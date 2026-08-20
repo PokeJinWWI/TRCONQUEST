@@ -4,8 +4,7 @@ import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
 import { GalacticViewScene } from './scene/GalacticViewScene'
 import { InterstellarScene } from './scene/InterstellarScene'
-import { PLANETS } from './scene/planetData'
-import { PlanetViewScene } from './scene/PlanetViewScene'
+import { SatelliteViewScene } from './scene/SatelliteViewScene'
 import { SolarSystemScene } from './scene/SolarSystemScene'
 import { useViewStore } from './state/viewStore'
 import './App.css'
@@ -13,21 +12,20 @@ import './App.css'
 function ActiveScene() {
   const level = useViewStore((s) => s.level)
   const selectedStarId = useViewStore((s) => s.selectedStarId)
-  const selectedPlanetName = useViewStore((s) => s.selectedPlanetName)
+  const selectedBodyName = useViewStore((s) => s.selectedBodyName)
 
   let scene = <SolarSystemScene />
   if (level === 'galactic') scene = <GalacticViewScene />
   else if (level === 'interstellar') scene = <InterstellarScene />
-  else if (level === 'planet') {
-    const planet = PLANETS.find((p) => p.name === selectedPlanetName)
-    if (planet) scene = <PlanetViewScene data={planet} />
+  else if (level === 'satellite' && selectedBodyName) {
+    scene = <SatelliteViewScene bodyName={selectedBodyName} />
   }
 
   // Keying on the full location forces a remount on every navigation change,
   // which retriggers the fade/scale-in animation below — a lightweight
   // "smooth transition" between view levels without needing to keep two
   // WebGL canvases alive at once.
-  const transitionKey = `${level}:${selectedStarId}:${selectedPlanetName ?? ''}`
+  const transitionKey = `${level}:${selectedStarId}:${selectedBodyName ?? ''}`
 
   return (
     <div key={transitionKey} className="view-transition">

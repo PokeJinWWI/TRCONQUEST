@@ -16,30 +16,67 @@ import { useViewStore } from '../state/viewStore'
 const MAX_DISTANCE = 32000
 const EXIT_DISTANCE = 26000
 const FOCUS_ARRIVE_DISTANCE = 1.4
-// How close (to the locked-on planet) manually zooming in has to get before
-// it counts as "entering" the planet, same idea as Detailed View but driven
+// How close (to the locked-on body) manually zooming in has to get before it
+// counts as "entering" satellite view, same idea as Detailed View but driven
 // by the player's own zoom instead of the explicit button/fly animation.
-const ENTER_PLANET_DISTANCE = 3
+const ENTER_SATELLITE_DISTANCE = 3
 const SOL_NAME = 'Sol'
+
+// Default, far-out starting camera direction/distance for a fresh arrival
+// (fly-in from interstellar, breadcrumb) — the whole system reads as a
+// distant cluster, matching the "shrink to a dot" feel of leaving it.
+const FAR_START = new Vector3(0, 6300, 8400)
+// "Somewhat close" starting distance used instead when returning from
+// satellite view via zoom-out, so exiting a body's close-up reads as
+// gradually pulling back to a lower level of detail, not jumping to a
+// different, distant view.
+const NEAR_START_DISTANCE = 18
 
 const ORIGIN = new Vector3(0, 0, 0)
 
+function getBodyPosition(name: string): Vector3 {
+  if (name === SOL_NAME) return ORIGIN.clone()
+  const data = PLANETS.find((p) => p.name === name)
+  if (!data) return ORIGIN.clone()
+  return getPlanetPosition(data, simDaysToYears(useGameTimeStore.getState().simDays))
+}
+
 export function SolarSystemScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
+  const enterSatellite = useViewStore((s) => s.enterSatellite)
+  const enterInterstellar = useViewStore((s) => s.enterInterstellar)
+
+  // If we're arriving here because the player zoomed out of a body's
+  // satellite view, selectedBodyName is still set (see exitSatelliteToSystem)
+  // — use it once, at mount, to both pre-select that body (so the camera
+  // lock engages immediately) and to start the camera nearby instead of at
+  // the far default. A fresh arrival (breadcrumb, interstellar fly-in) has
+  // selectedBodyName cleared, so this is a no-op in that case.
+  const continuityBodyRef = useRef(useViewStore.getState().selectedBodyName)
+
   // Selecting a body locks the camera onto it immediately (see
   // SelectionTracker) — `selectedName` doubles as "what's tracked" except
   // while flying to a Detailed View, when CameraFocusRig takes over instead.
-  const [selectedName, setSelectedName] = useState<string | null>(null)
+  const [selectedName, setSelectedName] = useState<string | null>(() => continuityBodyRef.current)
   const [flyingToName, setFlyingToName] = useState<string | null>(null)
-  const enterPlanet = useViewStore((s) => s.enterPlanet)
-  const enterInterstellar = useViewStore((s) => s.enterInterstellar)
+
+  const initialCameraPosition = useMemo<[number, number, number]>(() => {
+    if (!continuityBodyRef.current) return [FAR_START.x, FAR_START.y, FAR_START.z]
+    const target = getBodyPosition(continuityBodyRef.current)
+    const dir = FAR_START.clone().normalize().multiplyScalar(NEAR_START_DISTANCE)
+    const pos = target.add(dir)
+    return [pos.x, pos.y, pos.z]
+    // Computed once, at mount, from whatever the state was at that moment —
+    // deliberately not reactive to later selection changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const selectedPlanetData = useMemo(
     () => (selectedName && selectedName !== SOL_NAME ? PLANETS.find((p) => p.name === selectedName) : undefined),
     [selectedName],
   )
   const flyingPlanetData = useMemo(
-    () => (flyingToName ? PLANETS.find((p) => p.name === flyingToName) : undefined),
+    () => (flyingToName && flyingToName !== SOL_NAME ? PLANETS.find((p) => p.name === flyingToName) : undefined),
     [flyingToName],
   )
 
@@ -61,14 +98,14 @@ export function SolarSystemScene() {
   }
 
   const handleDetailedView = () => {
-    if (!selectedPlanetData) return
+    if (!selectedName) return
     setFlyingToName(selectedName)
   }
 
   return (
     <div className="solar-system-wrapper">
       <Canvas
-        camera={{ position: [0, 6300, 8400], fov: 50, near: 0.02, far: 40000 }}
+        camera={{ position: initialCameraPosition, fov: 50, near: 0.02, far: 40000 }}
         onPointerMissed={handleUnfocus}
       >
         <color attach="background" args={['#020409']} />
@@ -80,15 +117,17 @@ export function SolarSystemScene() {
           <Planet key={planet.name} data={planet} selected={selectedName === planet.name} onSelect={handleSelect} />
         ))}
 
-        {flyingToName && flyingPlanetData && (
+        {flyingToName && (
           <CameraFocusRig
             key={flyingToName}
             controlsRef={controlsRef}
             arriveDistance={FOCUS_ARRIVE_DISTANCE}
             getTargetPosition={() =>
-              getPlanetPosition(flyingPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
+              flyingPlanetData
+                ? getPlanetPosition(flyingPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
+                : ORIGIN
             }
-            onArrive={() => enterPlanet(flyingToName)}
+            onArrive={() => enterSatellite(flyingToName)}
           />
         )}
 
@@ -112,11 +151,11 @@ export function SolarSystemScene() {
           />
         )}
 
-        {selectedPlanetData && !flyingToName && (
+        {selectedName && !flyingToName && (
           <DistanceThresholdWatcher
             mode="min"
-            threshold={ENTER_PLANET_DISTANCE}
-            onTrigger={() => enterPlanet(selectedName!)}
+            threshold={ENTER_SATELLITE_DISTANCE}
+            onTrigger={() => enterSatellite(selectedName)}
             controlsRef={controlsRef}
           />
         )}
@@ -148,11 +187,9 @@ export function SolarSystemScene() {
           {flyingToName ? (
             <div className="star-info-status ok">Entering orbit…</div>
           ) : (
-            selectedPlanetData && (
-              <button type="button" className="detail-view-btn" onClick={handleDetailedView}>
-                Detailed View
-              </button>
-            )
+            <button type="button" className="detail-view-btn" onClick={handleDetailedView}>
+              Detailed View
+            </button>
           )}
         </div>
       )}

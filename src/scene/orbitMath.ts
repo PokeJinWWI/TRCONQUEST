@@ -1,5 +1,6 @@
 import { MathUtils, Vector3 } from 'three'
 import type { PlanetData } from './planetData'
+import type { MoonData } from './moonData'
 
 const X_AXIS = new Vector3(1, 0, 0)
 const Y_AXIS = new Vector3(0, 1, 0)
@@ -36,4 +37,20 @@ export function angleForYear(simYears: number, periodYears: number, phase: numbe
 export function getPlanetPosition(data: PlanetData, simYears: number, out = new Vector3()): Vector3 {
   const angle = angleForYear(simYears, data.orbitPeriodYears, MathUtils.degToRad(data.phaseDeg))
   return getOrbitPosition(data.orbitRadius, angle, data.inclinationDeg, data.ascendingNodeDeg, out)
+}
+
+// Real moon orbital periods (hours to a couple weeks) are far too fast to
+// animate at the same accelerated day-scale the rest of the sim uses — a
+// full Phobos orbit would take a fraction of a second and look like a
+// flicker. MOON_TIME_DILATION stretches moon orbits by a fixed factor so
+// they stay tied to the game clock (pausing/speeding up still affects them,
+// consistently with everything else) while remaining visually legible —
+// relative speed differences between moons (closer = faster) are preserved.
+export const MOON_TIME_DILATION = 60
+
+export function getMoonPosition(moon: MoonData, simYears: number, out = new Vector3()): Vector3 {
+  const effectivePeriodYears = (moon.periodDays * MOON_TIME_DILATION) / 365.25
+  const direction = moon.retrograde ? -1 : 1
+  const angle = angleForYear(simYears * direction, effectivePeriodYears, MathUtils.degToRad(moon.phaseDeg))
+  return getOrbitPosition(moon.orbitRadius, angle, moon.inclinationDeg, 0, out)
 }

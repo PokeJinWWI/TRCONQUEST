@@ -1,12 +1,15 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { AdditiveBlending, BackSide, Color, type Group, type Mesh } from 'three'
-import type { PlanetData } from './planetData'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 
-interface HologramPlanetProps {
-  data: PlanetData
+interface HologramBodyProps {
+  color: string
   radius: number
+  /** Stars render with a bright glowing core instead of a dark one. */
+  variant?: 'planet' | 'star'
+  /** When provided, clicking anywhere on the hologram (not just its label marker) selects it. */
+  onSelect?: () => void
 }
 
 const RIM_VERTEX_SHADER = `
@@ -46,15 +49,18 @@ function useFibonacciSphere(count: number, radius: number) {
   }, [count, radius])
 }
 
-// DEFCON/HUD-style "hologram" body: a dark core, a sparse lat/long wireframe
+// DEFCON/HUD-style "hologram" body: a core, a sparse lat/long wireframe
 // grid, a glowing dot cloud, and a fresnel rim glow — all procedural, no
 // texture assets required, and in keeping with the game's vector-art style.
-export function HologramPlanet({ data, radius }: HologramPlanetProps) {
+// Used for planets (dark, reflective-looking core) and stars (bright,
+// self-luminous core) alike.
+export function HologramBody({ color, radius, variant = 'planet', onSelect }: HologramBodyProps) {
   const groupRef = useRef<Group>(null)
   const coreRef = useRef<Mesh>(null)
   const dotPositions = useFibonacciSphere(220, radius * 1.01)
-  const accent = useMemo(() => new Color(data.color), [data.color])
+  const accent = useMemo(() => new Color(color), [color])
   const rimUniforms = useMemo(() => ({ glowColor: { value: accent } }), [accent])
+  const isStar = variant === 'star'
 
   useFrame(() => {
     const simYears = simDaysToYears(useGameTimeStore.getState().simDays)
@@ -65,17 +71,21 @@ export function HologramPlanet({ data, radius }: HologramPlanetProps) {
 
   return (
     <group>
-      {/* Dark core — spins slightly slower, giving the grid/dots a parallax "hologram" feel */}
+      {/* Core — spins slightly slower, giving the grid/dots a parallax "hologram" feel */}
       <mesh ref={coreRef}>
         <sphereGeometry args={[radius * 0.97, 48, 48]} />
-        <meshStandardMaterial color="#03060a" emissive={data.color} emissiveIntensity={0.06} roughness={1} />
+        {isStar ? (
+          <meshBasicMaterial color={color} />
+        ) : (
+          <meshStandardMaterial color="#03060a" emissive={color} emissiveIntensity={0.06} roughness={1} />
+        )}
       </mesh>
 
       <group ref={groupRef}>
         {/* Sparse lat/long wireframe grid */}
         <mesh>
           <sphereGeometry args={[radius * 1.002, 20, 14]} />
-          <meshBasicMaterial color={data.color} wireframe transparent opacity={0.35} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={0.35} />
         </mesh>
 
         {/* Glowing dot cloud scattered across the surface */}
@@ -84,7 +94,7 @@ export function HologramPlanet({ data, radius }: HologramPlanetProps) {
             <bufferAttribute attach="attributes-position" args={[dotPositions, 3]} />
           </bufferGeometry>
           <pointsMaterial
-            color={data.color}
+            color={color}
             size={radius * 0.05}
             sizeAttenuation
             transparent
@@ -95,8 +105,8 @@ export function HologramPlanet({ data, radius }: HologramPlanetProps) {
         </points>
       </group>
 
-      {/* Fresnel rim glow (atmosphere-style halo) */}
-      <mesh scale={1.1}>
+      {/* Fresnel rim glow (atmosphere-style halo, or a corona for stars) */}
+      <mesh scale={isStar ? 1.25 : 1.1}>
         <sphereGeometry args={[radius, 32, 32]} />
         <shaderMaterial
           transparent
@@ -108,6 +118,28 @@ export function HologramPlanet({ data, radius }: HologramPlanetProps) {
           fragmentShader={RIM_FRAGMENT_SHADER}
         />
       </mesh>
+
+      {isStar && <pointLight color={color} intensity={8} decay={2} distance={200} />}
+
+      {/* Invisible, slightly oversized click-catcher — lets clicking directly
+          on the hologram select it, not just its separate Html label marker. */}
+      {onSelect && (
+        <mesh
+          onClick={(e) => {
+            e.stopPropagation()
+            onSelect()
+          }}
+          onPointerOver={() => {
+            document.body.style.cursor = 'pointer'
+          }}
+          onPointerOut={() => {
+            document.body.style.cursor = 'auto'
+          }}
+        >
+          <sphereGeometry args={[radius * 1.15, 24, 24]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
     </group>
   )
 }

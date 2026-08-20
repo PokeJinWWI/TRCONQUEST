@@ -227,6 +227,24 @@
   color: #fff;
 }
 
+/* The prominent label for whichever body is currently focused/inspected in
+   satellite view — anchored above the hologram instead of sitting on it. */
+.focused-label {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #fff;
+  text-shadow: 0 0 6px rgba(159, 232, 255, 0.9), 0 0 16px rgba(159, 232, 255, 0.4);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  padding-bottom: 5px;
+  border-bottom: 1.5px solid rgba(159, 232, 255, 0.6);
+  pointer-events: auto;
+}
+
 /* System view */
 
 .solar-system-wrapper {
@@ -329,4 +347,100 @@
   font-size: 13px;
   opacity: 0.6;
   letter-spacing: 0.1em;
+}
+
+/* Satellite view */
+
+.satellite-view-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Draggable inspect window */
+
+.draggable-window {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  z-index: 20;
+  width: 240px;
+  background: rgba(2, 6, 12, 0.92);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+  color: #9fe8ff;
+}
+
+.draggable-window-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: rgba(111, 227, 255, 0.1);
+  border-bottom: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 4px 4px 0 0;
+  cursor: grab;
+  touch-action: none;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  letter-spacing: 0.08em;
+  user-select: none;
+}
+
+.draggable-window-titlebar:active {
+  cursor: grabbing;
+}
+
+.draggable-window-close {
+  background: none;
+  border: none;
+  color: #9fe8ff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.draggable-window-close:hover {
+  color: #fff;
+}
+
+.draggable-window-body {
+  padding: 10px 12px;
+}
+
+.inspect-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  padding: 3px 0;
+}
+
+.inspect-label {
+  opacity: 0.65;
+}
+
+.inspect-value {
+  color: #fff;
+  text-align: right;
+}
+
+.inspect-divider {
+  border-top: 1px solid rgba(111, 227, 255, 0.25);
+  margin: 6px 0;
+}
+
+.inspect-status {
+  font-size: 11px;
+  margin-top: 4px;
+  opacity: 0.6;
+}
+
+.inspect-status.ok {
+  color: #7de08a;
+  opacity: 1;
 }

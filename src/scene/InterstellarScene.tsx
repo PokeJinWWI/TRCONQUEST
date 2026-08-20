@@ -7,6 +7,7 @@ import type { StarData } from '../data/starData'
 import { STARS, UNITS_PER_LY } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
 import { CameraFocusRig } from './CameraFocusRig'
+import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 
@@ -14,6 +15,10 @@ const ENTER_DISTANCE = 6
 const MAX_DISTANCE = 4200
 const EXIT_DISTANCE = 3500
 const FOCUS_ARRIVE_DISTANCE = 4
+// How close (to the locked-on star) manually zooming in has to get before it
+// counts as "entering" its system — mirrors system view's manual
+// zoom-to-enter-satellite threshold, same select-first model.
+const ENTER_SYSTEM_DISTANCE = 4.5
 
 function toScenePos(star: StarData): [number, number, number] {
   return [
@@ -62,9 +67,16 @@ export function InterstellarScene() {
   const selectedStar = useMemo(() => STARS.find((s) => s.id === selectedId) ?? null, [selectedId])
   const focusedStar = useMemo(() => STARS.find((s) => s.id === focusedId) ?? null, [focusedId])
 
+  // Select-first, same as system view: clicking a star just locks the
+  // camera onto it (SelectionTracker, smooth eased pan) — flying all the way
+  // in (CameraFocusRig) only starts once "Enter System" is pressed, or the
+  // player manually zooms in close enough on their own.
   const handleSelect = (star: StarData) => {
     setSelectedId(star.id)
-    setFocusedId(star.id)
+  }
+
+  const handleEnterSystem = () => {
+    if (selectedStar?.hasSystemData) setFocusedId(selectedStar.id)
   }
 
   // Same race as system view: r3f's onPointerMissed fires for any click that
@@ -74,7 +86,6 @@ export function InterstellarScene() {
   const handleUnfocus = (event: MouseEvent) => {
     if (event.target instanceof Element && event.target.closest('.planet-marker')) return
     setSelectedId(null)
-    setFocusedId(null)
   }
 
   return (
@@ -96,16 +107,27 @@ export function InterstellarScene() {
             controlsRef={controlsRef}
             arriveDistance={FOCUS_ARRIVE_DISTANCE}
             getTargetPosition={() => new Vector3(...toScenePos(focusedStar))}
-            onArrive={() => {
-              if (focusedStar.hasSystemData) enterSystem(focusedStar.id)
-            }}
+            onArrive={() => enterSystem(focusedStar.id)}
+          />
+        )}
+
+        {selectedStar && !focusedStar && (
+          <SelectionTracker controlsRef={controlsRef} getPosition={() => new Vector3(...toScenePos(selectedStar))} />
+        )}
+
+        {selectedStar?.hasSystemData && !focusedStar && (
+          <DistanceThresholdWatcher
+            mode="min"
+            threshold={ENTER_SYSTEM_DISTANCE}
+            onTrigger={handleEnterSystem}
+            controlsRef={controlsRef}
           />
         )}
 
         {!focusedStar && (
           <>
             <DistanceThresholdWatcher mode="min" threshold={ENTER_DISTANCE} onTrigger={() => enterSystem('sol')} />
-            <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={enterGalactic} />
+            <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={enterGalactic} controlsRef={controlsRef} />
           </>
         )}
 
@@ -125,7 +147,13 @@ export function InterstellarScene() {
           <div className="star-info-name">{selectedStar.name}</div>
           <div className="star-info-dist">{selectedStar.distanceLy.toFixed(2)} ly from Sol</div>
           {selectedStar.hasSystemData ? (
-            <div className="star-info-status ok">Entering system…</div>
+            focusedStar ? (
+              <div className="star-info-status ok">Entering system…</div>
+            ) : (
+              <button type="button" className="detail-view-btn" onClick={handleEnterSystem}>
+                Enter System
+              </button>
+            )
           ) : (
             <div className="star-info-status">No system data available</div>
           )}

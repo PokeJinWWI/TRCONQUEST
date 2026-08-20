@@ -6,11 +6,13 @@ export const UNITS_PER_AU = 20
 
 const auRadius = (km: number) => (km / AU_IN_KM) * UNITS_PER_AU
 
-export const SUN_RADIUS = auRadius(696_000)
+export const SUN_RADIUS_KM = 696_000
+export const SUN_RADIUS = auRadius(SUN_RADIUS_KM)
 
 export interface PlanetData {
   name: string
   radius: number
+  radiusKm: number
   orbitRadius: number
   color: string
   orbitPeriodYears: number
@@ -51,6 +53,7 @@ const RAW_PLANETS: RawPlanet[] = [
 export const PLANETS: PlanetData[] = RAW_PLANETS.map((p) => ({
   name: p.name,
   radius: auRadius(p.radiusKm),
+  radiusKm: p.radiusKm,
   orbitRadius: p.auDistance * UNITS_PER_AU,
   color: p.color,
   orbitPeriodYears: p.periodYears,

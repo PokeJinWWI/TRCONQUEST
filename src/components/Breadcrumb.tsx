@@ -16,7 +16,7 @@ export function Breadcrumb() {
       <button type="button" className="crumb" onClick={enterInterstellar} disabled={level === 'interstellar'}>
         INTERSTELLAR
       </button>
-      {(level === 'system' || level === 'planet') && (
+      {(level === 'system' || level === 'satellite') && (
         <>
           <span className="crumb-sep">›</span>
           <button
@@ -29,11 +29,11 @@ export function Breadcrumb() {
           </button>
         </>
       )}
-      {level === 'planet' && (
+      {level === 'satellite' && (
         <>
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb" disabled>
-            PLANET
+            SATELLITE
           </button>
         </>
       )}
