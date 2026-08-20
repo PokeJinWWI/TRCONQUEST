@@ -1,0 +1,332 @@
+#app-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.view-transition {
+  position: absolute;
+  inset: 0;
+  animation: view-enter 500ms ease-out;
+}
+
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.hud-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.08em;
+  color: #6fe3ff;
+  text-shadow: 0 0 6px rgba(111, 227, 255, 0.6);
+  background: linear-gradient(180deg, rgba(2, 6, 12, 0.85), rgba(2, 6, 12, 0));
+  pointer-events: none;
+  font-size: 13px;
+}
+
+.hud-bar > * {
+  pointer-events: auto;
+}
+
+.hud-top {
+  top: 0;
+}
+
+.hud-bottom {
+  bottom: 0;
+  justify-content: center;
+  background: linear-gradient(0deg, rgba(2, 6, 12, 0.85), rgba(2, 6, 12, 0));
+}
+
+.hud-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hud-title {
+  font-weight: 700;
+}
+
+.location-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: #9fe8ff;
+  opacity: 0.75;
+}
+
+/* Breadcrumb */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crumb {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font: inherit;
+  color: #6fe3ff;
+  text-shadow: 0 0 6px rgba(111, 227, 255, 0.6);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.crumb:not(:disabled):hover {
+  opacity: 1;
+}
+
+.crumb:disabled {
+  color: #fff;
+  opacity: 1;
+  cursor: default;
+}
+
+.crumb-sep {
+  opacity: 0.4;
+}
+
+/* Time controls */
+
+.time-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-date {
+  min-width: 110px;
+  text-align: right;
+  color: #fff;
+}
+
+.time-btn {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  color: #6fe3ff;
+  width: 26px;
+  height: 22px;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.time-btn:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.2);
+}
+
+.time-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.time-btn.time-pause.active {
+  border-color: #ff6b4a;
+  color: #ff6b4a;
+}
+
+.speed-pips {
+  display: flex;
+  gap: 3px;
+}
+
+.pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(111, 227, 255, 0.5);
+  background: transparent;
+}
+
+.pip.filled {
+  background: #6fe3ff;
+  box-shadow: 0 0 4px rgba(111, 227, 255, 0.8);
+}
+
+/* Planet / star markers */
+
+.planet-marker {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.marker-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid #9fe8ff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 6px rgba(159, 232, 255, 0.7);
+  transition: width 0.15s, height 0.15s;
+}
+
+.planet-marker.hovered .marker-dot {
+  width: 12px;
+  height: 12px;
+}
+
+.marker-dot.sun-dot {
+  border-color: #ffd27a;
+  box-shadow: 0 0 10px rgba(255, 210, 122, 0.9);
+}
+
+.marker-label {
+  position: absolute;
+  top: 0;
+  left: 10px;
+  transform: translateY(-50%);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #9fe8ff;
+  text-shadow: 0 0 4px rgba(159, 232, 255, 0.8);
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.planet-marker.hovered .marker-label {
+  opacity: 1;
+}
+
+.planet-marker.selected .marker-dot {
+  width: 12px;
+  height: 12px;
+  background: rgba(159, 232, 255, 0.4);
+}
+
+.planet-marker.selected .marker-label {
+  opacity: 1;
+  color: #fff;
+}
+
+/* System view */
+
+.solar-system-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.detail-view-btn {
+  margin-top: 10px;
+  padding: 6px 12px;
+  background: rgba(111, 227, 255, 0.1);
+  border: 1px solid rgba(111, 227, 255, 0.5);
+  border-radius: 3px;
+  color: #6fe3ff;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.detail-view-btn:hover {
+  background: rgba(111, 227, 255, 0.25);
+}
+
+/* Interstellar view */
+
+.interstellar-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.star-info-panel {
+  position: absolute;
+  right: 20px;
+  bottom: 70px;
+  z-index: 10;
+  padding: 12px 16px;
+  background: rgba(2, 6, 12, 0.85);
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  color: #9fe8ff;
+  min-width: 180px;
+}
+
+.star-info-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.08em;
+}
+
+.star-info-dist {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 4px;
+}
+
+.star-info-status {
+  font-size: 11px;
+  margin-top: 8px;
+  opacity: 0.6;
+}
+
+.star-info-status.ok {
+  color: #7de08a;
+  opacity: 1;
+}
+
+/* Galactic view */
+
+.galactic-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.galactic-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: 'Courier New', monospace;
+  color: #6fe3ff;
+}
+
+.galactic-placeholder-title {
+  font-size: 28px;
+  letter-spacing: 0.2em;
+  text-shadow: 0 0 10px rgba(111, 227, 255, 0.6);
+}
+
+.galactic-placeholder-sub {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.6;
+  letter-spacing: 0.1em;
+}
