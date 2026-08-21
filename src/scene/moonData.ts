@@ -26,6 +26,11 @@ export interface PlanetMoons {
 const PRIMARY_VISUAL_RADIUS = 3
 const MIN_MOON_RADIUS = 0.08
 const MAX_MOON_RADIUS = 0.9
+// Real distance ratios put some major moons (Luna included) well outside the
+// satellite view's default camera framing — clamped so every rendered moon
+// stays visible without having to hunt for it by panning/zooming, at the
+// cost of losing exact relative ordering among the farthest few.
+const MAX_ORBIT_RADIUS = 12
 
 // Real size/distance ratios vary too wildly to render true-to-scale (Jupiter
 // dwarfs its moons far more than Earth dwarfs the Moon) — sizes are clamped
@@ -37,7 +42,7 @@ function deriveMoons(planetRadiusKm: number, raw: MoonRawData[]): MoonData[] {
     const naturalRadius = (m.radiusKm / planetRadiusKm) * PRIMARY_VISUAL_RADIUS
     const visualRadius = Math.min(MAX_MOON_RADIUS, Math.max(MIN_MOON_RADIUS, naturalRadius))
     const ratio = m.distanceKm / planetRadiusKm
-    const orbitRadius = PRIMARY_VISUAL_RADIUS + 1.5 + Math.log2(1 + ratio) * 1.8
+    const orbitRadius = Math.min(MAX_ORBIT_RADIUS, PRIMARY_VISUAL_RADIUS + 1.5 + Math.log2(1 + ratio) * 1.8)
     return {
       ...m,
       visualRadius,
@@ -52,7 +57,7 @@ const MOON_TABLE: Record<string, { planetRadiusKm: number; totalCount: number; r
   Earth: {
     planetRadiusKm: 6371,
     totalCount: 1,
-    raw: [{ name: 'Moon', radiusKm: 1737.4, distanceKm: 384400, periodDays: 27.32, color: '#c9c9c9' }],
+    raw: [{ name: 'Luna', radiusKm: 1737.4, distanceKm: 384400, periodDays: 27.32, color: '#c9c9c9' }],
   },
   Mars: {
     planetRadiusKm: 3389.5,

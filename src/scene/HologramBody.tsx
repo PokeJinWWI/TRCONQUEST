@@ -10,6 +10,10 @@ interface HologramBodyProps {
   variant?: 'planet' | 'star'
   /** When provided, clicking anywhere on the hologram (not just its label marker) selects it. */
   onSelect?: () => void
+  /** Right-click anywhere on the hologram — orders the currently-selected
+   * ship (if any) here. Omitted by MoonDetailScene, since a moon isn't a
+   * valid move-order target yet. */
+  onOrderTo?: () => void
 }
 
 const RIM_VERTEX_SHADER = `
@@ -54,7 +58,7 @@ function useFibonacciSphere(count: number, radius: number) {
 // texture assets required, and in keeping with the game's vector-art style.
 // Used for planets (dark, reflective-looking core) and stars (bright,
 // self-luminous core) alike.
-export function HologramBody({ color, radius, variant = 'planet', onSelect }: HologramBodyProps) {
+export function HologramBody({ color, radius, variant = 'planet', onSelect, onOrderTo }: HologramBodyProps) {
   const groupRef = useRef<Group>(null)
   const coreRef = useRef<Mesh>(null)
   const dotPositions = useFibonacciSphere(220, radius * 1.01)
@@ -128,6 +132,11 @@ export function HologramBody({ color, radius, variant = 'planet', onSelect }: Ho
           onClick={(e) => {
             e.stopPropagation()
             onSelect()
+          }}
+          onContextMenu={(e) => {
+            e.stopPropagation()
+            e.nativeEvent.preventDefault()
+            onOrderTo?.()
           }}
           onPointerOver={() => {
             document.body.style.cursor = 'pointer'

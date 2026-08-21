@@ -4,12 +4,21 @@ import { Html, OrbitControls, Stars } from '@react-three/drei'
 import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { StarData } from '../data/starData'
-import { STARS, UNITS_PER_LY } from '../data/starData'
+import { STARS, starScenePosition } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
+import type { ShipInstance } from '../state/shipStore'
+import { useShipStore } from '../state/shipStore'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
+import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
+import { ShipMarker } from './ShipMarker'
+import { ShipPanel } from './ShipPanel'
+import { getShipRenderPosition, planMove, shipSystemId } from './shipPhysics'
+import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
+import { DraggableWindow } from '../components/DraggableWindow'
+import { ALLEGIANCE_COLORS } from '../data/shipData'
 
 const ENTER_DISTANCE = 6
 const MAX_DISTANCE = 4200
@@ -19,64 +28,167 @@ const FOCUS_ARRIVE_DISTANCE = 4
 // counts as "entering" its system — mirrors system view's manual
 // zoom-to-enter-satellite threshold, same select-first model.
 const ENTER_SYSTEM_DISTANCE = 4.5
-
-function toScenePos(star: StarData): [number, number, number] {
-  return [
-    star.position[0] * UNITS_PER_LY,
-    star.position[2] * UNITS_PER_LY,
-    star.position[1] * UNITS_PER_LY,
-  ]
-}
+// How close the "Go To" fly-in to a selected ship needs to get before it
+// counts as arrived.
+const SHIP_FOCUS_ARRIVE_DISTANCE = 3
 
 interface StarNodeProps {
   star: StarData
   selected: boolean
   onSelect: (star: StarData) => void
+  /** Right-click — orders the currently-selected ship (if any) here. */
+  onOrderTo: (star: StarData) => void
+  /** One representative ship per distinct allegiance color currently nested
+   * somewhere inside this star's system (e.g. orbiting a planet) — those
+   * ships have no position at interstellar scale, so this is the only trace
+   * of them here. Deliberately icon-only, no name/count text, but still
+   * clicking-to-select the ship it represents (see onSelectFleet) — if
+   * several ships share a color, clicking selects whichever one was found
+   * first, same simplification the badge's own dedupe-by-color already
+   * makes. */
+  fleetPresence: ShipInstance[]
+  onSelectFleet: (shipId: string) => void
 }
 
 // Stars are just labels here, same as planets in system view — no 3D sphere
 // model, just a fixed-size marker anchored at the star's true position.
-function StarNode({ star, selected, onSelect }: StarNodeProps) {
+function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelectFleet }: StarNodeProps) {
   const [hovered, setHovered] = useState(false)
-  const pos = toScenePos(star)
+  const pos = starScenePosition(star)
 
   return (
     <group position={pos}>
-      <Html style={{ pointerEvents: 'auto' }}>
+      <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
         <div
           className={`planet-marker star-node${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
           onClick={() => onSelect(star)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            onOrderTo(star)
+          }}
           onWheel={forwardWheelToCanvas}
         >
           <span className="marker-dot" style={{ borderColor: star.color }} />
           <span className="marker-label">{star.name}</span>
+          {fleetPresence.map((ship) => (
+            <span
+              key={ship.id}
+              className="fleet-presence-icon"
+              style={{ borderBottomColor: ALLEGIANCE_COLORS[ship.allegiance] }}
+              onClick={(e) => {
+                // Otherwise this bubbles to the marker's own onClick above,
+                // selecting the star instead of (or as well as) the fleet.
+                e.stopPropagation()
+                onSelectFleet(ship.id)
+              }}
+            />
+          ))}
         </div>
       </Html>
     </group>
   )
 }
 
+// Only ships whose order/location currently puts them in interstellar space
+// belong here — see shipPhysics.ts and Context.md for why this membership
+// check doesn't need to poll every frame (it only changes at order-issue/
+// order-complete, both discrete store writes).
+function isShipInInterstellarSpace(order: { space: 'system' | 'interstellar' } | null, locationKind: string): boolean {
+  if (order) return order.space === 'interstellar'
+  return locationKind === 'star' || locationKind === 'interstellar-point'
+}
+
 export function InterstellarScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const enterSystem = useViewStore((s) => s.enterSystem)
   const enterGalactic = useViewStore((s) => s.enterGalactic)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selectedId = useViewStore((s) => s.inViewSelection)
+  const selectInView = useViewStore((s) => s.selectInView)
+  const lockOnEnabled = useViewStore((s) => s.lockOnEnabled)
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  // Set by ShipPanel's "Go To" button — separate from focusedId since,
+  // unlike flying to a star, arriving doesn't transition to system view.
+  // Independent of lockOnEnabled (a one-time fly, not continuous follow).
+  const [flyingToShip, setFlyingToShip] = useState(false)
   const selectedStar = useMemo(() => STARS.find((s) => s.id === selectedId) ?? null, [selectedId])
   const focusedStar = useMemo(() => STARS.find((s) => s.id === focusedId) ?? null, [focusedId])
+
+  const ships = useShipStore((s) => s.ships)
+  const selectedShipId = useShipStore((s) => s.selectedShipId)
+  const selectShip = useShipStore((s) => s.selectShip)
+  const setShipOrder = useShipStore((s) => s.setShipOrder)
+  const setShipLocation = useShipStore((s) => s.setShipLocation)
+  const setPendingHyperdriveJump = useShipStore((s) => s.setPendingHyperdriveJump)
+  const interstellarShips = useMemo(
+    () => ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)),
+    [ships],
+  )
+  // Only track a selected ship for the camera lock while it's actually
+  // present in interstellar space — same "focusing logic like a star" idea,
+  // but a star is always here to lock onto while a ship might currently be
+  // nested inside a system instead (see fleetPresenceByStar below).
+  const trackedShip = useMemo(
+    () => (selectedShipId ? interstellarShips.find((s) => s.id === selectedShipId) ?? null : null),
+    [selectedShipId, interstellarShips],
+  )
+  // One representative ship per distinct allegiance present in each star's
+  // system, for the no-text presence badges — the complementary set to
+  // interstellarShips above (a ship is either out in interstellar space,
+  // rendered directly, or nested inside exactly one system, rendered only as
+  // a badge here).
+  const fleetPresenceByStar = useMemo(() => {
+    const map = new Map<string, ShipInstance[]>()
+    for (const ship of ships) {
+      const systemId = shipSystemId(ship)
+      if (!systemId) continue
+      const existing = map.get(systemId)
+      if (existing) {
+        if (!existing.some((s) => s.allegiance === ship.allegiance)) existing.push(ship)
+      } else {
+        map.set(systemId, [ship])
+      }
+    }
+    return map
+  }, [ships])
 
   // Select-first, same as system view: clicking a star just locks the
   // camera onto it (SelectionTracker, smooth eased pan) — flying all the way
   // in (CameraFocusRig) only starts once "Enter System" is pressed, or the
   // player manually zooms in close enough on their own.
   const handleSelect = (star: StarData) => {
-    setSelectedId(star.id)
+    selectInView(star.id)
+    selectShip(null)
   }
 
   const handleEnterSystem = () => {
     if (selectedStar?.hasSystemData) setFocusedId(selectedStar.id)
+  }
+
+  // Right-clicking a star orders the selected ship there (warp/hyperdrive,
+  // whichever the ship has) — no-op if no ship is selected. A hyperdrive
+  // still on cooldown doesn't just drop the order — "jump when ready" queues
+  // it to fire automatically once the drive is off cooldown (see
+  // useShipOrderSettler), rather than silently doing nothing.
+  const handleOrderToStar = (star: StarData) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship) return
+    const result = planMove(ship, { kind: 'star', starId: star.id }, useGameTimeStore.getState().simDays)
+    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
+    else if (result.kind === 'instant')
+      setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays })
+    else if (result.kind === 'on-cooldown') setPendingHyperdriveJump(ship.id, star.id)
+    // 'unknown-class': silently ignored — genuinely nothing to do.
+  }
+
+  const handleOrderToPoint = (point: [number, number, number]) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship) return
+    const result = planMove(ship, { kind: 'interstellar-point', position: point }, useGameTimeStore.getState().simDays)
+    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
   }
 
   // Same race as system view: r3f's onPointerMissed fires for any click that
@@ -84,8 +196,8 @@ export function InterstellarScene() {
   // markers (they share the canvas's event container). Ignore misses that
   // actually landed on a marker so its own onClick isn't immediately undone.
   const handleUnfocus = (event: MouseEvent) => {
-    if (event.target instanceof Element && event.target.closest('.planet-marker')) return
-    setSelectedId(null)
+    if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
+    selectInView(null)
   }
 
   return (
@@ -95,10 +207,24 @@ export function InterstellarScene() {
         <ambientLight intensity={0.3} />
         <Stars radius={800} depth={200} count={5000} factor={3} fade speed={0.2} />
 
+        <DeepSpaceClickPlane onDeselect={() => selectInView(null)} onOrderTo={handleOrderToPoint} />
+
         {/* No connecting lines yet — those represent plotted routes, which
             the player draws later. Just the star nodes themselves for now. */}
         {STARS.map((star) => (
-          <StarNode key={star.id} star={star} selected={star.id === selectedId} onSelect={handleSelect} />
+          <StarNode
+            key={star.id}
+            star={star}
+            selected={star.id === selectedId}
+            onSelect={handleSelect}
+            onOrderTo={handleOrderToStar}
+            fleetPresence={fleetPresenceByStar.get(star.id) ?? []}
+            onSelectFleet={selectShip}
+          />
+        ))}
+
+        {interstellarShips.map((ship) => (
+          <ShipMarker key={ship.id} ship={ship} />
         ))}
 
         {focusedStar && (
@@ -106,16 +232,47 @@ export function InterstellarScene() {
             key={focusedStar.id}
             controlsRef={controlsRef}
             arriveDistance={FOCUS_ARRIVE_DISTANCE}
-            getTargetPosition={() => new Vector3(...toScenePos(focusedStar))}
-            onArrive={() => enterSystem(focusedStar.id)}
+            getTargetPosition={() => new Vector3(...starScenePosition(focusedStar))}
+            onArrive={() => enterSystem(focusedStar.id, focusedStar.name)}
           />
         )}
 
-        {selectedStar && !focusedStar && (
-          <SelectionTracker controlsRef={controlsRef} getPosition={() => new Vector3(...toScenePos(selectedStar))} />
+        {/* "Go To" — a one-time fly to the selected ship's live position,
+            independent of lockOnEnabled. Only reachable when the ship is
+            actually out in interstellar space (trackedShip) — a ship nested
+            inside a system has no interstellar-scale position to fly to. */}
+        {flyingToShip && trackedShip && (
+          <CameraFocusRig
+            key={trackedShip.id}
+            controlsRef={controlsRef}
+            arriveDistance={SHIP_FOCUS_ARRIVE_DISTANCE}
+            getTargetPosition={() => getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
+            onArrive={() => setFlyingToShip(false)}
+          />
         )}
 
-        {selectedStar?.hasSystemData && !focusedStar && (
+        {(selectedStar || trackedShip) && !focusedStar && !flyingToShip && lockOnEnabled && (
+          <SelectionTracker
+            controlsRef={controlsRef}
+            getPosition={() =>
+              trackedShip
+                ? getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
+                : new Vector3(...starScenePosition(selectedStar!))
+            }
+          />
+        )}
+
+        {/* Gated on lockOnEnabled too — this measures distance from the
+            tracked target, which only actually sits near the selected star
+            while lock-on is engaging it above; with lock-on off the target
+            just stays wherever it last was, so this would otherwise misfire
+            off zooming in on whatever the camera happens to be near. Also
+            gated on !selectedShipId — see SolarSystemScene's identical guard
+            for the bug this prevents: selecting a ship doesn't clear a stale
+            selectedStar, so a "Go To" fly-in to a ship resting near that
+            stale star could otherwise auto-trigger entering its system right
+            after the flight, with no zoom gesture from the player. */}
+        {selectedStar?.hasSystemData && !selectedShipId && !focusedStar && !flyingToShip && lockOnEnabled && (
           <DistanceThresholdWatcher
             mode="min"
             threshold={ENTER_SYSTEM_DISTANCE}
@@ -124,16 +281,16 @@ export function InterstellarScene() {
           />
         )}
 
-        {!focusedStar && (
+        {!focusedStar && !flyingToShip && (
           <>
-            <DistanceThresholdWatcher mode="min" threshold={ENTER_DISTANCE} onTrigger={() => enterSystem('sol')} />
+            <DistanceThresholdWatcher mode="min" threshold={ENTER_DISTANCE} onTrigger={() => enterSystem('sol', 'Sol')} />
             <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={enterGalactic} controlsRef={controlsRef} />
           </>
         )}
 
         <OrbitControls
           ref={controlsRef}
-          enabled={!focusedStar}
+          enabled={!focusedStar && !flyingToShip}
           enablePan
           enableDamping
           dampingFactor={0.08}
@@ -142,22 +299,29 @@ export function InterstellarScene() {
         />
       </Canvas>
 
-      {selectedStar && (
-        <div className="star-info-panel">
-          <div className="star-info-name">{selectedStar.name}</div>
-          <div className="star-info-dist">{selectedStar.distanceLy.toFixed(2)} ly from Sol</div>
-          {selectedStar.hasSystemData ? (
-            focusedStar ? (
-              <div className="star-info-status ok">Entering system…</div>
+      {selectedShipId ? (
+        <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />
+      ) : (
+        selectedStar && (
+          <DraggableWindow title={selectedStar.name} onClose={() => selectInView(null)}>
+            <div className="inspect-row">
+              <span className="inspect-label">Distance</span>
+              <span className="inspect-value">{selectedStar.distanceLy.toFixed(2)} ly from Sol</span>
+            </div>
+            <div className="inspect-divider" />
+            {selectedStar.hasSystemData ? (
+              focusedStar ? (
+                <div className="inspect-status ok">Entering system…</div>
+              ) : (
+                <button type="button" className="detail-view-btn" onClick={handleEnterSystem}>
+                  Enter System
+                </button>
+              )
             ) : (
-              <button type="button" className="detail-view-btn" onClick={handleEnterSystem}>
-                Enter System
-              </button>
-            )
-          ) : (
-            <div className="star-info-status">No system data available</div>
-          )}
-        </div>
+              <div className="inspect-status">No system data available</div>
+            )}
+          </DraggableWindow>
+        )
       )}
     </div>
   )

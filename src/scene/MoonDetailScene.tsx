@@ -52,13 +52,7 @@ export function MoonDetailScene({ moon, parentOrbitAU, onExit }: MoonDetailScene
         <Stars radius={300} depth={80} count={3000} factor={2} fade speed={0.2} />
 
         <HologramBody color={moon.color} radius={VISUAL_RADIUS} variant="planet" onSelect={() => setInspected(true)} />
-        <FocusableMarker
-          name={moon.name}
-          color={moon.color}
-          radius={VISUAL_RADIUS}
-          focused={inspected}
-          onSelect={() => setInspected(true)}
-        />
+        <FocusableMarker name={moon.name} radius={VISUAL_RADIUS} onSelect={() => setInspected(true)} />
 
         <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={onExit} />
 

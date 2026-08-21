@@ -12,9 +12,11 @@ interface PlanetProps {
   data: PlanetData
   selected: boolean
   onSelect: (name: string) => void
+  /** Right-click — orders the currently-selected ship (if any) here. */
+  onOrderTo?: (name: string) => void
 }
 
-export function Planet({ data, selected, onSelect }: PlanetProps) {
+export function Planet({ data, selected, onSelect, onOrderTo }: PlanetProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
 
@@ -40,12 +42,16 @@ export function Planet({ data, selected, onSelect }: PlanetProps) {
             emissiveIntensity={0.5}
           />
         </mesh>
-        <Html style={{ pointerEvents: 'auto' }}>
+        <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
           <div
             className={`planet-marker${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
             onPointerEnter={() => setHovered(true)}
             onPointerLeave={() => setHovered(false)}
             onClick={() => onSelect(data.name)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              onOrderTo?.(data.name)
+            }}
             onWheel={forwardWheelToCanvas}
           >
             <span className="marker-dot" style={{ borderColor: data.color }} />

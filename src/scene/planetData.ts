@@ -1,7 +1,7 @@
 // Single unified scale: 1 AU = UNITS_PER_AU scene units, applied identically
 // to orbital distances and body radii, so positions and sizes are all
 // true-to-scale relative to each other (real solar system proportions).
-const AU_IN_KM = 149_597_870
+export const AU_IN_KM = 149_597_870
 export const UNITS_PER_AU = 20
 
 const auRadius = (km: number) => (km / AU_IN_KM) * UNITS_PER_AU

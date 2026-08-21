@@ -11,6 +11,13 @@ export interface StarData {
 
 export const UNITS_PER_LY = 8
 
+// A star's real (ly-scale) Cartesian position converted to interstellar-view
+// scene units — shared by InterstellarScene's rendering and shipPhysics'
+// travel-order math so both agree on where a star actually sits on screen.
+export function starScenePosition(star: StarData): [number, number, number] {
+  return [star.position[0] * UNITS_PER_LY, star.position[2] * UNITS_PER_LY, star.position[1] * UNITS_PER_LY]
+}
+
 // Real nearest-neighbor stars/systems to the Sun (within ~10 ly), positioned
 // from their actual right ascension, declination, and distance.
 export const STARS: StarData[] = [

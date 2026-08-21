@@ -5,13 +5,21 @@ import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { Sun } from './Sun'
 import { Planet } from './Planet'
-import { PLANETS, UNITS_PER_AU } from './planetData'
+import { ShipMarker } from './ShipMarker'
+import { ShipPanel } from './ShipPanel'
+import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
+import { PLANETS, SUN_RADIUS_KM, UNITS_PER_AU } from './planetData'
+import { getMoonsForPlanet } from './moonData'
+import type { InspectableBody } from './inspectableBody'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { getPlanetPosition } from './orbitMath'
+import { getShipRenderPosition, planMove, shipSystemId, SOL_SYSTEM_ID } from './shipPhysics'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
+import { useShipStore } from '../state/shipStore'
+import { InspectPanel } from '../components/InspectPanel'
 
 const MAX_DISTANCE = 32000
 const EXIT_DISTANCE = 26000
@@ -20,12 +28,21 @@ const FOCUS_ARRIVE_DISTANCE = 1.4
 // counts as "entering" satellite view, same idea as Detailed View but driven
 // by the player's own zoom instead of the explicit button/fly animation.
 const ENTER_SATELLITE_DISTANCE = 3
+// How close the "Go To" fly-in to a selected ship needs to get before it
+// counts as arrived.
+const SHIP_FOCUS_ARRIVE_DISTANCE = 1.2
 const SOL_NAME = 'Sol'
+const SOL_COLOR = '#ffd27a'
 
-// Default, far-out starting camera direction/distance for a fresh arrival
-// (fly-in from interstellar, breadcrumb) — the whole system reads as a
-// distant cluster, matching the "shrink to a dot" feel of leaving it.
-const FAR_START = new Vector3(0, 6300, 8400)
+// Default starting camera direction/distance for a fresh arrival (fly-in
+// from interstellar, breadcrumb) — close enough that the outer planets
+// (Neptune's orbit radius is ~600 units, see planetData's UNITS_PER_AU) read
+// as individually spaced-out, legible markers rather than a cluttered,
+// overlapping knot near the center of frame. Same viewing angle as before,
+// just ~4.4x closer — that earlier distance was tuned for a "shrink to a
+// dot" feel on *exit*, which turned out to double, unintentionally, as an
+// illegible *entry* framing too.
+const FAR_START = new Vector3(0, 1440, 1920)
 // "Somewhat close" starting distance used instead when returning from
 // satellite view via zoom-out, so exiting a body's close-up reads as
 // gradually pulling back to a lower level of detail, not jumping to a
@@ -45,20 +62,42 @@ export function SolarSystemScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const enterSatellite = useViewStore((s) => s.enterSatellite)
   const enterInterstellar = useViewStore((s) => s.enterInterstellar)
+  const selectedName = useViewStore((s) => s.inViewSelection)
+  const selectInView = useViewStore((s) => s.selectInView)
+  const lockOnEnabled = useViewStore((s) => s.lockOnEnabled)
+  const ships = useShipStore((s) => s.ships)
+  const selectedShipId = useShipStore((s) => s.selectedShipId)
+  const selectShip = useShipStore((s) => s.selectShip)
+  const setShipOrder = useShipStore((s) => s.setShipOrder)
+  const systemShips = useMemo(() => ships.filter((ship) => shipSystemId(ship) === SOL_SYSTEM_ID), [ships])
+  // Only track a selected ship for the camera lock while it's actually
+  // present in this scene — same "focusing logic like planets" idea, but a
+  // planet is always here to lock onto while a ship might have travelled
+  // elsewhere since being selected.
+  const trackedShip = useMemo(
+    () => (selectedShipId ? systemShips.find((s) => s.id === selectedShipId) ?? null : null),
+    [selectedShipId, systemShips],
+  )
 
   // If we're arriving here because the player zoomed out of a body's
   // satellite view, selectedBodyName is still set (see exitSatelliteToSystem)
-  // — use it once, at mount, to both pre-select that body (so the camera
-  // lock engages immediately) and to start the camera nearby instead of at
-  // the far default. A fresh arrival (breadcrumb, interstellar fly-in) has
-  // selectedBodyName cleared, so this is a no-op in that case.
+  // — used once, at mount, purely to start the camera nearby instead of at
+  // the far default (see initialCameraPosition below). A fresh arrival
+  // (breadcrumb, interstellar fly-in) has selectedBodyName cleared, so this
+  // is a no-op in that case. Body *selection* itself (as opposed to camera
+  // framing) is viewStore's inViewSelection, above — exitSatelliteToSystem
+  // and enterSystem both seed it directly, so this ref doesn't need to.
   const continuityBodyRef = useRef(useViewStore.getState().selectedBodyName)
 
   // Selecting a body locks the camera onto it immediately (see
   // SelectionTracker) — `selectedName` doubles as "what's tracked" except
   // while flying to a Detailed View, when CameraFocusRig takes over instead.
-  const [selectedName, setSelectedName] = useState<string | null>(() => continuityBodyRef.current)
   const [flyingToName, setFlyingToName] = useState<string | null>(null)
+  // Set by ShipPanel's "Go To" button — separate from flyingToName since,
+  // unlike a planet's Detailed View, arriving doesn't transition to a
+  // deeper view level. Independent of lockOnEnabled (a one-time fly, not
+  // continuous follow).
+  const [flyingToShip, setFlyingToShip] = useState(false)
 
   const initialCameraPosition = useMemo<[number, number, number]>(() => {
     if (!continuityBodyRef.current) return [FAR_START.x, FAR_START.y, FAR_START.z]
@@ -75,14 +114,29 @@ export function SolarSystemScene() {
     () => (selectedName && selectedName !== SOL_NAME ? PLANETS.find((p) => p.name === selectedName) : undefined),
     [selectedName],
   )
+  const selectedBody: InspectableBody | null = useMemo(() => {
+    if (!selectedName) return null
+    if (selectedName === SOL_NAME) return { name: SOL_NAME, kind: 'star', color: SOL_COLOR, radiusKm: SUN_RADIUS_KM }
+    if (!selectedPlanetData) return null
+    return {
+      name: selectedPlanetData.name,
+      kind: 'planet',
+      color: selectedPlanetData.color,
+      radiusKm: selectedPlanetData.radiusKm,
+      orbitAU: selectedPlanetData.orbitRadius / UNITS_PER_AU,
+      orbitPeriodYears: selectedPlanetData.orbitPeriodYears,
+      moonCount: getMoonsForPlanet(selectedPlanetData.name).totalCount,
+    }
+  }, [selectedName, selectedPlanetData])
   const flyingPlanetData = useMemo(
     () => (flyingToName && flyingToName !== SOL_NAME ? PLANETS.find((p) => p.name === flyingToName) : undefined),
     [flyingToName],
   )
 
   const handleSelect = (name: string) => {
-    setSelectedName(name)
+    selectInView(name)
     setFlyingToName(null)
+    selectShip(null)
   }
 
   // r3f's onPointerMissed fires for any click inside the canvas's shared
@@ -93,13 +147,32 @@ export function SolarSystemScene() {
   // wins, silently undoing the selection. Ignore misses that actually landed
   // on a marker; the marker's own onClick already handled them.
   const handleUnfocus = (event: MouseEvent) => {
-    if (event.target instanceof Element && event.target.closest('.planet-marker')) return
-    setSelectedName(null)
+    if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
+    selectInView(null)
   }
 
   const handleDetailedView = () => {
     if (!selectedName) return
     setFlyingToName(selectedName)
+  }
+
+  // Right-clicking a body orders the currently-selected ship (if any) to go
+  // orbit it — reaction drive or warp, whichever the ship has (hyperdrive
+  // doesn't apply within a system, see shipPhysics.planMove).
+  const handleOrderToBody = (bodyName: string) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship) return
+    const result = planMove(ship, { kind: 'body', systemId: SOL_SYSTEM_ID, bodyName }, useGameTimeStore.getState().simDays)
+    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
+  }
+
+  const handleOrderToPoint = (point: [number, number, number]) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship) return
+    const result = planMove(ship, { kind: 'point', systemId: SOL_SYSTEM_ID, position: point }, useGameTimeStore.getState().simDays)
+    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
   }
 
   return (
@@ -112,9 +185,21 @@ export function SolarSystemScene() {
         <ambientLight intensity={0.15} />
         <Stars radius={40000} depth={8000} count={6000} factor={4} fade speed={0.3} />
 
-        <Sun selected={selectedName === SOL_NAME} onSelect={() => handleSelect(SOL_NAME)} />
+        <DeepSpaceClickPlane onDeselect={() => selectInView(null)} onOrderTo={handleOrderToPoint} />
+
+        <Sun selected={selectedName === SOL_NAME} onSelect={() => handleSelect(SOL_NAME)} onOrderTo={() => handleOrderToBody(SOL_NAME)} />
         {PLANETS.map((planet) => (
-          <Planet key={planet.name} data={planet} selected={selectedName === planet.name} onSelect={handleSelect} />
+          <Planet
+            key={planet.name}
+            data={planet}
+            selected={selectedName === planet.name}
+            onSelect={handleSelect}
+            onOrderTo={handleOrderToBody}
+          />
+        ))}
+
+        {systemShips.map((ship) => (
+          <ShipMarker key={ship.id} ship={ship} />
         ))}
 
         {flyingToName && (
@@ -131,18 +216,39 @@ export function SolarSystemScene() {
           />
         )}
 
-        {selectedName && !flyingToName && (
-          <SelectionTracker
+        {/* "Go To" — a one-time fly to the selected ship's live position,
+            independent of lockOnEnabled. */}
+        {flyingToShip && trackedShip && (
+          <CameraFocusRig
+            key={trackedShip.id}
             controlsRef={controlsRef}
-            getPosition={() =>
-              selectedPlanetData
-                ? getPlanetPosition(selectedPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
-                : ORIGIN
-            }
+            arriveDistance={SHIP_FOCUS_ARRIVE_DISTANCE}
+            getTargetPosition={() => getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
+            onArrive={() => setFlyingToShip(false)}
           />
         )}
 
-        {!flyingToName && (
+        {/* Always tracking, not just while something's selected — falls back
+            to Sol (ORIGIN) so deselecting eases the camera back to the
+            system's main body instead of leaving it wherever it last
+            pointed. That fallback stays active regardless of lockOnEnabled
+            (it's navigation plumbing, not "following a selection" — see
+            viewStore.lockOnEnabled) — only the "chase whatever's actually
+            selected" branch is gated on it, same as a planet or a ship. */}
+        {!flyingToName && !flyingToShip && (
+          <SelectionTracker
+            controlsRef={controlsRef}
+            getPosition={() => {
+              if (lockOnEnabled) {
+                if (trackedShip) return getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
+                if (selectedPlanetData) return getPlanetPosition(selectedPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
+              }
+              return ORIGIN
+            }}
+          />
+        )}
+
+        {!flyingToName && !flyingToShip && (
           <DistanceThresholdWatcher
             mode="max"
             threshold={EXIT_DISTANCE}
@@ -151,7 +257,22 @@ export function SolarSystemScene() {
           />
         )}
 
-        {selectedName && !flyingToName && (
+        {/* Gated on lockOnEnabled too — this measures distance from the
+            tracked target, which only actually sits near the selected body
+            while lock-on is engaging it above; with lock-on off the target
+            stays parked at Sol, so this would otherwise misfire off zooming
+            into Sol instead of the actually-selected planet. Also gated on
+            !selectedShipId — a real bug: selecting a ship doesn't clear
+            selectedName (body selection is deliberately independent, see
+            handleSelect vs. a ship marker's own onClick), so a stale body
+            selection from *before* the ship was selected could still be
+            sitting here. Without this guard, a "Go To" fly-in to a ship
+            resting near that stale body — Sol, say — would leave the camera
+            within ENTER_SATELLITE_DISTANCE the instant flyingToShip clears,
+            immediately (and wrongly) entering that stale body's satellite
+            view right after the flight, with no zoom-in gesture from the
+            player at all. */}
+        {selectedName && !selectedShipId && !flyingToName && !flyingToShip && lockOnEnabled && (
           <DistanceThresholdWatcher
             mode="min"
             threshold={ENTER_SATELLITE_DISTANCE}
@@ -162,7 +283,7 @@ export function SolarSystemScene() {
 
         <OrbitControls
           ref={controlsRef}
-          enabled={!flyingToName}
+          enabled={!flyingToName && !flyingToShip}
           enablePan
           enableDamping
           dampingFactor={0.08}
@@ -172,26 +293,21 @@ export function SolarSystemScene() {
         />
       </Canvas>
 
-      {selectedName && (
-        <div className="star-info-panel">
-          <div className="star-info-name">{selectedName}</div>
-          {selectedName === SOL_NAME ? (
-            <div className="star-info-dist">The system's star</div>
-          ) : (
-            selectedPlanetData && (
-              <div className="star-info-dist">
-                {(selectedPlanetData.orbitRadius / UNITS_PER_AU).toFixed(2)} AU · {selectedPlanetData.orbitPeriodYears.toFixed(2)} yr orbit
-              </div>
-            )
-          )}
-          {flyingToName ? (
-            <div className="star-info-status ok">Entering orbit…</div>
-          ) : (
-            <button type="button" className="detail-view-btn" onClick={handleDetailedView}>
-              Detailed View
-            </button>
-          )}
-        </div>
+      {selectedShipId ? (
+        <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />
+      ) : (
+        selectedBody && (
+          <InspectPanel
+            body={selectedBody}
+            onClose={() => selectInView(null)}
+            action={{
+              label: 'Detailed View',
+              pendingLabel: 'Entering orbit…',
+              pending: !!flyingToName,
+              onClick: handleDetailedView,
+            }}
+          />
+        )
       )}
     </div>
   )

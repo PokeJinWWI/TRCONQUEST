@@ -1,7 +1,13 @@
 import { Breadcrumb } from './components/Breadcrumb'
+import { ChatPlaceholder } from './components/ChatPlaceholder'
+import { DebugConsole } from './components/DebugConsole'
 import { LocationLabel } from './components/LocationLabel'
+import { LockOnToggle } from './components/LockOnToggle'
+import { NavBar } from './components/NavBar'
+import { Outliner } from './components/Outliner'
 import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
+import { useShipOrderSettler } from './hooks/useShipOrderSettler'
 import { GalacticViewScene } from './scene/GalacticViewScene'
 import { InterstellarScene } from './scene/InterstellarScene'
 import { SatelliteViewScene } from './scene/SatelliteViewScene'
@@ -36,21 +42,34 @@ function ActiveScene() {
 
 function App() {
   useGameClock()
+  useShipOrderSettler()
 
   return (
     <div id="app-root">
       <header className="hud-bar hud-top">
-        <div className="hud-title-block">
-          <span className="hud-title">TERRA RELICTA: CONQUEST</span>
-          <LocationLabel />
+        <span className="hud-title">TERRA RELICTA: CONQUEST</span>
+        <div className="hud-top-right">
+          <LockOnToggle />
+          <Breadcrumb />
         </div>
-        <Breadcrumb />
       </header>
 
       <ActiveScene />
 
+      <NavBar />
+      <Outliner />
+      {/* Dev-only spawn tool — import.meta.env.DEV is a compile-time
+          constant Vite replaces with `false` in production builds, so this
+          branch (and the whole DebugConsole module) is dead-code-eliminated
+          out of what ships to players, not just hidden at runtime. */}
+      {import.meta.env.DEV && <DebugConsole />}
+
       <footer className="hud-bar hud-bottom">
-        <TimeControls />
+        <div className="hud-bottom-left">
+          <ChatPlaceholder />
+          <TimeControls />
+        </div>
+        <LocationLabel />
       </footer>
     </div>
   )

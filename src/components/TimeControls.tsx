@@ -1,16 +1,4 @@
-import { SPEED_MULTIPLIERS, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
-
-const MONTHS = [
-  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
-]
-
-function formatDate(date: Date): string {
-  const day = date.getUTCDate()
-  const month = MONTHS[date.getUTCMonth()]
-  const year = date.getUTCFullYear()
-  return `${day} ${month} ${year}`
-}
+import { SPEED_MULTIPLIERS, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
 
 export function TimeControls() {
   const simDays = useGameTimeStore((s) => s.simDays)

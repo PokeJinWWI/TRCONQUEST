@@ -50,25 +50,83 @@
 
 .hud-bottom {
   bottom: 0;
-  justify-content: center;
+  justify-content: space-between;
   background: linear-gradient(0deg, rgba(2, 6, 12, 0.85), rgba(2, 6, 12, 0));
-}
-
-.hud-title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .hud-title {
   font-weight: 700;
 }
 
+.hud-bottom-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The current location — bottom-right, large and prominent so it reads at
+   a glance instead of competing with the title bar's small subtitle. */
 .location-label {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(111, 227, 255, 0.9), 0 0 26px rgba(111, 227, 255, 0.5);
+  white-space: nowrap;
+}
+
+/* Fleet-comms placeholder — not functional yet, just reserving its spot */
+
+.chat-placeholder {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(111, 227, 255, 0.25);
+  border-radius: 3px;
+  background: rgba(111, 227, 255, 0.04);
+  opacity: 0.45;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.chat-placeholder-text {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #6fe3ff;
+}
+
+.hud-top-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Lock-on toggle — whether selecting something eases the camera onto it. */
+
+.lock-on-toggle {
+  background: none;
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font: inherit;
   font-size: 11px;
-  letter-spacing: 0.1em;
-  color: #9fe8ff;
-  opacity: 0.75;
+  color: #6fe3ff;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.lock-on-toggle:hover {
+  opacity: 0.85;
+}
+
+.lock-on-toggle.active {
+  color: #fff;
+  border-color: rgba(111, 227, 255, 0.7);
+  background: rgba(111, 227, 255, 0.08);
+  opacity: 1;
 }
 
 /* Breadcrumb */
@@ -227,6 +285,73 @@
   color: #fff;
 }
 
+/* Ship markers — a triangle instead of the celestial-body dot, so ships
+   read as distinct from planets/stars at a glance. A resting ship's real
+   position gets a small world-space nudge off the body/star it's orbiting
+   (see shipPhysics.restingOffset), but that nudge shrinks to nothing on
+   screen at any reasonably zoomed-out camera distance (the whole-system
+   default view especially) — so this screen-space offset is the part that
+   actually guarantees visible separation from the body's own marker,
+   regardless of zoom. */
+.ship-marker {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transform: translate(4px, -18px);
+}
+
+.ship-marker-icon {
+  position: absolute;
+  top: -4px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #9fe8ff;
+  filter: drop-shadow(0 0 4px rgba(159, 232, 255, 0.7));
+  transition: transform 0.15s;
+}
+
+.ship-marker.hovered .ship-marker-icon,
+.ship-marker.selected .ship-marker-icon {
+  transform: scale(1.35);
+}
+
+.ship-marker.selected .ship-marker-icon {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.9));
+}
+
+.ship-marker .marker-label {
+  color: #fff;
+  opacity: 0.9;
+}
+
+.ship-marker.selected .marker-label {
+  opacity: 1;
+  font-weight: 700;
+}
+
+/* No-text presence badge — sits next to a star's marker in interstellar
+   view when a fleet is nested somewhere inside that system (e.g. orbiting a
+   planet) and so has no position at interstellar scale of its own. One per
+   distinct allegiance color present, deliberately icon-only — but still
+   clicking-to-select the fleet it represents, same as any other ship
+   marker. */
+.fleet-presence-icon {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 6px;
+  vertical-align: middle;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 7px solid;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+}
+
 /* The prominent label for whichever body is currently focused/inspected in
    satellite view — anchored above the hologram instead of sitting on it. */
 .focused-label {
@@ -278,44 +403,6 @@
   height: 100%;
 }
 
-.star-info-panel {
-  position: absolute;
-  right: 20px;
-  bottom: 70px;
-  z-index: 10;
-  padding: 12px 16px;
-  background: rgba(2, 6, 12, 0.85);
-  border: 1px solid rgba(111, 227, 255, 0.35);
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  color: #9fe8ff;
-  min-width: 180px;
-}
-
-.star-info-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.08em;
-}
-
-.star-info-dist {
-  font-size: 11px;
-  opacity: 0.75;
-  margin-top: 4px;
-}
-
-.star-info-status {
-  font-size: 11px;
-  margin-top: 8px;
-  opacity: 0.6;
-}
-
-.star-info-status.ok {
-  color: #7de08a;
-  opacity: 1;
-}
-
 /* Galactic view */
 
 .galactic-wrapper {
@@ -361,8 +448,8 @@
 
 .draggable-window {
   position: absolute;
-  left: 50%;
-  top: 45%;
+  left: 32%;
+  top: 55%;
   z-index: 20;
   width: 240px;
   background: rgba(2, 6, 12, 0.92);
@@ -443,4 +530,519 @@
 .inspect-status.ok {
   color: #7de08a;
   opacity: 1;
+}
+
+.ship-panel-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 3px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ship-panel-checkbox-row input {
+  cursor: pointer;
+}
+
+.ship-panel-status {
+  font-size: 12px;
+  color: #fff;
+  margin-top: 2px;
+}
+
+.ship-panel-hint {
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Nation nav sidebar */
+
+.nav-sidebar {
+  position: absolute;
+  top: 52px;
+  bottom: 58px;
+  left: 0;
+  z-index: 12;
+  display: flex;
+  align-items: stretch;
+  width: 220px;
+  background: rgba(2, 6, 12, 0.88);
+  border-right: 1px solid rgba(111, 227, 255, 0.3);
+  font-family: 'Courier New', monospace;
+  color: #9fe8ff;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.nav-sidebar.collapsed {
+  width: 28px;
+}
+
+.nav-sidebar-content {
+  flex: 1;
+  width: 191px;
+  overflow-y: auto;
+  padding: 12px 10px;
+  opacity: 1;
+  /* Fading in is delayed until the width transition (0.2s, see .nav-sidebar)
+     is mostly done, so content only becomes visible once the panel is
+     already wide — without this, its long labels ("Imperial State of Mars",
+     "Fleet Management") visibly wrap down to single clipped characters while
+     briefly squeezed into the panel's narrow in-between width during the
+     transition. */
+  transition: opacity 0.12s ease 0.1s;
+}
+
+/* Fading out has no such delay — collapsing should hide the content
+   immediately, before the panel has narrowed far enough for this same
+   clipping to show. Padding drops to 0 (not transitioned, no reason to
+   animate it) alongside it — otherwise the content box's 20px of horizontal
+   padding (10px each side) never actually shrinks away even at flex-basis
+   0%, since padding isn't absorbed by flex-shrink under content-box sizing.
+   In the fully collapsed 28px container that pushes the *toggle button*
+   (next in flex order) 20px past where it belongs, clipping the arrow
+   itself almost entirely out of view — a real, persistent bug, not just a
+   transition artifact. */
+.nav-sidebar.collapsed .nav-sidebar-content {
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+  transition: opacity 0.08s ease;
+}
+
+.nav-sidebar-toggle {
+  flex: 0 0 28px;
+  background: rgba(111, 227, 255, 0.06);
+  border: none;
+  border-left: 1px solid rgba(111, 227, 255, 0.2);
+  color: #6fe3ff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.nav-sidebar-toggle:hover {
+  background: rgba(111, 227, 255, 0.15);
+}
+
+.nav-nation-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow: 0 0 6px rgba(111, 227, 255, 0.6);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.3);
+}
+
+.nav-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.nav-category-btn {
+  text-align: left;
+  background: rgba(111, 227, 255, 0.04);
+  border: 1px solid rgba(111, 227, 255, 0.2);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.nav-category-btn:hover {
+  background: rgba(111, 227, 255, 0.12);
+}
+
+.nav-category-btn.active {
+  background: rgba(111, 227, 255, 0.2);
+  border-color: rgba(111, 227, 255, 0.6);
+  color: #fff;
+}
+
+.nav-placeholder {
+  font-size: 11px;
+  opacity: 0.5;
+  padding: 6px 0;
+}
+
+/* Outliner */
+
+.outliner {
+  position: absolute;
+  top: 52px;
+  bottom: 58px;
+  right: 0;
+  z-index: 12;
+  display: flex;
+  align-items: stretch;
+  width: 220px;
+  background: rgba(2, 6, 12, 0.88);
+  border-left: 1px solid rgba(111, 227, 255, 0.3);
+  font-family: 'Courier New', monospace;
+  color: #9fe8ff;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.outliner.collapsed {
+  width: 28px;
+}
+
+.outliner-toggle {
+  flex: 0 0 28px;
+  background: rgba(111, 227, 255, 0.06);
+  border: none;
+  border-right: 1px solid rgba(111, 227, 255, 0.2);
+  color: #6fe3ff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.outliner-toggle:hover {
+  background: rgba(111, 227, 255, 0.15);
+}
+
+.outliner-content {
+  flex: 1;
+  width: 191px;
+  overflow-y: auto;
+  padding: 12px 10px;
+  /* Same transition asymmetry as .nav-sidebar-content — see its comment. */
+  opacity: 1;
+  transition: opacity 0.12s ease 0.1s;
+}
+
+/* Padding dropped to 0 here too — see .nav-sidebar.collapsed
+   .nav-sidebar-content's comment for why. Less visually obvious on this
+   right-anchored sidebar (the overflow direction happens to clip the
+   leftover content remnant instead of the toggle here), but it's the exact
+   same underlying bug and deserves the same fix rather than relying on that
+   anchor-side coincidence. */
+.outliner.collapsed .outliner-content {
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+  transition: opacity 0.08s ease;
+}
+
+.outliner-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #6fe3ff;
+  text-shadow: 0 0 6px rgba(111, 227, 255, 0.6);
+  margin-bottom: 14px;
+}
+
+.outliner-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(111, 227, 255, 0.05);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+}
+
+.outliner-search-input::placeholder {
+  color: #9fe8ff;
+  opacity: 0.5;
+}
+
+.outliner-search-input:focus {
+  outline: none;
+  border-color: rgba(111, 227, 255, 0.7);
+}
+
+.outliner-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.outliner-filter-pill {
+  background: rgba(111, 227, 255, 0.04);
+  border: 1px solid rgba(111, 227, 255, 0.2);
+  border-radius: 10px;
+  color: #9fe8ff;
+  opacity: 0.5;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.outliner-filter-pill:hover {
+  opacity: 0.8;
+}
+
+.outliner-filter-pill.active {
+  background: rgba(111, 227, 255, 0.18);
+  border-color: rgba(111, 227, 255, 0.6);
+  color: #fff;
+  opacity: 1;
+}
+
+.outliner-section + .outliner-section {
+  margin-top: 16px;
+}
+
+.outliner-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.25);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #fff;
+  opacity: 0.85;
+  padding: 0 0 6px 0;
+  margin-bottom: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.outliner-section-title:hover {
+  opacity: 1;
+}
+
+.outliner-section-caret {
+  display: inline-block;
+  font-size: 9px;
+  color: #6fe3ff;
+  transition: transform 0.15s ease;
+}
+
+.outliner-section-caret.collapsed {
+  transform: rotate(-90deg);
+}
+
+.outliner-empty {
+  font-size: 11px;
+  opacity: 0.45;
+  padding: 2px 0;
+}
+
+.outliner-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.outliner-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.outliner-entry.clickable {
+  cursor: pointer;
+}
+
+.outliner-entry.clickable:hover .outliner-entry-name {
+  color: #fff;
+}
+
+.outliner-entry.selected .outliner-entry-name {
+  color: #fff;
+  font-weight: 700;
+}
+
+.outliner-icon {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid;
+}
+
+.outliner-icon-star {
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 0 4px currentColor;
+}
+
+.outliner-icon-moon {
+  width: 6px;
+  height: 6px;
+}
+
+.outliner-icon-ship {
+  width: 0;
+  height: 0;
+  border: none;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 7px solid;
+  border-radius: 0;
+}
+
+.outliner-entry-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Debug console (dev build only — see App.tsx's import.meta.env.DEV gate).
+   Deliberately amber/danger-colored, unlike the rest of the cyan HUD, so
+   it's never mistaken for real game UI while developing. */
+
+.debug-console {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: 260px;
+  background: rgba(20, 10, 0, 0.94);
+  border: 1px solid rgba(255, 176, 59, 0.6);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  font-family: 'Courier New', monospace;
+  color: #ffd9a0;
+}
+
+.debug-console-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 176, 59, 0.12);
+  border-bottom: 1px solid rgba(255, 176, 59, 0.4);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #ffb03b;
+}
+
+.debug-console-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 90, 90, 0.6);
+  border-radius: 10px;
+  color: #ff8a8a;
+}
+
+.debug-console-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #ffd9a0;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.debug-console-close:hover {
+  color: #fff;
+}
+
+.debug-console-body {
+  padding: 10px 12px;
+}
+
+.debug-console-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+
+.debug-console-row label {
+  opacity: 0.7;
+}
+
+.debug-console-row select {
+  background: rgba(255, 176, 59, 0.08);
+  border: 1px solid rgba(255, 176, 59, 0.35);
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 6px;
+}
+
+.debug-console-spawn-btn {
+  width: 100%;
+  background: rgba(255, 176, 59, 0.15);
+  border: 1px solid rgba(255, 176, 59, 0.6);
+  border-radius: 3px;
+  color: #ffb03b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 6px 0;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.debug-console-spawn-btn:hover {
+  background: rgba(255, 176, 59, 0.28);
+}
+
+.debug-console-divider {
+  border-top: 1px solid rgba(255, 176, 59, 0.25);
+  margin: 10px 0;
+}
+
+.debug-console-empty {
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+.debug-console-ship-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.debug-console-ship-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.debug-console-ship-row button {
+  background: none;
+  border: none;
+  color: #ff8a8a;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.debug-console-ship-row button:hover {
+  color: #fff;
 }

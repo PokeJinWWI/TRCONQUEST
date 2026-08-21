@@ -47,3 +47,18 @@ export function simDaysToDate(simDays: number): Date {
 export function simDaysToYears(simDays: number): number {
   return simDays / DAYS_PER_YEAR
 }
+
+const MONTHS = [
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+]
+
+// Shared date format ("18 AUG 2604") — the same string TimeControls shows
+// for the current date, reused for a ship's estimated arrival so both read
+// as the same kind of in-universe date.
+export function formatDate(date: Date): string {
+  const day = date.getUTCDate()
+  const month = MONTHS[date.getUTCMonth()]
+  const year = date.getUTCFullYear()
+  return `${day} ${month} ${year}`
+}
