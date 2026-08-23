@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { CombatProfile, ComponentKind } from '../data/combatData'
 import type { FleetAllegiance } from '../data/shipData'
 
 // Where a ship rests when it has no active order — always resolved to a
@@ -13,8 +14,13 @@ import type { FleetAllegiance } from '../data/shipData'
 // rather than sharing one stored value that could only be right for one of
 // them. The time-basis (how fast, starting where in the circle) is the one
 // part that's genuinely shared, physical ship state.
+// `inclinationDeg` defaults to 0 for a normal arrival (a flat orbit, same as
+// before this field existed) — nonzero only when a ship has entered a
+// synced orbit matching a real moon's tilt (see MoveDestination's 'body'
+// `syncOrbit`, and shipPhysics.oppositeMoonSyncOrbit), so its path actually
+// stays coplanar with that moon's, not just angularly opposite it.
 export type ShipLocation =
-  | { kind: 'orbiting'; systemId: string; bodyName: string; periodDays: number; phaseDeg: number }
+  | { kind: 'orbiting'; systemId: string; bodyName: string; periodDays: number; phaseDeg: number; inclinationDeg: number }
   | { kind: 'system-point'; systemId: string; position: [number, number, number] }
   | { kind: 'star'; starId: string; offset: [number, number, number] }
   | { kind: 'interstellar-point'; position: [number, number, number] }
@@ -23,7 +29,18 @@ export type ShipLocation =
 // at order-issue time (and, for a 'body', re-resolved to wherever that body
 // actually is once the order completes).
 export type MoveDestination =
-  | { kind: 'body'; systemId: string; bodyName: string }
+  | {
+      kind: 'body'
+      systemId: string
+      bodyName: string
+      // Present only for "enter a preexisting orbit" (see
+      // shipPhysics.oppositeMoonSyncOrbit) — overrides the default
+      // fresh-arrival period/phase/inclination with an exact match to
+      // another orbiting object's motion (offset however the caller likes;
+      // the opposite-a-moon case bakes in a 180° phase offset itself).
+      // Absent for every ordinary "go orbit this body" order.
+      syncOrbit?: { periodDays: number; phaseDeg: number; inclinationDeg: number }
+    }
   | { kind: 'point'; systemId: string; position: [number, number, number] }
   | { kind: 'star'; starId: string }
   | { kind: 'interstellar-point'; position: [number, number, number] }
@@ -66,6 +83,51 @@ export interface MoveOrder {
   gravityWellClearSimDays?: number
 }
 
+// A drive spooling up to fire. This is the *only* way out of an engagement:
+// a ship in combat can't simply fly off at reaction drive (it's pinned inside
+// the arena), so escaping means committing to a charge and surviving it.
+// While charging, the ship cannot fire (see combatResolution) — the whole
+// point of the mechanic is that announcing an escape costs you your guns for
+// the duration and hands the enemy a window to stop you.
+export interface FtlCharge {
+  kind: 'warp' | 'hyperdrive'
+  // Where the ship intends to go once the charge completes. Kept here rather
+  // than as a MoveOrder because no arrival time can be computed until the
+  // drive actually fires.
+  destination: MoveDestination
+  startedSimDays: number
+  // Absolute deadline. Recomputed if the ship's utility component takes
+  // damage mid-charge — a wrecked utility array charges slower, and can stall
+  // the escape entirely at zero.
+  readySimDays: number
+}
+
+// Persistent battle damage, carried on the ship itself so it outlives any one
+// engagement. Everything transient about a fight (arena position, weapon
+// timers, chosen target) lives on the engagement instead — see
+// combatStore.CombatParticipant.
+export interface ShipCombatState {
+  componentHp: Record<ComponentKind, number>
+  // Regenerates over time, in and out of combat.
+  shieldHp: number
+  // Does not regenerate in the field — armor damage is permanent until some
+  // future repair/shipyard system exists to undo it.
+  armorHp: number
+  ftlCharge: FtlCharge | null
+}
+
+// A fresh, undamaged combat state for a hull. Every ship gets one at spawn
+// (there is no "not yet in combat" null state) so damage application never
+// has to construct state on the fly.
+export function pristineCombatState(profile: CombatProfile): ShipCombatState {
+  return {
+    componentHp: { ...profile.components },
+    shieldHp: profile.defenses.shieldHp,
+    armorHp: profile.defenses.armorHp,
+    ftlCharge: null,
+  }
+}
+
 export interface ShipInstance {
   id: string
   classId: string
@@ -99,6 +161,19 @@ export interface ShipInstance {
   // whenever a new order/location is set, since that supersedes the queued
   // intent — a ship can only ever have one destination in mind at a time.
   pendingHyperdriveJump: string | null
+  // Standing "escort" directive (see useShipOrderSettler) — when set, this
+  // ship keeps re-targeting whatever destination the named ship is
+  // currently ordered to (or resting at), re-issuing a fresh order whenever
+  // that destination changes, until either ship is removed or the player
+  // issues this ship its own manual order (which cancels it — see
+  // setShipOrder/setShipLocation's `keepFollowing` param). Not a MoveOrder
+  // itself since there's no fixed arrival time to compute up front — the
+  // target can keep moving.
+  followingShipId: string | null
+  // Persistent battle damage + any in-progress FTL escape charge. Always
+  // present (see pristineCombatState) — a ship that has never fought simply
+  // has one at full health.
+  combat: ShipCombatState
 }
 
 interface ShipState {
@@ -114,19 +189,38 @@ interface ShipState {
   // — redirecting a ship away from an in-progress warp jump forces its
   // cooldown to restart right now, applied atomically with the new order so
   // there's no frame where the old order is gone but the penalty isn't in
-  // effect yet.
-  setShipOrder: (id: string, order: MoveOrder, warpReadySimDays?: number) => void
+  // effect yet. `keepFollowing` defaults to false — any *manual* order
+  // (issued from a scene's right-click handler) cancels a standing follow
+  // directive, same as it already cancels a pending hyperdrive jump; only
+  // useShipOrderSettler's own follow-recompute calls pass true, since that's
+  // the mechanism keeping the directive alive, not overriding it.
+  setShipOrder: (id: string, order: MoveOrder, warpReadySimDays?: number, keepFollowing?: boolean) => void
   setWarpEnabled: (id: string, enabled: boolean) => void
   setWarpWhenReady: (id: string, whenReady: boolean) => void
   setShipLocation: (
     id: string,
     location: ShipLocation,
     cooldowns?: { hyperdriveReadySimDays?: number; warpReadySimDays?: number },
+    keepFollowing?: boolean,
   ) => void
   // "Jump when ready" — queues a hyperdrive jump to fire automatically once
   // the drive is off cooldown (see useShipOrderSettler). Pass null to cancel
   // a queued jump without issuing a new order/location.
   setPendingHyperdriveJump: (id: string, starId: string | null) => void
+  // Sets or clears (pass null) this ship's standing follow directive — see
+  // ShipInstance.followingShipId. Always a deliberate, direct call (from a
+  // scene's right-click-a-ship handler), so no keepFollowing-style guard is
+  // needed here the way setShipOrder/setShipLocation have.
+  setFollowing: (id: string, targetShipId: string | null) => void
+  // Bulk-applies one combat step's damage results, keyed by ship id, and
+  // removes any ship whose core component hit zero. Combat resolves as a
+  // pure function over every participant at once (see combatResolution.ts),
+  // so it writes back through a single action — applying per-ship damage
+  // one call at a time would let a ship die mid-step and change what its
+  // own already-fired shots hit.
+  applyCombatDamage: (next: Record<string, ShipCombatState>, destroyedIds: string[]) => void
+  // Begins or cancels (pass null) an FTL escape charge — see FtlCharge.
+  setFtlCharge: (id: string, charge: FtlCharge | null) => void
 }
 
 export const useShipStore = create<ShipState>((set) => ({
@@ -145,7 +239,7 @@ export const useShipStore = create<ShipState>((set) => ({
   // (shipPhysics.planMove refuses to plan a move for a non-player ship) —
   // see planMove's own doc comment.
   selectShip: (id) => set({ selectedShipId: id }),
-  setShipOrder: (id, order, warpReadySimDays) =>
+  setShipOrder: (id, order, warpReadySimDays, keepFollowing) =>
     set((s) => ({
       ships: s.ships.map((ship) =>
         ship.id === id
@@ -154,6 +248,7 @@ export const useShipStore = create<ShipState>((set) => ({
               order,
               pendingHyperdriveJump: null,
               warpReadySimDays: warpReadySimDays ?? ship.warpReadySimDays,
+              followingShipId: keepFollowing ? ship.followingShipId : null,
             }
           : ship,
       ),
@@ -166,7 +261,7 @@ export const useShipStore = create<ShipState>((set) => ({
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, warpWhenReady: whenReady } : ship)),
     })),
-  setShipLocation: (id, location, cooldowns) =>
+  setShipLocation: (id, location, cooldowns, keepFollowing) =>
     set((s) => ({
       ships: s.ships.map((ship) =>
         ship.id === id
@@ -177,6 +272,7 @@ export const useShipStore = create<ShipState>((set) => ({
               hyperdriveReadySimDays: cooldowns?.hyperdriveReadySimDays ?? ship.hyperdriveReadySimDays,
               warpReadySimDays: cooldowns?.warpReadySimDays ?? ship.warpReadySimDays,
               pendingHyperdriveJump: null,
+              followingShipId: keepFollowing ? ship.followingShipId : null,
             }
           : ship,
       ),
@@ -184,5 +280,26 @@ export const useShipStore = create<ShipState>((set) => ({
   setPendingHyperdriveJump: (id, starId) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingHyperdriveJump: starId } : ship)),
+    })),
+  setFollowing: (id, targetShipId) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, followingShipId: targetShipId } : ship)),
+    })),
+  applyCombatDamage: (next, destroyedIds) =>
+    set((s) => {
+      const destroyed = new Set(destroyedIds)
+      const ships = s.ships
+        .filter((ship) => !destroyed.has(ship.id))
+        .map((ship) => (next[ship.id] ? { ...ship, combat: next[ship.id] } : ship))
+      return {
+        ships,
+        // A destroyed ship can't stay selected — same cleanup removeShip
+        // already does for the lost-in-hyperspace case.
+        selectedShipId: s.selectedShipId && destroyed.has(s.selectedShipId) ? null : s.selectedShipId,
+      }
+    }),
+  setFtlCharge: (id, charge) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, combat: { ...ship.combat, ftlCharge: charge } } : ship)),
     })),
 }))

@@ -224,6 +224,400 @@
   box-shadow: 0 0 4px rgba(111, 227, 255, 0.8);
 }
 
+/* Strategic/tactical clock mode switch. Deliberately louder than the speed
+   buttons beside it — switching modes changes the pace of the whole game by
+   ~500,000x, which is not a neighbor of "one step faster". */
+.time-mode-btn {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  color: #6fe3ff;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.time-mode-btn:hover {
+  background: rgba(111, 227, 255, 0.2);
+}
+
+.time-mode-btn.tactical {
+  border-color: #ff6b4a;
+  color: #ff6b4a;
+  background: rgba(255, 107, 74, 0.12);
+  box-shadow: 0 0 6px rgba(255, 107, 74, 0.35);
+}
+
+/* Wall-clock readout, shown only in tactical mode where the date is
+   effectively frozen. */
+.time-clock {
+  margin-left: 8px;
+  color: #ff6b4a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Health bars (ShipPanel) */
+
+.health-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+  font-size: 11px;
+}
+
+.health-bar-label {
+  flex: 0 0 82px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.health-bar-track {
+  flex: 1 1 auto;
+  height: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.health-bar-fill {
+  display: block;
+  height: 100%;
+  transition: width 120ms linear;
+}
+
+.health-bar-value {
+  flex: 0 0 62px;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One color per layer so the two consumable buffers (shields, armor) never
+   get mistaken for the ship's own three component bars. */
+.tone-overall .health-bar-fill {
+  background: #4ade80;
+  box-shadow: 0 0 5px rgba(74, 222, 128, 0.6);
+}
+
+.tone-shield .health-bar-fill {
+  background: #4da6ff;
+}
+
+.tone-armor .health-bar-fill {
+  background: #ffd23f;
+}
+
+.tone-component .health-bar-fill {
+  background: #ff8a5c;
+}
+
+.ship-panel-combat {
+  color: #ff6b4a;
+}
+
+/* Combat view */
+
+.crumb-combat:disabled {
+  color: #ff6b4a;
+  opacity: 1;
+}
+
+/* Arena markers carry their own integrity bar and FTL badge, so they need
+   more room than the compact orbital ship markers elsewhere. */
+.combat-ship-marker .marker-label {
+  display: block;
+}
+
+.combat-marker-health {
+  display: block;
+  width: 46px;
+  height: 3px;
+  margin-top: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.combat-marker-health-fill {
+  display: block;
+  height: 100%;
+  transition: width 120ms linear;
+}
+
+.combat-marker-charging {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0 3px;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: #ff6b4a;
+  border: 1px solid #ff6b4a;
+  border-radius: 2px;
+  animation: combat-charging-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes combat-charging-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.combat-side {
+  margin-bottom: 8px;
+}
+
+.combat-side-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 3px;
+}
+
+.combat-side-empty {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  padding: 2px 0;
+}
+
+.combat-roster-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 3px 5px;
+  margin: 2px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  text-align: left;
+}
+
+.combat-roster-row:hover {
+  background: rgba(111, 227, 255, 0.1);
+}
+
+.combat-roster-row.selected {
+  border-color: rgba(111, 227, 255, 0.6);
+  background: rgba(111, 227, 255, 0.12);
+}
+
+.combat-roster-row.targeted {
+  border-color: rgba(255, 107, 74, 0.7);
+}
+
+.combat-roster-name {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.combat-roster-tag {
+  margin-left: 5px;
+  padding: 0 3px;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  border: 1px solid #ff6b4a;
+  color: #ff6b4a;
+  border-radius: 2px;
+}
+
+.combat-roster-tag.target {
+  border-color: #ffd23f;
+  color: #ffd23f;
+}
+
+.combat-roster-bar {
+  flex: 0 0 54px;
+}
+
+.combat-roster-pct {
+  flex: 0 0 32px;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.combat-orders-title {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #6fe3ff;
+  margin: 4px 0 6px;
+}
+
+.combat-density-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.combat-density-btn {
+  background: rgba(111, 227, 255, 0.06);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.combat-density-btn:hover {
+  background: rgba(111, 227, 255, 0.18);
+}
+
+.combat-density-btn.active {
+  border-color: #6fe3ff;
+  color: #6fe3ff;
+  background: rgba(111, 227, 255, 0.2);
+}
+
+/* Fleet Management */
+
+.fleet-management {
+  min-width: 460px;
+  max-width: 620px;
+}
+
+.fleet-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+  padding-bottom: 6px;
+}
+
+.fleet-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.fleet-tab:hover {
+  color: #fff;
+  background: rgba(111, 227, 255, 0.1);
+}
+
+.fleet-tab.active {
+  color: #6fe3ff;
+  border-color: rgba(111, 227, 255, 0.5);
+  background: rgba(111, 227, 255, 0.14);
+}
+
+.fleet-list {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.fleet-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 7px;
+  margin-bottom: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font: inherit;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.fleet-row:hover {
+  background: rgba(111, 227, 255, 0.1);
+}
+
+.fleet-row.selected {
+  border-color: rgba(111, 227, 255, 0.6);
+  background: rgba(111, 227, 255, 0.12);
+}
+
+.fleet-row-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.fleet-row-name {
+  color: #fff;
+}
+
+.fleet-row-class,
+.fleet-row-allegiance {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+}
+
+.fleet-row-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.fleet-row-status {
+  margin-top: 4px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.designer-layout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.designer-list {
+  flex: 0 0 168px;
+}
+
+.designer-detail {
+  flex: 1 1 auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.designer-title {
+  font-size: 13px;
+  color: #6fe3ff;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.design-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  margin: 4px 0 6px;
+}
+
+.design-table th {
+  text-align: left;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: normal;
+  padding: 2px 5px 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.design-table td {
+  padding: 2px 5px 2px 0;
+  color: rgba(255, 255, 255, 0.75);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Planet / star markers */
 
 .planet-marker {
@@ -544,6 +938,21 @@
 
 .ship-panel-checkbox-row input {
   cursor: pointer;
+}
+
+.ship-panel-unfollow-btn {
+  margin-left: 6px;
+  font-size: 9px;
+  padding: 1px 5px;
+  background: transparent;
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  color: #6fe3ff;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.ship-panel-unfollow-btn:hover {
+  background: rgba(111, 227, 255, 0.15);
 }
 
 .ship-panel-status {

@@ -20,7 +20,7 @@ export function OrbitRing({ radius, inclinationDeg = 0, ascendingNodeDeg = 0 }: 
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[new Float32Array(points), 3]} />
       </bufferGeometry>
-      <lineBasicMaterial color="#2fd8ff" transparent opacity={0.55} />
+      <lineBasicMaterial color="#7ce8ff" transparent opacity={0.9} />
     </line>
   )
 }

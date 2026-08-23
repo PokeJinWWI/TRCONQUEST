@@ -13,6 +13,7 @@ export interface PlanetData {
   name: string
   radius: number
   radiusKm: number
+  massKg: number
   orbitRadius: number
   color: string
   orbitPeriodYears: number
@@ -24,6 +25,7 @@ export interface PlanetData {
 interface RawPlanet {
   name: string
   radiusKm: number
+  massKg: number
   auDistance: number
   color: string
   periodYears: number
@@ -40,20 +42,21 @@ interface RawPlanet {
 // (camera fly-to, minimaps, etc) can independently compute a planet's exact
 // position from `data` + the current sim time alone.
 const RAW_PLANETS: RawPlanet[] = [
-  { name: 'Mercury', radiusKm: 2439.7, auDistance: 0.387, color: '#9c9c9c', periodYears: 0.241, inclinationDeg: 7.0, ascendingNodeDeg: 48.33, phaseDeg: 45 },
-  { name: 'Venus', radiusKm: 6051.8, auDistance: 0.723, color: '#e0c078', periodYears: 0.615, inclinationDeg: 3.39, ascendingNodeDeg: 76.68, phaseDeg: 120 },
-  { name: 'Earth', radiusKm: 6371, auDistance: 1.0, color: '#4da6ff', periodYears: 1.0, inclinationDeg: 0.0, ascendingNodeDeg: 0.0, phaseDeg: 200 },
-  { name: 'Mars', radiusKm: 3389.5, auDistance: 1.524, color: '#ff6b4a', periodYears: 1.881, inclinationDeg: 1.85, ascendingNodeDeg: 49.56, phaseDeg: 10 },
-  { name: 'Jupiter', radiusKm: 69911, auDistance: 5.203, color: '#e0a96d', periodYears: 11.86, inclinationDeg: 1.31, ascendingNodeDeg: 100.46, phaseDeg: 300 },
-  { name: 'Saturn', radiusKm: 58232, auDistance: 9.537, color: '#e8d7a7', periodYears: 29.45, inclinationDeg: 2.49, ascendingNodeDeg: 113.67, phaseDeg: 80 },
-  { name: 'Uranus', radiusKm: 25362, auDistance: 19.191, color: '#7de0e0', periodYears: 84.02, inclinationDeg: 0.77, ascendingNodeDeg: 74.02, phaseDeg: 160 },
-  { name: 'Neptune', radiusKm: 24622, auDistance: 30.069, color: '#5a7de0', periodYears: 164.8, inclinationDeg: 1.77, ascendingNodeDeg: 131.78, phaseDeg: 260 },
+  { name: 'Mercury', radiusKm: 2439.7, massKg: 3.3011e23, auDistance: 0.387, color: '#9c9c9c', periodYears: 0.241, inclinationDeg: 7.0, ascendingNodeDeg: 48.33, phaseDeg: 45 },
+  { name: 'Venus', radiusKm: 6051.8, massKg: 4.8675e24, auDistance: 0.723, color: '#e0c078', periodYears: 0.615, inclinationDeg: 3.39, ascendingNodeDeg: 76.68, phaseDeg: 120 },
+  { name: 'Earth', radiusKm: 6371, massKg: 5.972e24, auDistance: 1.0, color: '#4da6ff', periodYears: 1.0, inclinationDeg: 0.0, ascendingNodeDeg: 0.0, phaseDeg: 200 },
+  { name: 'Mars', radiusKm: 3389.5, massKg: 6.4171e23, auDistance: 1.524, color: '#ff6b4a', periodYears: 1.881, inclinationDeg: 1.85, ascendingNodeDeg: 49.56, phaseDeg: 10 },
+  { name: 'Jupiter', radiusKm: 69911, massKg: 1.8982e27, auDistance: 5.203, color: '#e0a96d', periodYears: 11.86, inclinationDeg: 1.31, ascendingNodeDeg: 100.46, phaseDeg: 300 },
+  { name: 'Saturn', radiusKm: 58232, massKg: 5.6834e26, auDistance: 9.537, color: '#e8d7a7', periodYears: 29.45, inclinationDeg: 2.49, ascendingNodeDeg: 113.67, phaseDeg: 80 },
+  { name: 'Uranus', radiusKm: 25362, massKg: 8.681e25, auDistance: 19.191, color: '#7de0e0', periodYears: 84.02, inclinationDeg: 0.77, ascendingNodeDeg: 74.02, phaseDeg: 160 },
+  { name: 'Neptune', radiusKm: 24622, massKg: 1.02413e26, auDistance: 30.069, color: '#5a7de0', periodYears: 164.8, inclinationDeg: 1.77, ascendingNodeDeg: 131.78, phaseDeg: 260 },
 ]
 
 export const PLANETS: PlanetData[] = RAW_PLANETS.map((p) => ({
   name: p.name,
   radius: auRadius(p.radiusKm),
   radiusKm: p.radiusKm,
+  massKg: p.massKg,
   orbitRadius: p.auDistance * UNITS_PER_AU,
   color: p.color,
   orbitPeriodYears: p.periodYears,

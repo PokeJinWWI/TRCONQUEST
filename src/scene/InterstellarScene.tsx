@@ -8,13 +8,15 @@ import { STARS, starScenePosition } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
+import { useHyperlaneStore, laneEndpoints } from '../state/hyperlaneStore'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
+import { HyperlaneLine } from './HyperlaneLine'
 import { ShipMarker } from './ShipMarker'
 import { ShipPanel } from './ShipPanel'
-import { getShipRenderPosition, planMove, shipSystemId } from './shipPhysics'
+import { getShipRenderPosition, planMove, shipSystemId, canFollow } from './shipPhysics'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 import { DraggableWindow } from '../components/DraggableWindow'
@@ -119,8 +121,13 @@ export function InterstellarScene() {
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const setShipOrder = useShipStore((s) => s.setShipOrder)
+  const setFtlCharge = useShipStore((s) => s.setFtlCharge)
   const setShipLocation = useShipStore((s) => s.setShipLocation)
   const setPendingHyperdriveJump = useShipStore((s) => s.setPendingHyperdriveJump)
+  const setFollowing = useShipStore((s) => s.setFollowing)
+  const removeShip = useShipStore((s) => s.removeShip)
+  const lanes = useHyperlaneStore((s) => s.lanes)
+  const addHyperlane = useHyperlaneStore((s) => s.addHyperlane)
   const interstellarShips = useMemo(
     () => ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)),
     [ships],
@@ -168,19 +175,32 @@ export function InterstellarScene() {
 
   // Right-clicking a star orders the selected ship there (warp/hyperdrive,
   // whichever the ship has) — no-op if no ship is selected. A hyperdrive
-  // still on cooldown doesn't just drop the order — "jump when ready" queues
-  // it to fire automatically once the drive is off cooldown (see
-  // useShipOrderSettler), rather than silently doing nothing.
+  // still on cooldown, or the game being paused, doesn't just drop the order
+  // — "jump when ready" queues it to fire automatically once the drive is
+  // off cooldown *and* time is unpaused (see useShipOrderSettler), rather
+  // than silently doing nothing. A hyperdrive
+  // jump that actually fires carries real risk (see planMove/
+  // hyperdriveLossChance) — 'lost-in-hyperspace' means the ship is simply
+  // gone, deselected if it was selected (its ShipPanel closes on its own
+  // once the ship no longer exists); a successful jump instead records the
+  // hyperlane it just charted (hyperlaneEstablished), same "physics layer
+  // computes it, caller applies it" split every other MoveResult already
+  // follows.
   const handleOrderToStar = (star: StarData) => {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
     const result = planMove(ship, { kind: 'star', starId: star.id }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
-    else if (result.kind === 'instant')
+    else if (result.kind === 'instant') {
       setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays })
-    else if (result.kind === 'on-cooldown') setPendingHyperdriveJump(ship.id, star.id)
-    // 'unknown-class': silently ignored — genuinely nothing to do.
+      if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
+    } else if (result.kind === 'on-cooldown' || result.kind === 'paused') setPendingHyperdriveJump(ship.id, star.id)
+    else if (result.kind === 'lost-in-hyperspace') removeShip(ship.id)
+    // Pinned in a firefight: the jump becomes an FTL escape charge instead of
+    // firing immediately (see planMove's 'engaged' result).
+    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+    // 'unknown-class'/'not-owned': silently ignored — genuinely nothing to do.
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
@@ -189,6 +209,21 @@ export function InterstellarScene() {
     if (!ship) return
     const result = planMove(ship, { kind: 'interstellar-point', position: point }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
+    // Pinned in a firefight: the destination becomes an FTL escape charge
+    // instead of a move order (see planMove's 'engaged' result).
+    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+  }
+
+  // Right-clicking another ship while one is selected orders the selected
+  // ship to follow it, instead of a normal move order — see
+  // ShipInstance.followingShipId. Selection itself never changes (matches
+  // every other right-click-to-order in this project: it commands whatever
+  // was already selected, it doesn't reselect).
+  const handleFollowShip = (targetShipId: string) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship || !canFollow(ship, targetShipId)) return
+    setFollowing(ship.id, targetShipId)
   }
 
   // Same race as system view: r3f's onPointerMissed fires for any click that
@@ -209,8 +244,19 @@ export function InterstellarScene() {
 
         <DeepSpaceClickPlane onDeselect={() => selectInView(null)} onOrderTo={handleOrderToPoint} />
 
-        {/* No connecting lines yet — those represent plotted routes, which
-            the player draws later. Just the star nodes themselves for now. */}
+        {/* Charted hyperlanes — established automatically the first time a
+            hyperdrive jump between two stars succeeds (see planMove/
+            hyperdriveLossChance), not drawn by the player. A separate,
+            future "plot a route" feature may let the player draw their own
+            lines here too; this is unrelated to that. */}
+        {lanes.map((key) => {
+          const [aId, bId] = laneEndpoints(key)
+          const a = STARS.find((s) => s.id === aId)
+          const b = STARS.find((s) => s.id === bId)
+          if (!a || !b) return null
+          return <HyperlaneLine key={key} from={starScenePosition(a)} to={starScenePosition(b)} />
+        })}
+
         {STARS.map((star) => (
           <StarNode
             key={star.id}
@@ -224,7 +270,7 @@ export function InterstellarScene() {
         ))}
 
         {interstellarShips.map((ship) => (
-          <ShipMarker key={ship.id} ship={ship} />
+          <ShipMarker key={ship.id} ship={ship} onOrderFollow={handleFollowShip} />
         ))}
 
         {focusedStar && (

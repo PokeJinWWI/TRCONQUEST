@@ -1,10 +1,20 @@
 import { Vector3 } from 'three'
-import type { ShipInstance, ShipLocation, MoveDestination, MoveOrder } from '../state/shipStore'
-import { SHIP_CLASSES, type WarpDrive, type HyperDrive } from '../data/shipData'
+import type { ShipInstance, ShipLocation, MoveDestination, MoveOrder, FtlCharge } from '../state/shipStore'
+import { useCombatStore } from '../state/combatStore'
+import { findEngagementFor, planFtlCharge } from './combatResolution'
+import {
+  SHIP_CLASSES,
+  HYPERDRIVE_BASE_LOSS_CHANCE,
+  HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE,
+  type WarpDrive,
+  type HyperDrive,
+} from '../data/shipData'
 import { PLANETS, UNITS_PER_AU, AU_IN_KM } from './planetData'
-import { getPlanetPosition, getOrbitPosition, angleForYear } from './orbitMath'
+import { getPlanetPosition, getOrbitPosition, angleForYear, MOON_TIME_DILATION } from './orbitMath'
+import type { MoonData } from './moonData'
 import { STARS, UNITS_PER_LY, starScenePosition } from '../data/starData'
-import { DAYS_PER_YEAR, formatDate, simDaysToDate } from '../state/gameTimeStore'
+import { DAYS_PER_YEAR, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
+import { useHyperlaneStore } from '../state/hyperlaneStore'
 
 export const SOL_SYSTEM_ID = 'sol'
 export const SOL_BODY_NAME = 'Sol'
@@ -35,7 +45,7 @@ export interface ShipRenderInfo {
   position: Vector3
 }
 
-function bodyLivePosition(bodyName: string, simDays: number): Vector3 {
+export function bodyLivePosition(bodyName: string, simDays: number): Vector3 {
   if (bodyName === SOL_BODY_NAME) return new Vector3(0, 0, 0)
   const planet = PLANETS.find((p) => p.name === bodyName)
   if (!planet) return new Vector3(0, 0, 0)
@@ -97,10 +107,15 @@ function restingOffset(shipId: string): [number, number, number] {
 // arbitrary but fixed "close orbit" rate, not derived from any real distance
 // the way a moon's period is (ships aren't real astronomical bodies with a
 // canonical altitude) — same "pick a legible default, not a literal one"
-// spirit as orbitMath's MOON_TIME_DILATION. A flat circular orbit (no
-// inclination/ascending node — ships don't have a meaningful orbital plane
-// to model yet).
-export const DEFAULT_SHIP_ORBIT_PERIOD_DAYS = 4
+// spirit as orbitMath's MOON_TIME_DILATION. Picked to read as comparably
+// paced to a moon's own *apparent* motion, not dramatically faster — Phobos,
+// the fastest-apparent moon in this project's roster, works out to
+// `0.319 * MOON_TIME_DILATION` ≈ 19.1 apparent days (see moonData.ts/
+// orbitMath.ts); 20 sits right at that pace rather than the ~5x-faster
+// default this constant used to be. A flat circular orbit by default (no
+// inclination) — nonzero inclination only happens via a synced orbit (see
+// oppositeMoonSyncOrbit below), not a fresh arrival.
+export const DEFAULT_SHIP_ORBIT_PERIOD_DAYS = 20
 // How far out a resting ship's marker orbits its body, in *system view's*
 // own scale — real planet radii are near sub-pixel at true AU scale (Earth's
 // is ~0.00085 scene units), so this is picked to read as a visible "close
@@ -112,33 +127,79 @@ export const DEFAULT_SHIP_ORBIT_PERIOD_DAYS = 4
 export const SYSTEM_SHIP_ORBIT_RADIUS = 0.15
 
 // How long a ship resting in a body's gravity well must spend on reaction
-// drive alone before a warp drive can fire — a flat, deliberately-not-
-// derived-from-real-physics heuristic (same "pick a legible default, not a
-// literal one" spirit as SYSTEM_SHIP_ORBIT_RADIUS/MOON_TIME_DILATION), just
-// long enough to be a visible "Leaving gravity well" status rather than an
-// instantaneous escape.
-export const GRAVITY_WELL_ESCAPE_DAYS = 1
+// drive alone before a warp drive can fire, scaled by that specific body's
+// actual gravity — real mass/radius data (see planetData.ts/starData.ts) in,
+// a heuristic *time* out, same "real constants, legible game-time mapping"
+// approach as REACTION_DRIVE_SPEED_KM_S/LY_IN_KM above. Escape velocity
+// (not surface gravity) is the physically apt quantity for "how hard is
+// this body's well to climb out of" — computed at each body's own surface,
+// even though a resting ship's orbit radius is itself a fictional visual
+// constant (SYSTEM_SHIP_ORBIT_RADIUS): the body's surface escape velocity is
+// a fixed, real property of the body alone, independent of where exactly a
+// ship happens to be drawn orbiting it.
+const GRAVITATIONAL_CONSTANT = 6.674e-11 // m^3 kg^-1 s^-2
+
+function escapeVelocityKmS(massKg: number, radiusKm: number): number {
+  return Math.sqrt((2 * GRAVITATIONAL_CONSTANT * massKg) / (radiusKm * 1000)) / 1000
+}
+
+const EARTH = PLANETS.find((p) => p.name === 'Earth')!
+const EARTH_ESCAPE_VELOCITY_KM_S = escapeVelocityKmS(EARTH.massKg, EARTH.radiusKm)
+
+// Earth-equivalent-gravity baseline (in days) that the ratio above scales —
+// picked, not derived, same "legible default" spirit as
+// SYSTEM_SHIP_ORBIT_RADIUS/MOON_TIME_DILATION; only the *ratio* between
+// bodies is physically grounded, this anchor point is not.
+const EARTH_GRAVITY_WELL_ESCAPE_DAYS = 1
+
+function gravityWellEscapeDays(massKg: number, radiusKm: number): number {
+  return EARTH_GRAVITY_WELL_ESCAPE_DAYS * (escapeVelocityKmS(massKg, radiusKm) / EARTH_ESCAPE_VELOCITY_KM_S)
+}
+
+// The real body (mass/radius) whose gravity well a resting ship is currently
+// inside, if any — 'orbiting' (a planet, or Sol itself as a system-view
+// body) and 'star' (resting beside any star, interstellar-scale) both count;
+// a ship resting at a bare system/interstellar point isn't inside anything's
+// well. Returns null for a body/star this project doesn't have real data
+// for (shouldn't happen given every entry in PLANETS/STARS has massKg/
+// radiusKm, but keeps this total rather than throwing).
+function gravityWellBody(location: ShipLocation): { massKg: number; radiusKm: number } | null {
+  if (location.kind === 'orbiting') {
+    if (location.bodyName === SOL_BODY_NAME) {
+      const sol = STARS.find((s) => s.id === SOL_SYSTEM_ID)
+      return sol ? { massKg: sol.massKg, radiusKm: sol.radiusKm } : null
+    }
+    const planet = PLANETS.find((p) => p.name === location.bodyName)
+    return planet ? { massKg: planet.massKg, radiusKm: planet.radiusKm } : null
+  }
+  if (location.kind === 'star') {
+    const star = STARS.find((s) => s.id === location.starId)
+    return star ? { massKg: star.massKg, radiusKm: star.radiusKm } : null
+  }
+  return null
+}
 
 // A circular orbit offset for a ship — reuses the same angle-from-time and
 // flat-circle math planets/moons already use (orbitMath.ts), just with the
 // radius supplied directly instead of being read from PlanetData/MoonData,
 // since a ship's orbit radius is a per-view rendering constant, not stored
 // ship state (see ShipLocation's 'orbiting' comment).
-function shipOrbitOffset(radius: number, periodDays: number, phaseDeg: number, simDays: number): Vector3 {
+function shipOrbitOffset(radius: number, periodDays: number, phaseDeg: number, inclinationDeg: number, simDays: number): Vector3 {
   const angle = angleForYear(simDays / DAYS_PER_YEAR, periodDays / DAYS_PER_YEAR, (phaseDeg * Math.PI) / 180)
-  return getOrbitPosition(radius, angle, 0, 0)
+  return getOrbitPosition(radius, angle, inclinationDeg, 0)
 }
 
 // A ship resting in orbit around the body a satellite view is currently
-// showing — same underlying orbital motion (periodDays/phaseDeg) as system
-// view's own rendering of the same ship, just at this view's local
-// hologram-visual-radius scale instead of system view's AU-derived one.
+// showing — same underlying orbital motion (periodDays/phaseDeg/
+// inclinationDeg) as system view's own rendering of the same ship, just at
+// this view's local hologram-visual-radius scale instead of system view's
+// AU-derived one.
 export function satelliteOrbitLocalPosition(
-  location: { periodDays: number; phaseDeg: number },
+  location: { periodDays: number; phaseDeg: number; inclinationDeg: number },
   primaryVisualRadius: number,
   simDays: number,
 ): [number, number, number] {
-  const v = shipOrbitOffset(primaryVisualRadius + 1.2, location.periodDays, location.phaseDeg, simDays)
+  const v = shipOrbitOffset(primaryVisualRadius + 1.2, location.periodDays, location.phaseDeg, location.inclinationDeg, simDays)
   return [v.x, v.y, v.z]
 }
 
@@ -146,7 +207,7 @@ function resolveLocation(location: ShipLocation, simDays: number): ShipRenderInf
   switch (location.kind) {
     case 'orbiting': {
       const base = bodyLivePosition(location.bodyName, simDays)
-      base.add(shipOrbitOffset(SYSTEM_SHIP_ORBIT_RADIUS, location.periodDays, location.phaseDeg, simDays))
+      base.add(shipOrbitOffset(SYSTEM_SHIP_ORBIT_RADIUS, location.periodDays, location.phaseDeg, location.inclinationDeg, simDays))
       return { space: 'system', systemId: location.systemId, position: base }
     }
     case 'system-point':
@@ -246,9 +307,19 @@ export function warpCooldownRemainingDays(ship: ShipInstance, simDays: number): 
   return Math.max(0, ship.warpReadySimDays - simDays)
 }
 
-export function getShipStatusText(ship: ShipInstance, simDays: number): string {
+// The ship's "Current Action" line (ShipPanel) — one short, human-readable
+// summary of what it's doing right now: travelling (and how), waiting on a
+// queued jump, resting somewhere, or following another ship. `ships`, when
+// supplied, is only used to look up a followed ship's *name* for the
+// "Following X — " prefix — omit it (e.g. a call site with no ships list
+// handy) and the rest of the status still renders correctly, just without
+// that prefix.
+export function getShipStatusText(ship: ShipInstance, simDays: number, ships?: ShipInstance[]): string {
+  const leaderName = ship.followingShipId ? ships?.find((s) => s.id === ship.followingShipId)?.name : undefined
+  const prefix = leaderName ? `Following ${leaderName} — ` : ''
+
   if (ship.order) {
-    if (simDays >= ship.order.arrivalSimDays) return 'Arriving…'
+    if (simDays >= ship.order.arrivalSimDays) return `${prefix}Arriving…`
     const destLabel = destinationLabel(ship.order.destination)
     const { gravityWellClearSimDays, warpEngageSimDays } = ship.order
     // Two distinct "not warping yet" reasons get distinct status text — a
@@ -256,36 +327,89 @@ export function getShipStatusText(ship: ShipInstance, simDays: number): string {
     // a cooldown (see planMove) — even though both resolve to the same
     // reaction-drive-then-warp mechanics underneath.
     if (gravityWellClearSimDays !== undefined && simDays < gravityWellClearSimDays) {
-      return `Leaving gravity well — reaction drive (warp in ${(gravityWellClearSimDays - simDays).toFixed(1)}d)`
+      return `${prefix}Leaving gravity well — reaction drive (warp in ${(gravityWellClearSimDays - simDays).toFixed(1)}d)`
     }
     if (warpEngageSimDays !== undefined && simDays < warpEngageSimDays) {
-      return `En route to ${destLabel} — reaction drive (warp in ${(warpEngageSimDays - simDays).toFixed(1)}d)`
+      return `${prefix}En route to ${destLabel} — reaction drive (warp in ${(warpEngageSimDays - simDays).toFixed(1)}d)`
     }
     const eta = formatDate(simDaysToDate(ship.order.arrivalSimDays))
-    return `En route to ${destLabel} — ETA ${eta}`
+    return `${prefix}En route to ${destLabel} — ETA ${eta}`
   }
-  // "Jump when ready" — the player ordered a hyperdrive jump while it was
-  // still on cooldown; queued instead of refused (see planMove/
-  // useShipOrderSettler), so the ship is meaningfully "doing something,"
-  // not just idle, until the drive comes off cooldown and it actually fires.
+  // "Jump when ready" — the player ordered a hyperdrive jump while it
+  // couldn't fire yet (still on cooldown, or the game is paused — see
+  // planMove/useShipOrderSettler); queued instead of refused, so the ship is
+  // meaningfully "doing something," not just idle, until it actually fires.
+  // Paused gets its own distinct wording rather than a numeric "0.0d" —
+  // remaining cooldown isn't counting down while paused, so showing it would
+  // read as "about to fire any second" when actually nothing will happen
+  // until the player resumes time.
   if (ship.pendingHyperdriveJump) {
     const star = STARS.find((s) => s.id === ship.pendingHyperdriveJump)
+    const starName = star?.name ?? ship.pendingHyperdriveJump
+    if (useGameTimeStore.getState().paused) {
+      return `${prefix}Jump to ${starName} queued — resume time to jump`
+    }
     const remaining = hyperdriveCooldownRemainingDays(ship, simDays)
-    return `Hyperdrive charging — jump to ${star?.name ?? ship.pendingHyperdriveJump} queued (${remaining.toFixed(1)}d)`
+    return `${prefix}Hyperdrive charging — jump to ${starName} queued (${remaining.toFixed(1)}d)`
   }
   const location = ship.location
   switch (location.kind) {
     case 'orbiting':
-      return `In ${systemDisplayName(location.systemId)} System, orbiting ${location.bodyName}`
+      return `${prefix}In ${systemDisplayName(location.systemId)} System, orbiting ${location.bodyName}`
     case 'system-point':
-      return `In ${systemDisplayName(location.systemId)} System, Deep Space`
+      return `${prefix}In ${systemDisplayName(location.systemId)} System, Deep Space`
     case 'star': {
       const star = STARS.find((s) => s.id === location.starId)
-      if (!star) return 'In Deep Space'
-      return star.hasSystemData ? `In ${star.name} System` : `At ${star.name}`
+      if (!star) return `${prefix}In Deep Space`
+      return star.hasSystemData ? `${prefix}In ${star.name} System` : `${prefix}At ${star.name}`
     }
     case 'interstellar-point':
-      return 'In Deep Space'
+      return `${prefix}In Deep Space`
+  }
+}
+
+// Shared by both resolveArrivalLocation's 'body' case and its 'star' case
+// (when the star has its own system) — a resting ship orbiting a body,
+// whether that body is a planet or the system's own star, is described
+// identically: which system, which body's live position to track, and a
+// starting orbital phase seeded from the ship's own id so multiple arrivals
+// at the same body don't all line up identically (see hashAngleRad). `sync`
+// overrides that default fresh-arrival motion entirely — see
+// MoveDestination's 'body'.syncOrbit / oppositeMoonSyncOrbit.
+function orbitingLocation(
+  systemId: string,
+  bodyName: string,
+  shipId: string,
+  sync?: { periodDays: number; phaseDeg: number; inclinationDeg: number },
+): ShipLocation {
+  return {
+    kind: 'orbiting',
+    systemId,
+    bodyName,
+    periodDays: sync?.periodDays ?? DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
+    phaseDeg: sync?.phaseDeg ?? (hashAngleRad(shipId) * 180) / Math.PI,
+    inclinationDeg: sync?.inclinationDeg ?? 0,
+  }
+}
+
+// The synced period/phase/inclination for entering orbit on the exact
+// opposite side of a moon's parent body from that moon — matching its
+// period (so the two stay antipodal forever, not just at the moment the
+// order was given) and its inclination (so they stay coplanar, not just
+// angularly opposite while drifting apart in 3D over one tilted orbit vs.
+// the other's flat one). `periodDays` reuses the moon's real period scaled
+// by the same MOON_TIME_DILATION its own on-screen motion already uses
+// (orbitMath.ts) — matching the moon's *apparent* rate, not its real one —
+// negated for a retrograde moon (e.g. Triton): `angleForYear` computes angle
+// as `phase + (t/period)*2π`, so flipping period's sign flips the sign of
+// angle's rate of change over time exactly the way getMoonPosition's own
+// `simYears * direction` trick does, with no other code needing to know
+// about direction at all.
+export function oppositeMoonSyncOrbit(moon: MoonData): { periodDays: number; phaseDeg: number; inclinationDeg: number } {
+  return {
+    periodDays: moon.periodDays * MOON_TIME_DILATION * (moon.retrograde ? -1 : 1),
+    phaseDeg: (moon.phaseDeg + 180) % 360,
+    inclinationDeg: moon.inclinationDeg,
   }
 }
 
@@ -298,20 +422,71 @@ export function getShipStatusText(ship: ShipInstance, simDays: number): string {
 export function resolveArrivalLocation(destination: MoveDestination, shipId: string): ShipLocation {
   switch (destination.kind) {
     case 'body':
-      return {
-        kind: 'orbiting',
-        systemId: destination.systemId,
-        bodyName: destination.bodyName,
-        periodDays: DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
-        phaseDeg: (hashAngleRad(shipId) * 180) / Math.PI,
-      }
+      return orbitingLocation(destination.systemId, destination.bodyName, shipId, destination.syncOrbit)
     case 'point':
       return { kind: 'system-point', systemId: destination.systemId, position: destination.position }
-    case 'star':
+    case 'star': {
+      // A star with its own system is a place ships actually enter and
+      // orbit, same as any planet — the whole point of ordering a ship
+      // there from interstellar view is to see it settle into that system,
+      // not hover beside the star at interstellar scale forever. A star
+      // with no system data yet has nothing to orbit *into*, so it keeps
+      // the old "rest visibly beside it" behavior.
+      const star = STARS.find((s) => s.id === destination.starId)
+      if (star?.hasSystemData) return orbitingLocation(star.id, star.name, shipId)
       return { kind: 'star', starId: destination.starId, offset: restingOffset(shipId) }
+    }
     case 'interstellar-point':
       return { kind: 'interstellar-point', position: destination.position }
   }
+}
+
+// The inverse of resolveArrivalLocation — a resting ship's current location
+// re-expressed as the MoveDestination that would land a ship there. Used
+// only for "follow" (see ShipInstance.followingShipId / useShipOrderSettler):
+// a follower re-targets whatever destination its leader is *currently*
+// ordered to, or, if the leader itself is at rest, wherever it's currently
+// resting — this is how that second case gets expressed as a destination.
+export function restingDestinationOf(location: ShipLocation): MoveDestination {
+  switch (location.kind) {
+    case 'orbiting':
+      return { kind: 'body', systemId: location.systemId, bodyName: location.bodyName }
+    case 'system-point':
+      return { kind: 'point', systemId: location.systemId, position: location.position }
+    case 'star':
+      return { kind: 'star', starId: location.starId }
+    case 'interstellar-point':
+      return { kind: 'interstellar-point', position: location.position }
+  }
+}
+
+function destinationKey(d: MoveDestination): string {
+  switch (d.kind) {
+    case 'body':
+      return `body:${d.systemId}:${d.bodyName}:${d.syncOrbit ? `${d.syncOrbit.periodDays},${d.syncOrbit.phaseDeg},${d.syncOrbit.inclinationDeg}` : ''}`
+    case 'point':
+      return `point:${d.systemId}:${d.position.join(',')}`
+    case 'star':
+      return `star:${d.starId}`
+    case 'interstellar-point':
+      return `ipoint:${d.position.join(',')}`
+  }
+}
+
+// Whether two destinations describe the same target — used by the follow
+// mechanism to decide whether a leader's intended destination has actually
+// changed since a follower last re-targeted (see useShipOrderSettler),
+// rather than blindly reissuing an identical order every tick.
+export function destinationsEqual(a: MoveDestination, b: MoveDestination): boolean {
+  return destinationKey(a) === destinationKey(b)
+}
+
+// Whether `ship` may be given a follow directive targeting `targetShipId` —
+// same ownership reasoning as planMove's own "not-owned" gate (only a
+// player-owned ship can be commanded at all, following included), plus the
+// obvious "can't follow itself."
+export function canFollow(ship: ShipInstance, targetShipId: string): boolean {
+  return ship.allegiance === 'player' && ship.id !== targetShipId
 }
 
 // The warpReadySimDays cooldown update to apply once a completed order that
@@ -339,12 +514,71 @@ function isShipCurrentlyWarping(ship: ShipInstance, simDays: number): boolean {
   return simDays >= order.warpEngageSimDays
 }
 
+// Chance (0..1) a given hyperdrive jump strands and destroys the ship — see
+// HYPERDRIVE_BASE_LOSS_CHANCE/HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE
+// (shipData.ts) for why these are named constants, not inlined. A drive's
+// own lossChanceOverride (e.g. a Turing Scout's 0) always wins outright,
+// regardless of lane state — that's the whole point of that field.
+export function hyperdriveLossChance(hyperDrive: HyperDrive, laneEstablished: boolean): number {
+  if (hyperDrive.lossChanceOverride !== undefined) return hyperDrive.lossChanceOverride
+  return laneEstablished ? HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE : HYPERDRIVE_BASE_LOSS_CHANCE
+}
+
+// The star id a hyperlane should anchor to on the *departure* side of a jump
+// — the system a ship is currently in (system view's systemId doubles as
+// that system's own star id, e.g. SOL_SYSTEM_ID === 'sol', the Sol StarData
+// entry's own id) if it's inside one, or the star it's resting beside if
+// it's out in interstellar space at one. A ship resting at a bare
+// system/interstellar point, or currently mid-order anywhere, has no single
+// star to anchor a lane to — the jump still proceeds normally in that case
+// (the roll still happens), it just can't record a lane afterward, a
+// deliberate, documented gap rather than a bug (see Context.md).
+function hyperlaneOriginStarId(ship: ShipInstance, simDays: number): string | null {
+  const current = getShipRenderPosition(ship, simDays)
+  if (current.space === 'system') return current.systemId ?? null
+  if (!ship.order && ship.location.kind === 'star') return ship.location.starId
+  return null
+}
+
 export type MoveResult =
   | { kind: 'order'; order: MoveOrder; warpReadyOverride?: number }
-  | { kind: 'instant'; location: ShipLocation; hyperdriveReadySimDays: number }
+  | {
+      kind: 'instant'
+      location: ShipLocation
+      hyperdriveReadySimDays: number
+      // Present only when the jump succeeded *and* the departure side had a
+      // known star anchor (see hyperlaneOriginStarId) — the caller (the
+      // scene handler or useShipOrderSettler) records this pair via
+      // hyperlaneStore.addHyperlane once it applies the rest of the result.
+      // planMove itself never writes to that store — same "physics layer
+      // computes, caller applies" split every other result kind already
+      // follows.
+      hyperlaneEstablished?: [string, string]
+    }
   | { kind: 'on-cooldown'; readySimDays: number }
   | { kind: 'unknown-class' }
   | { kind: 'not-owned' }
+  // The hyperdrive jump was attempted and lost — see hyperdriveLossChance.
+  // The ship is gone; the caller removes it from the store (shipStore's
+  // removeShip) rather than applying any location/cooldown update.
+  | { kind: 'lost-in-hyperspace' }
+  // A hyperdrive jump is "instant" — it resolves the moment it's ordered,
+  // not over simDays actually advancing the way every other order does. If
+  // the clock is paused, nothing else in the game is happening either, so
+  // letting a jump fire anyway would be the one thing that keeps moving
+  // while everything else is frozen. Same treatment as 'on-cooldown' at
+  // every call site — queued (setPendingHyperdriveJump) rather than dropped,
+  // firing the instant time resumes (and any real cooldown is also clear —
+  // see useShipOrderSettler's firing condition, which checks both).
+  | { kind: 'paused' }
+  // The ship is pinned in a combat engagement, so it can't simply fly off at
+  // reaction drive — the only way out is to spool an FTL drive and survive
+  // the charge (see combatResolution.planFtlCharge and ShipInstance's
+  // FtlCharge). The caller starts the charge via shipStore.setFtlCharge; the
+  // actual move is issued later, by useCombatResolver, once the drive fires.
+  // `charge` is null when the ship has no usable drive (or its utility array
+  // is wrecked) and therefore genuinely cannot leave.
+  | { kind: 'engaged'; charge: FtlCharge | null }
 
 // The single entry point scenes/DebugConsole call to turn "ship X, go to Y"
 // into either a continuous MoveOrder (reaction/warp) or an instant hyperdrive
@@ -364,6 +598,21 @@ export function planMove(ship: ShipInstance, destination: MoveDestination, simDa
   const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
   if (!shipClass) return { kind: 'unknown-class' }
 
+  // Checked before any drive logic: a ship in a firefight can't leave by
+  // ordinary means at all, so "go here" becomes "charge out to here" rather
+  // than a move order. Deliberately placed at this single chokepoint (same
+  // reasoning as the ownership check above) so no call site can bypass it and
+  // teleport a ship out of a battle. A ship already charging keeps its
+  // existing charge rather than restarting the timer — redirecting mid-spool
+  // changes only where it ends up, not how long it stays vulnerable.
+  if (findEngagementFor(useCombatStore.getState().engagements, ship.id)) {
+    const existing = ship.combat.ftlCharge
+    return {
+      kind: 'engaged',
+      charge: existing ? { ...existing, destination } : planFtlCharge(ship, destination, simDays),
+    }
+  }
+
   const warpDrive = shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp')
   const hyperDrive = shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
 
@@ -371,11 +620,19 @@ export function planMove(ship: ShipInstance, destination: MoveDestination, simDa
   // somewhere, not into open space) — and only when there's no warp drive to
   // prefer instead (warp is always at least as fast for any real distance).
   if (destination.kind === 'star' && hyperDrive && !warpDrive) {
+    if (useGameTimeStore.getState().paused) return { kind: 'paused' }
     if (simDays < ship.hyperdriveReadySimDays) return { kind: 'on-cooldown', readySimDays: ship.hyperdriveReadySimDays }
+
+    const originStarId = hyperlaneOriginStarId(ship, simDays)
+    const laneEstablished = originStarId !== null && useHyperlaneStore.getState().hasHyperlane(originStarId, destination.starId)
+    const lossChance = hyperdriveLossChance(hyperDrive, laneEstablished)
+    if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
+
     return {
       kind: 'instant',
-      location: { kind: 'star', starId: destination.starId, offset: restingOffset(ship.id) },
+      location: resolveArrivalLocation(destination, ship.id),
       hyperdriveReadySimDays: simDays + hyperDrive.cooldownDays,
+      hyperlaneEstablished: originStarId !== null ? [originStarId, destination.starId] : undefined,
     }
   }
 
@@ -436,18 +693,20 @@ export function planMove(ship: ShipInstance, destination: MoveDestination, simDa
     }
   }
 
-  // A ship at rest in orbit is inside that body's gravity well — a warp
-  // drive can't fire from inside one (see GRAVITY_WELL_ESCAPE_DAYS), so it
-  // must first spend a short, fixed stretch on reaction drive alone
-  // clearing it. A ship already underway (mid-order, any phase) is already
-  // out in open space by definition, so this only ever applies to a fresh
-  // order issued from rest. If the destination is closer than escape alone
-  // would cover, the trip just never gets that far — no gravity-well phase
-  // at all, plain reaction drive the whole (short) way.
-  const inGravityWell = !ship.order && ship.location.kind === 'orbiting'
+  // A ship at rest in orbit (or beside a star) is inside that body's gravity
+  // well — a warp drive can't fire from inside one, so it must first spend a
+  // stretch on reaction drive alone clearing it, scaled by that specific
+  // body's own real gravity (see gravityWellEscapeDays). A ship already
+  // underway (mid-order, any phase) is already out in open space by
+  // definition, so this only ever applies to a fresh order issued from rest.
+  // If the destination is closer than escape alone would cover, the trip
+  // just never gets that far — no gravity-well phase at all, plain reaction
+  // drive the whole (short) way.
+  const gravityWell = ship.order ? null : gravityWellBody(ship.location)
+  const gravityWellEscapeDaysForBody = gravityWell ? gravityWellEscapeDays(gravityWell.massKg, gravityWell.radiusKm) : 0
   const gravityWellClearSimDays =
-    inGravityWell && simDays + GRAVITY_WELL_ESCAPE_DAYS < reactionOnlyArrivalSimDays
-      ? simDays + GRAVITY_WELL_ESCAPE_DAYS
+    gravityWell && simDays + gravityWellEscapeDaysForBody < reactionOnlyArrivalSimDays
+      ? simDays + gravityWellEscapeDaysForBody
       : undefined
 
   // Once clear of any gravity well, warp still can't fire until its own

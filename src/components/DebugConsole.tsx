@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useShipStore } from '../state/shipStore'
+import { pristineCombatState, useShipStore } from '../state/shipStore'
 import type { FleetAllegiance } from '../data/shipData'
 import { SHIP_CLASSES, ALLEGIANCE_LABELS, describeFtlDrive } from '../data/shipData'
 import { PLANETS } from '../scene/planetData'
@@ -56,6 +56,7 @@ export function DebugConsole() {
         bodyName: nearBody,
         periodDays: DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
         phaseDeg,
+        inclinationDeg: 0,
       },
       order: null,
       hyperdriveReadySimDays: 0,
@@ -63,6 +64,8 @@ export function DebugConsole() {
       warpEnabled: true,
       warpWhenReady: false,
       pendingHyperdriveJump: null,
+      followingShipId: null,
+      combat: pristineCombatState(shipClass.combat),
     })
   }
 

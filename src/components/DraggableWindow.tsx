@@ -3,15 +3,23 @@ import type { ReactNode } from 'react'
 
 interface DraggableWindowProps {
   title: string
-  onClose: () => void
+  /** Omit to render a window with no close button — for a panel that *is*
+   * the view it lives in (the combat view's order panel), where dismissing it
+   * would leave the player in an arena with no way to give orders. */
+  onClose?: () => void
+  /** Starting offset from the default spot, in pixels. Every window otherwise
+   * opens at the same place, so two shown at once (the combat view's order
+   * panel plus a selected ship's inspector) land exactly on top of each
+   * other. The player can still drag from wherever this puts it. */
+  initialOffset?: { x: number; y: number }
   children: ReactNode
 }
 
 // A movable HUD window (title bar drag, no resize) for the satellite-view
 // inspection panel — re-centers on whichever body is selected but stays
 // wherever the player last dragged it until they select something else.
-export function DraggableWindow({ title, onClose, children }: DraggableWindowProps) {
-  const [pos, setPos] = useState({ x: 0, y: 0 })
+export function DraggableWindow({ title, onClose, initialOffset, children }: DraggableWindowProps) {
+  const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -38,9 +46,11 @@ export function DraggableWindow({ title, onClose, children }: DraggableWindowPro
         onPointerUp={handlePointerUp}
       >
         <span>{title}</span>
-        <button type="button" className="draggable-window-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
+        {onClose && (
+          <button type="button" className="draggable-window-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        )}
       </div>
       <div className="draggable-window-body">{children}</div>
     </div>

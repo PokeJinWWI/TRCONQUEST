@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 
-export type ViewLevel = 'galactic' | 'interstellar' | 'system' | 'satellite'
+// 'combat' is the "detailed view" of an engagement, the same way 'satellite'
+// is the detailed view of a body — a real view level rather than a modal
+// overlay, so it gets the breadcrumb, the zoom-out-to-leave gesture, and the
+// scene-remount transition every other level already has. It sits outside the
+// galactic→satellite zoom ladder though: you don't reach it by zooming in on
+// anything, you enter it from a ship that's in a fight.
+export type ViewLevel = 'galactic' | 'interstellar' | 'system' | 'satellite' | 'combat'
 
 interface ViewState {
   level: ViewLevel
@@ -48,6 +54,17 @@ interface ViewState {
   // pre-selected (matching what was open in satellite view).
   exitSatelliteToSystem: () => void
   enterGalactic: () => void
+  // Which engagement the combat view is showing. Held here rather than in
+  // combatStore's `viewedEngagementId` because it's navigation state — it has
+  // to move in lockstep with `level`, and splitting "which view" from "what
+  // that view is showing" across two stores is how you get a combat level
+  // mounted with nothing to render.
+  combatEngagementId: string | null
+  enterCombat: (engagementId: string) => void
+  // Leaves combat for the system view. Combat isn't part of the zoom ladder,
+  // so there's no "one level up" to return to — system view is the sensible
+  // place to land, since that's where the fight is physically happening.
+  exitCombat: () => void
 }
 
 export const useViewStore = create<ViewState>((set) => ({
@@ -64,4 +81,10 @@ export const useViewStore = create<ViewState>((set) => ({
     set({ level: 'system', selectedStarId: starId, selectedBodyName: null, inViewSelection: preselectBody ?? null }),
   enterSatellite: (bodyName) => set({ level: 'satellite', selectedBodyName: bodyName, inViewSelection: null }),
   exitSatelliteToSystem: () => set((s) => ({ level: 'system', inViewSelection: s.selectedBodyName })),
+  combatEngagementId: null,
+  // Deliberately leaves `inViewSelection` alone: entering combat is always
+  // done from a selected ship, and that selection is exactly what the combat
+  // view's panel wants to keep showing.
+  enterCombat: (engagementId) => set({ level: 'combat', combatEngagementId: engagementId }),
+  exitCombat: () => set({ level: 'system', combatEngagementId: null, inViewSelection: null }),
 }))

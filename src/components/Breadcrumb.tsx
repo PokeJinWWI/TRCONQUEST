@@ -16,7 +16,7 @@ export function Breadcrumb() {
       <button type="button" className="crumb" onClick={enterInterstellar} disabled={level === 'interstellar'}>
         INTERSTELLAR
       </button>
-      {(level === 'system' || level === 'satellite') && (
+      {(level === 'system' || level === 'satellite' || level === 'combat') && (
         <>
           <span className="crumb-sep">›</span>
           <button
@@ -34,6 +34,18 @@ export function Breadcrumb() {
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb" disabled>
             SATELLITE
+          </button>
+        </>
+      )}
+      {/* Combat isn't reached by zooming in on anything, so it hangs off
+          SYSTEM (where the fight is physically happening) rather than
+          extending the satellite chain. Styled hot to match the tactical
+          clock — both signal "you are in a fight." */}
+      {level === 'combat' && (
+        <>
+          <span className="crumb-sep">›</span>
+          <button type="button" className="crumb crumb-combat" disabled>
+            COMBAT
           </button>
         </>
       )}

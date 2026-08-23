@@ -17,7 +17,8 @@ import { PLANETS, SUN_RADIUS_KM, UNITS_PER_AU } from './planetData'
 import { getMoonsForPlanet } from './moonData'
 import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
-import { planMove, satelliteOrbitLocalPosition, SOL_SYSTEM_ID } from './shipPhysics'
+import { OrbitRing } from './OrbitRing'
+import { planMove, satelliteOrbitLocalPosition, canFollow, oppositeMoonSyncOrbit, SOL_SYSTEM_ID } from './shipPhysics'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
@@ -71,6 +72,8 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const setShipOrder = useShipStore((s) => s.setShipOrder)
+  const setFtlCharge = useShipStore((s) => s.setFtlCharge)
+  const setFollowing = useShipStore((s) => s.setFollowing)
   // Ships resting in orbit around this exact body — the "correct
   // corresponding view" a move order here should actually be visible in, not
   // just an abstract system-AU point only system view could ever render. A
@@ -98,6 +101,24 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   // TypeScript can't see that through .find() — narrow it once here instead
   // of re-checking at every call site below.
   const trackedShipLocation = trackedShip && trackedShip.location.kind === 'orbiting' ? trackedShip.location : null
+  // Every ship here already shares one body by construction (see
+  // orbitingShips above) — stacking just needs each one's position within
+  // this same array (see ShipMarker's identical system-view version, which
+  // needs the extra per-body grouping this view doesn't).
+  const shipStackInfo = useMemo(() => {
+    const info = new Map<string, { index: number; count: number }>()
+    orbitingShips.forEach((ship, index) => info.set(ship.id, { index, count: orbitingShips.length }))
+    return info
+  }, [orbitingShips])
+  // One ring per distinct inclination present (almost always just one, 0° —
+  // see ShipMarker's system-view version for why rings are deduped instead
+  // of one-per-ship: everyone at the same inclination traces the same
+  // circle).
+  const shipOrbitInclinations = useMemo(() => {
+    const set = new Set<number>()
+    for (const ship of orbitingShips) if (ship.location.kind === 'orbiting') set.add(ship.location.inclinationDeg)
+    return Array.from(set)
+  }, [orbitingShips])
 
   // If the Outliner (or anything else driving inViewSelection) points
   // somewhere other than the moon currently focused — e.g. the player is
@@ -175,6 +196,42 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (!ship) return
     const result = planMove(ship, { kind: 'body', systemId: SOL_SYSTEM_ID, bodyName }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
+    // Pinned in a firefight: the destination becomes an FTL escape charge
+    // instead of a move order (see planMove's 'engaged' result).
+    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+  }
+
+  // Right-clicking a moon orders the currently-selected ship into orbit
+  // around *this scene's own primary body* — not the moon itself, a moon
+  // still isn't a valid destination on its own — but synced to match that
+  // moon's exact period/phase/inclination, offset 180° (see
+  // shipPhysics.oppositeMoonSyncOrbit). Matching period is what makes
+  // "opposite" hold forever rather than just at the moment of arrival: a
+  // ship on its own default (much faster, unrelated) orbit would drift in
+  // and out of alignment with the moon continuously.
+  const handleOrderToMoonOrbit = (moon: MoonData) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship) return
+    const result = planMove(
+      ship,
+      { kind: 'body', systemId: SOL_SYSTEM_ID, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) },
+      useGameTimeStore.getState().simDays,
+    )
+    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
+    // Pinned in a firefight: the destination becomes an FTL escape charge
+    // instead of a move order (see planMove's 'engaged' result).
+    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+  }
+
+  // Right-clicking another ship while one is selected orders the selected
+  // ship to follow it, instead of a normal move order — see
+  // ShipInstance.followingShipId.
+  const handleFollowShip = (targetShipId: string) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship || !canFollow(ship, targetShipId)) return
+    setFollowing(ship.id, targetShipId)
   }
 
   // Same onPointerMissed/marker-click race as every other view — ignore
@@ -221,11 +278,28 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
           />
 
           {moonInfo.moons.map((moon) => (
-            <Moon key={moon.name} moon={moon} selected={inspected?.name === moon.name} onSelect={handleSelectMoon} />
+            <Moon
+              key={moon.name}
+              moon={moon}
+              selected={inspected?.name === moon.name}
+              onSelect={handleSelectMoon}
+              onOrderTo={handleOrderToMoonOrbit}
+            />
           ))}
 
-          {orbitingShips.map((ship) => (
-            <SatelliteShipMarker key={ship.id} ship={ship} primaryVisualRadius={PRIMARY_VISUAL_RADIUS} />
+          {shipOrbitInclinations.map((incl) => (
+            <OrbitRing key={incl} radius={PRIMARY_VISUAL_RADIUS + 1.2} inclinationDeg={incl} />
+          ))}
+
+          {orbitingShips.map((ship, index) => (
+            <SatelliteShipMarker
+              key={ship.id}
+              ship={ship}
+              primaryVisualRadius={PRIMARY_VISUAL_RADIUS}
+              onOrderFollow={handleFollowShip}
+              stackIndex={shipStackInfo.get(ship.id)?.index ?? index}
+              stackCount={orbitingShips.length}
+            />
           ))}
 
           {flyingToMoon && (

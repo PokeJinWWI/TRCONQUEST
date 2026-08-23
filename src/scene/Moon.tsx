@@ -13,6 +13,11 @@ interface MoonProps {
   moon: MoonData
   selected: boolean
   onSelect: (moon: MoonData) => void
+  /** Right-click — orders the currently-selected ship into orbit around
+   * *this moon's parent body*, synced to sit permanently on the opposite
+   * side of it from this moon (see shipPhysics.oppositeMoonSyncOrbit). A
+   * moon itself still isn't a valid move-order destination. */
+  onOrderTo?: (moon: MoonData) => void
 }
 
 // Rendered as an actual hologram sphere (sized to moon.visualRadius, already
@@ -22,7 +27,7 @@ interface MoonProps {
 // Earth's size) should visibly read as a body here, not just a name. Its
 // true full-detail shape still only shows in its own detail view
 // (MoonDetailScene), reached via "Detailed View" after selecting it.
-export function Moon({ moon, selected, onSelect }: MoonProps) {
+export function Moon({ moon, selected, onSelect, onOrderTo }: MoonProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
 
@@ -36,13 +41,23 @@ export function Moon({ moon, selected, onSelect }: MoonProps) {
     <group>
       <OrbitRing radius={moon.orbitRadius} inclinationDeg={moon.inclinationDeg} ascendingNodeDeg={0} />
       <group ref={groupRef}>
-        <HologramBody color={moon.color} radius={moon.visualRadius} variant="planet" onSelect={() => onSelect(moon)} />
+        <HologramBody
+          color={moon.color}
+          radius={moon.visualRadius}
+          variant="planet"
+          onSelect={() => onSelect(moon)}
+          onOrderTo={() => onOrderTo?.(moon)}
+        />
         <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
           <div
             className={`planet-marker${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
             onPointerEnter={() => setHovered(true)}
             onPointerLeave={() => setHovered(false)}
             onClick={() => onSelect(moon)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              onOrderTo?.(moon)
+            }}
             onWheel={forwardWheelToCanvas}
           >
             <span className="marker-dot" style={{ borderColor: moon.color }} />

@@ -8,6 +8,8 @@ import { Outliner } from './components/Outliner'
 import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
 import { useShipOrderSettler } from './hooks/useShipOrderSettler'
+import { useCombatResolver } from './hooks/useCombatResolver'
+import { CombatViewScene } from './scene/CombatViewScene'
 import { GalacticViewScene } from './scene/GalacticViewScene'
 import { InterstellarScene } from './scene/InterstellarScene'
 import { SatelliteViewScene } from './scene/SatelliteViewScene'
@@ -19,19 +21,22 @@ function ActiveScene() {
   const level = useViewStore((s) => s.level)
   const selectedStarId = useViewStore((s) => s.selectedStarId)
   const selectedBodyName = useViewStore((s) => s.selectedBodyName)
+  const combatEngagementId = useViewStore((s) => s.combatEngagementId)
 
   let scene = <SolarSystemScene />
   if (level === 'galactic') scene = <GalacticViewScene />
   else if (level === 'interstellar') scene = <InterstellarScene />
   else if (level === 'satellite' && selectedBodyName) {
     scene = <SatelliteViewScene bodyName={selectedBodyName} />
+  } else if (level === 'combat' && combatEngagementId) {
+    scene = <CombatViewScene engagementId={combatEngagementId} />
   }
 
   // Keying on the full location forces a remount on every navigation change,
   // which retriggers the fade/scale-in animation below — a lightweight
   // "smooth transition" between view levels without needing to keep two
   // WebGL canvases alive at once.
-  const transitionKey = `${level}:${selectedStarId}:${selectedBodyName ?? ''}`
+  const transitionKey = `${level}:${selectedStarId}:${selectedBodyName ?? ''}:${combatEngagementId ?? ''}`
 
   return (
     <div key={transitionKey} className="view-transition">
@@ -43,6 +48,9 @@ function ActiveScene() {
 function App() {
   useGameClock()
   useShipOrderSettler()
+  // Resolves every active engagement independent of which view is mounted —
+  // a battle in another system happens whether or not anyone is watching it.
+  useCombatResolver()
 
   return (
     <div id="app-root">

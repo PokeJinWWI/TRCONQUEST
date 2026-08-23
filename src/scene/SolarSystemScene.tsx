@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { Sun } from './Sun'
 import { Planet } from './Planet'
 import { ShipMarker } from './ShipMarker'
+import { ShipOrbitRing } from './ShipOrbitRing'
 import { ShipPanel } from './ShipPanel'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
 import { PLANETS, SUN_RADIUS_KM, UNITS_PER_AU } from './planetData'
@@ -15,7 +16,15 @@ import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { getPlanetPosition } from './orbitMath'
-import { getShipRenderPosition, planMove, shipSystemId, SOL_SYSTEM_ID } from './shipPhysics'
+import {
+  getShipRenderPosition,
+  planMove,
+  shipSystemId,
+  canFollow,
+  bodyLivePosition,
+  SYSTEM_SHIP_ORBIT_RADIUS,
+  SOL_SYSTEM_ID,
+} from './shipPhysics'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
@@ -69,7 +78,38 @@ export function SolarSystemScene() {
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const setShipOrder = useShipStore((s) => s.setShipOrder)
+  const setFtlCharge = useShipStore((s) => s.setFtlCharge)
+  const setFollowing = useShipStore((s) => s.setFollowing)
   const systemShips = useMemo(() => ships.filter((ship) => shipSystemId(ship) === SOL_SYSTEM_ID), [ships])
+  // Every resting-orbiting ship's position among the others sharing its
+  // exact body — lets ShipMarker stack their markers/labels instead of
+  // letting them overlap into an unreadable pile (most likely once one ship
+  // is following another there — see ShipInstance.followingShipId).
+  const shipStackInfo = useMemo(() => {
+    const groups = new Map<string, string[]>()
+    for (const ship of systemShips) {
+      if (ship.order || ship.location.kind !== 'orbiting') continue
+      const arr = groups.get(ship.location.bodyName) ?? []
+      arr.push(ship.id)
+      groups.set(ship.location.bodyName, arr)
+    }
+    const info = new Map<string, { index: number; count: number }>()
+    for (const ids of groups.values()) ids.forEach((id, index) => info.set(id, { index, count: ids.length }))
+    return info
+  }, [systemShips])
+  // One ring per distinct (body, inclination) pair with at least one
+  // resting orbiting ship — every ship sharing both traces the identical
+  // circle (radius is a shared per-view constant, not per-ship state), so
+  // there's no reason to render more than one ring for them collectively.
+  const shipOrbitRings = useMemo(() => {
+    const seen = new Map<string, { bodyName: string; inclinationDeg: number }>()
+    for (const ship of systemShips) {
+      if (ship.order || ship.location.kind !== 'orbiting') continue
+      const key = `${ship.location.bodyName}::${ship.location.inclinationDeg}`
+      if (!seen.has(key)) seen.set(key, { bodyName: ship.location.bodyName, inclinationDeg: ship.location.inclinationDeg })
+    }
+    return Array.from(seen.values())
+  }, [systemShips])
   // Only track a selected ship for the camera lock while it's actually
   // present in this scene — same "focusing logic like planets" idea, but a
   // planet is always here to lock onto while a ship might have travelled
@@ -165,6 +205,9 @@ export function SolarSystemScene() {
     if (!ship) return
     const result = planMove(ship, { kind: 'body', systemId: SOL_SYSTEM_ID, bodyName }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
+    // Pinned in a firefight: the destination becomes an FTL escape charge
+    // instead of a move order (see planMove's 'engaged' result).
+    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
@@ -173,6 +216,19 @@ export function SolarSystemScene() {
     if (!ship) return
     const result = planMove(ship, { kind: 'point', systemId: SOL_SYSTEM_ID, position: point }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
+    // Pinned in a firefight: the destination becomes an FTL escape charge
+    // instead of a move order (see planMove's 'engaged' result).
+    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+  }
+
+  // Right-clicking another ship while one is selected orders the selected
+  // ship to follow it, instead of a normal move order — see
+  // ShipInstance.followingShipId.
+  const handleFollowShip = (targetShipId: string) => {
+    if (!selectedShipId) return
+    const ship = ships.find((s) => s.id === selectedShipId)
+    if (!ship || !canFollow(ship, targetShipId)) return
+    setFollowing(ship.id, targetShipId)
   }
 
   return (
@@ -198,8 +254,23 @@ export function SolarSystemScene() {
           />
         ))}
 
+        {shipOrbitRings.map((g) => (
+          <ShipOrbitRing
+            key={`${g.bodyName}::${g.inclinationDeg}`}
+            radius={SYSTEM_SHIP_ORBIT_RADIUS}
+            inclinationDeg={g.inclinationDeg}
+            getCenterPosition={(simDays) => bodyLivePosition(g.bodyName, simDays)}
+          />
+        ))}
+
         {systemShips.map((ship) => (
-          <ShipMarker key={ship.id} ship={ship} />
+          <ShipMarker
+            key={ship.id}
+            ship={ship}
+            onOrderFollow={handleFollowShip}
+            stackIndex={shipStackInfo.get(ship.id)?.index ?? 0}
+            stackCount={shipStackInfo.get(ship.id)?.count ?? 1}
+          />
         ))}
 
         {flyingToName && (
