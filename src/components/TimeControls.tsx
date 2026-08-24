@@ -47,11 +47,13 @@ export function TimeControls() {
       >
         {MODE_LABELS[mode]}
       </button>
+      {/* Both speed buttons stay live while paused — only the ends of the
+          ladder disable them. See gameTimeStore.speedUp/slowDown. */}
       <button
         type="button"
         className="time-btn"
         onClick={slowDown}
-        disabled={paused || speedIndex === 0}
+        disabled={speedIndex === 0}
         aria-label="Slow down"
       >
         «
@@ -68,14 +70,18 @@ export function TimeControls() {
         type="button"
         className="time-btn"
         onClick={speedUp}
-        disabled={!paused && speedIndex === multipliers.length - 1}
+        disabled={speedIndex === multipliers.length - 1}
         aria-label="Speed up"
       >
         »
       </button>
-      <span className="speed-pips">
+      {/* Pips show the *selected* speed even while paused — since speed is
+          now adjustable in that state, blanking them would hide the very
+          thing being adjusted. The row dims instead, so "which speed" and
+          "is it running" stay separately readable. */}
+      <span className={`speed-pips${paused ? ' paused' : ''}`}>
         {multipliers.map((_, i) => (
-          <span key={i} className={`pip${!paused && i <= speedIndex ? ' filled' : ''}`} />
+          <span key={i} className={`pip${i <= speedIndex ? ' filled' : ''}`} />
         ))}
       </span>
     </div>

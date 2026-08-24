@@ -8,7 +8,9 @@ import {
   HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE,
   type WarpDrive,
   type HyperDrive,
+  type ShipClass,
 } from '../data/shipData'
+import { ACTIVE_ENGAGEMENT_RISK_BONUS, WARP_BASE_ESCAPE_LOSS_CHANCE, coreDamageRiskBonus } from '../data/combatData'
 import { PLANETS, UNITS_PER_AU, AU_IN_KM } from './planetData'
 import { getPlanetPosition, getOrbitPosition, angleForYear, MOON_TIME_DILATION } from './orbitMath'
 import type { MoonData } from './moonData'
@@ -514,14 +516,54 @@ function isShipCurrentlyWarping(ship: ShipInstance, simDays: number): boolean {
   return simDays >= order.warpEngageSimDays
 }
 
+// A ship's core component HP as a fraction of that hull's max — the input
+// every FTL risk figure below scales against. 1 (full health) whenever a
+// hull has no combat profile or zero max core, so a total gap here never
+// silently reads as "maximally damaged."
+export function coreHealthFraction(ship: ShipInstance, shipClass: Pick<ShipClass, 'combat'>): number {
+  const max = shipClass.combat.components.core
+  if (max <= 0) return 1
+  return Math.max(0, Math.min(1, ship.combat.componentHp.core / max))
+}
+
 // Chance (0..1) a given hyperdrive jump strands and destroys the ship — see
 // HYPERDRIVE_BASE_LOSS_CHANCE/HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE
 // (shipData.ts) for why these are named constants, not inlined. A drive's
 // own lossChanceOverride (e.g. a Turing Scout's 0) always wins outright,
-// regardless of lane state — that's the whole point of that field.
-export function hyperdriveLossChance(hyperDrive: HyperDrive, laneEstablished: boolean): number {
+// regardless of lane state, damage, or combat — that's the whole point of
+// that field: the ship's navigational AI makes every jump safe, full stop.
+//
+// `coreFraction`/`activelyEngaged` layer two independent modifiers on top of
+// the base/lane rate (see combatData.ts's coreDamageRiskBonus/
+// ACTIVE_ENGAGEMENT_RISK_BONUS for the reasoning behind each). Both default
+// to their "no effect" values so every existing call site that doesn't pass
+// them keeps behaving exactly as before. `activelyEngaged` is, in practice,
+// only ever true from useCombatResolver's FTL-escape path — planMove's own
+// hyperdrive branch below is structurally unreachable while a ship is
+// actually in an engagement (see planMove's 'engaged' short-circuit), so an
+// ordinary jump can never be "actively engaged" by construction.
+export function hyperdriveLossChance(
+  hyperDrive: HyperDrive,
+  laneEstablished: boolean,
+  coreFraction = 1,
+  activelyEngaged = false,
+): number {
   if (hyperDrive.lossChanceOverride !== undefined) return hyperDrive.lossChanceOverride
-  return laneEstablished ? HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE : HYPERDRIVE_BASE_LOSS_CHANCE
+  const base = laneEstablished ? HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE : HYPERDRIVE_BASE_LOSS_CHANCE
+  const modified = base + coreDamageRiskBonus(coreFraction) + (activelyEngaged ? ACTIVE_ENGAGEMENT_RISK_BONUS : 0)
+  return Math.max(0, Math.min(1, modified))
+}
+
+// The warp equivalent — but unlike hyperdrive, warp has never carried any
+// transit risk for an ordinary trip, and this function changes nothing about
+// that: it's consulted ONLY at the one new moment that's actually risky, an
+// FTL escape charge completing while the ship is (or very recently was)
+// fighting — see planMove's warp branch, gated on `riskContext` being
+// present at all, and useCombatResolver, the only caller that ever supplies
+// one. An ordinary player-issued warp order never calls this.
+export function warpEscapeLossChance(coreFraction: number, activelyEngaged: boolean): number {
+  const modified = WARP_BASE_ESCAPE_LOSS_CHANCE + coreDamageRiskBonus(coreFraction) + (activelyEngaged ? ACTIVE_ENGAGEMENT_RISK_BONUS : 0)
+  return Math.max(0, Math.min(1, modified))
 }
 
 // The star id a hyperlane should anchor to on the *departure* side of a jump
@@ -592,7 +634,17 @@ export type MoveResult =
 // result kinds they don't handle (see 'on-cooldown'/'unknown-class'), so
 // 'not-owned' fits the same pattern with no extra plumbing — the ship's own
 // panel is where "not under your command" is actually communicated.
-export function planMove(ship: ShipInstance, destination: MoveDestination, simDays: number): MoveResult {
+export function planMove(
+  ship: ShipInstance,
+  destination: MoveDestination,
+  simDays: number,
+  // Present only when this call is resolving a combat FTL-escape charge (see
+  // useCombatResolver) — its mere presence, not just `activelyEngaged`'s
+  // value, is what gates the new warp-escape risk roll below, so an
+  // ordinary player-issued warp order (which never passes this) can never
+  // trigger it, even for a ship with zero core damage and no active target.
+  riskContext?: { activelyEngaged: boolean },
+): MoveResult {
   if (ship.allegiance !== 'player') return { kind: 'not-owned' }
 
   const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
@@ -625,7 +677,12 @@ export function planMove(ship: ShipInstance, destination: MoveDestination, simDa
 
     const originStarId = hyperlaneOriginStarId(ship, simDays)
     const laneEstablished = originStarId !== null && useHyperlaneStore.getState().hasHyperlane(originStarId, destination.starId)
-    const lossChance = hyperdriveLossChance(hyperDrive, laneEstablished)
+    const lossChance = hyperdriveLossChance(
+      hyperDrive,
+      laneEstablished,
+      coreHealthFraction(ship, shipClass),
+      riskContext?.activelyEngaged ?? false,
+    )
     if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
 
     return {
@@ -737,6 +794,13 @@ export function planMove(ship: ShipInstance, destination: MoveDestination, simDa
     // Clear of any gravity well and off cooldown right now — full trip at
     // warp speed, exactly as before this feature existed.
     const travelDays = distanceKm / (warpSpeedKmS(warpDrive.speedC) * SECONDS_PER_DAY)
+    // Only ever true when resolving a combat escape (see riskContext's own
+    // comment) — an ordinary warp trip skips this block entirely, unchanged
+    // from before this mechanic existed.
+    if (riskContext) {
+      const lossChance = warpEscapeLossChance(coreHealthFraction(ship, shipClass), riskContext.activelyEngaged)
+      if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
+    }
     return {
       kind: 'order',
       order: { ...baseOrder, arrivalSimDays: simDays + travelDays, usedWarp: true },
@@ -754,6 +818,14 @@ export function planMove(ship: ShipInstance, destination: MoveDestination, simDa
   const warpEngageFraction = phase1DistanceKm / distanceKm
   const remainingDistanceKm = distanceKm - phase1DistanceKm
   const phase2Days = remainingDistanceKm / (warpSpeedKmS(warpDrive.speedC) * SECONDS_PER_DAY)
+
+  // Same escape-only gate as the single-phase branch above — this trip also
+  // ends up using warp (usedWarp: true below), just after an initial
+  // reaction-drive stretch.
+  if (riskContext) {
+    const lossChance = warpEscapeLossChance(coreHealthFraction(ship, shipClass), riskContext.activelyEngaged)
+    if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
+  }
 
   return {
     kind: 'order',

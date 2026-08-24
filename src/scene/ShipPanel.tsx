@@ -6,8 +6,15 @@ import {
   DAMAGE_TYPE_LABELS,
   type CombatProfile,
 } from '../data/combatData'
-import { getShipStatusText, hyperdriveCooldownRemainingDays, warpCooldownRemainingDays, hyperdriveLossChance } from './shipPhysics'
-import { overallHealthFraction } from './combatResolution'
+import {
+  getShipStatusText,
+  hyperdriveCooldownRemainingDays,
+  warpCooldownRemainingDays,
+  hyperdriveLossChance,
+  warpEscapeLossChance,
+  coreHealthFraction,
+} from './shipPhysics'
+import { activeEnemyContacts, overallHealthFraction } from './combatResolution'
 import { useCombatStore } from '../state/combatStore'
 import { useViewStore } from '../state/viewStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
@@ -111,18 +118,37 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset }: ShipPanelProps
     hasWarp ? formatCooldown('Warp', warpCooldownRemainingDays(ship, simDays)) : null,
   ].filter((part): part is string => part !== null)
   const followedShip = ship.followingShipId ? ships.find((s) => s.id === ship.followingShipId) : undefined
+
+  const combatProfile = shipClass?.combat
+  const engagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
+  const participant = engagement?.participants.find((p) => p.shipId === ship.id)
+  // "In combat" (part of an Engagement — the row below) and "actively
+  // engaged" (has a live target right now) are different questions: a fleet
+  // fight can easily include ships sitting outside anyone's range or blocked
+  // by a body, present in the battle but not actually fighting anyone. This
+  // is the narrower, live-contact count, and it's also exactly what should
+  // (and shouldn't) move FTL risk — see the Jump/Warp Risk rows below.
+  const activeContacts = engagement && participant ? activeEnemyContacts(participant, engagement, ships, simDays) : []
+  const activelyEngaged = activeContacts.length > 0
+  const coreFraction = shipClass ? coreHealthFraction(ship, shipClass) : 1
+  const riskElevated = activelyEngaged || coreFraction < 1
   // Two figures rather than one live number — there's no "selected
   // destination" context in this panel to know whether a specific jump
   // would land on an already-charted lane, so this shows both of the
   // drive's own fixed rates (see hyperdriveLossChance) as ship-level info,
   // same spirit as the Cooldowns row above. Collapses to a single number
   // when both rates are equal (e.g. a Turing Scout's 0% override, which
-  // ignores lane state entirely).
-  const jumpRiskNew = hyperDrive ? hyperdriveLossChance(hyperDrive, false) : undefined
-  const jumpRiskLane = hyperDrive ? hyperdriveLossChance(hyperDrive, true) : undefined
+  // ignores lane state entirely). Both figures already fold in the current
+  // core-damage and active-engagement modifiers, so what's shown here is
+  // exactly what a jump attempted right now would actually roll against.
+  const jumpRiskNew = hyperDrive ? hyperdriveLossChance(hyperDrive, false, coreFraction, activelyEngaged) : undefined
+  const jumpRiskLane = hyperDrive ? hyperdriveLossChance(hyperDrive, true, coreFraction, activelyEngaged) : undefined
+  // Warp has no risk at all for an ordinary trip — see warpEscapeLossChance —
+  // so this only ever comes back nonzero while there's something to show:
+  // combat damage or an active fight. A permanent "Warp Risk: 0%" row on
+  // every peaceful warp-capable ship would just be noise.
+  const warpRisk = hasWarp ? warpEscapeLossChance(coreFraction, activelyEngaged) : undefined
 
-  const combatProfile = shipClass?.combat
-  const engagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
   const charge = ship.combat.ftlCharge
   // Counted down in *seconds*, not days — a 5-second hyperdrive spool is the
   // one deadline in this game short enough that a "0.0d" readout would be
@@ -158,7 +184,18 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset }: ShipPanelProps
             {jumpRiskNew === jumpRiskLane
               ? formatPercent(jumpRiskNew)
               : `${formatPercent(jumpRiskNew)} new · ${formatPercent(jumpRiskLane)} charted`}
+            {riskElevated && <span className="ship-panel-combat"> (elevated)</span>}
           </span>
+        </div>
+      )}
+      {/* Warp itself has no baseline risk for an ordinary trip — this only
+          ever appears once there's actually something raising it (core
+          damage, or fleeing a live fight), which is also why it's absent
+          from every peaceful ship's panel. */}
+      {warpRisk !== undefined && warpRisk > 0 && (
+        <div className="inspect-row">
+          <span className="inspect-label">Warp Risk</span>
+          <span className="inspect-value ship-panel-combat">{formatPercent(warpRisk)} (elevated)</span>
         </div>
       )}
       {hasWarp && owned && (
@@ -237,22 +274,38 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset }: ShipPanelProps
         </>
       )}
       {engagement && (
-        <div className="inspect-row">
-          <span className="inspect-label">Engagement</span>
-          <span className="inspect-value ship-panel-combat">
-            In combat at {engagement.locationLabel}
-            {/* The way into the arena. Offered rather than forced — the
-                clock already switches itself to tactical when a fight
-                starts, and yanking the player's camera somewhere else on top
-                of that would be one automatic disruption too many. Hidden
-                when already in the combat view, where it would be a no-op. */}
-            {level !== 'combat' && (
-              <button type="button" className="ship-panel-unfollow-btn" onClick={() => enterCombat(engagement.id)}>
-                Enter Combat
-              </button>
-            )}
-          </span>
-        </div>
+        <>
+          <div className="inspect-row">
+            <span className="inspect-label">Engagement</span>
+            <span className="inspect-value ship-panel-combat">
+              In combat at {engagement.locationLabel}
+              {/* The way into the arena. Offered rather than forced — the
+                  clock already switches itself to tactical when a fight
+                  starts, and yanking the player's camera somewhere else on
+                  top of that would be one automatic disruption too many.
+                  Hidden when already in the combat view, where it would be a
+                  no-op. */}
+              {level !== 'combat' && (
+                <button type="button" className="ship-panel-unfollow-btn" onClick={() => enterCombat(engagement.id)}>
+                  Enter Combat
+                </button>
+              )}
+            </span>
+          </div>
+          {/* Distinct from the row above on purpose — a ship can be "in
+              combat" (present in this Engagement) without being "actively
+              engaged" (in range and line of fire of anyone). This is the
+              narrower, live-contact count, and works for a selected enemy
+              ship too, not just an owned one. */}
+          <div className="inspect-row">
+            <span className="inspect-label">Engaged Against</span>
+            <span className="inspect-value">
+              {activelyEngaged
+                ? `${activeContacts.length} enemy ship${activeContacts.length === 1 ? '' : 's'}`
+                : 'None in range'}
+            </span>
+          </div>
+        </>
       )}
       {charge && (
         <div className="inspect-row">

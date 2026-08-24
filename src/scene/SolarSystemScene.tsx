@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { Sun } from './Sun'
 import { Planet } from './Planet'
 import { ShipMarker } from './ShipMarker'
+import { NavigationLine } from './NavigationLine'
 import { ShipOrbitRing } from './ShipOrbitRing'
 import { ShipPanel } from './ShipPanel'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
@@ -28,6 +29,7 @@ import {
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
+import { ALLEGIANCE_COLORS } from '../data/shipData'
 import { InspectPanel } from '../components/InspectPanel'
 
 const MAX_DISTANCE = 32000
@@ -42,6 +44,12 @@ const ENTER_SATELLITE_DISTANCE = 3
 const SHIP_FOCUS_ARRIVE_DISTANCE = 1.2
 const SOL_NAME = 'Sol'
 const SOL_COLOR = '#ffd27a'
+// How far a route line's arrowhead reaches back from its destination, in
+// this view's own units (UNITS_PER_AU = 20, so this is ~1.25 AU) — sized
+// against typical in-system hop lengths (tens to hundreds of units), not
+// against the arena-scale constant CombatPathLine uses, which is metres by
+// comparison at this view's zoom.
+const NAV_ARROW_LENGTH = 25
 
 // Default starting camera direction/distance for a fresh arrival (fly-in
 // from interstellar, breadcrumb) — close enough that the outer planets
@@ -272,6 +280,16 @@ export function SolarSystemScene() {
             stackCount={shipStackInfo.get(ship.id)?.count ?? 1}
           />
         ))}
+
+        {/* Committed orders for the player's own and allied ships only —
+            same information-hiding rule as combat's route lines (see
+            CombatViewScene): hostiles still travel exactly as before, this
+            just doesn't hand the player a readout of where they're headed. */}
+        {systemShips
+          .filter((ship) => ship.order && (ship.allegiance === 'player' || ship.allegiance === 'friendly'))
+          .map((ship) => (
+            <NavigationLine key={`nav-${ship.id}`} ship={ship} color={ALLEGIANCE_COLORS[ship.allegiance]} arrowLength={NAV_ARROW_LENGTH} />
+          ))}
 
         {flyingToName && (
           <CameraFocusRig

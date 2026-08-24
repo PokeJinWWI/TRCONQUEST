@@ -1,79 +1,214 @@
 # Project Context
 
+> **Read `Context.md` first.** It is the authoritative, continuously-maintained
+> project document (~330 lines, every design decision with its reasoning).
+> This file is a compact index into it, not a replacement.
+>
+> ⚠️ **Never write a handoff to `CONTEXT.md`.** The filesystem is
+> case-insensitive (macOS), so `CONTEXT.md` **is** `Context.md` — writing a
+> handoff there silently destroys the real project doc. Handoffs go here, in
+> `HANDOFF.md`. (The `/newchat` command's template names `CONTEXT.md`; ignore
+> that and use this file.)
+
 ## Objective
-"Terra Relicta: Conquest" — a web-based grand strategy game (Vite + React + TypeScript + three.js/react-three-fiber), DEFCON-style minimalist vector-map aesthetic, Stellaris-inspired mechanics. This session was almost entirely about the fleet/ship system, in four successive rounds of feature work: (1) warp-drive mechanics, (2) star-arrival orbiting / real-gravity physics / ship-follow / hyperlanes+jump-risk / two new ship classes, (3) UI polish on that batch (marker stacking, orbit rings, brightness, slower ship orbits, moon-relative orbit sync), (4) `ShipPanel` info additions ("Current Action", "Jump Risk") plus making paused hyperdrive jumps queueable instead of blocked.
+
+"Terra Relicta: Conquest" — a web-based grand strategy game (Vite + React +
+TypeScript + three.js/react-three-fiber), DEFCON-style minimalist vector-map
+aesthetic, Stellaris-inspired mechanics. Recent sessions have been almost
+entirely about building a **ship combat system** from nothing, across five
+phases.
 
 ## Current State
-Everything requested across all four rounds is implemented, type-checks clean (`npx tsc -b` — **not** `--noEmit`, see Constraints), and builds clean (`npm run build`). Verified live wherever the sandboxed browser allowed; pure-function tests (via `npx tsx` running a scratch script that imports `shipPhysics.ts`/`shipStore.ts`/`hyperlaneStore.ts`/`gameTimeStore.ts` directly) were used for anything the sandbox couldn't reliably render — notably satellite view and any 2nd+ view transition in one browser tab, which deterministically loses its WebGL context in this sandbox (see Constraints). No known open bugs.
 
-`Context.md` (repo root, capital C — **not** this file) has been kept continuously updated with full reasoning for every decision this session, including a detailed post-mortem on a long, ultimately-false-alarm debugging chase for the ship-orbit-ring feature (see Important Details). Treat `Context.md` as the authoritative, detailed record, and this file as a compact index into it.
+**All five combat phases are complete and verified.** Typecheck clean
+(`npx tsc -b`), build clean (`npm run build`), 90-check pure-function suite
+passing (`npx tsx tests/combat.test.ts`), and verified live in the browser.
 
-**Git state (important, check before committing/pushing next):**
-- One commit from this session was made and pushed: `ce87a39` "Add fleet/ship system: allegiance, ownership, orbital motion, warp/hyperdrive cooldowns" (round 1's warp-drive work plus everything the *prior* session had left uncommitted), followed by `ebc925c` "Set up GitHub Pages deployment via Actions" (also this session, also pushed).
-- **Local `main` is now behind `origin/main` by 2 commits** — `5c47e24` and `f1907c0`, both titled "Update index.html" (one-line changes each), pushed directly by the repo owner outside this session, not by Claude. Confirmed via `git fetch` + `git log ebc925c..origin/main --stat`: small, benign edits, nothing alarming, but local needs a `git pull` (a clean fast-forward — `git merge-base --is-ancestor HEAD origin/main` confirms no divergence) before the next push.
-- **Everything from rounds 2–4 (star-arrival orbiting, gravity physics, follow, hyperlanes, new ship classes, marker stacking, orbit rings, brighter lines, moon-sync orbit, Current Action, Jump Risk, pause-queueable jumps) is uncommitted** on top of `ebc925c`. House rule: only commit when explicitly asked — nothing here was.
+What exists now:
+
+- **Phase 1 (mechanics)**: tactical time mode; damage matrix
+  (energy/kinetic/missile/torpedo vs shields/armor/point-defense); three
+  component healthbars (weapons/utility/core) + a blended overall; five
+  warship presets; auto-forming fleet-vs-fleet engagements on hostile
+  co-location; FTL charge-to-escape.
+- **Phase 2 (combat view)**: `combat` as a real view level; 3D lattice with
+  live density control; click-to-move; latching manual control vs.
+  auto-approach; right-click targeting; focus-fire.
+- **Phase 3 (terrain + fleet UI)**: celestial bodies as real terrain that
+  block line of fire and force A* routing around them; the arena as a movable
+  *window*; Fleet Management subtabs.
+- **Phase 4 (position model + risk)**: positions rewritten as real,
+  density-independent coordinates; unobstructed moves land on the exact
+  clicked point; grid movement moved to right-click; "Engaged Against"
+  (actively trading fire) distinguished from merely being in a fight; FTL risk
+  modifiers for core damage (universal) and active engagement (combat-only).
+- **Phase 5 (motion physics + stances)**: position+velocity replaces the hop
+  model; provably sub-light speeds with acceleration/deceleration/turning;
+  four auto-combat stances in the Strategizer; yellow dashed engagement lines;
+  Fleet Management window sizing fixed; tactical time five tiers with
+  pause-independent speed control.
+
+### Git state (check before committing)
+
+- `main` is in sync with `origin/main`.
+- Last commit: `1f1c380` "Add ship orbiting/physics polish and full combat
+  system (mechanics, arena view, fleet UI)" — covers combat Phases 1–3 plus
+  the prior session's ship work. **Pushed? No — verify with `git status`.**
+- **Phases 4 and 5 are uncommitted**, plus `Context.md` updates and the new
+  `tests/combat.test.ts`. House rule: only commit when explicitly asked.
 
 ## Decisions
-### Round 1 — Warp drive mechanics
-- **Direction-change stop-and-start**: redirecting a ship *actually mid-warp-leg* forces `warpReadySimDays = simDays + cooldownDays` immediately (`isShipCurrentlyWarping` check in `planMove`), applied atomically via a new `warpReadyOverride` field on the `'order'` `MoveResult` and `shipStore.setShipOrder`'s new optional param. A redirect during reaction-drive/leaving-gravity-well portions incurs no penalty (drive was never engaged).
-- **`warpEnabled`/`warpWhenReady`** (`ShipInstance` booleans, `ShipPanel` checkboxes): `warpEnabled=false` forces pure reaction-drive, full stop. `warpWhenReady=true` lets a cooldown-blocked order wait and auto-engage warp mid-flight (two-phase `MoveOrder`: `warpEngageSimDays`/`warpEngageFraction` fields; `getShipRenderPosition` interpolates each phase on its own timeline).
-- **Gravity-well gating**: a ship at rest in orbit/beside a star can't warp immediately — must spend a mandatory reaction-drive-only stretch first (`gravityWellClearSimDays`), *always* enforced regardless of `warpWhenReady` (physics, not a timing preference). Escape duration was originally a flat `GRAVITY_WELL_ESCAPE_DAYS=1`constant — **superseded in round 2** by real per-body escape-velocity physics (see below).
-- **Hyperdrive intentionally untouched** in round 1 per explicit instruction — only warp mechanics changed.
 
-### Round 2 — Star-arrival orbiting, real gravity, follow, hyperlanes, new ship classes
-- **Ships ordered to a star with system data (currently only Sol) now arrive `'orbiting'` it**, not resting beside it at interstellar scale — shared `orbitingLocation()` helper used by both the `'body'` case and the system-having `'star'` case of `resolveArrivalLocation`. A star with no system data keeps the old resting-beside-it behavior. This is what makes a nested ship correctly show only as an interstellar-view presence badge (not an animated marker) — falls out of reusing the existing `'orbiting'` location kind, no new isolation logic needed.
-- **Gravity-well escape time is now derived from real mass/radius** (`planetData.ts`/`starData.ts` both gained `massKg`; stars also gained `radiusKm`) via escape velocity (`v=√(2GM/r)`), scaled against Earth's own value (`EARTH_GRAVITY_WELL_ESCAPE_DAYS=1` baseline, itself still picked not derived). Mercury→0.38d, Earth→1.00d, Jupiter→5.38d, Sol→~55d (a real consequence of using a star's true surface, not fudged down).
-- **Ship-to-ship "follow"** (`ShipInstance.followingShipId`): right-click ship A while ship B is selected. **Not** a continuous position-chase — a follower re-targets B's *intended destination* (order's destination, or resting location via new `restingDestinationOf()`, the inverse of `resolveArrivalLocation`) only when that destination actually changes, computed in `useShipOrderSettler` (runs regardless of which view is mounted). A manual order to a following ship cancels the directive (`setShipOrder`/`setShipLocation` gained a `keepFollowing` param, default `false`; only the settler's own calls pass `true`). `ShipPanel` shows a "Following: `<name>` [Stop]" row.
-- **Hyperdrive jump risk + hyperlanes**: `planMove`'s hyperdrive branch rolls against `hyperdriveLossChance()` — `HYPERDRIVE_BASE_LOSS_CHANCE=0.5`, dropping to `HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE=0.1` once a hyperlane connects the two systems (both plain exported constants in `shipData.ts`, explicitly for a future tech system to adjust). A losing roll returns `{kind:'lost-in-hyperspace'}` → caller calls `removeShip`; no toast/log system exists yet, ship just vanishes (documented gap). New `useHyperlaneStore` (array of sorted `"a::b"` keys) tracks charted lanes; `planMove` reads it via `getState()` (its first store dependency) but never writes — callers do, via an optional `hyperlaneEstablished:[string,string]` field on the `'instant'` result. Departure star for a lane is `hyperlaneOriginStarId()` — the ship's current system or the star it's resting beside; a ship at a bare point/mid-order has no anchor, so the jump still happens but no lane gets recorded (documented gap, not a bug). Lanes render as `HyperlaneLine` (`src/scene/HyperlaneLine.tsx`) between the two stars.
-- **Two new ship classes**: **Hyperspace Scout** (identical to existing Star Jumper today; the distinct class exists for its future role as a cheap hyperlane-mapping hull once resource costs exist) and **Turing Scout** (same, but `HyperDrive.lossChanceOverride=0` — always safe, also useful as a deterministic test ship for the risk framework itself).
+Full reasoning for every one of these is in `Context.md` under "Combat system
+(Phase N …)". Condensed:
 
-### Round 3 — UI polish on round 2's batch
-- **Marker stacking**: ships sharing a body now stack vertically with visible names (`ShipMarker`/`SatelliteShipMarker` gained `stackIndex`/`stackCount` props) instead of every label being hidden — the old "single resting ship shows no label" rule was too aggressive once `followingShipId` can co-locate ships.
-- **Orbit rings for orbiting ships**: new `ShipOrbitRing` component (system view; satellite view reuses the existing static `OrbitRing` directly since the viewed body sits at scene origin there). Deduped per (body, inclination) pair, not one per ship. Required exporting `bodyLivePosition` from `shipPhysics.ts` (was private).
-- **Ship orbit speed**: `DEFAULT_SHIP_ORBIT_PERIOD_DAYS` raised from 4 to 20 (Phobos, the fastest *apparent* moon in this project's data, works out to ~19.1 days — ships were previously ~5x faster than even the fastest moon).
-- **Opposite-moon sync orbit**: right-clicking a moon (previously moons had no `onOrderTo` at all) orders the selected ship to orbit *the moon's parent planet*, synced to the moon's exact period/phase (offset 180°)/inclination via new `oppositeMoonSyncOrbit(moon)`. Implemented by extending `MoveDestination`'s `'body'` kind with an optional `syncOrbit` field rather than a new destination kind. `ShipLocation`'s `'orbiting'` variant gained a required `inclinationDeg` field (0 for every ordinary arrival) so the ship's rendered path can actually match the moon's tilt, not just its angle. Retrograde moons (Triton) work for free — negating `periodDays`'s sign flips `angleForYear`'s rate of change, same trick `getMoonPosition` already uses via `simYears * direction`.
-- **Hyperlane color**: matched to `OrbitRing`'s color/opacity (both were `#2fd8ff`/0.55 by end of this round) — a distinct purple had proven hard to see.
-- **Big debugging false-alarm, worth knowing about**: the ship orbit ring appeared completely missing through a long chase (isolating `useFrame`, bisecting `OrbitRing` for a bare mesh, patching `requestAnimationFrame`, `gl.readPixels`). Root cause: **none of the code was broken** — `document.hidden`/`visibilityState` reports `"hidden"` unconditionally in this sandboxed browser tool regardless of actual tab state, and `gl.readPixels` reads back all-zero because the canvas's drawing buffer isn't preserved by the time the async devtools call runs. Both are false signals in this environment, not real diagnostics. What actually resolved it: a plain visible test mesh, then swapping `OrbitRing` back in — it had been rendering correctly the whole time. **For future WebGL "is this even rendering" questions in this environment: use a plain unmissable visual swap-test, not rAF-counting or pixel-reading.**
-
-### Round 4 — ShipPanel info + pause-queueable jumps
-- **"Current Action"**: `ShipPanel`'s status row relabeled from "Location" (it always described what the ship is *doing*, not just where). `getShipStatusText` gained an optional `ships?: ShipInstance[]` param — when supplied and `followingShipId` is set, every branch gets a `"Following <Name> — "` prefix. The separate "Following: `<name>` [Stop]" row stays for the Stop button.
-- **"Jump Risk"**: new `ShipPanel` row for hyperdrive ships, showing both `hyperdriveLossChance` figures at once (e.g. `"50% new · 10% charted"`) since the panel has no "selected destination" context to know which applies — same reasoning as the existing Cooldowns row. Collapses to one number when both rates are equal (Turing Scout's override).
-- **Brighter lines**: `OrbitRing` and `HyperlaneLine` both moved from `#2fd8ff`/0.55 to `#7ce8ff`/0.9.
-- **Hyperdrive jumps queueable while paused** (supersedes round 1/2's "refused outright, silently ignored" — changed within the same session once the actual ask, queueable not just blocked, came in): `planMove`'s `'paused'` result is now queued via `setPendingHyperdriveJump` at every call site that already queues on `'on-cooldown'` (`InterstellarScene.handleOrderToStar`, `useShipOrderSettler`'s follow-recompute branch) — identical handling to that existing case. `useShipOrderSettler`'s firing condition gained an explicit `&& !paused` (provably redundant for a real tick, since ticking itself requires `!paused`, but not for the hook's own mount-time `settle()` call). `getShipStatusText` distinguishes *why* a jump is queued: `"queued — resume time to jump"` while paused (no misleading numeric countdown) vs. `"queued (Xd)"` while genuinely on cooldown.
+- **Tactical time is a second *rate* on one clock**, not a second clock —
+  everything is already a pure function of `simDays`, so nothing else changed.
+  The clock auto-switches to tactical when a fight starts and back when it
+  ends (combat is otherwise unobservable at ~518,400 sim-seconds per real
+  second).
+- **Damage follows the Stellaris convention** (the brief's own reference):
+  energy strong vs armor / weak vs shields, kinetic the mirror,
+  missiles+torpedoes bypass shields but are interceptable. *The brief as
+  written described both energy and kinetic as strong-vs-armor — flagged as a
+  typo and corrected.* Layer overflow carries in **raw** (pre-multiplier)
+  damage so the counter-matrix stays correct on partially-stripped layers.
+- **Three components degrade; only core kills.** Weapons scales firepower,
+  utility scales thrust *and* FTL charge rate (0 = stranded, can't flee), core
+  at 0 destroys. The overall bar blends all five pools (including
+  shields/armor) — an earlier components-only version showed 100% integrity on
+  a ship that had lost all shields and half its armor.
+- **Positions are real continuous coordinates; the lattice is only a
+  pathfinding aid.** Two reported bugs traced to violating this: storing
+  positions as density-relative lattice indices caused "ships teleport to the
+  nearest intersection on density change"; storing the current leg's
+  *endpoint* in `position` caused "a new order teleports the ship to the
+  previous destination" and made the route line vanish on issue. Both fixed at
+  the root, not patched.
+- **Ships are provably sub-light.** Speeds are declared as fractions of a
+  derived `ARENA_LIGHT_SPEED_UNITS_PER_SECOND` (from Sol's real radius and
+  *c*), never as bare numbers — the old fastest hull ran at 96% of light on a
+  reaction drive and nothing caught it because nothing expressed the
+  relationship.
+- **Acceleration comes from one rule**: steer the velocity *vector* under a
+  single `accel * dt` budget. Starting, stopping, and turning all fall out of
+  it; no special-case turn logic.
+- **Engagement lines ignore the lattice** — it's a line of *fire*, and shots
+  travel straight; drawing it on the grid would imply a constraint gunnery
+  doesn't have. Pairs come from the same `activeEnemyContacts` that drives the
+  panel readout and FTL risk, so there's no second cosmetic definition.
+- **Warp gained combat-only escape risk**, scoped so ordinary warp orders are
+  *provably* unaffected (gated on a `riskContext` param only the combat
+  resolver passes) — regression-tested with 200 ordinary orders on a
+  nearly-dead-core ship.
 
 ## Constraints
-- **No backend** — pure client-side app; "dev-only" only ever means "stripped from the production bundle by Vite's dead-code elimination," not truly secret.
-- **No real gameplay/economy/tech-tree systems** — habitability, districts, drive tiers, hyperdrive/warp risk rates, etc. are real *data* with heuristics/placeholders, documented throughout `Context.md`, not a gap to silently paper over.
-- **`npx tsc --noEmit` does NOT actually typecheck this project** — `tsconfig.json` is a solution-style file (`files: []`, only `references`), so that command silently checks nothing. Use `npx tsc -b` (matches what `npm run build` actually runs).
-- **No eslint installed** — don't attempt lint checks.
-- **Sandboxed browser testing — environment artifacts found/reconfirmed this session** (see `Context.md` for full detail):
-  - **The 2nd+ `<Canvas>` mount within one browser-pane tab deterministically loses its WebGL context** (`THREE.WebGLRenderer: Context Lost.` in console) — confirmed again and again this session. Regular DOM UI outside the Canvas (e.g. `ShipPanel`, since it's a sibling to `<Canvas>`, not `Html`-portaled inside it) still works and can be read/verified even in a context-lost tab; anything `Html`-portaled inside the Canvas (markers, badges) does not mount. **Open a fresh tab per new view level being tested.**
-  - **`document.hidden`/`document.visibilityState` report `"hidden"` unconditionally in this tool**, regardless of real tab state, and do **not** correlate with whether `requestAnimationFrame`/animation is actually running (it demonstrably keeps working). Don't use these as a diagnostic signal here.
-  - **`gl.readPixels` against the live WebGL context is unreliable** — reads back all-zero even for known-rendered content, likely because `preserveDrawingBuffer` isn't set and the buffer is cleared before the async devtools call executes. Don't use this to check "is X rendering" here either.
-  - Real wall-clock time keeps advancing during agent reasoning between tool calls, not just explicit `wait()` calls — re-read the in-game date to sanity-check elapsed time. Pausing the in-game clock gives precise timing control for tests.
-- **Filesystem is case-insensitive (macOS)** — `CONTEXT.md`/`Context.md` are the same file. Session handoffs go in `HANDOFF.md` instead (this file) — never write a `/newchat`-style handoff to `CONTEXT.md`/`Context.md`, it would silently overwrite the real, much more detailed project doc.
+
+- **`npx tsc --noEmit` does NOT typecheck this project** — `tsconfig.json` is
+  solution-style (`files: []`, only `references`), so it silently checks
+  nothing. Use **`npx tsc -b`**.
+- No eslint installed — don't attempt lint checks.
+- No backend; pure client-side. "Dev-only" means dead-code-eliminated by Vite,
+  not secret.
+- No real economy/tech-tree systems yet — habitability, drive tiers, weapon
+  balance numbers etc. are real data with documented heuristics, not gaps to
+  silently paper over.
+- **Arena scale is non-linear.** Body radii are fourth-root compressed, so
+  there is **no single km-per-unit scale**: one unit is ~179,000 km against
+  Sol but ~5,300 km against Earth. The light-speed anchor is therefore defined
+  against one specific body. Fully realistic reaction-drive speed (0.01c)
+  would make one arena crossing ~12 minutes, which isn't playable.
+- **Browser sandbox artifacts** (all reconfirmed):
+  - The 2nd+ `<Canvas>` mount in one tab deterministically loses its WebGL
+    context. Open a fresh tab per view level being tested. DOM UI outside the
+    Canvas still works in a context-lost tab.
+  - `document.hidden` reports `"hidden"` unconditionally; `gl.readPixels`
+    reads back all-zero. **Neither is a valid diagnostic here.**
+  - **Real wall-clock time advances between agent tool calls.** Polling for a
+    mid-fight moment fails — fights resolve between calls. Do the whole
+    play→wait→pause sequence *inside a single* `javascript_tool` call.
+  - r3f only recognizes a synthetic `contextmenu` dispatched as a
+    **`PointerEvent`**, not the DOM-native `MouseEvent` type.
+  - Vite HMR goes stale after store/type edits and silently breaks handlers
+    (e.g. spawn buttons stop working). **Hard-reload before concluding
+    anything is broken.**
+  - Use `HTMLSelectElement.prototype` (not `window.HTMLSelectElement`) when
+    setting select values via the native setter — the latter throws
+    "Illegal invocation".
 
 ## Important Details
+
 - Working directory: `/Users/pikaj/Documents/Terra Relicta/TRCONQUEST`
-- `Context.md` (repo root, capital C) is the authoritative, continuously-maintained project document — **read it first** in any new session. Do not confuse with this `HANDOFF.md`.
-- Dev server: `npm run dev` (Vite, port 5173, base path `/TRCONQUEST/` per `vite.config.ts` — navigate to `http://localhost:5173/TRCONQUEST/` explicitly, not bare root, to avoid ambiguity). `.claude/launch.json` registers it as `trc-dev` for the Browser preview tool.
-- Build: `npm run build`. Real typecheck: `npx tsc -b`.
-- Debug console: backtick key, dev build only; ship-class selector now includes all four classes (Swift Courier, Star Jumper, Hyperspace Scout, Turing Scout), plus spawn-near-body and allegiance selectors.
-- GitHub Pages: deploys via `.github/workflows/deploy.yml` (Actions-based) on push to `main`, to `https://pokejinwwi.github.io/TRCONQUEST/`. Repo owner must have (or need to) set Settings → Pages → Source to "GitHub Actions" for this to actually serve — last known status was pending that manual step; not reverified this session.
-- Git: see "Git state" under Current State above — local behind origin by 2 benign commits, plus a large uncommitted local diff from rounds 2–4.
+- **`Context.md`** (capital C, repo root) — authoritative project doc. Read
+  first. Keep updated after every change, documenting *why*, not just *what*.
+- **`tests/combat.test.ts`** — 90-check seeded pure-function suite, the
+  primary verification path for combat. Run with `npx tsx tests/combat.test.ts`.
+  Lives outside `src/` so it never enters the app typecheck or bundle.
+- Dev server: `npm run dev` (Vite, port 5173, base `/TRCONQUEST/` — navigate
+  to `http://localhost:5173/TRCONQUEST/` explicitly). `.claude/launch.json`
+  registers it as `trc-dev`.
+- Build: `npm run build`. Typecheck: `npx tsc -b`.
+- Debug console: backtick key, dev build only — spawns any ship class at any
+  body with any allegiance.
+- Combat source map:
+  - `src/data/combatData.ts` — damage matrix, weapon/defense archetypes, hull
+    presets, stances, risk constants.
+  - `src/scene/combatArena.ts` — `ArenaPoint` (real coords) vs `GridNode`
+    (pathfinding index), light-speed anchor, body sizing, LOS, A*.
+  - `src/scene/combatResolution.ts` — pure simulation: `integrateMotion`,
+    `stanceDestination`, `stepEngagements`, `syncEngagements`,
+    `activeEnemyContacts`.
+  - `src/state/combatStore.ts` — live engagements. `src/hooks/useCombatResolver.ts`
+    — drives it off the clock.
+  - Views: `CombatViewScene` / `CombatGrid` / `CombatShipMarker` /
+    `CombatPathLine` / `CombatEngagementLine`; panels `CombatPanel`,
+    `FleetManagement`, `ShipPanel`.
+- GitHub Pages deploys via `.github/workflows/deploy.yml` on push to `main`.
+  Whether Settings → Pages → Source is actually set to "GitHub Actions" has
+  never been reverified.
 
 ## Open Questions
-- Should the two remote-only "Update index.html" commits be pulled before any new commit/push? (Straightforward fast-forward, no conflict expected, but worth confirming with the user first since it touches shared/pushed history.)
-- Is GitHub Pages actually live yet (Settings → Pages → Source flipped to "GitHub Actions")? Not reverified this session.
-- No other blocking open questions.
+
+- Should Phases 4–5 be committed (and pushed)? Nothing has been committed
+  since `1f1c380`.
+- Is GitHub Pages actually live (Settings → Pages → Source = "GitHub
+  Actions")? Still unverified across several sessions.
+- Combat balance is untuned by playtesting — fights are now noticeably longer
+  since ships became sub-light. Whether that pacing feels right is a judgment
+  call only the user can make.
 
 ## Next Steps
-No specific next request pending as of this handoff. Natural candidates per `Context.md`'s roadmap (unstarted): flesh out the galactic view (still a stub), build out star systems beyond Sol, real gameplay/economy/tech-tree systems, ship combat/fleet composition beyond move orders, broader DEFCON-style GUI/side panels. If picking up git hygiene instead: pull the 2 remote commits, then decide whether to commit rounds 2–4 as one or several commits (all still uncommitted).
+
+Nothing is pending — the last request was fully delivered. Natural candidates,
+roughly by value:
+
+- **Combat feedback**: no visual for a shot fired, intercepted, or blocked —
+  damage just appears on bars. A tracer/impact layer and a "no line of fire"
+  indicator would make the terrain rules legible without reading the panel.
+- **Fleet-wide targeting UI**: per-ship right-click targeting exists, but
+  there's no way to assign a whole fleet's focus fire at once.
+- **Loadout editing** in the Ship Designer, once resources/refit exist to make
+  custom designs mean anything.
+- Long-unstarted: flesh out the galactic view (still a stub), star systems
+  beyond Sol, real economy/tech systems.
 
 ## User Preferences
-- Wants honest, concrete verification — call out plainly when something can't be verified live rather than assuming it works. This session repeatedly valued catching false leads (the WebGL/rAF/`document.hidden` debugging chase in round 3) and being upfront about pure-function testing as a substitute when the sandbox can't render something.
-- Wants `Context.md` kept up to date after every change, documenting *why*, not just *what* — established house convention, followed continuously this session across all four rounds.
-- Gives concrete, specific feedback in short messages, often bundling multiple distinct asks in one message (e.g. round 3's five-item list, round 4's four-item list) — worth explicitly separating and addressing each rather than conflating them.
-- Comfortable delegating large, ambiguous feature work (real orbital physics, hyperlane risk framework, follow semantics) and trusting reasonable judgment calls — but expects those calls clearly surfaced afterward (this `HANDOFF.md` itself, and `Context.md`'s per-decision reasoning, are both examples of that).
-- Explicitly asked to be told, in future sessions, if a request seems better suited to Opus (more complex/open-ended design work) or if Opus is overkill for something simple enough for Sonnet — flag this proactively rather than silently picking a model.
-- House rule: only commit when explicitly asked. Nothing from this session has been committed.
+
+- **Wants honest, concrete verification.** Call out plainly what couldn't be
+  verified live rather than assuming. This user has repeatedly valued catching
+  false leads and being upfront about pure-function testing as a substitute
+  when the sandbox can't render something.
+- **Wants `Context.md` kept current after every change**, documenting *why*.
+  Established house convention.
+- **Only commit when explicitly asked.**
+- Gives concrete feedback in short messages that **bundle several distinct
+  asks at once** — separate and address each rather than conflating them.
+- Comfortable delegating large, ambiguous design work and trusting judgment
+  calls — but expects those calls **surfaced clearly afterward**.
+- Asked to be told proactively if a request is better suited to Opus (complex,
+  open-ended design) or overkill for it (simple enough for Sonnet) — flag the
+  model rather than silently picking.
+- Reports bugs precisely and from real observation ("it takes light ~4-5
+  seconds to cross the sun"). Take these literally and verify the underlying
+  numbers — every such report this session was correct and pointed at a real
+  structural bug.

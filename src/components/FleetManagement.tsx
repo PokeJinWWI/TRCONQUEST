@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import {
+  COMBAT_STANCES,
   COMPONENT_KINDS,
   COMPONENT_LABELS,
   DAMAGE_PROFILES,
   DAMAGE_TYPE_LABELS,
+  STANCE_DESCRIPTIONS,
+  STANCE_LABELS,
   type CombatProfile,
   type DamageType,
 } from '../data/combatData'
@@ -254,6 +257,63 @@ function ShipDesigner() {
   )
 }
 
+// --- Strategizer ----------------------------------------------------------
+
+// Standing auto-combat doctrine, per ship. Set here rather than only inside
+// a fight because that's the point of a doctrine — you decide how a hull
+// fights before it's shooting, and the setting carries from one engagement
+// to the next (see ShipInstance.stance).
+//
+// Only player-owned ships are listed: these are orders, and the same
+// ownership rule that gates move orders gates these.
+function Strategizer() {
+  const ships = useShipStore((s) => s.ships)
+  const setStance = useShipStore((s) => s.setStance)
+  const selectShip = useShipStore((s) => s.selectShip)
+  const selectedShipId = useShipStore((s) => s.selectedShipId)
+
+  const owned = ships.filter((s) => s.allegiance === 'player')
+  if (owned.length === 0) {
+    return <div className="nav-placeholder">No ships under your command.</div>
+  }
+
+  return (
+    <div className="fleet-list">
+      <div className="ship-panel-hint strategizer-intro">
+        Auto-combat doctrine. Applies whenever a ship isn't under a manual move order — issuing one in the combat view
+        overrides it until you resume auto.
+      </div>
+      {owned.map((ship) => {
+        const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
+        return (
+          <div key={ship.id} className={`fleet-row${ship.id === selectedShipId ? ' selected' : ''}`}>
+            <div className="fleet-row-head">
+              <button type="button" className="strategizer-name" onClick={() => selectShip(ship.id)}>
+                {ship.name}
+              </button>
+              <span className="fleet-row-class">{shipClass?.name ?? 'Unknown'}</span>
+            </div>
+            <div className="combat-density-row">
+              {COMBAT_STANCES.map((stance) => (
+                <button
+                  key={stance}
+                  type="button"
+                  className={`combat-density-btn${ship.stance === stance ? ' active' : ''}`}
+                  onClick={() => setStance(ship.id, stance)}
+                  title={STANCE_DESCRIPTIONS[stance]}
+                >
+                  {STANCE_LABELS[stance]}
+                </button>
+              ))}
+            </div>
+            <div className="fleet-row-status">{STANCE_DESCRIPTIONS[ship.stance]}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // --- Root -----------------------------------------------------------------
 
 export function FleetManagement() {
@@ -275,10 +335,7 @@ export function FleetManagement() {
       </div>
       {tab === 'manager' && <FleetManager />}
       {tab === 'designer' && <ShipDesigner />}
-      {/* Deliberately empty per the design brief — the tab is reserved, not
-          filled with invented content. Same "reserve the spot, don't invent
-          content" spirit as the other NavBar placeholders. */}
-      {tab === 'strategizer' && <div className="nav-placeholder">Not yet available</div>}
+      {tab === 'strategizer' && <Strategizer />}
     </div>
   )
 }

@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
 import { FleetManagement } from './FleetManagement'
+import { SettingsPanel } from './SettingsPanel'
 
 const NATION_NAME = 'Imperial State of Mars'
 
 const FLEET_CATEGORY = 'Fleet Management'
+const SETTINGS_CATEGORY = 'Settings'
 
-const CATEGORIES = ['Situations', 'Government', 'Technology', 'Society', 'Species', 'Contacts', FLEET_CATEGORY]
+const CATEGORIES = ['Situations', 'Government', 'Technology', 'Society', 'Species', 'Contacts', FLEET_CATEGORY, SETTINGS_CATEGORY]
 
 // Stellaris-style left-side nation nav — real nation name (hardcoded for
 // now, no empire/player system exists yet) and a row of category buttons,
@@ -46,12 +48,14 @@ export function NavBar() {
       </div>
 
       {activeCategory && (
-        <DraggableWindow title={activeCategory} onClose={() => setActiveCategory(null)}>
-          {/* Fleet Management is the first of these categories to have real
-              content behind it; the rest stay reserved placeholders until
-              there's something true to put in them. */}
+        <DraggableWindow title={activeCategory} onClose={() => setActiveCategory(null)} wide={activeCategory === FLEET_CATEGORY}>
+          {/* Fleet Management and Settings are the first of these categories
+              to have real content behind them; the rest stay reserved
+              placeholders until there's something true to put in them. */}
           {activeCategory === FLEET_CATEGORY ? (
             <FleetManagement />
+          ) : activeCategory === SETTINGS_CATEGORY ? (
+            <SettingsPanel />
           ) : (
             <div className="nav-placeholder">Not yet available</div>
           )}

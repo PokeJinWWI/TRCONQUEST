@@ -7,7 +7,7 @@ import { useShipStore } from '../state/shipStore'
 import { useCombatStore } from '../state/combatStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { overallHealthFraction, participantArenaPosition, shipCombatProfile } from './combatResolution'
-import { nodeToArenaPosition } from './combatArena'
+import { toVector3 } from './combatArena'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 
 interface CombatShipMarkerProps {
@@ -46,10 +46,10 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
     const engagement = useCombatStore.getState().engagements.find((e) => e.id === engagementId)
     const participant = engagement?.participants.find((p) => p.shipId === shipId)
     if (!engagement || !participant) return
-    // Positions are absolute lattice coordinates; the view draws relative to
-    // the current window centre, so subtract it here.
-    const pos = participantArenaPosition(participant, engagement.density, useGameTimeStore.getState().simDays)
-    pos.sub(nodeToArenaPosition(engagement.center, engagement.density))
+    // Positions are real, absolute arena coordinates; the view draws
+    // relative to the current window centre, so subtract it here.
+    const pos = participantArenaPosition(participant, useGameTimeStore.getState().simDays)
+    pos.sub(toVector3(engagement.center))
     groupRef.current?.position.copy(pos)
   })
 

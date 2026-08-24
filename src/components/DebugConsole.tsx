@@ -66,6 +66,7 @@ export function DebugConsole() {
       pendingHyperdriveJump: null,
       followingShipId: null,
       combat: pristineCombatState(shipClass.combat),
+      stance: 'balanced',
     })
   }
 

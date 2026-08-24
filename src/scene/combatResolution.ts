@@ -16,7 +16,11 @@ import {
   COMPONENT_KINDS,
   utilityEffectiveness,
   weaponsEffectiveness,
+  KITE_RANGE_FRACTION,
+  KITE_TOLERANCE,
+  SWARM_RANGE_FRACTION,
   type CombatProfile,
+  type CombatStance,
   type ComponentKind,
   type WeaponMount,
 } from '../data/combatData'
@@ -31,24 +35,24 @@ import {
   type Engagement,
 } from '../state/combatStore'
 import {
-  arenaCenterNode,
-  arenaDistance,
+  ARENA_ORIGIN,
   arenaPositionToNode,
   hasLineOfFire,
-  isNodeBlocked,
+  isPointBlocked,
   latticePath,
   nodeToArenaPosition,
-  nodesEqual,
-  startingNode,
-  traversalSeconds,
+  pointDistance,
+  segmentClearsObstacles,
+  startingPoint,
+  toVector3,
+  type ArenaPoint,
   type CombatObstacle,
   type GridDensity,
-  type GridNode,
 } from './combatArena'
 import { PLANETS } from './planetData'
 import { STARS } from '../data/starData'
 import { getMoonsForPlanet } from './moonData'
-import { simSecondsToDays } from '../state/gameTimeStore'
+import { simDaysToSeconds, simSecondsToDays } from '../state/gameTimeStore'
 
 // Fixed simulation step, in sim-seconds. Small enough that a 0.8s autocannon
 // resolves smoothly, large enough that a minute of tactical combat is ~600
@@ -104,16 +108,112 @@ export function isDestroyed(state: ShipCombatState): boolean {
   return state.componentHp.core <= 0
 }
 
-// Where a participant actually is right now — interpolated along its current
-// lattice hop. A ship mid-hop is genuinely between nodes for range purposes,
-// so weapons check against this rather than snapping to either endpoint.
-export function participantArenaPosition(p: CombatParticipant, density: GridDensity, simDays: number): Vector3 {
-  const from = nodeToArenaPosition(p.hopFrom, density)
-  const to = nodeToArenaPosition(p.node, density)
-  const span = p.hopArrivalSimDays - p.hopStartSimDays
-  if (span <= 0 || simDays >= p.hopArrivalSimDays) return to
-  const t = Math.max(0, (simDays - p.hopStartSimDays) / span)
-  return from.clone().lerp(to, t)
+// How far past its last integration step rendering may extrapolate a ship's
+// position, in sim-seconds. The resolver advances in whole 0.1s steps and
+// carries the remainder, so the render clock normally sits a fraction of a
+// step ahead — extrapolating along the velocity vector across that gap is
+// what keeps motion smooth instead of visibly updating 10 times a second.
+// Clamped so that a clock racing far ahead of the simulation (normal time
+// mode, or a long catch-up) can't fling ships across the arena on a stale
+// velocity.
+const MAX_EXTRAPOLATION_SECONDS = COMBAT_STEP_SECONDS * 2
+
+// Where a participant actually is right now: its last integrated position,
+// carried forward along its current velocity. Exact for constant velocity,
+// and never more than a step or two of extrapolation off during
+// acceleration.
+export function participantArenaPosition(p: CombatParticipant, simDays: number): Vector3 {
+  const elapsed = Math.max(0, Math.min(MAX_EXTRAPOLATION_SECONDS, simDaysToSeconds(simDays - p.positionSimDays)))
+  return new Vector3(
+    p.position.x + p.velocity.x * elapsed,
+    p.position.y + p.velocity.y * elapsed,
+    p.position.z + p.velocity.z * elapsed,
+  )
+}
+
+export function participantSpeed(p: CombatParticipant): number {
+  return Math.hypot(p.velocity.x, p.velocity.y, p.velocity.z)
+}
+
+// A waypoint counts as reached inside this radius (or inside one step's
+// travel, whichever is larger — otherwise a fast ship can step straight over
+// a waypoint and circle back for it).
+const WAYPOINT_ARRIVE_RADIUS = 0.08
+
+// Advances one ship's motion by `dt` sim-seconds under a real acceleration
+// limit.
+//
+// The whole model is a single rule: steer the velocity *vector* toward the
+// velocity we'd like to have, changing it by no more than `accel * dt` per
+// step. Starting, stopping, and turning all fall out of that one constraint
+// rather than needing separate cases — turning costs acceleration budget
+// exactly like speeding up does, so a heavy hull sweeps a wide arc while a
+// corvette pivots tightly, with no special-case turn logic anywhere.
+//
+// Braking is handled by asking, each step, "how fast could I still be going
+// and stop exactly on the final waypoint?" (v = sqrt(2*a*d)) and never
+// exceeding that. Intermediate waypoints deliberately skip this — a ship
+// flies *through* a corner of a detour at cruise speed rather than coming to
+// a halt at every turn.
+export function integrateMotion(
+  p: CombatParticipant,
+  maxSpeed: number,
+  accel: number,
+  dt: number,
+  simDays: number,
+): CombatParticipant {
+  const position = toVector3(p.position)
+  const velocity = toVector3(p.velocity)
+  let path = p.path
+
+  // The velocity we'd hold if we could change it instantly.
+  const desired = new Vector3(0, 0, 0)
+  if (path.length > 0 && maxSpeed > 0) {
+    const target = toVector3(path[0])
+    const toTarget = target.clone().sub(position)
+    const distance = toTarget.length()
+    if (distance > 1e-9) {
+      let speed = maxSpeed
+      if (path.length === 1 && accel > 0) {
+        speed = Math.min(maxSpeed, Math.sqrt(2 * accel * distance))
+      }
+      desired.copy(toTarget.divideScalar(distance).multiplyScalar(speed))
+    }
+  }
+
+  // Steer toward it, budget-limited. With an empty path `desired` is zero,
+  // so this is also what brings a ship to a controlled stop.
+  const budget = accel * dt
+  const delta = desired.clone().sub(velocity)
+  if (budget <= 0) delta.set(0, 0, 0)
+  else if (delta.length() > budget) delta.setLength(budget)
+  velocity.add(delta)
+  if (velocity.length() > maxSpeed) velocity.setLength(maxSpeed)
+
+  position.add(velocity.clone().multiplyScalar(dt))
+
+  if (path.length > 0) {
+    const target = toVector3(path[0])
+    const arriveRadius = Math.max(WAYPOINT_ARRIVE_RADIUS, velocity.length() * dt)
+    if (target.distanceTo(position) <= arriveRadius) {
+      // Settle exactly onto the last waypoint rather than drifting past it —
+      // the ship was ordered *there*, and braking has it nearly stopped by
+      // this point anyway.
+      if (path.length === 1) {
+        position.copy(target)
+        velocity.set(0, 0, 0)
+      }
+      path = path.slice(1)
+    }
+  }
+
+  return {
+    ...p,
+    position: { x: position.x, y: position.y, z: position.z },
+    velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
+    positionSimDays: simDays,
+    path,
+  }
 }
 
 // Which of the three healthbars a shot lands on. An explicitly chosen
@@ -229,11 +329,7 @@ export function ftlChargeSeconds(kind: 'warp' | 'hyperdrive', utilityFraction: n
 // Builds the FtlCharge a ship would begin right now for a given destination.
 // Returns null when the ship has no drive of that kind, or is too wrecked to
 // charge at all.
-export function planFtlCharge(
-  ship: ShipInstance,
-  destination: MoveDestination,
-  simDays: number,
-): FtlCharge | null {
+export function planFtlCharge(ship: ShipInstance, destination: MoveDestination, simDays: number): FtlCharge | null {
   const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
   const profile = shipClass?.combat
   if (!shipClass || !profile) return null
@@ -259,16 +355,12 @@ export function planFtlCharge(
 
 // The nearest hostile participant — the default target for any ship whose
 // player hasn't assigned one, and the permanent behavior of every AI ship.
-export function nearestEnemy(
-  self: CombatParticipant,
-  participants: CombatParticipant[],
-  density: GridDensity,
-): CombatParticipant | null {
+export function nearestEnemy(self: CombatParticipant, participants: CombatParticipant[]): CombatParticipant | null {
   let best: CombatParticipant | null = null
   let bestDistance = Infinity
   for (const other of participants) {
     if (other.side === self.side || other.shipId === self.shipId) continue
-    const distance = arenaDistance(self.node, other.node, density)
+    const distance = pointDistance(self.position, other.position)
     if (distance < bestDistance) {
       bestDistance = distance
       best = other
@@ -299,24 +391,23 @@ export function arenaBodyRadius(radiusKm: number): number {
   return Math.max(MIN_BODY_RADIUS_UNITS, Math.min(MAX_BODY_RADIUS_UNITS, scaled))
 }
 
-// The bodies present at a fight, placed at the window's centre so an
-// engagement in orbit starts with that body squarely between the two sides —
-// which is exactly the situation the design brief called out: two ships on
-// opposite sides of a star should not be able to shoot each other.
+// The bodies present at a fight, placed at the arena origin — which is where
+// a fresh engagement's window is centred too (see syncEngagements), so a
+// fight in orbit starts with that body squarely between the two sides. This
+// is exactly the situation the design brief called out: two ships on
+// opposite sides of a star should not be able to shoot each other. The
+// body's position is real and fixed from here on — it does not move if the
+// player later recentres the window (see combatArena.ts's header).
 //
 // Moons of the primary are deliberately *not* included: they're far enough
 // out at real scale that putting them in a 12-unit arena would be inventing
 // geometry rather than modelling it. Only the body actually being orbited
 // is here.
-export function obstaclesForLocation(location: ShipLocation, density: GridDensity): CombatObstacle[] {
-  const center = arenaCenterNode(density)
-
+export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
   if (location.kind === 'star') {
     const star = STARS.find((s) => s.id === location.starId)
     if (!star) return []
-    return [
-      { name: star.name, kind: 'star', color: star.color, node: center, radiusUnits: arenaBodyRadius(star.radiusKm) },
-    ]
+    return [{ name: star.name, kind: 'star', color: star.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(star.radiusKm) }]
   }
 
   if (location.kind === 'orbiting') {
@@ -324,20 +415,12 @@ export function obstaclesForLocation(location: ShipLocation, density: GridDensit
     // so check both rosters.
     const star = STARS.find((s) => s.name === location.bodyName)
     if (star) {
-      return [
-        { name: star.name, kind: 'star', color: star.color, node: center, radiusUnits: arenaBodyRadius(star.radiusKm) },
-      ]
+      return [{ name: star.name, kind: 'star', color: star.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(star.radiusKm) }]
     }
     const planet = PLANETS.find((p) => p.name === location.bodyName)
     if (planet) {
       return [
-        {
-          name: planet.name,
-          kind: 'planet',
-          color: planet.color,
-          node: center,
-          radiusUnits: arenaBodyRadius(planet.radiusKm),
-        },
+        { name: planet.name, kind: 'planet', color: planet.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(planet.radiusKm) },
       ]
     }
     // A moon being orbited directly isn't reachable as a rest location today,
@@ -346,9 +429,7 @@ export function obstaclesForLocation(location: ShipLocation, density: GridDensit
     for (const p of PLANETS) {
       const moon = getMoonsForPlanet(p.name).moons.find((m) => m.name === location.bodyName)
       if (moon) {
-        return [
-          { name: moon.name, kind: 'moon', color: p.color, node: center, radiusUnits: arenaBodyRadius(moon.radiusKm) },
-        ]
+        return [{ name: moon.name, kind: 'moon', color: p.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(moon.radiusKm) }]
       }
     }
   }
@@ -371,68 +452,10 @@ export function longestWeaponRange(profile: CombatProfile): number {
   return profile.weapons.reduce((max, w) => Math.max(max, w.rangeUnits), 0)
 }
 
-// Baseline "close to the enemy" behavior. Without this, two fleets spawn on
-// opposite faces of the arena 12 units apart — outside every weapon's reach —
-// and simply stare at each other forever, so a battle could never actually
-// join until player-issued movement exists (Phase 2).
-//
-// It deliberately stops at a standoff just inside the ship's *own* longest
-// range rather than closing to contact, so a long-ranged hull keeps its reach
-// advantage instead of throwing it away. A player-issued move order overrides
-// this entirely — the approach only runs when the ship has no path of its own
-// queued (see stepEngagements), so manual control always wins.
-export function approachNode(
-  self: CombatParticipant,
-  target: CombatParticipant,
-  profile: CombatProfile,
-  density: GridDensity,
-  obstacles: CombatObstacle[] = [],
-): GridNode | null {
-  const reach = longestWeaponRange(profile)
-  // An unarmed ship has nothing to close for — it holds position (and had
-  // better be charging a drive).
-  if (reach <= 0) return null
-
-  const selfPos = nodeToArenaPosition(self.node, density)
-  const targetPos = nodeToArenaPosition(target.node, density)
-  const separation = selfPos.distanceTo(targetPos)
-  const standoff = reach * APPROACH_RANGE_FRACTION
-  const blocked = obstacles.length > 0 && !hasLineOfFire(selfPos, targetPos, obstacles, density)
-
-  // Already in range with a clear shot — nothing to do.
-  if (separation <= standoff && !blocked) return null
-
-  // Deliberately does NOT check the display window: where the player has the
-  // camera framed must not constrain what a ship is allowed to do, or a ship
-  // that ends up outside the frame is frozen out of the fight.
-  const usable = (node: GridNode): boolean => {
-    if (isNodeBlocked(node, obstacles, density, OBSTACLE_CLEARANCE_UNITS)) return false
-    return hasLineOfFire(nodeToArenaPosition(node, density), targetPos, obstacles, density)
-  }
-
-  // Straight in, if that works.
-  const direction = selfPos.clone().sub(targetPos).normalize()
-  const direct = arenaPositionToNode(targetPos.clone().add(direction.clone().multiplyScalar(standoff)), density)
-  if (obstacles.length === 0) return nodesEqual(direct, self.node) ? null : direct
-  if (usable(direct)) return nodesEqual(direct, self.node) ? null : direct
-
-  // Otherwise the body is in the way, so look for a firing position *around*
-  // it: sample directions on the sphere of radius `standoff` about the target
-  // and take the one closest to where the ship already is. Without this, two
-  // fleets on opposite sides of a star would sit forever, each unable to
-  // shoot and each convinced it was already in position.
-  let best: GridNode | null = null
-  let bestDistance = Infinity
-  for (const candidateDir of SPHERE_DIRECTIONS) {
-    const candidate = arenaPositionToNode(targetPos.clone().add(candidateDir.clone().multiplyScalar(standoff)), density)
-    if (!usable(candidate)) continue
-    const distance = selfPos.distanceTo(nodeToArenaPosition(candidate, density))
-    if (distance < bestDistance) {
-      bestDistance = distance
-      best = candidate
-    }
-  }
-  return best && !nodesEqual(best, self.node) ? best : null
+// The reach of the SHORTEST mount — the distance at which a mixed loadout
+// finally has everything firing, and therefore what Swarm closes to.
+export function shortestWeaponRange(profile: CombatProfile): number {
+  return profile.weapons.reduce((min, w) => Math.min(min, w.rangeUnits), Infinity)
 }
 
 // A fixed spread of unit directions used to search for a firing position with
@@ -451,6 +474,185 @@ const SPHERE_DIRECTIONS: Vector3[] = (() => {
   }
   return dirs
 })()
+
+const EPSILON = 1e-6
+
+// Baseline "close to the enemy" behavior. Without this, two fleets spawn on
+// opposite faces of the arena 12 units apart — outside every weapon's reach —
+// and simply stare at each other forever, so a battle could never actually
+// join until player-issued movement exists.
+//
+// It deliberately stops at a standoff just inside the ship's *own* longest
+// range rather than closing to contact, so a long-ranged hull keeps its reach
+// advantage instead of throwing it away. A player-issued move order overrides
+// this entirely — the approach only runs when the ship has no path of its own
+// queued (see stepEngagements), so manual control always wins.
+//
+// Entirely in real coordinates now — no density, no lattice. Returns the
+// destination point directly; the caller (orderParticipantTo) is the only
+// place that ever needs to touch the lattice, and only when that destination
+// turns out to be obstructed.
+export function approachNode(
+  self: CombatParticipant,
+  target: CombatParticipant,
+  profile: CombatProfile,
+  obstacles: CombatObstacle[] = [],
+  standoffOverride?: number,
+): ArenaPoint | null {
+  const reach = longestWeaponRange(profile)
+  // An unarmed ship has nothing to close for — it holds position (and had
+  // better be charging a drive).
+  if (reach <= 0) return null
+
+  const selfPos = toVector3(self.position)
+  const targetPos = toVector3(target.position)
+  const separation = selfPos.distanceTo(targetPos)
+  const standoff = standoffOverride ?? reach * APPROACH_RANGE_FRACTION
+  const blocked = obstacles.length > 0 && !hasLineOfFire(selfPos, targetPos, obstacles)
+
+  // Already in range with a clear shot — nothing to do.
+  if (separation <= standoff && !blocked) return null
+
+  const usable = (point: Vector3): boolean => {
+    if (isPointBlocked({ x: point.x, y: point.y, z: point.z }, obstacles, OBSTACLE_CLEARANCE_UNITS)) return false
+    return hasLineOfFire(point, targetPos, obstacles)
+  }
+  const toArenaPoint = (v: Vector3): ArenaPoint | null => (v.distanceTo(selfPos) < EPSILON ? null : { x: v.x, y: v.y, z: v.z })
+
+  // Straight in, if that works.
+  const direction = selfPos.clone().sub(targetPos).normalize()
+  const direct = targetPos.clone().add(direction.clone().multiplyScalar(standoff))
+  if (obstacles.length === 0) return toArenaPoint(direct)
+  if (usable(direct)) return toArenaPoint(direct)
+
+  // Otherwise the body is in the way, so look for a firing position *around*
+  // it: sample directions on the sphere of radius `standoff` about the target
+  // and take the one closest to where the ship already is. Without this, two
+  // fleets on opposite sides of a star would sit forever, each unable to
+  // shoot and each convinced it was already in position.
+  let best: Vector3 | null = null
+  let bestDistance = Infinity
+  for (const candidateDir of SPHERE_DIRECTIONS) {
+    const candidate = targetPos.clone().add(candidateDir.clone().multiplyScalar(standoff))
+    if (!usable(candidate)) continue
+    const distance = selfPos.distanceTo(candidate)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = candidate
+    }
+  }
+  return best ? toArenaPoint(best) : null
+}
+
+// Where a ship wants to be, given its standing doctrine. Returns null for
+// "already positioned, hold". Each stance is a genuinely different answer,
+// not a tuning knob on one behavior:
+//
+//   balanced — close to just inside longest range and hold (the original,
+//              and still the default).
+//   swarm    — drive all the way in to the SHORTEST mount's range, so every
+//              gun on the hull bears at once.
+//   kite     — sit at the outer edge of longest range and actively back off
+//              when the target closes, within a tolerance band so it isn't
+//              re-planning every step.
+//   stall    — refuse the fight: put the nearest body between itself and the
+//              enemy so line of fire is broken, and stay there.
+export function stanceDestination(
+  self: CombatParticipant,
+  target: CombatParticipant,
+  profile: CombatProfile,
+  stance: CombatStance,
+  obstacles: CombatObstacle[] = [],
+): ArenaPoint | null {
+  const reach = longestWeaponRange(profile)
+
+  if (stance === 'stall') return stallDestination(self, target, obstacles)
+
+  // An unarmed hull has no range to hold — it behaves as if stalling, which
+  // is the only sensible thing it can do anyway.
+  if (reach <= 0) return stallDestination(self, target, obstacles)
+
+  if (stance === 'swarm') {
+    const shortest = shortestWeaponRange(profile)
+    const closeTo = Number.isFinite(shortest) ? shortest * SWARM_RANGE_FRACTION : reach * SWARM_RANGE_FRACTION
+    return approachNode(self, target, profile, obstacles, closeTo)
+  }
+
+  if (stance === 'kite') {
+    const hold = reach * KITE_RANGE_FRACTION
+    const selfPos = toVector3(self.position)
+    const targetPos = toVector3(target.position)
+    const separation = selfPos.distanceTo(targetPos)
+    const blocked = obstacles.length > 0 && !hasLineOfFire(selfPos, targetPos, obstacles)
+    // Inside the band and shooting freely — hold station rather than
+    // twitching back and forth over fractions of a unit.
+    if (!blocked && Math.abs(separation - hold) <= hold * KITE_TOLERANCE) return null
+    // Too close is the case that makes kiting a real behavior: back straight
+    // off along the line from the target, rather than waiting to be caught.
+    if (!blocked && separation < hold) {
+      const away = selfPos.clone().sub(targetPos)
+      if (away.length() < EPSILON) away.set(1, 0, 0)
+      const retreat = targetPos.clone().add(away.normalize().multiplyScalar(hold))
+      if (!isPointBlocked({ x: retreat.x, y: retreat.y, z: retreat.z }, obstacles, OBSTACLE_CLEARANCE_UNITS)) {
+        return { x: retreat.x, y: retreat.y, z: retreat.z }
+      }
+    }
+    return approachNode(self, target, profile, obstacles, hold)
+  }
+
+  return approachNode(self, target, profile, obstacles)
+}
+
+// Stall: break line of fire and stay broken. Puts the ship on the far side
+// of the nearest body from its enemy — the one position in the arena where
+// the terrain rules guarantee it can't be shot (and, symmetrically, can't
+// shoot). With no body anywhere to hide behind, the best available move is
+// simply to open the distance.
+function stallDestination(
+  self: CombatParticipant,
+  target: CombatParticipant,
+  obstacles: CombatObstacle[],
+): ArenaPoint | null {
+  const selfPos = toVector3(self.position)
+  const targetPos = toVector3(target.position)
+
+  if (obstacles.length === 0) {
+    const away = selfPos.clone().sub(targetPos)
+    if (away.length() < EPSILON) away.set(1, 0, 0)
+    const flee = selfPos.clone().add(away.normalize().multiplyScalar(STALL_FLEE_DISTANCE))
+    return { x: flee.x, y: flee.y, z: flee.z }
+  }
+
+  // Nearest body to hide behind.
+  let body = obstacles[0]
+  let bodyDistance = pointDistance(self.position, body.position)
+  for (const candidate of obstacles) {
+    const d = pointDistance(self.position, candidate.position)
+    if (d < bodyDistance) {
+      bodyDistance = d
+      body = candidate
+    }
+  }
+
+  const bodyPos = toVector3(body.position)
+  const fromTarget = bodyPos.clone().sub(targetPos)
+  if (fromTarget.length() < EPSILON) fromTarget.set(1, 0, 0)
+  // Directly behind the body, far enough out to clear its surface.
+  const hide = bodyPos
+    .clone()
+    .add(fromTarget.normalize().multiplyScalar(body.radiusUnits + OBSTACLE_CLEARANCE_UNITS + STALL_SHELTER_MARGIN))
+
+  // Already sheltered — no line of fire either way, so stay put rather than
+  // shuffling around behind the body as the enemy drifts.
+  if (!hasLineOfFire(selfPos, targetPos, obstacles) && selfPos.distanceTo(hide) < STALL_SHELTER_MARGIN * 2) return null
+  if (selfPos.distanceTo(hide) < EPSILON) return null
+  return { x: hide.x, y: hide.y, z: hide.z }
+}
+
+// How far a stalling ship runs when there's no body to hide behind.
+const STALL_FLEE_DISTANCE = 6
+// Clearance beyond a body's surface a stalling ship holds station at.
+const STALL_SHELTER_MARGIN = 1
 
 export interface CombatStepResult {
   engagements: Engagement[]
@@ -490,7 +692,6 @@ export function stepEngagements(
   const nextEngagements: Engagement[] = []
 
   for (const engagement of engagements) {
-    const { density } = engagement
     // Drop participants whose ship no longer exists (destroyed earlier, lost
     // in hyperspace, etc.) before anything else reads the roster.
     const participants = engagement.participants.filter((p) => shipsById.has(p.shipId) && !destroyed.has(p.shipId))
@@ -510,42 +711,31 @@ export function stepEngagements(
       const profile = shipCombatProfile(ship)
       if (!profile) return p
       const explicit = p.targetShipId ? participants.find((o) => o.shipId === p.targetShipId) : undefined
-      const target = explicit ?? nearestEnemy(p, participants, density)
+      const target = explicit ?? nearestEnemy(p, participants)
       if (!target) return p
-      const node = approachNode(p, target, profile, density, engagement.obstacles)
-      if (!node) return p
-      return orderParticipantTo(p, node, density, simDays, engagement.obstacles)
+      const point = stanceDestination(p, target, profile, ship.stance ?? 'balanced', engagement.obstacles)
+      if (!point) return p
+      return orderParticipantTo(p, point, engagement.density, simDays, engagement.obstacles)
     })
 
-    // --- Movement: complete any hop that has landed, then start the next. ---
+    // --- Movement: integrate one step of real accelerated motion. ---
     const moved: CombatParticipant[] = withApproach.map((p) => {
-      if (simDays < p.hopArrivalSimDays) return p
-      // The hop has landed: the ship is now at `node`. Start the next queued
-      // hop if there is one.
-      if (p.path.length === 0) {
-        return { ...p, hopFrom: p.node, hopStartSimDays: simDays, hopArrivalSimDays: simDays }
-      }
       const ship = shipsById.get(p.shipId)!
       const profile = shipCombatProfile(ship)
       const state = stateOf(p.shipId)
-      const utility = profile && state
-        ? utilityEffectiveness(state.componentHp.utility, profile.components.utility)
-        : 0
-      const speed = (profile?.maneuverUnitsPerSecond ?? 0) * utility
-      const [nextNode, ...rest] = p.path
-      // A ship with dead utility can't move — it holds position with its
-      // path still queued, so repairs (or simply the path being reissued)
-      // would resume it rather than silently dropping the order.
-      if (speed <= 0) return { ...p, hopFrom: p.node, hopStartSimDays: simDays, hopArrivalSimDays: simDays }
-      const seconds = traversalSeconds(p.node, nextNode, density, speed)
-      return {
-        ...p,
-        hopFrom: p.node,
-        node: nextNode,
-        path: rest,
-        hopStartSimDays: simDays,
-        hopArrivalSimDays: simDays + simSecondsToDays(seconds),
-      }
+      if (!profile || !state) return p
+      // Utility damage scales BOTH cruise speed and acceleration — a wrecked
+      // drive array is sluggish as well as slow, and at zero the ship simply
+      // stops responding (keeping its queued path, so repairs would resume
+      // it rather than silently dropping the order).
+      const utility = utilityEffectiveness(state.componentHp.utility, profile.components.utility)
+      return integrateMotion(
+        p,
+        profile.maneuverUnitsPerSecond * utility,
+        profile.accelerationUnitsPerSecondSq * utility,
+        COMBAT_STEP_SECONDS,
+        simDays,
+      )
     })
 
     // --- Shield regeneration, before firing, so a shot this step meets the
@@ -583,7 +773,7 @@ export function stepEngagements(
       const explicit = p.targetShipId ? moved.find((o) => o.shipId === p.targetShipId) : undefined
       // An explicitly chosen target that has died or fled falls back to
       // auto-targeting rather than leaving the ship idle.
-      const target = explicit && !destroyed.has(explicit.shipId) ? explicit : nearestEnemy(p, moved, density)
+      const target = explicit && !destroyed.has(explicit.shipId) ? explicit : nearestEnemy(p, moved)
       if (!target) return p
 
       const targetState = stateOf(target.shipId)
@@ -591,14 +781,14 @@ export function stepEngagements(
       const targetProfile = targetShip ? shipCombatProfile(targetShip) : null
       if (!targetState || !targetProfile) return p
 
-      const selfPos = participantArenaPosition(p, density, simDays)
-      const targetPos = participantArenaPosition(target, density, simDays)
+      const selfPos = participantArenaPosition(p, simDays)
+      const targetPos = participantArenaPosition(target, simDays)
       const separation = selfPos.distanceTo(targetPos)
 
       // A celestial body between the two ships stops every shot, at any
       // range. Checked once per firing ship rather than per mount, since
       // line of fire is a property of the geometry, not of the weapon.
-      if (!hasLineOfFire(selfPos, targetPos, engagement.obstacles, density)) return p
+      if (!hasLineOfFire(selfPos, targetPos, engagement.obstacles)) return p
 
       const weaponReady = [...p.weaponReadySimDays]
       let current = targetState
@@ -610,14 +800,7 @@ export function stepEngagements(
         if (separation > weapon.rangeUnits) return
         if (current.componentHp.core <= 0) return
 
-        const { next, outcome } = applyShot(
-          weapon,
-          weapon.damage * effectiveness,
-          current,
-          targetProfile,
-          p.targetComponent,
-          rng,
-        )
+        const { next, outcome } = applyShot(weapon, weapon.damage * effectiveness, current, targetProfile, p.targetComponent, rng)
         current = next
         // An intercepted shot still consumed the round.
         void outcome
@@ -711,7 +894,7 @@ export function syncEngagements(
 
     // Ships already in the fight keep their arena position and timers;
     // newcomers are placed on their side's face, indexed past whoever's
-    // already there so they don't spawn on an occupied node.
+    // already there so they don't spawn on an occupied point.
     const perSideCount: Record<number, number> = { 0: 0, 1: 0 }
     for (const p of priorById.values()) perSideCount[p.side]++
 
@@ -719,15 +902,14 @@ export function syncEngagements(
       const kept = priorById.get(ship.id)
       if (kept) return kept
       const side = sideFor(ship.allegiance)
-      const node = startingNode(side, perSideCount[side]++, density)
+      const spawnPosition = startingPoint(side, perSideCount[side]++, density)
       const profile = shipCombatProfile(ship)
       return {
         shipId: ship.id,
         side,
-        node,
-        hopFrom: node,
-        hopStartSimDays: simDays,
-        hopArrivalSimDays: simDays,
+        position: spawnPosition,
+        velocity: { x: 0, y: 0, z: 0 },
+        positionSimDays: simDays,
         path: [],
         weaponReadySimDays: (profile?.weapons ?? []).map(() => simDays),
         targetShipId: null,
@@ -747,10 +929,11 @@ export function syncEngagements(
             locationLabel: combatLocationLabel(combatants[0].location),
             startedSimDays: simDays,
             density,
-            center: arenaCenterNode(density),
+            center: ARENA_ORIGIN,
             // Whatever the fleets are orbiting is physically present in the
-            // arena, sitting between them at the start.
-            obstacles: obstaclesForLocation(combatants[0].location, density),
+            // arena, sitting between them at the start (see
+            // obstaclesForLocation — it anchors at the same origin).
+            obstacles: obstaclesForLocation(combatants[0].location),
             participants,
             resolvedThroughSimDays: simDays,
           },
@@ -760,39 +943,110 @@ export function syncEngagements(
   return result
 }
 
-// Queues a lattice move for one participant. Exposed here (rather than as a
-// store action) so the path is computed by the same pure layer that consumes
-// it, and so the caller can't queue a path the arena wouldn't accept.
+// Queues a move for one participant, to an exact real destination point —
+// exposed here (rather than as a store action) so the route is computed by
+// the same pure layer that consumes it, and so the caller can't queue a
+// route the arena wouldn't accept.
+//
+// The lattice is consulted only as a last resort: if the straight real-space
+// segment from the ship's current position to `destination` is clear, the
+// ship simply walks that line — the destination can be anywhere, including a
+// point that isn't on any grid intersection ("nodes are simply a
+// pathfinding tool," per the design brief). Only when that direct line is
+// blocked does this snap both ends to the lattice, route around the
+// obstacle, and convert the result back to real waypoints — and even then,
+// the FINAL waypoint is overwritten with the exact requested `destination`
+// rather than left at its lattice-snapped position, so only the detour
+// itself is grid-quantized, not the resting place. (This is an approximation
+// for the last leg from the final detour waypoint to the exact destination —
+// good enough given the waypoint sits within half a grid cell of it, but not
+// a rigorous guarantee against every possible obstacle geometry.)
 export function orderParticipantTo(
   participant: CombatParticipant,
-  destination: GridNode,
+  destination: ArenaPoint,
   density: GridDensity,
-  simDays: number,
+  _simDays: number,
   obstacles: CombatObstacle[] = [],
 ): CombatParticipant {
-  if (nodesEqual(participant.node, destination)) return participant
-  const path = latticePath(participant.node, destination, density, {
-    obstacles,
-    clearance: OBSTACLE_CLEARANCE_UNITS,
-  })
-  // No route (destination inside a body, or unreachable within this window) —
-  // the order is simply refused rather than flying the ship through it.
-  if (path.length === 0) return participant
-  // The current hop is abandoned in place: the ship is treated as being at
-  // its current node and re-paths from there. Simpler than finishing the hop
-  // first, and matches the "orders take effect now" feel of the strategic
-  // layer's redirects.
-  return {
-    ...participant,
-    hopFrom: participant.node,
-    hopStartSimDays: simDays,
-    hopArrivalSimDays: simDays,
-    path,
+  const current = participant.position
+  if (pointDistance(current, destination) < EPSILON) return participant
+
+  let path: ArenaPoint[]
+  if (segmentClearsObstacles(toVector3(current), toVector3(destination), obstacles, OBSTACLE_CLEARANCE_UNITS)) {
+    path = [destination]
+  } else {
+    const fromNode = arenaPositionToNode(toVector3(current), density)
+    const toNode = arenaPositionToNode(toVector3(destination), density)
+    const latticeNodes = latticePath(fromNode, toNode, density, { obstacles, clearance: OBSTACLE_CLEARANCE_UNITS })
+    // No route (destination inside a body, or unreachable) — the order is
+    // simply refused rather than flying the ship through the obstacle.
+    if (latticeNodes.length === 0) return participant
+    path = latticeNodes.map((n) => {
+      const v = nodeToArenaPosition(n, density)
+      return { x: v.x, y: v.y, z: v.z }
+    })
+    path[path.length - 1] = destination
   }
+
+  // Only the route changes. Position and velocity are deliberately left
+  // untouched, which is what makes redirecting a ship mid-flight behave like
+  // a real course change: it carries its momentum into the turn and arcs
+  // onto the new heading under the same acceleration limit as everything
+  // else. (It's also why the old teleport bug can't recur — this function no
+  // longer has any reason to write a position at all.)
+  return { ...participant, path }
 }
 
 // Whether a ship is currently pinned in a fight — used to decide whether a
 // move order becomes a normal order or an FTL escape charge.
 export function findEngagementFor(engagements: Engagement[], shipId: string): Engagement | null {
   return engagements.find((e) => e.participants.some((p) => p.shipId === shipId)) ?? null
+}
+
+// Enemies a participant could genuinely exchange fire with right now — within
+// EITHER side's weapon range and with a clear line of fire. Deliberately
+// narrower than "everyone in the same Engagement": a fleet fight can easily
+// include ships sitting well outside anyone's range, or blocked by a body,
+// that are technically part of the battle but aren't actually fighting
+// anyone. "In combat" (present in an Engagement) and "actively engaged" (has
+// a live target) are different questions — see ShipPanel, which surfaces
+// both, and shipPhysics's FTL risk functions, which only the second one
+// affects.
+//
+// The range check uses EITHER ship's reach on purpose: a longer-ranged ship
+// is a real, active threat to a target it can hit even if that target can't
+// hit back — exactly the situation a kiting Frigate creates, and it should
+// still count as "actively engaged" from the target's perspective.
+export function activeEnemyContacts(
+  participant: CombatParticipant,
+  engagement: Engagement,
+  ships: ShipInstance[],
+  simDays: number,
+): CombatParticipant[] {
+  const shipsById = new Map(ships.map((s) => [s.id, s]))
+  const selfShip = shipsById.get(participant.shipId)
+  const selfProfile = selfShip ? shipCombatProfile(selfShip) : null
+  const selfReach = selfProfile ? longestWeaponRange(selfProfile) : 0
+  const selfPos = participantArenaPosition(participant, simDays)
+
+  return engagement.participants.filter((other) => {
+    if (other.side === participant.side) return false
+    const otherShip = shipsById.get(other.shipId)
+    if (!otherShip) return false
+    const otherProfile = shipCombatProfile(otherShip)
+    const otherReach = otherProfile ? longestWeaponRange(otherProfile) : 0
+    const otherPos = participantArenaPosition(other, simDays)
+    const distance = selfPos.distanceTo(otherPos)
+    if (distance > selfReach && distance > otherReach) return false
+    return hasLineOfFire(selfPos, otherPos, engagement.obstacles)
+  })
+}
+
+export function isActivelyEngaged(
+  participant: CombatParticipant,
+  engagement: Engagement,
+  ships: ShipInstance[],
+  simDays: number,
+): boolean {
+  return activeEnemyContacts(participant, engagement, ships, simDays).length > 0
 }

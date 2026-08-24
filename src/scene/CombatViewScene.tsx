@@ -5,10 +5,11 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { CombatGrid } from './CombatGrid'
 import { CombatShipMarker } from './CombatShipMarker'
 import { CombatPathLine } from './CombatPathLine'
+import { CombatEngagementLine } from './CombatEngagementLine'
 import { ShipPanel } from './ShipPanel'
 import { CombatPanel, combatPanelGap } from '../components/CombatPanel'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
-import { type GridNode } from './combatArena'
+import { type ArenaPoint } from './combatArena'
 import { orderParticipantTo } from './combatResolution'
 import { useCombatStore } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
@@ -59,24 +60,21 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
   const selectedShip = ships.find((s) => s.id === selectedShipId)
   const canCommand = selectedShip?.allegiance === 'player' && !!selectedParticipant
 
-  // Left-click the grid: walk the selected ship to that node along lattice
-  // edges. Latches manual control (see CombatParticipant.holdPosition) so the
-  // resolver's auto-approach doesn't immediately undo the order.
-  const handlePickNode = (node: GridNode) => {
+  // Right-click the grid: walk the selected ship to the picked destination,
+  // which CombatGrid has already resolved to a fine-lattice node (see
+  // combatArena's pickLatticeNode — a click is a ray, and the lattice is what
+  // supplies the depth it can't). Latches manual control (see
+  // CombatParticipant.holdPosition) so the resolver's auto-approach doesn't
+  // immediately undo the order.
+  const handlePickPoint = (point: ArenaPoint) => {
     if (!engagement || !selectedParticipant || !canCommand) return
     // A ship spooling a drive has committed to leaving and can't maneuver.
     if (selectedShip?.combat.ftlCharge) return
     const simDays = useGameTimeStore.getState().simDays
-    const ordered = orderParticipantTo(
-      selectedParticipant,
-      node,
-      engagement.density,
-      simDays,
-      engagement.obstacles,
-    )
+    const ordered = orderParticipantTo(selectedParticipant, point, engagement.density, simDays, engagement.obstacles)
     // orderParticipantTo returns the participant unchanged when no route
-    // exists (the node is inside a body, or walled off) — don't latch manual
-    // control off an order that was refused.
+    // exists (the point is inside a body, or walled off) — don't latch
+    // manual control off an order that was refused.
     if (ordered === selectedParticipant) return
     setParticipant(engagement.id, { ...ordered, holdPosition: true })
   }
@@ -86,7 +84,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
   // a ship can be walked anywhere, one window at a time.
   const handleRecenter = () => {
     if (!engagement || !selectedParticipant) return
-    setCenter(engagement.id, selectedParticipant.node)
+    setCenter(engagement.id, selectedParticipant.position)
   }
 
   // Right-click a hostile marker: concentrate this ship's fire on it.
@@ -109,26 +107,34 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
           center={engagement.center}
           density={engagement.density}
           obstacles={engagement.obstacles}
-          onPickNode={handlePickNode}
+          onPickPoint={handlePickPoint}
         />
 
-        {/* Every committed route, not just the selected ship's — seeing where
-            the enemy is heading is exactly the information positioning is
-            supposed to be played on. */}
+        {/* Committed routes for the player's own and allied ships only.
+            Hostile and neutral ships still manoeuvre exactly as before — this
+            hides the *information*, not the behaviour. Knowing precisely
+            where an enemy is headed several seconds early trivialises the
+            positioning the fight is played on; reading their heading off the
+            hulls themselves is the intended skill. Each line reads its own
+            live state per frame (it stays mounted and hides itself when
+            there's no route), so a route appearing or completing doesn't
+            remount anything. */}
         {engagement.participants.map((p) => {
           const ship = ships.find((s) => s.id === p.shipId)
-          if (!ship || p.path.length === 0) return null
+          if (!ship) return null
+          if (ship.allegiance !== 'player' && ship.allegiance !== 'friendly') return null
           return (
             <CombatPathLine
               key={`path-${p.shipId}`}
-              from={p.node}
-              path={p.path}
-              density={engagement.density}
-              center={engagement.center}
+              engagementId={engagement.id}
+              shipId={p.shipId}
               color={ALLEGIANCE_COLORS[ship.allegiance]}
             />
           )
         })}
+
+        {/* Who is actually shooting at whom, right now. */}
+        <CombatEngagementLine engagementId={engagement.id} />
 
         {engagement.participants.map((p) => (
           <CombatShipMarker

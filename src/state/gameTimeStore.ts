@@ -21,11 +21,18 @@ export const NORMAL_DAYS_PER_SECOND = 6
 // combatStore's auto-switch on engagement start).
 export const TACTICAL_DAYS_PER_SECOND = 1 / SECONDS_PER_DAY
 
-// Stellaris-style discrete speed tiers. Index 0 is the slowest non-paused
-// speed. Tactical tops out at 3x rather than 5x — past that, per-shot combat
-// events start landing faster than they can be read.
+// Stellaris-style discrete speed tiers. Index 0 is the slowest speed in
+// either mode.
+//
+// Tactical originally stopped at 3x on the reasoning that per-shot events
+// get unreadable past that. Ships are now genuinely sub-light (see
+// combatData's hullMotion), which made closing to weapons range take tens of
+// seconds rather than a handful — so the upper tiers earn their place back:
+// they're for skipping the approach, not for watching the shooting. The
+// slowest tier stays 1x, deliberately unchanged, since that's the pace
+// combat is actually authored at (1 sim-second per real second).
 export const NORMAL_SPEED_MULTIPLIERS = [1, 2, 3, 4, 5]
-export const TACTICAL_SPEED_MULTIPLIERS = [1, 2, 3]
+export const TACTICAL_SPEED_MULTIPLIERS = [1, 2, 3, 4, 5]
 
 export function speedMultipliersFor(mode: TimeMode): number[] {
   return mode === 'tactical' ? TACTICAL_SPEED_MULTIPLIERS : NORMAL_SPEED_MULTIPLIERS
@@ -76,11 +83,16 @@ export const useGameTimeStore = create<GameTimeState>((set, get) => ({
     set((s) => ({ simDays: s.simDays + deltaSeconds * daysPerSecondFor(mode) * multiplier }))
   },
   togglePause: () => set((s) => ({ paused: !s.paused })),
+  // Speed and pause are fully independent controls: either direction works
+  // whether or not the clock is running, and neither touches `paused`.
+  //
+  // Previously `speedUp` force-unpaused as a side effect and `slowDown` was
+  // disabled outright while paused, which meant a paused player could only
+  // change speed by resuming — exactly backwards for the common case of
+  // pausing to think, dialing the pace in, then resuming at it. Setting the
+  // speed you want while frozen is now just allowed.
   speedUp: () =>
-    set((s) => ({
-      paused: false,
-      speedIndex: Math.min(s.speedIndex + 1, speedMultipliersFor(s.mode).length - 1),
-    })),
+    set((s) => ({ speedIndex: Math.min(s.speedIndex + 1, speedMultipliersFor(s.mode).length - 1) })),
   slowDown: () => set((s) => ({ speedIndex: Math.max(s.speedIndex - 1, 0) })),
   setMode: (mode) =>
     set((s) => ({

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { ComponentKind } from '../data/combatData'
 import type { FleetAllegiance } from '../data/shipData'
-import { remapNode, type CombatObstacle, type GridDensity, type GridNode } from '../scene/combatArena'
+import type { ArenaPoint, CombatObstacle, GridDensity } from '../scene/combatArena'
 import type { ShipLocation } from './shipStore'
 
 // Live combat state — which fights are happening, and everything transient
@@ -59,14 +59,28 @@ export function combatLocationLabel(location: ShipLocation): string {
 export interface CombatParticipant {
   shipId: string
   side: CombatSide
-  node: GridNode
-  // The hop currently underway. `hopFrom` equals `node` and hopArrivalSimDays
-  // is in the past when the ship is stationary.
-  hopFrom: GridNode
-  hopStartSimDays: number
-  hopArrivalSimDays: number
-  // Remaining queued nodes after the current hop completes.
-  path: GridNode[]
+  // Where the ship ACTUALLY is, in real continuous arena units, as of
+  // `positionSimDays` — not a lattice index, and never a destination.
+  //
+  // That last part is load-bearing. An earlier model stored the current
+  // *hop's endpoint* here and set it the instant a hop began, so `position`
+  // meant "where this leg ends." Re-ordering a ship mid-flight then read
+  // `position` as its start point and snapped it straight to the previous
+  // order's destination — the reported "it teleports to where I sent it
+  // last" bug. Position and destination are now different things, which
+  // makes that class of bug unrepresentable.
+  position: ArenaPoint
+  // Current velocity, in arena units per sim-second. Integrated under an
+  // acceleration limit (see combatResolution.integrateMotion), which is what
+  // gives ships real inertia — they build up speed, coast, brake to a stop,
+  // and sweep an arc when turning instead of pivoting instantly.
+  velocity: ArenaPoint
+  // When `position`/`velocity` were last integrated. Rendering extrapolates
+  // from here so motion stays smooth between the resolver's 0.1s steps.
+  positionSimDays: number
+  // Remaining waypoints to fly through, in order. Empty means "hold here"
+  // (and the ship will decelerate to a stop if it's still moving).
+  path: ArenaPoint[]
   // Per *mount index* (not mount id) — a hull carrying three identical
   // autocannons needs three independent timers, and they're distinguished
   // only by position in the class's weapons array.
@@ -94,11 +108,10 @@ export interface Engagement {
   locationLabel: string
   startedSimDays: number
   density: GridDensity
-  // The lattice node the visible window is centred on. The arena is a window
-  // onto an unbounded lattice, not a box the fight is sealed inside — sliding
-  // this is how a ship travels further than one window's width (see
-  // combatArena's header).
-  center: GridNode
+  // The real point the visible window is centred on. Purely a camera
+  // parameter — recentring never moves a ship or a body, only what's in
+  // frame (see combatArena.ts's header).
+  center: ArenaPoint
   // Celestial bodies sharing the arena — blocking line of fire and barring
   // movement. Derived from where the fight is happening (see
   // combatResolution.obstaclesForLocation), not authored per engagement.
@@ -128,7 +141,7 @@ interface CombatState {
   setParticipantTarget: (engagementId: string, shipId: string, targetShipId: string | null) => void
   setParticipantTargetComponent: (engagementId: string, shipId: string, component: ComponentKind | null) => void
   setDensity: (engagementId: string, density: GridDensity) => void
-  setCenter: (engagementId: string, center: GridNode) => void
+  setCenter: (engagementId: string, center: ArenaPoint) => void
   // Writes back a participant the caller has already recomputed — the move
   // itself is planned by combatResolution.orderParticipantTo, keeping the
   // "physics computes, store applies" split every other order path in this
@@ -179,34 +192,20 @@ export const useCombatStore = create<CombatState>((set) => ({
           : e,
       ),
     })),
-  // Changing density changes the physical spacing between nodes, so every
-  // stored coordinate has to be remapped to preserve its *world position* —
-  // otherwise the whole battle visibly jumps, since the same integer would
-  // suddenly mean somewhere else. Remapping keeps a density switch what it
-  // should be: a change of movement resolution and nothing else. (An earlier
-  // cut left coordinates untouched and accepted the jump as a harmless snap;
-  // once ships had to path around a body that sat at a fixed world position,
-  // it stopped being harmless.) Queued paths are dropped rather than remapped
-  // point-by-point, since a route planned at one resolution isn't
-  // meaningfully the same route at another.
+  // Every position here is already real, density-independent game state (see
+  // combatArena.ts's header) — density only changes the pathfinding/
+  // visualization lattice, so switching it is nothing more than flipping
+  // this one field. Ships, bodies, the window centre, and any queued route
+  // all stay exactly where they were; nothing needs remapping. (An earlier
+  // cut stored positions AS lattice indices and round-tripped them through a
+  // remap on every density change, which snapped each one to the nearest
+  // node of the new spacing — a real, visible jump whenever the original
+  // position wasn't already an exact multiple of the new spacing, which was
+  // routine. Storing real coordinates as the ground truth removes the bug at
+  // the root instead of patching the remap.)
   setDensity: (engagementId, density) =>
     set((s) => ({
-      engagements: s.engagements.map((e) => {
-        if (e.id !== engagementId || e.density === density) return e
-        const from = e.density
-        return {
-          ...e,
-          density,
-          center: remapNode(e.center, from, density),
-          obstacles: e.obstacles.map((o) => ({ ...o, node: remapNode(o.node, from, density) })),
-          participants: e.participants.map((p) => ({
-            ...p,
-            node: remapNode(p.node, from, density),
-            hopFrom: remapNode(p.hopFrom, from, density),
-            path: [],
-          })),
-        }
-      }),
+      engagements: s.engagements.map((e) => (e.id === engagementId ? { ...e, density } : e)),
     })),
   // Slides the visible window. This is the answer to "movement shouldn't be
   // confined to one cube" — ships stay where they are in absolute lattice

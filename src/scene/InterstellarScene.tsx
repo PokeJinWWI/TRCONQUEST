@@ -15,6 +15,7 @@ import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
 import { HyperlaneLine } from './HyperlaneLine'
 import { ShipMarker } from './ShipMarker'
+import { NavigationLine } from './NavigationLine'
 import { ShipPanel } from './ShipPanel'
 import { getShipRenderPosition, planMove, shipSystemId, canFollow } from './shipPhysics'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -33,6 +34,11 @@ const ENTER_SYSTEM_DISTANCE = 4.5
 // How close the "Go To" fly-in to a selected ship needs to get before it
 // counts as arrived.
 const SHIP_FOCUS_ARRIVE_DISTANCE = 3
+// How far a route line's arrowhead reaches back from its destination, in
+// this view's own units — interstellar hops span a much wider range than a
+// system-view leg (ENTER_DISTANCE=6 up to MAX_DISTANCE=4200), so this picks
+// its own constant rather than sharing SolarSystemScene's.
+const NAV_ARROW_LENGTH = 12
 
 interface StarNodeProps {
   star: StarData
@@ -272,6 +278,16 @@ export function InterstellarScene() {
         {interstellarShips.map((ship) => (
           <ShipMarker key={ship.id} ship={ship} onOrderFollow={handleFollowShip} />
         ))}
+
+        {/* Committed orders for the player's own and allied ships only —
+            same information-hiding rule as combat's route lines (see
+            CombatViewScene): hostiles still travel exactly as before, this
+            just doesn't hand the player a readout of where they're headed. */}
+        {interstellarShips
+          .filter((ship) => ship.order && (ship.allegiance === 'player' || ship.allegiance === 'friendly'))
+          .map((ship) => (
+            <NavigationLine key={`nav-${ship.id}`} ship={ship} color={ALLEGIANCE_COLORS[ship.allegiance]} arrowLength={NAV_ARROW_LENGTH} />
+          ))}
 
         {focusedStar && (
           <CameraFocusRig

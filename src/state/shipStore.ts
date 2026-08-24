@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CombatProfile, ComponentKind } from '../data/combatData'
+import type { CombatProfile, CombatStance, ComponentKind } from '../data/combatData'
 import type { FleetAllegiance } from '../data/shipData'
 
 // Where a ship rests when it has no active order — always resolved to a
@@ -174,6 +174,13 @@ export interface ShipInstance {
   // present (see pristineCombatState) — a ship that has never fought simply
   // has one at full health.
   combat: ShipCombatState
+  // How this ship fights when the player isn't steering it by hand — set
+  // from Fleet Management > Strategizer. Lives on the ship rather than on a
+  // CombatParticipant so it can be set *before* a fight (that's the whole
+  // point of a standing doctrine) and survives from one engagement to the
+  // next. A manual move order still overrides it for the rest of that fight
+  // (see CombatParticipant.holdPosition).
+  stance: CombatStance
 }
 
 interface ShipState {
@@ -221,6 +228,7 @@ interface ShipState {
   applyCombatDamage: (next: Record<string, ShipCombatState>, destroyedIds: string[]) => void
   // Begins or cancels (pass null) an FTL escape charge — see FtlCharge.
   setFtlCharge: (id: string, charge: FtlCharge | null) => void
+  setStance: (id: string, stance: CombatStance) => void
 }
 
 export const useShipStore = create<ShipState>((set) => ({
@@ -301,5 +309,9 @@ export const useShipStore = create<ShipState>((set) => ({
   setFtlCharge: (id, charge) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, combat: { ...ship.combat, ftlCharge: charge } } : ship)),
+    })),
+  setStance: (id, stance) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, stance } : ship)),
     })),
 }))

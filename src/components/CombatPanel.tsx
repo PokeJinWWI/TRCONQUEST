@@ -53,8 +53,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const selectedParticipant = engagement.participants.find((p) => p.shipId === selectedShipId)
   const selectedShip = selectedShipId ? shipsById.get(selectedShipId) : undefined
   const commandable = selectedShip?.allegiance === 'player' && selectedParticipant
-  const selectedOutsideWindow =
-    !!selectedParticipant && !isInsideWindow(selectedParticipant.node, engagement.center, engagement.density)
+  const selectedOutsideWindow = !!selectedParticipant && !isInsideWindow(selectedParticipant.position, engagement.center)
 
   const sides: [typeof engagement.participants, typeof engagement.participants] = [
     engagement.participants.filter((p) => p.side === 0),
@@ -226,7 +225,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           )}
 
           <div className="ship-panel-hint">
-            Left-click the grid to move · right-click a hostile to target it.
+            Right-click the grid to move · right-click a hostile ship to target it.
           </div>
         </>
       ) : (

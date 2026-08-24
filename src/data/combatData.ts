@@ -9,6 +9,8 @@
 // exports specifically so a future tech tree has one obvious place to scale
 // them from, same reasoning as shipData's HYPERDRIVE_BASE_LOSS_CHANCE.
 
+import { ARENA_LIGHT_SPEED_UNITS_PER_SECOND } from '../scene/combatArena'
+
 // The four weapon families, following the Stellaris convention the design
 // brief referenced: energy chews through armor but is soaked by shields,
 // kinetic is the mirror, and missiles/torpedoes ignore shields entirely at
@@ -143,14 +145,78 @@ export interface CombatProfile {
   // Empty for civilian hulls — an unarmed ship is a fully valid combatant,
   // it just can't shoot back (and had better be able to run).
   weapons: WeaponMount[]
-  // Sublight speed inside the combat arena, in grid units per sim-second,
-  // at full utility health. This is what makes range a real trade rather
-  // than a formality: a long-ranged Frigate that outruns a Battleship can
-  // kite it indefinitely, while a Corvette has to survive the approach to
-  // bring its short autocannons to bear. Unrelated to
-  // REACTION_DRIVE_SPEED_KM_S — that governs interplanetary travel across
-  // real AU, this governs a knife-fight across a few arena units.
+  // Sublight cruise speed inside the combat arena, in arena units per
+  // sim-second, at full utility health. This is what makes range a real
+  // trade rather than a formality: a long-ranged Frigate that outruns a
+  // Battleship can kite it indefinitely, while a Corvette has to survive the
+  // approach to bring its short autocannons to bear.
+  //
+  // Always defined below as a fraction of ARENA_LIGHT_SPEED_UNITS_PER_SECOND
+  // rather than as a bare number — these are reaction drives, and a reaction
+  // drive that crosses a star faster than light does is a bug the code
+  // should make hard to write. (It was previously easy to write, and got
+  // written: the old fastest hull ran at 96% of light.)
   maneuverUnitsPerSecond: number
+  // Arena units per sim-second squared. Governs starting, stopping, AND
+  // turning — the movement integrator steers a velocity *vector* under this
+  // single limit (see combatResolution.integrateMotion), so changing
+  // direction costs exactly as much as changing speed, and a heavy hull
+  // sweeps a wide arc where a corvette pivots. Expressed below as
+  // "cruise speed reached in N seconds" so the handling characteristic is
+  // the number being tuned, not an abstract rate.
+  accelerationUnitsPerSecondSq: number
+}
+
+// How a ship behaves when the player isn't steering it directly — the
+// auto-combat options surfaced in the Fleet Management > Strategizer tab.
+// Each one is a genuinely different answer to "where should I be standing",
+// resolved by combatResolution.stanceDestination.
+export type CombatStance = 'balanced' | 'swarm' | 'kite' | 'stall'
+
+export const COMBAT_STANCES: CombatStance[] = ['balanced', 'swarm', 'kite', 'stall']
+
+export const STANCE_LABELS: Record<CombatStance, string> = {
+  balanced: 'Balanced',
+  swarm: 'Swarm',
+  kite: 'Kite',
+  stall: 'Stall',
+}
+
+export const STANCE_DESCRIPTIONS: Record<CombatStance, string> = {
+  balanced: 'Close to just inside your longest weapon range and hold there.',
+  swarm: 'Drive straight at the enemy and stay on top of them, bringing every short-ranged mount to bear.',
+  kite: 'Hover at the far edge of your longest weapon range, backing off the moment they close.',
+  stall: 'Break line of fire behind the nearest body and stay hidden, avoiding engagement entirely.',
+}
+
+// Kite holds this fraction of its longest weapon's range — just inside the
+// edge, so a target drifting slightly doesn't drop out of reach entirely.
+export const KITE_RANGE_FRACTION = 0.92
+// ...and re-positions only once separation leaves this band around it, so a
+// kiting ship isn't re-planning a new route every single step.
+export const KITE_TOLERANCE = 0.08
+// Swarm closes to inside the SHORTEST mount's range, which is the only
+// distance at which a mixed loadout actually fires everything it has.
+export const SWARM_RANGE_FRACTION = 0.8
+
+// --- Hull speed / handling, expressed against the speed of light ----------
+//
+// `lightFraction` is "this hull is N times slower than light across the same
+// distance"; `secondsToCruise` is how long it takes to reach that speed from
+// rest (and, equivalently, to stop from it, or to reverse a turn).
+//
+// The slowest divisor here (13) means a Battleship needs ~60 sim-seconds to
+// cross Sol's rendered diameter, against light's ~4.6 — comfortably sub-light
+// at every setting, which is the whole point. It also makes tactical combat
+// genuinely slower-paced than it was: closing from the 12-unit opening
+// separation now takes tens of seconds rather than a handful, which is the
+// intended consequence of ships no longer moving at relativistic speed.
+function hullMotion(lightDivisor: number, secondsToCruise: number) {
+  const maneuverUnitsPerSecond = ARENA_LIGHT_SPEED_UNITS_PER_SECOND / lightDivisor
+  return {
+    maneuverUnitsPerSecond,
+    accelerationUnitsPerSecondSq: maneuverUnitsPerSecond / secondsToCruise,
+  }
 }
 
 // Weapon archetypes the presets below are assembled from. Named separately
@@ -225,7 +291,7 @@ export const CIVILIAN_COMBAT_PROFILE: CombatProfile = {
   components: { weapons: 20, utility: 60, core: 80 },
   defenses: { shieldHp: 40, shieldRegenPerSecond: 0.6, armorHp: 20, pointDefenseRating: 0 },
   weapons: [],
-  maneuverUnitsPerSecond: 1.1,
+  ...hullMotion(5, 4),
 }
 
 // Warship presets. Roles are differentiated by the damage-type matrix rather
@@ -238,35 +304,35 @@ export const CORVETTE_PROFILE: CombatProfile = {
   components: { weapons: 40, utility: 60, core: 100 },
   defenses: { shieldHp: 90, shieldRegenPerSecond: 1.4, armorHp: 40, pointDefenseRating: 0.1 },
   weapons: mounts(WEAPON_TYPES.autocannon, 3),
-  maneuverUnitsPerSecond: 1.6,
+  ...hullMotion(4, 3),
 }
 
 export const FRIGATE_PROFILE: CombatProfile = {
   components: { weapons: 60, utility: 70, core: 140 },
   defenses: { shieldHp: 60, shieldRegenPerSecond: 0.9, armorHp: 140, pointDefenseRating: 0 },
   weapons: [...mounts(WEAPON_TYPES.missileBattery, 2), ...mounts(WEAPON_TYPES.autocannon, 1)],
-  maneuverUnitsPerSecond: 1.2,
+  ...hullMotion(6, 4),
 }
 
 export const DESTROYER_PROFILE: CombatProfile = {
   components: { weapons: 90, utility: 90, core: 200 },
   defenses: { shieldHp: 140, shieldRegenPerSecond: 1.2, armorHp: 120, pointDefenseRating: 0.55 },
   weapons: [...mounts(WEAPON_TYPES.laser, 2), ...mounts(WEAPON_TYPES.massDriver, 2)],
-  maneuverUnitsPerSecond: 1.0,
+  ...hullMotion(8, 5),
 }
 
 export const CRUISER_PROFILE: CombatProfile = {
   components: { weapons: 140, utility: 130, core: 320 },
   defenses: { shieldHp: 240, shieldRegenPerSecond: 1.8, armorHp: 260, pointDefenseRating: 0.3 },
   weapons: [...mounts(WEAPON_TYPES.heavyBeam, 1), ...mounts(WEAPON_TYPES.laser, 2), ...mounts(WEAPON_TYPES.massDriver, 2)],
-  maneuverUnitsPerSecond: 0.75,
+  ...hullMotion(10, 7),
 }
 
 export const BATTLESHIP_PROFILE: CombatProfile = {
   components: { weapons: 220, utility: 190, core: 560 },
   defenses: { shieldHp: 380, shieldRegenPerSecond: 2.2, armorHp: 460, pointDefenseRating: 0.4 },
   weapons: [...mounts(WEAPON_TYPES.torpedoTube, 2), ...mounts(WEAPON_TYPES.heavyBeam, 2), ...mounts(WEAPON_TYPES.massDriver, 2)],
-  maneuverUnitsPerSecond: 0.5,
+  ...hullMotion(13, 10),
 }
 
 // How long a drive takes to spool up before it fires, in sim-seconds. This is
@@ -291,3 +357,41 @@ export function utilityEffectiveness(utilityHp: number, utilityMaxHp: number): n
   if (utilityMaxHp <= 0) return 0
   return Math.max(0, Math.min(1, utilityHp / utilityMaxHp))
 }
+
+// --- FTL transit risk modifiers ---------------------------------------------
+//
+// Two independent effects layer on top of a drive's own baseline risk (see
+// shipData's HYPERDRIVE_BASE_LOSS_CHANCE and shipPhysics's
+// hyperdriveLossChance/warpEscapeLossChance, which combine these):
+//
+//   - A battered core doesn't just mean the ship is close to destroyed — a
+//     damaged core also complicates every FTL transit that hull attempts,
+//     win or lose, in or out of combat. This applies UNIVERSALLY, to every
+//     jump a damaged ship ever makes, not just ones taken under fire.
+//   - Being present in a fight (an Engagement) does NOT by itself raise risk
+//     — plenty of ships in a battle are outside anyone's effective range and
+//     never take a shot. What matters is being ACTIVELY engaged: within
+//     weapon range and line of fire of a live hostile right now (see
+//     combatResolution.activeEnemyContacts) — that's the moment a drive
+//     spooling up is genuinely under fire, and it's what earns the
+//     (structurally larger) engagement bonus below.
+//
+// "Slightly" (core damage) vs. "moderately" (active engagement) per the
+// design brief — the engagement bonus is intentionally the bigger of the two.
+
+// Capped well below the engagement bonus — core damage alone should never
+// make a routine jump feel as risky as fleeing a live firefight.
+export const CORE_DAMAGE_MAX_RISK_BONUS = 0.15
+
+export function coreDamageRiskBonus(coreFraction: number): number {
+  return CORE_DAMAGE_MAX_RISK_BONUS * (1 - Math.max(0, Math.min(1, coreFraction)))
+}
+
+export const ACTIVE_ENGAGEMENT_RISK_BONUS = 0.2
+
+// Warp has never carried transit risk for an ordinary, peacetime trip, and
+// nothing here changes that — this baseline stays 0, and shipPhysics only
+// ever consults it (via warpEscapeLossChance) at the one moment that's new:
+// an FTL charge completing while the ship is fleeing combat. An ordinary
+// warp order issued from the strategic map never rolls against this at all.
+export const WARP_BASE_ESCAPE_LOSS_CHANCE = 0

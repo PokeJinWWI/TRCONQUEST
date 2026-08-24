@@ -6,6 +6,7 @@ import { useCombatStore } from '../state/combatStore'
 import {
   COMBAT_STEP_DAYS,
   MAX_STEPS_PER_TICK,
+  activeEnemyContacts,
   stepEngagements,
   syncEngagements,
 } from '../scene/combatResolution'
@@ -61,6 +62,24 @@ export function useCombatResolver() {
       }
 
       if (!hadEngagements) followCombatWithClock(true)
+
+      // Snapshot, right now, which ships have a live enemy within range and
+      // line of fire — the only situation an FTL escape's risk should be
+      // elevated by (see combatData's ACTIVE_ENGAGEMENT_RISK_BONUS). Taken
+      // BEFORE stepping because by the time a charge completes below and we
+      // call planMove, stepEngagements has already dropped that ship from
+      // `engagements` (it's leaving), so planMove itself can no longer see
+      // what it was fighting. A tick-start snapshot is a deliberate
+      // approximation — steps are 0.1s and a tick catches up at most 4s
+      // (MAX_STEPS_PER_TICK), so "engaged at tick start" and "engaged at the
+      // instant of escape" differ by at most a few steps, which is fine for
+      // a coarse risk modifier rather than a precise combat mechanic.
+      const activelyEngagedIds = new Set<string>()
+      for (const e of synced) {
+        for (const p of e.participants) {
+          if (activeEnemyContacts(p, e, ships, simDays).length > 0) activelyEngagedIds.add(p.shipId)
+        }
+      }
 
       // Catch up from wherever resolution last got to. Bounded so that time
       // running far ahead of combat (normal mode, or a long pause) can't
@@ -123,7 +142,7 @@ export function useCombatResolver() {
           if (!ship?.combat.ftlCharge) continue
           const destination = ship.combat.ftlCharge.destination
           shipStore.setFtlCharge(id, null)
-          const result = planMove(ship, destination, simDays)
+          const result = planMove(ship, destination, simDays, { activelyEngaged: activelyEngagedIds.has(id) })
           if (result.kind === 'order') {
             shipStore.setShipOrder(id, result.order, result.warpReadyOverride, true)
           } else if (result.kind === 'instant') {

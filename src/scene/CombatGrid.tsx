@@ -1,26 +1,30 @@
 import { useMemo } from 'react'
-import { BufferGeometry, Float32BufferAttribute, DoubleSide, Vector3, type Ray } from 'three'
+import { useThree } from '@react-three/fiber'
+import { BufferGeometry, Float32BufferAttribute, DoubleSide, Vector3 } from 'three'
 import {
   ARENA_SPAN_UNITS,
   GRID_DIVISIONS,
   gridSpacing,
+  isPointBlocked,
+  pickLatticeNode,
+  type ArenaPoint,
   type CombatObstacle,
   type GridDensity,
-  type GridNode,
 } from './combatArena'
 
 // The arena's movement lattice, drawn DEFCON-style: pure wireframe, no
 // surfaces. Three layers of decreasing subtlety — the full interior lattice
-// (faint, it's reference not decoration), the node points ships can actually
-// occupy, and the arena's outer cage (brightest, it's the hard boundary of
-// the fight).
+// (faint, it's reference not decoration), the node points (the things a move
+// order actually resolves to, so they need to read as targets), and the
+// arena's outer cage (brightest, it's the hard boundary of what's currently
+// in frame).
 
 const LATTICE_COLOR = '#2b6b80'
 const NODE_COLOR = '#7ce8ff'
 const CAGE_COLOR = '#7ce8ff'
 
 // The interior lattice gets fainter as it gets denser — at 'fine' there are
-// 507 lines crossing the view, and at a fixed opacity they'd read as fog
+// 867 lines crossing the view, and at a fixed opacity they'd read as fog
 // rather than as a grid. Scales the other way too: a coarse lattice is sparse
 // enough to carry more weight.
 const LATTICE_OPACITY: Record<GridDensity, number> = {
@@ -36,12 +40,12 @@ const NODE_SIZE: Record<GridDensity, number> = {
 }
 
 // All geometry below is built in *window-local* space — relative to the
-// window's centre node — so sliding the window (see Engagement.center) costs
+// window's centre point — so sliding the window (see Engagement.center) costs
 // nothing to redraw. The scene positions the whole group; only a density
 // change rebuilds these buffers.
 
 // Builds every axis-aligned lattice segment as one flat position buffer.
-// For D subdivisions that's 3*(D+1)^2 segments (507 at 'fine'), all in a
+// For D subdivisions that's 3*(D+1)^2 segments (867 at 'fine'), all in a
 // single draw call — cheap enough that there's no reason to cull interior
 // lines or fade by distance.
 function useLatticeGeometry(density: GridDensity): BufferGeometry {
@@ -112,58 +116,32 @@ function useCageGeometry(): BufferGeometry {
   }, [])
 }
 
-// Nearest lattice node to a click ray, searched over the current window.
-//
-// A click ray passes through many nodes, so "what did they click on" can't be
-// answered by a hit test — instead every node is scored by its perpendicular
-// distance to the ray and the closest wins. That's the behavior players
-// actually expect from a 3D grid (it picks what looks nearest the cursor
-// line), and at 2,197 nodes worst case it's a trivial per-click loop rather
-// than something needing 2,197 raycast targets in the scene.
-//
-// `ray` arrives in the group's local space (r3f transforms it for us), so the
-// search runs in window-local coordinates and the result is offset back to an
-// absolute node at the end.
-export function nearestNodeToRay(ray: Ray, center: GridNode, density: GridDensity): GridNode {
-  const divisions = GRID_DIVISIONS[density]
-  const spacing = gridSpacing(density)
-  const half = divisions / 2
-  let best: GridNode = center
-  let bestScore = Infinity
-  const point = new Vector3()
-  for (let x = 0; x <= divisions; x++) {
-    for (let y = 0; y <= divisions; y++) {
-      for (let z = 0; z <= divisions; z++) {
-        point.set((x - half) * spacing, (y - half) * spacing, (z - half) * spacing)
-        const score = ray.distanceSqToPoint(point)
-        if (score < bestScore) {
-          bestScore = score
-          best = { x: center.x + x - half, y: center.y + y - half, z: center.z + z - half }
-        }
-      }
-    }
-  }
-  return best
-}
-
 interface CombatGridProps {
-  center: GridNode
+  center: ArenaPoint
   density: GridDensity
   obstacles: CombatObstacle[]
-  /** Fires with the absolute lattice node nearest the click ray. */
-  onPickNode: (node: GridNode) => void
+   /** Fires with the picked destination, in real absolute arena coordinates:
+   * one of the nodes currently DRAWN at this density, which by the nesting
+   * rule on GRID_DIVISIONS is always a fine-lattice point too. See
+   * pickLatticeNode for why a click has to resolve to a node at all — a click
+   * is a ray, and the lattice is the only thing supplying the depth it
+   * lacks. */
+  onPickPoint: (point: ArenaPoint) => void
 }
 
 // Drawn in window-local space and positioned by the caller — see
 // CombatViewScene, which offsets the whole arena so the window centre sits at
 // the scene origin.
-export function CombatGrid({ center, density, obstacles, onPickNode }: CombatGridProps) {
+export function CombatGrid({ center, density, obstacles, onPickPoint }: CombatGridProps) {
   const lattice = useLatticeGeometry(density)
   const nodes = useNodeGeometry(density)
   const cage = useCageGeometry()
   const spacing = gridSpacing(density)
-  // One node's worth of padding so nodes on the window's outer faces are
-  // still comfortably inside the click-catcher.
+  // Needed to turn projected NDC into the pixel distances pickLatticeNode
+  // reasons about — a capture radius means nothing until it's in screen units.
+  const size = useThree((s) => s.size)
+  // One node's worth of padding so the window's outer faces are still
+  // comfortably inside the click-catcher.
   const catcherSize = ARENA_SPAN_UNITS + spacing
 
   return (
@@ -186,11 +164,14 @@ export function CombatGrid({ center, density, obstacles, onPickNode }: CombatGri
           ships behind the body stay visible as silhouettes instead of
           vanishing, which would make "why can't I shoot?" unreadable. */}
       {obstacles.map((obstacle) => {
-        const local = [
-          (obstacle.node.x - center.x) * spacing,
-          (obstacle.node.y - center.y) * spacing,
-          (obstacle.node.z - center.z) * spacing,
-        ] as const
+        // Real position minus real centre = window-local offset — no
+        // density/spacing multiplication needed, both are already in real
+        // arena units.
+        const local: [number, number, number] = [
+          obstacle.position.x - center.x,
+          obstacle.position.y - center.y,
+          obstacle.position.z - center.z,
+        ]
         return (
           <group key={obstacle.name} position={local}>
             <mesh>
@@ -211,11 +192,44 @@ export function CombatGrid({ center, density, obstacles, onPickNode }: CombatGri
           never receive the click. DoubleSide so it still catches once the
           camera is inside the cage. Rendered last so the bodies above don't
           swallow clicks — they're drawn without depth write and this sits
-          over them in the raycast order. */}
+          over them in the raycast order.
+          Right-click, not left: left-click-drag is OrbitControls' rotate
+          gesture, and sharing the button with movement made ordinary camera
+          orbiting and issuing a move order fight over the same input. Moving
+          a ship is now unambiguously right-click, matching targeting
+          (right-click a hostile marker) — the two never collide since
+          they're different objects.
+          NOTE: this mesh is only an event *receiver* now. Its intersection
+          point is deliberately ignored — reading `e.point` is exactly the bug
+          documented above pickLatticeNode, since a box raycast can only ever
+          report a point on the box's own shell. What the click contributes is
+          the cursor ray; the lattice supplies the depth. */}
       <mesh
-        onClick={(e) => {
+        onContextMenu={(e) => {
           e.stopPropagation()
-          onPickNode(nearestNodeToRay(e.ray, center, density))
+          e.nativeEvent.preventDefault()
+          const camera = e.camera
+          const toPixels = (ndcX: number, ndcY: number) => ({
+            x: (ndcX * 0.5 + 0.5) * size.width,
+            y: (-ndcY * 0.5 + 0.5) * size.height,
+          })
+          const world = new Vector3()
+          const picked = pickLatticeNode(
+            center,
+            density,
+            toPixels(e.pointer.x, e.pointer.y),
+            (point) => {
+              // Node geometry is drawn window-local, and the scene leaves this
+              // group at the origin, so local coordinates *are* world ones.
+              world.set(point.x - center.x, point.y - center.y, point.z - center.z)
+              const depth = world.distanceTo(camera.position)
+              world.project(camera)
+              const screen = toPixels(world.x, world.y)
+              return { ...screen, depth, visible: world.z >= -1 && world.z <= 1 }
+            },
+            { isBlocked: (point) => isPointBlocked(point, obstacles) },
+          )
+          if (picked) onPickPoint(picked)
         }}
       >
         <boxGeometry args={[catcherSize, catcherSize, catcherSize]} />

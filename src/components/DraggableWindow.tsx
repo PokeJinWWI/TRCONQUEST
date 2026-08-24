@@ -12,13 +12,17 @@ interface DraggableWindowProps {
    * panel plus a selected ship's inspector) land exactly on top of each
    * other. The player can still drag from wherever this puts it. */
   initialOffset?: { x: number; y: number }
+  /** Widens the window for content that genuinely needs the room (Fleet
+   * Management's tables). Default 240px fits the inspector panels; anything
+   * wider than that has to say so, rather than overflowing its own frame. */
+  wide?: boolean
   children: ReactNode
 }
 
 // A movable HUD window (title bar drag, no resize) for the satellite-view
 // inspection panel — re-centers on whichever body is selected but stays
 // wherever the player last dragged it until they select something else.
-export function DraggableWindow({ title, onClose, initialOffset, children }: DraggableWindowProps) {
+export function DraggableWindow({ title, onClose, initialOffset, wide, children }: DraggableWindowProps) {
   const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
 
@@ -38,7 +42,7 @@ export function DraggableWindow({ title, onClose, initialOffset, children }: Dra
   }
 
   return (
-    <div className="draggable-window" style={{ transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))` }}>
+    <div className={`draggable-window${wide ? ' wide' : ''}`} style={{ transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))` }}>
       <div
         className="draggable-window-titlebar"
         onPointerDown={handlePointerDown}
