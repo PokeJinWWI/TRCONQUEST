@@ -9,6 +9,11 @@ export interface MoonRawData {
   periodDays: number
   color: string
   retrograde?: boolean
+  // Real mass — optional because it's only actually needed by whichever moon
+  // ends up placed in a combat arena as gravity-bearing terrain (currently
+  // just Luna, see combatResolution's EARTH_MOON_OFFSET); every other entry
+  // here is display-only and has no reason to carry it.
+  massKg?: number
 }
 
 export interface MoonData extends MoonRawData {
@@ -57,7 +62,7 @@ const MOON_TABLE: Record<string, { planetRadiusKm: number; totalCount: number; r
   Earth: {
     planetRadiusKm: 6371,
     totalCount: 1,
-    raw: [{ name: 'Luna', radiusKm: 1737.4, distanceKm: 384400, periodDays: 27.32, color: '#c9c9c9' }],
+    raw: [{ name: 'Luna', radiusKm: 1737.4, distanceKm: 384400, periodDays: 27.32, color: '#c9c9c9', massKg: 7.342e22 }],
   },
   Mars: {
     planetRadiusKm: 3389.5,

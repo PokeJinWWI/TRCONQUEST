@@ -171,15 +171,16 @@ export interface CombatProfile {
 // auto-combat options surfaced in the Fleet Management > Strategizer tab.
 // Each one is a genuinely different answer to "where should I be standing",
 // resolved by combatResolution.stanceDestination.
-export type CombatStance = 'balanced' | 'swarm' | 'kite' | 'stall'
+export type CombatStance = 'balanced' | 'swarm' | 'kite' | 'stall' | 'flee'
 
-export const COMBAT_STANCES: CombatStance[] = ['balanced', 'swarm', 'kite', 'stall']
+export const COMBAT_STANCES: CombatStance[] = ['balanced', 'swarm', 'kite', 'stall', 'flee']
 
 export const STANCE_LABELS: Record<CombatStance, string> = {
   balanced: 'Balanced',
   swarm: 'Swarm',
   kite: 'Kite',
   stall: 'Stall',
+  flee: 'Flee',
 }
 
 export const STANCE_DESCRIPTIONS: Record<CombatStance, string> = {
@@ -187,6 +188,11 @@ export const STANCE_DESCRIPTIONS: Record<CombatStance, string> = {
   swarm: 'Drive straight at the enemy and stay on top of them, bringing every short-ranged mount to bear.',
   kite: 'Hover at the far edge of your longest weapon range, backing off the moment they close.',
   stall: 'Break line of fire behind the nearest body and stay hidden, avoiding engagement entirely.',
+  // Distinct from Stall: Stall hides (breaks line of fire and stays put,
+  // still an ambush option for an armed ship); Flee just runs, which is also
+  // the automatic behaviour for any ship with no weapons or none currently
+  // online — see stanceDestination's own fallback.
+  flee: 'Run as far from every hostile fleet as possible. Automatic for an unarmed ship, or one whose weapons are offline.',
 }
 
 // Kite holds this fraction of its longest weapon's range — just inside the
@@ -335,6 +341,43 @@ export const BATTLESHIP_PROFILE: CombatProfile = {
   ...hullMotion(13, 10),
 }
 
+// --- Chaff ------------------------------------------------------------------
+//
+// A consumable countermeasure: a burst of decoys that makes the ship harder
+// to hit for a short window. Deliberately a *miss chance applied to incoming
+// fire*, not a damage reduction — the two are very different to play against.
+// Damage reduction is a flat tax the attacker can out-scale; a miss chance
+// makes each individual volley a coin-flip, which is what makes spending a
+// charge at the right moment feel like a decision rather than a discount.
+//
+// Chaff is checked against the TARGET's state by the ATTACKER (see
+// combatResolution's firing loop): it degrades everyone shooting at this
+// hull, not this hull's own aim.
+export const CHAFF_CHARGES = 2
+// In SIM-seconds, which at tactical 1x is exactly 6 real seconds — the pace
+// combat is authored at (see gameTimeStore's TACTICAL_DAYS_PER_SECOND).
+// Stored in sim-seconds like every other combat deadline (weapon cooldowns,
+// FTL charge) rather than wall-clock, so it behaves consistently if the
+// player speeds tactical time up.
+export const CHAFF_DURATION_SECONDS = 6
+// Three shots in four simply do not connect, at any range. Deliberately
+// severe: at a merely even coin-flip a countermeasure with two charges and a
+// six-second life is a rounding error on a fight that runs for minutes, and
+// spending one never felt like it changed anything.
+//
+// Flat rather than range-scaled, and that was a deliberate reversal. A
+// version of this briefly fell off as the attacker closed, on the theory that
+// "close the distance" made a nice counter to it — but chaff exists to help a
+// ship that is LOSING, and a losing ship is very often one with enemies
+// closing on it. A falloff therefore switched the tool off at exactly the
+// moment it was most needed, which is precisely backwards for a comeback
+// mechanic. Countermeasures are for bad odds; they don't need their own
+// counter.
+export const CHAFF_MISS_CHANCE = 0.75
+
+export const CHAFF_AI_FIRST_THRESHOLD = 0.7
+export const CHAFF_AI_SECOND_THRESHOLD = 0.4
+
 // How long a drive takes to spool up before it fires, in sim-seconds. This is
 // the whole reason FTL matters in combat: a ship announcing an escape is
 // committed and defenseless for this long (see ShipCombatState.ftlCharge —
@@ -356,6 +399,35 @@ export function weaponsEffectiveness(weaponsHp: number, weaponsMaxHp: number): n
 export function utilityEffectiveness(utilityHp: number, utilityMaxHp: number): number {
   if (utilityMaxHp <= 0) return 0
   return Math.max(0, Math.min(1, utilityHp / utilityMaxHp))
+}
+
+// --- Scuttle (the doomed-ship trade) ---------------------------------------
+//
+// Deliberately detonate a ship that is going to die anyway, damaging
+// everything hostile nearby. The point is to convert a total loss into a
+// partial trade: a hull about to be destroyed is worth nothing, so spending
+// it to strip an enemy's armor is strictly better than letting it pop.
+//
+// Scaled by REMAINING CORE, which is the whole design tension. A healthy ship
+// makes a far bigger bang (its reactor is intact), but a healthy ship is also
+// one you'd rather keep — so the moment with the best payoff is never the
+// moment you most want to spend it. A nearly-dead hull detonates for very
+// little, which stops this from being a free "finisher" bolted onto every
+// losing fight.
+export const SCUTTLE_MAX_DAMAGE = 260
+// Full damage at the centre, falling linearly to nothing at the edge. Sized
+// against the arena's short weapon ranges (autocannon reaches 3) so a scuttle
+// is a knife-range play — you have to be among them, which usually means the
+// ship really was cornered.
+export const SCUTTLE_BLAST_RADIUS_UNITS = 3
+
+// Damage one scuttling hull deals to something `distanceUnits` away.
+// `coreFraction` is the detonating ship's remaining core as a fraction of its
+// max (see coreHealthFraction). Pure so the falloff is testable on its own.
+export function scuttleDamageAt(distanceUnits: number, coreFraction: number): number {
+  if (distanceUnits >= SCUTTLE_BLAST_RADIUS_UNITS) return 0
+  const falloff = 1 - distanceUnits / SCUTTLE_BLAST_RADIUS_UNITS
+  return SCUTTLE_MAX_DAMAGE * falloff * Math.max(0, Math.min(1, coreFraction))
 }
 
 // --- FTL transit risk modifiers ---------------------------------------------

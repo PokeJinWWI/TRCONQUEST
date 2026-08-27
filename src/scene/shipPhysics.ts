@@ -11,7 +11,7 @@ import {
   type ShipClass,
 } from '../data/shipData'
 import { ACTIVE_ENGAGEMENT_RISK_BONUS, WARP_BASE_ESCAPE_LOSS_CHANCE, coreDamageRiskBonus } from '../data/combatData'
-import { PLANETS, UNITS_PER_AU, AU_IN_KM } from './planetData'
+import { PLANETS, UNITS_PER_AU, AU_IN_KM, SUN_RADIUS } from './planetData'
 import { getPlanetPosition, getOrbitPosition, angleForYear, MOON_TIME_DILATION } from './orbitMath'
 import type { MoonData } from './moonData'
 import { STARS, UNITS_PER_LY, starScenePosition } from '../data/starData'
@@ -36,6 +36,78 @@ export const KM_PER_INTERSTELLAR_UNIT = LY_IN_KM / UNITS_PER_LY
 // precision this project has no propulsion tech-tree to back up yet — see
 // Context.md's Design Decisions for the reasoning.
 export const REACTION_DRIVE_SPEED_KM_S = 3_000
+
+// --- System-scale gravity, for unpowered hulls -------------------------------
+//
+// Unlike the combat arena — whose body radii are fourth-root compressed and
+// which therefore has NO consistent km-per-unit scale (see combatArena's
+// arenaBodyRadius) — system view IS true-to-scale: planetData applies one
+// AU->units factor to orbital distances and body radii alike. That means real
+// gravity can be computed honestly here, with no invented anchor constant of
+// the kind the arena needs. (Reuses KM_PER_SYSTEM_UNIT, already defined above
+// for travel-time math — same conversion, same reason.)
+// Newton's constant in km^3 kg^-1 s^-2 (the SI value scaled by 1e-9, since
+// 1 m^3 = 1e-9 km^3) — keeps everything below in the km/s the rest of this
+// file already works in.
+const GRAVITATIONAL_CONSTANT_KM3_PER_KG_S2 = 6.6743e-20
+
+// Net gravitational acceleration at a system-space point, in system units per
+// sim-day squared (the units drift integration works in — see
+// useShipDriftIntegrator). Sums the star and every planet; each planet's
+// position is live, so a drifting hull is pulled by where the planets
+// actually are at that moment, not where they started.
+export function systemGravityAcceleration(position: Vector3, simDays: number): Vector3 {
+  const total = new Vector3()
+  const pull = (bodyPosition: Vector3, massKg: number) => {
+    const toBody = bodyPosition.clone().sub(position)
+    const distanceUnits = toBody.length()
+    if (distanceUnits < 1e-12) return
+    const distanceKm = distanceUnits * KM_PER_SYSTEM_UNIT
+    const accelKmPerS2 = (GRAVITATIONAL_CONSTANT_KM3_PER_KG_S2 * massKg) / (distanceKm * distanceKm)
+    // km/s^2 -> system units/day^2.
+    const accelUnitsPerDay2 = (accelKmPerS2 * SECONDS_PER_DAY * SECONDS_PER_DAY) / KM_PER_SYSTEM_UNIT
+    total.add(toBody.normalize().multiplyScalar(accelUnitsPerDay2))
+  }
+
+  const sol = STARS.find((star) => star.id === SOL_SYSTEM_ID)
+  if (sol) pull(new Vector3(0, 0, 0), sol.massKg)
+  for (const planet of PLANETS) pull(bodyLivePosition(planet.name, simDays), planet.massKg)
+  return total
+}
+
+// A body's own velocity through system space, in units per sim-day, by
+// finite-differencing its live position. Central-differenced so it's accurate
+// to second order rather than lagging half a step.
+//
+// This exists so a hull stranded near a body inherits that body's motion. A
+// ship orbiting Earth is ALSO travelling with Earth around the Sun at roughly
+// 0.34 units/day; seeding a drifting wreck at rest in the heliocentric frame
+// instead makes it drop the Sun-ward velocity it actually had, and it spirals
+// into Sol over a couple of months. Verified: a hull stranded 0.02 units from
+// Earth at heliocentric rest struck Sol after 64 sim-days rather than staying
+// anywhere near Earth. Inheriting the body's velocity keeps the local physics
+// local — Earth's pull dominates at that range, so the wreck falls toward
+// Earth or loops around it, which is the behaviour that reads correctly.
+const ORBIT_VELOCITY_SAMPLE_DAYS = 0.01
+
+export function bodyOrbitalVelocity(bodyName: string, simDays: number): Vector3 {
+  const ahead = bodyLivePosition(bodyName, simDays + ORBIT_VELOCITY_SAMPLE_DAYS)
+  const behind = bodyLivePosition(bodyName, simDays - ORBIT_VELOCITY_SAMPLE_DAYS)
+  return ahead.sub(behind).divideScalar(2 * ORBIT_VELOCITY_SAMPLE_DAYS)
+}
+
+// Whether a system-space point lies inside a body's real surface — the
+// collision test for a drifting hull. Uses each body's true-to-scale rendered
+// radius, so "it fell into the sun" means exactly what it looks like on the
+// map.
+export function systemBodyContaining(position: Vector3, simDays: number): string | null {
+  const sol = STARS.find((star) => star.id === SOL_SYSTEM_ID)
+  if (sol && position.length() <= SUN_RADIUS) return sol.name
+  for (const planet of PLANETS) {
+    if (bodyLivePosition(planet.name, simDays).distanceTo(position) <= planet.radius) return planet.name
+  }
+  return null
+}
 
 export function warpSpeedKmS(speedC: number): number {
   return speedC * SPEED_OF_LIGHT_KM_S

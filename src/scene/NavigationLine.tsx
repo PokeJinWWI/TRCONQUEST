@@ -78,20 +78,6 @@ export function NavigationLine({ ship, color, arrowLength }: NavigationLineProps
 
     buffer.needsUpdate = true
     line.geometry.instanceCount = segment
-    // @@PROBE@@
-    if (import.meta.env.DEV) {
-      const w = window as unknown as Record<string, unknown>
-      const bag = (w.__navProbe ??= {}) as Record<string, unknown>
-      ;(bag as Record<string, unknown>)[ship.id] = {
-        segments: segment,
-        start: start.toArray(),
-        end: end.toArray(),
-        wings: wings ? { w1: wings.wing1.toArray(), w2: wings.wing2.toArray() } : null,
-        linewidth: (line.material as unknown as { linewidth: number }).linewidth,
-        color: (line.material as unknown as { color: { getHexString: () => string } }).color.getHexString(),
-      }
-    }
-    // @@END-PROBE@@
   })
 
   return (

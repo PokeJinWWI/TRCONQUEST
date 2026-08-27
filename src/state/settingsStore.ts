@@ -8,10 +8,8 @@ export type LineThickness = 'thin' | 'medium' | 'thick'
 // Real screen-space pixel widths, fed straight to Line2's `linewidth` (which,
 // unlike WebGL's native LineBasicMaterial.linewidth, actually renders at more
 // than one hardware pixel — see CombatPathLine's own comment on why Line2 is
-// used at all). 'thick' is what every route line rendered at before this
-// setting existed, so it stays the default — nothing changes for a player
-// who never opens Settings. 'thin' reproduces the old LineBasicMaterial-era
-// look for anyone who preferred it.
+// used at all). 'thin' is the default, matching the old LineBasicMaterial-era
+// look this setting was added to make optional.
 export const LINE_THICKNESS_PX: Record<LineThickness, number> = {
   thin: 1,
   medium: 1.8,
@@ -32,6 +30,6 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  navigationLineThickness: 'thick',
+  navigationLineThickness: 'thin',
   setNavigationLineThickness: (thickness) => set({ navigationLineThickness: thickness }),
 }))

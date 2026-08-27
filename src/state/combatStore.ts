@@ -99,6 +99,13 @@ export interface CombatParticipant {
   // enemy — which makes deliberate kiting (the entire point of giving a
   // long-ranged hull a speed advantage) impossible to actually perform.
   holdPosition: boolean
+  // The player has ordered this hull to detonate. Acted on by the resolver at
+  // the top of its next step (see stepEngagements) rather than immediately,
+  // so the blast resolves inside the same fixed-step simulation everything
+  // else does — a scuttle that applied instantly from a click would land
+  // outside the step ordering and could kill a ship that had already fired
+  // this step, or miss one that had already moved.
+  scuttleOrdered?: boolean
 }
 
 export interface Engagement {
@@ -139,6 +146,14 @@ interface CombatState {
   replaceEngagements: (engagements: Engagement[]) => void
   viewEngagement: (id: string | null) => void
   setParticipantTarget: (engagementId: string, shipId: string, targetShipId: string | null) => void
+  // Points EVERY listed ship at one enemy at once. The answer to being
+  // outnumbered is to kill hulls one at a time — every kill permanently
+  // removes that ship's damage from the fight, so concentrating fire is how
+  // a smaller force closes the gap. Doing that ship-by-ship put the most
+  // clicking on the player who could least afford the time, which is exactly
+  // backwards. Takes an explicit id list rather than "all player ships" so
+  // the caller owns the ownership rule (see CombatPanel).
+  setFleetTarget: (engagementId: string, shipIds: string[], targetShipId: string | null) => void
   setParticipantTargetComponent: (engagementId: string, shipId: string, component: ComponentKind | null) => void
   setDensity: (engagementId: string, density: GridDensity) => void
   setCenter: (engagementId: string, center: ArenaPoint) => void
@@ -148,6 +163,9 @@ interface CombatState {
   // project follows (see shipStore.setShipOrder's comment).
   setParticipant: (engagementId: string, participant: CombatParticipant) => void
   setHoldPosition: (engagementId: string, shipId: string, hold: boolean) => void
+  // Flags a hull to detonate on the resolver's next step — see
+  // CombatParticipant.scuttleOrdered.
+  orderScuttle: (engagementId: string, shipId: string) => void
 }
 
 export const useCombatStore = create<CombatState>((set) => ({
@@ -181,6 +199,17 @@ export const useCombatStore = create<CombatState>((set) => ({
           : e,
       ),
     })),
+  setFleetTarget: (engagementId, shipIds, targetShipId) =>
+    set((s) => {
+      const ids = new Set(shipIds)
+      return {
+        engagements: s.engagements.map((e) =>
+          e.id === engagementId
+            ? { ...e, participants: e.participants.map((p) => (ids.has(p.shipId) ? { ...p, targetShipId } : p)) }
+            : e,
+        ),
+      }
+    }),
   setParticipantTargetComponent: (engagementId, shipId, targetComponent) =>
     set((s) => ({
       engagements: s.engagements.map((e) =>
@@ -220,6 +249,17 @@ export const useCombatStore = create<CombatState>((set) => ({
       engagements: s.engagements.map((e) =>
         e.id === engagementId
           ? { ...e, participants: e.participants.map((p) => (p.shipId === participant.shipId ? participant : p)) }
+          : e,
+      ),
+    })),
+  orderScuttle: (engagementId, shipId) =>
+    set((s) => ({
+      engagements: s.engagements.map((e) =>
+        e.id === engagementId
+          ? {
+              ...e,
+              participants: e.participants.map((p) => (p.shipId === shipId ? { ...p, scuttleOrdered: true } : p)),
+            }
           : e,
       ),
     })),

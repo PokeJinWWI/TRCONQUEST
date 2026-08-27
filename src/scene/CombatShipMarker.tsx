@@ -5,8 +5,8 @@ import type { Group } from 'three'
 import { ALLEGIANCE_COLORS } from '../data/shipData'
 import { useShipStore } from '../state/shipStore'
 import { useCombatStore } from '../state/combatStore'
-import { useGameTimeStore } from '../state/gameTimeStore'
-import { overallHealthFraction, participantArenaPosition, shipCombatProfile } from './combatResolution'
+import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
+import { isChaffActive, overallHealthFraction, participantArenaPosition, shipCombatProfile } from './combatResolution'
 import { toVector3 } from './combatArena'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 
@@ -36,6 +36,9 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
   // Re-rendered only when the *health* actually moves enough to matter — the
   // bar is rounded to whole percent, so this subscription is far quieter than
   // one on the raw participant state.
+  // Whole sim-seconds only: chaff's badge just needs to appear and disappear,
+  // and subscribing to the raw clock would re-render this marker every frame.
+  const simDays = useGameTimeStore((s) => Math.floor(simDaysToSeconds(s.simDays) * 2) / 2 / 86400)
   const healthPercent = useShipStore((s) => {
     const found = s.ships.find((sh) => sh.id === shipId)
     const profile = found ? shipCombatProfile(found) : null
@@ -58,6 +61,7 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
   const selected = ship.id === selectedShipId
   const color = ALLEGIANCE_COLORS[ship.allegiance]
   const charging = !!ship.combat.ftlCharge
+  const chaffed = isChaffActive(ship.combat, simDays)
 
   return (
     <group ref={groupRef}>
@@ -83,6 +87,11 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
               arena, so it gets its own badge rather than living only in the
               panel. */}
           {charging && <span className="combat-marker-charging">FTL</span>}
+          {/* Chaff has to be visible on EVERY hull, not just your own, or it
+              isn't counterplay — the response to an enemy raising chaff is to
+              close the distance (see combatData's chaffMissChance), and you
+              can't decide to do that without being told it's up. */}
+          {chaffed && <span className="combat-marker-chaff">CHAFF</span>}
         </div>
       </Html>
     </group>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   COMBAT_STANCES,
   COMPONENT_KINDS,
@@ -52,11 +52,14 @@ function totalHp(profile: CombatProfile): number {
 
 // --- Fleet Manager --------------------------------------------------------
 
-// Every ship that actually exists, with live condition and what it's doing.
-// The counterpart to the Outliner's flat fleet list: this is where you read
-// the *state* of your navy rather than navigate to one ship.
+// Every ship the player actually owns, with live condition and what it's
+// doing. The counterpart to the Outliner's flat fleet list: this is where
+// you read the *state* of your navy rather than navigate to one ship — same
+// player-only scope as that list, for the same reason (this is "my navy,"
+// not a sensor sweep of every hull that exists).
 function FleetManager() {
-  const ships = useShipStore((s) => s.ships)
+  const allShips = useShipStore((s) => s.ships)
+  const ships = useMemo(() => allShips.filter((ship) => ship.allegiance === 'player'), [allShips])
   const selectShip = useShipStore((s) => s.selectShip)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const engagements = useCombatStore((s) => s.engagements)

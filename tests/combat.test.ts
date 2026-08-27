@@ -11,7 +11,7 @@
 // Deliberately outside `src/` — tsconfig.app.json only includes `src`, so
 // this never enters the app typecheck or the production bundle.
 import { SHIP_CLASSES, TURING_HYPERDRIVE_COOLDOWN_DAYS, type HyperDrive } from '../src/data/shipData'
-import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, type WeaponMount } from '../src/data/combatData'
+import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, type WeaponMount } from '../src/data/combatData'
 import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { useCombatStore } from '../src/state/combatStore'
 import {
@@ -29,6 +29,14 @@ import {
   participantArenaPosition,
   participantSpeed,
   stanceDestination,
+  pruneOvershotWaypoints,
+  obstaclesForLocation,
+  isChaffActive,
+  deployChaff,
+  SHIP_SEPARATION_UNITS,
+  DISENGAGE_DISTANCE_UNITS,
+  combatCatchUpCursor,
+  MAX_STEPS_PER_TICK,
   COMBAT_STEP_DAYS,
   COMBAT_STEP_SECONDS,
 } from '../src/scene/combatResolution'
@@ -50,6 +58,8 @@ import {
   gridSpacing,
   snapToLatticeNode,
   pickLatticeNode,
+  arenaSurfaceGravity,
+  gravitationalAcceleration,
   type ArenaPoint,
   type CombatObstacle,
 } from '../src/scene/combatArena'
@@ -61,7 +71,7 @@ import {
   simDaysToSeconds,
   simSecondsToDays,
 } from '../src/state/gameTimeStore'
-import { hyperdriveLossChance, warpEscapeLossChance, coreHealthFraction, planMove } from '../src/scene/shipPhysics'
+import { hyperdriveLossChance, warpEscapeLossChance, coreHealthFraction, planMove, systemGravityAcceleration, systemBodyContaining, bodyLivePosition, bodyOrbitalVelocity } from '../src/scene/shipPhysics'
 import { Vector3, PerspectiveCamera } from 'three'
 
 function nodesEqualLocal(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
@@ -90,6 +100,7 @@ function makeShip(classId: string, id: string, allegiance: ShipInstance['allegia
     warpReadySimDays: 0,
     warpEnabled: true,
     warpWhenReady: false,
+    chaffAutoDeploy: true,
     pendingHyperdriveJump: null,
     followingShipId: null,
     combat: pristineCombatState(cls.combat),
@@ -206,7 +217,7 @@ console.log('\n=== 5. "Nodes are simply a pathfinding tool": unobstructed moves 
 
 console.log('\n=== 6. Obstructed moves detour via the lattice, but land exactly on the requested point ===')
 {
-  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2 }
+  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2, surfaceGravityUnitsPerSecondSq: 0 }
   const from = { x: 0, y: 0, z: -4 }
   const to = { x: 0.42, y: 0.11, z: 4 } // off-grid, but the straight line clips Earth
   const density = 'standard' as const
@@ -226,7 +237,7 @@ console.log('\n=== 6. Obstructed moves detour via the lattice, but land exactly 
 
 console.log('\n=== 7. Celestial bodies still block line of fire (Phase 3 behavior preserved) ===')
 {
-  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2 }
+  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2, surfaceGravityUnitsPerSecondSq: 0 }
   const near = new Vector3(0, 0, -3)
   const far = new Vector3(0, 0, 3)
   const side = new Vector3(3, 0, -3)
@@ -484,7 +495,7 @@ console.log('\n=== 19. Regression: pathing works even far from the display windo
   // bounding it to the window deadlocked any ship outside it. Phase 4 keeps
   // that guarantee — verified here at real coordinates far from the origin.
   const density = 'standard' as const
-  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2 }
+  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2, surfaceGravityUnitsPerSecondSq: 0 }
   const wayOut = { x: 0, y: 0, z: 40 }
   const target = { x: 0, y: 0, z: -3 }
   const ordered = orderParticipantTo(
@@ -510,13 +521,20 @@ console.log('\n=== 20. Shield regen is exactly one step per step — framerate i
   const rng = seededRng(11)
   const STEPS = 50
   for (let i = 0; i < STEPS; i++) {
-    // Pin both ships far apart with no queued path each step, so the
-    // approach AI can't close the gap and start a firefight — isolates the
-    // regen rate as the only thing under test.
+    // Pin both ships apart with no queued path each step, so the approach AI
+    // can't close the gap and start a firefight — isolates the regen rate as
+    // the only thing under test.
+    //
+    // The gap (20 units) is chosen to sit in a specific window: comfortably
+    // beyond the longest weapon range (11) so nothing fires, but INSIDE
+    // DISENGAGE_DISTANCE_UNITS (30) so neither ship counts as having broken
+    // contact and left. An earlier version of this fixture used 200 units
+    // apart, which is now — correctly — a disengagement: the engagement ended
+    // on step 1 and only one step of regen ever ran.
     engagements = engagements.map((e) => ({
       ...e,
       participants: e.participants.map((p, idx) => {
-        const pos = { x: idx === 0 ? -100 : 100, y: 0, z: 0 }
+        const pos = { x: idx === 0 ? -10 : 10, y: 0, z: 0 }
         return { ...p, position: pos, path: [] }
       }),
     }))
@@ -695,7 +713,7 @@ console.log('\n=== 25. Stances place ships differently ===')
   check('kite holds station inside its tolerance band', stanceDestination(inBand, enemy, profile, 'kite', []) === null)
 
   // Stall hides behind the body and breaks line of fire.
-  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2 }
+  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2, surfaceGravityUnitsPerSecondSq: 0 }
   const attacker = { ...mk({ x: -8, y: 0, z: 0 }), shipId: 'e', side: 1 as const }
   const staller = mk({ x: 4, y: 3, z: 0 })
   const hide = stanceDestination(staller, attacker, profile, 'stall', [earth])!
@@ -870,7 +888,7 @@ console.log('\n=== 27. Click picking resolves a real 3D node, not a box-shell po
     camera.position.set(0, 0, 30)
     camera.lookAt(0, 0, 0)
     camera.updateMatrixWorld(true)
-    const star: CombatObstacle = { name: 'Sol', kind: 'star', color: '#ffcc66', position: ARENA_ORIGIN, radiusUnits: 3.9 }
+    const star: CombatObstacle = { name: 'Sol', kind: 'star', color: '#ffcc66', position: ARENA_ORIGIN, radiusUnits: 3.9, surfaceGravityUnitsPerSecondSq: 0 }
     const picked = pickAimedAt(ARENA_ORIGIN, [star])
     const insideStar = picked ? pointDistance(picked, star.position) <= star.radiusUnits : true
     check('picking never returns a node buried inside a body', !insideStar, picked ? `picked z=${picked.z}` : 'null')
@@ -975,6 +993,808 @@ console.log('\n=== 29. Route-line arrowheads: pure chevron geometry ===')
   // case the fallback exists for — must still produce a valid, non-degenerate chevron.
   const dead_ahead = arrowWings(start, end, new Vector3(20, 0, 0), length)
   check('a camera looking straight down the segment still produces a chevron (fallback perpendicular)', dead_ahead !== null && dead_ahead.wing1.distanceTo(dead_ahead.wing2) > 1e-6)
+}
+
+const STANCE_REPLAN_TOLERANCE_TEST = 0.25
+
+console.log('\n=== 30. Overshot sub-waypoints are dropped, not treated as sub-destinations ===')
+{
+  const dest: ArenaPoint = { x: 10, y: 0, z: 0 }
+  const sub: ArenaPoint = { x: 5, y: 0, z: 0 }
+  const path = [sub, dest]
+
+  // Overshot: closer to the destination than the sub-node is, and the
+  // direct line onward is clear — the sub-node is dropped.
+  {
+    const position: ArenaPoint = { x: 8, y: 0, z: 0 }
+    const pruned = pruneOvershotWaypoints(path, position, [])
+    check('an overshot, unobstructed sub-node is dropped', pruned.length === 1 && pruned[0] === dest, JSON.stringify(pruned))
+  }
+
+  // Same geometry, but a body now sits on the direct line to the
+  // destination — the detour is still needed, so the sub-node stays.
+  {
+    const position: ArenaPoint = { x: 8, y: 0, z: 0 }
+    const blocker: CombatObstacle = { name: 'Body', kind: 'planet', color: '#fff', position: { x: 9, y: 0, z: 0 }, radiusUnits: 1.5, surfaceGravityUnitsPerSecondSq: 0 }
+    const pruned = pruneOvershotWaypoints(path, position, [blocker])
+    check('a still-blocked sub-node is kept even after overshoot geometry', pruned.length === 2 && pruned[0] === sub, JSON.stringify(pruned))
+  }
+
+  // Not actually overshot — still farther from the destination than the
+  // sub-node is — so the sub-node is the honest next step and stays.
+  {
+    const position: ArenaPoint = { x: 1, y: 0, z: 0 }
+    const pruned = pruneOvershotWaypoints(path, position, [])
+    check('a sub-node not yet reached is never dropped', pruned.length === 2 && pruned[0] === sub, JSON.stringify(pruned))
+  }
+
+  // A single-waypoint path (already just the destination) has nothing to
+  // prune — the loop must not touch it.
+  {
+    const position: ArenaPoint = { x: 1, y: 0, z: 0 }
+    const single = [dest]
+    const pruned = pruneOvershotWaypoints(single, position, [])
+    check('a path with only a destination is returned unchanged', pruned === single)
+  }
+
+  // A three-leg detour drops ONLY the sub-nodes that are actually overshot,
+  // never the final destination itself.
+  {
+    const legs: ArenaPoint[] = [{ x: 3, y: 0, z: 0 }, { x: 6, y: 0, z: 0 }, dest]
+    const position: ArenaPoint = { x: 9, y: 0, z: 0 } // past both sub-nodes, short of the destination
+    const pruned = pruneOvershotWaypoints(legs, position, [])
+    check('multiple overshot sub-nodes are all dropped, destination retained', pruned.length === 1 && pruned[0] === dest, JSON.stringify(pruned))
+  }
+}
+
+console.log('\n=== 31. Auto-controlled ships re-track a moving stance destination in real time ===')
+{
+  const simDays = 100
+  let ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+  check('engagement forms', engagements.length === 1)
+
+  // Push the hostile far off to one side so the player's balanced-stance
+  // approach has real distance to close, then step once so a route locks in.
+  engagements[0] = {
+    ...engagements[0],
+    participants: engagements[0].participants.map((p) => (p.shipId === 'e1' ? { ...p, position: { x: 8, y: 0, z: 8 } } : p)),
+  }
+  let result = stepEngagements([engagements[0]], ships, simDays)
+  let engagement = result.engagements[0]
+  const p1After1 = engagement.participants.find((p) => p.shipId === 'p1')!
+  check('the player ship queued a route toward the (first) enemy position', p1After1.path.length > 0)
+  const firstDestination = p1After1.path[p1After1.path.length - 1]
+
+  // Relocate the enemy FAR away — a real change in "where should I be" —
+  // and step again. The route's own endpoint must move to follow it; the
+  // old bug was that any ship with SOME path queued was never reconsidered
+  // again until it physically arrived.
+  engagement = {
+    ...engagement,
+    participants: engagement.participants.map((p) => (p.shipId === 'e1' ? { ...p, position: { x: -9, y: 0, z: -9 } } : p)),
+  }
+  result = stepEngagements([engagement], ships, simDays + COMBAT_STEP_DAYS)
+  const p1After2 = result.engagements[0].participants.find((p) => p.shipId === 'p1')!
+  check(
+    'a real, out-of-tolerance target move re-plans the route',
+    p1After2.path.length > 0 && pointDistance(p1After2.path[p1After2.path.length - 1], firstDestination) > STANCE_REPLAN_TOLERANCE_TEST,
+    `old dest ${JSON.stringify(firstDestination)} -> new dest ${JSON.stringify(p1After2.path[p1After2.path.length - 1])}`,
+  )
+
+  // Tiny target jitter, well under the tolerance, must NOT trigger a fresh
+  // plan — the participant object should come back completely untouched
+  // (same reference), not just "close to the same destination."
+  const before = result.engagements[0]
+  const jittered = {
+    ...before,
+    participants: before.participants.map((p) => (p.shipId === 'e1' ? { ...p, position: { x: p.position.x + 0.01, y: p.position.y, z: p.position.z } } : p)),
+  }
+  const stillResult = stepEngagements([jittered], ships, simDays + COMBAT_STEP_DAYS * 2)
+  const p1Before = jittered.participants.find((p) => p.shipId === 'p1')!
+  const p1After3 = stillResult.engagements[0].participants.find((p) => p.shipId === 'p1')!
+  check('negligible target movement does not force a fresh replan', p1After3.path === p1Before.path)
+}
+
+console.log('\n=== 32. A manual (held) order is never overridden by stance re-tracking ===')
+{
+  const simDays = 100
+  let ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+  const manualDestination: ArenaPoint = { x: -5, y: 4, z: 1 }
+  engagements[0] = {
+    ...engagements[0],
+    participants: engagements[0].participants.map((p) =>
+      p.shipId === 'p1'
+        ? { ...orderParticipantTo(p, manualDestination, engagements[0].density, simDays, []), holdPosition: true }
+        : p.shipId === 'e1'
+          ? { ...p, position: { x: 8, y: 0, z: 8 } }
+          : p,
+    ),
+  }
+  const held = engagements[0].participants.find((p) => p.shipId === 'p1')!
+  check('manual order is queued and latched', held.path.length > 0 && held.holdPosition)
+
+  const result = stepEngagements([engagements[0]], ships, simDays + COMBAT_STEP_DAYS)
+  const after = result.engagements[0].participants.find((p) => p.shipId === 'p1')!
+  check(
+    'a held manual order still ends on the exact commanded point, untouched by stance tracking',
+    pointDistance(after.path[after.path.length - 1] ?? after.position, manualDestination) < 1e-6 || after.path.length === 0,
+  )
+}
+
+console.log('\n=== 33. Earth combat brings Luna along; other bodies are unaffected ===')
+{
+  const earthObstacles = obstaclesForLocation({ kind: 'orbiting', systemId: 'sol', bodyName: 'Earth', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 })
+  check('a fight at Earth includes both Earth and Luna', earthObstacles.length === 2, earthObstacles.map((o) => o.name).join(', '))
+  check('Earth itself is still centred at the arena origin', earthObstacles.some((o) => o.name === 'Earth' && nodesEqualLocal(o.position, ARENA_ORIGIN)))
+  const luna = earthObstacles.find((o) => o.name === 'Luna')
+  check('Luna is present, offset from Earth, and sized smaller than Earth', !!luna && pointDistance(luna.position, ARENA_ORIGIN) > 0)
+  if (luna) {
+    const earth = earthObstacles.find((o) => o.name === 'Earth')!
+    check('Luna is smaller than Earth in the arena', luna.radiusUnits < earth.radiusUnits, `Luna ${luna.radiusUnits.toFixed(2)} vs Earth ${earth.radiusUnits.toFixed(2)}`)
+    check('Luna does not overlap Earth', pointDistance(luna.position, earth.position) > luna.radiusUnits + earth.radiusUnits)
+  }
+
+  // Not a general moon policy — every other body still gets exactly the one
+  // obstacle it always did.
+  const marsObstacles = obstaclesForLocation({ kind: 'orbiting', systemId: 'sol', bodyName: 'Mars', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 })
+  check('a fight at Mars is unaffected — still just the one body', marsObstacles.length === 1 && marsObstacles[0].name === 'Mars')
+  const solObstacles = obstaclesForLocation({ kind: 'star', starId: 'sol', offset: [0, 0, 0] })
+  check('a fight at Sol is unaffected — still just the one body', solObstacles.length === 1 && solObstacles[0].name === 'Sol')
+}
+
+console.log('\n=== 34. A ship with dead utility drifts ballistically and can collide with a body ===')
+{
+  const simDays = 100
+  let ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+  check('Earth is the obstacle in this fight', engagements[0].obstacles.some((o) => o.name === 'Earth'))
+  const earth = engagements[0].obstacles.find((o) => o.name === 'Earth')!
+
+  // Utility offline: zero acceleration/max-speed, so integrateMotion leaves
+  // whatever velocity the ship already had completely untouched — see
+  // combatResolution's own comment on this at the movement step.
+  ships = ships.map((s) => (s.id === 'p1' ? { ...s, combat: { ...s.combat, componentHp: { ...s.combat.componentHp, utility: 0 } } } : s))
+
+  // Positioned just outside the body, already moving straight at its centre
+  // at a fixed speed — with utility dead this velocity can never change.
+  const approachSpeed = 1.5
+  const startDistance = earth.radiusUnits + 3
+  engagements[0] = {
+    ...engagements[0],
+    participants: engagements[0].participants.map((p) =>
+      p.shipId === 'p1'
+        ? { ...p, position: { x: startDistance, y: 0, z: 0 }, velocity: { x: -approachSpeed, y: 0, z: 0 }, holdPosition: true }
+        : { ...p, position: { x: 8, y: 8, z: 8 } }, // keep the enemy far away and irrelevant to this scenario
+    ),
+  }
+
+  let engs = engagements
+  let died = false
+  let stepsRun = 0
+  for (let i = 0; i < 100 && !died; i++) {
+    const result = stepEngagements(engs, ships, simDays + i * COMBAT_STEP_DAYS)
+    if (result.destroyedShipIds.includes('p1')) died = true
+    engs = result.engagements
+    stepsRun = i + 1
+  }
+  check('a ballistic ship that flies into a body is destroyed', died, `after ${stepsRun} steps`)
+}
+
+console.log('\n=== 35. integrateMotion: zero thrust preserves velocity exactly (real ballistic drift) ===')
+{
+  const p: any = {
+    shipId: 'p1', side: 0, position: { x: 0, y: 0, z: 0 }, velocity: { x: 2.3, y: -0.7, z: 1.1 },
+    positionSimDays: 0, path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+  }
+  // maxSpeed=0 and accel=0 together are exactly what zero utility produces
+  // (see combatResolution's utility*maneuverUnitsPerSecond/accelerationUnitsPerSecondSq
+  // scaling) — the regression this guards is the maxSpeed clamp firing even
+  // with no thrust available, snapping velocity to zero on the very next step.
+  const next = integrateMotion(p, 0, 0, COMBAT_STEP_SECONDS, simSecondsToDays(COMBAT_STEP_SECONDS))
+  check(
+    'velocity survives a zero-thrust step completely unchanged',
+    next.velocity.x === 2.3 && next.velocity.y === -0.7 && next.velocity.z === 1.1,
+    JSON.stringify(next.velocity),
+  )
+  check(
+    'position advances by exactly velocity * dt (real ballistic motion, not a stop)',
+    Math.abs(next.position.x - 2.3 * COMBAT_STEP_SECONDS) < 1e-9 &&
+      Math.abs(next.position.y - -0.7 * COMBAT_STEP_SECONDS) < 1e-9 &&
+      Math.abs(next.position.z - 1.1 * COMBAT_STEP_SECONDS) < 1e-9,
+    JSON.stringify(next.position),
+  )
+
+  // Sanity check the OTHER direction still works: real thrust (accel>0)
+  // still enforces its own maxSpeed ceiling exactly as before.
+  const fast: any = { ...p, velocity: { x: 10, y: 0, z: 0 } }
+  const throttled = integrateMotion(fast, 1, 5, COMBAT_STEP_SECONDS, 0)
+  const speed = Math.hypot(throttled.velocity.x, throttled.velocity.y, throttled.velocity.z)
+  check('with real thrust, an over-speed velocity is still clamped down to maxSpeed (1)', Math.abs(speed - 1) < 1e-9, `${speed.toFixed(4)}`)
+}
+
+console.log('\n=== 36. Flee stance: runs from the combined enemy fleet, and is the auto-default when disarmed ===')
+{
+  const profile = SHIP_CLASSES.find((c) => c.id === 'cruiser')!.combat // armed — reach 9
+  const mk = (id: string, side: 0 | 1, position: ArenaPoint) => ({
+    shipId: id, side, position, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+  })
+  // Deliberately far: close enough and 'balanced' returns null ("already in
+  // range, hold") rather than a real point, same reasoning section 25 uses
+  // for its own 'far' fixture.
+  const self = mk('p1', 0, { x: 0, y: 0, z: 0 })
+  const enemyA = mk('e1', 1, { x: 30, y: 0, z: 0 })
+  const enemyB = mk('e2', 1, { x: -30, y: 10, z: 0 })
+  const all = [self, enemyA, enemyB]
+
+  const flee = stanceDestination(self, enemyA, profile, 'flee', [], all, true)!
+  check('flee produces a real destination', flee !== null)
+  const centroid = { x: (enemyA.position.x + enemyB.position.x) / 2, y: (enemyA.position.y + enemyB.position.y) / 2, z: 0 }
+  check(
+    'flee moves AWAY from the centroid of every hostile, not just the nearest one',
+    pointDistance(flee, centroid) > pointDistance(self.position, centroid),
+    `self->centroid ${pointDistance(self.position, centroid).toFixed(2)}, dest->centroid ${pointDistance(flee, centroid).toFixed(2)}`,
+  )
+
+  // Explicitly chosen, even for an armed ship with a perfectly good weapon.
+  const balanced = stanceDestination(self, enemyA, profile, 'balanced', [], all, true)!
+  check('flee and balanced genuinely differ for the same armed ship', pointDistance(flee, enemyA.position) > pointDistance(balanced, enemyA.position))
+
+  // No hostiles present — nothing to flee from, so null (same "hold" contract
+  // as every other stance's no-op case).
+  check('flee with no hostiles present returns null', stanceDestination(self, enemyA, profile, 'flee', [], [self], true) === null)
+
+  // An unarmed hull (no weapon mounts at all) defaults to flee-like behaviour
+  // regardless of the stance actually stored on it — same fallback rule as
+  // the old stall-based one, just pointed at flee per the design ask.
+  const unarmedProfile = SHIP_CLASSES.find((c) => c.id === 'swift-courier')!.combat
+  check('the fixture really is unarmed', unarmedProfile.weapons.length === 0)
+  const unarmedBalanced = stanceDestination(self, enemyA, unarmedProfile, 'balanced', [], all, true)!
+  const unarmedFlee = stanceDestination(self, enemyA, unarmedProfile, 'flee', [], all, true)!
+  check(
+    'an unarmed ship on ANY other stance behaves exactly like flee',
+    pointDistance(unarmedBalanced, unarmedFlee) < 1e-9,
+    JSON.stringify({ unarmedBalanced, unarmedFlee }),
+  )
+
+  // An ARMED ship whose weapons are currently offline (weaponsOnline=false)
+  // gets the same automatic override — this is the "or with offline
+  // weapons" half of the ask, which a spawn-time default alone could never
+  // satisfy (weapons go offline mid-fight, not at spawn).
+  const offlineWeapons = stanceDestination(self, enemyA, profile, 'balanced', [], all, false)!
+  const onlineWeapons = stanceDestination(self, enemyA, profile, 'balanced', [], all, true)!
+  check(
+    'the SAME armed ship with weapons knocked offline also defaults to flee',
+    pointDistance(offlineWeapons, onlineWeapons) > 1,
+    `offline dest ${JSON.stringify(offlineWeapons)}, online (balanced) dest ${JSON.stringify(onlineWeapons)}`,
+  )
+
+  // Stall remains an explicit, deliberate choice even for an unarmed ship —
+  // it should NOT be silently rerouted to flee (that override only applies
+  // to the OTHER stances).
+  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#fff', position: ARENA_ORIGIN, radiusUnits: 1.2, surfaceGravityUnitsPerSecondSq: 0 }
+  const unarmedStall = stanceDestination({ ...self, position: { x: 4, y: 3, z: 0 } }, enemyA, unarmedProfile, 'stall', [earth], all, true)
+  check(
+    'an unarmed ship can still explicitly choose stall (not silently overridden to flee)',
+    unarmedStall !== null && !hasLineOfFire(new Vector3(unarmedStall.x, unarmedStall.y, unarmedStall.z), new Vector3(enemyA.position.x, enemyA.position.y, enemyA.position.z), [earth]),
+  )
+}
+
+console.log('\n=== 37. Gravity: real relative strength, inverse-square falloff, thrust exemption ===')
+{
+  const SOL_MASS_KG = 1.989e30, SOL_RADIUS_KM = 696_000
+  const EARTH_MASS_KG = 5.972e24, EARTH_RADIUS_KM = 6371
+  const LUNA_MASS_KG = 7.342e22, LUNA_RADIUS_KM = 1737.4
+
+  const gSol = arenaSurfaceGravity(SOL_MASS_KG, SOL_RADIUS_KM)
+  const gEarth = arenaSurfaceGravity(EARTH_MASS_KG, EARTH_RADIUS_KM)
+  const gLuna = arenaSurfaceGravity(LUNA_MASS_KG, LUNA_RADIUS_KM)
+
+  check('Sol pulls harder than Earth, Earth harder than Luna — real ordering preserved', gSol > gEarth && gEarth > gLuna, `Sol ${gSol.toFixed(4)}, Earth ${gEarth.toFixed(4)}, Luna ${gLuna.toFixed(4)}`)
+  // Real ratio g_sol/g_earth ~= 27.9 (694000km/6371km compressed away, but
+  // the RATIO is exactly the real one, unaffected by any arena-scale pick).
+  check('Sol/Earth ratio matches the real ~28x, not an arbitrary one', Math.abs(gSol / gEarth - 27.9) < 0.5, `${(gSol / gEarth).toFixed(2)}`)
+  // Real Luna gravity is famously ~1/6th Earth's.
+  check('Luna/Earth ratio matches the real ~1/6', Math.abs(gLuna / gEarth - 1 / 6) < 0.01, `${(gLuna / gEarth).toFixed(4)}`)
+
+  const earth: CombatObstacle = { name: 'Earth', kind: 'planet', color: '#4da6ff', position: ARENA_ORIGIN, radiusUnits: 1.2, surfaceGravityUnitsPerSecondSq: gEarth }
+
+  // At the surface, pull should equal the obstacle's own surface gravity
+  // exactly (that's the whole point of parameterising it that way).
+  const atSurface = gravitationalAcceleration({ x: earth.radiusUnits, y: 0, z: 0 }, [earth])
+  check('at the surface, pull magnitude equals surfaceGravityUnitsPerSecondSq exactly', Math.abs(atSurface.length() - gEarth) < 1e-9, `${atSurface.length().toFixed(6)} vs ${gEarth.toFixed(6)}`)
+  check('pull points toward the body (negative x, standing on the +x side)', atSurface.x < 0)
+
+  // Inverse-square: doubling distance from the CENTRE should quarter the pull.
+  const atOneRadius = gravitationalAcceleration({ x: earth.radiusUnits, y: 0, z: 0 }, [earth]).length()
+  const atTwoRadii = gravitationalAcceleration({ x: earth.radiusUnits * 2, y: 0, z: 0 }, [earth]).length()
+  check('doubling distance quarters the pull (inverse-square)', Math.abs(atOneRadius / atTwoRadii - 4) < 1e-6, `ratio ${(atOneRadius / atTwoRadii).toFixed(4)}`)
+
+  // No obstacles, no pull.
+  check('with no obstacles, gravity is exactly zero', gravitationalAcceleration({ x: 3, y: 3, z: 3 }, []).length() === 0)
+
+  // Two nearby bodies (Earth + Luna, matching the real arena setup) — a ship
+  // between them should feel BOTH, added as real vectors. Checked via
+  // superposition (combined == sum of each alone) rather than "combined
+  // magnitude is bigger than either alone" — at a point roughly BETWEEN two
+  // bodies the two pulls partially point opposite directions and partially
+  // cancel, which is correct physics, not a bug, so that comparison isn't a
+  // safe way to tell "both counted" from "only one did."
+  const luna: CombatObstacle = { name: 'Luna', kind: 'moon', color: '#c9c9c9', position: { x: 4, y: 0.8, z: -2 }, radiusUnits: 0.87, surfaceGravityUnitsPerSecondSq: gLuna }
+  const midpoint = { x: (earth.position.x + luna.position.x) / 2, y: (earth.position.y + luna.position.y) / 2, z: (earth.position.z + luna.position.z) / 2 }
+  const fromEarthAlone = gravitationalAcceleration(midpoint, [earth])
+  const fromLunaAlone = gravitationalAcceleration(midpoint, [luna])
+  const fromBoth = gravitationalAcceleration(midpoint, [earth, luna])
+  const summed = { x: fromEarthAlone.x + fromLunaAlone.x, y: fromEarthAlone.y + fromLunaAlone.y, z: fromEarthAlone.z + fromLunaAlone.z }
+  check(
+    'two bodies sum as real vectors (superposition), not "nearest wins"',
+    Math.abs(fromBoth.x - summed.x) < 1e-9 && Math.abs(fromBoth.y - summed.y) < 1e-9 && Math.abs(fromBoth.z - summed.z) < 1e-9,
+    `combined ${JSON.stringify({ x: fromBoth.x, y: fromBoth.y, z: fromBoth.z })} vs summed ${JSON.stringify(summed)}`,
+  )
+  check('...and each body alone is nonzero (both genuinely contribute, neither is silently dropped)', fromEarthAlone.length() > 0 && fromLunaAlone.length() > 0)
+
+  // THE CORE DESIGN CONSTRAINT: a ship with WORKING thrust never feels
+  // gravity at all — "thrusters let ships treat it as flat space." Only a
+  // ship with zero thrust budget (utility destroyed) should be affected.
+  const nearBody: any = {
+    shipId: 'p1', side: 0, position: { x: earth.radiusUnits + 0.5, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 },
+    positionSimDays: 0, path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+  }
+  const poweredResult = integrateMotion(nearBody, 1, 5, COMBAT_STEP_SECONDS, 0, [earth])
+  check('a ship with real thrust is completely unaffected by gravity (flat space)', poweredResult.velocity.x === 0 && poweredResult.velocity.y === 0 && poweredResult.velocity.z === 0, JSON.stringify(poweredResult.velocity))
+
+  // With thrust dead (accel=0, maxSpeed=0), the SAME ship in the SAME spot
+  // DOES start falling toward the body.
+  const poweredOff = integrateMotion(nearBody, 0, 0, COMBAT_STEP_SECONDS, 0, [earth])
+  check('the same ship with dead thrust picks up real velocity toward the body', poweredOff.velocity.x < 0, JSON.stringify(poweredOff.velocity))
+  // Ship starts 0.5 units above the surface, not AT it, so the expected
+  // pull is gEarth scaled by inverse-square at that distance — not raw
+  // surface gravity (this is the actual distance dependence being tested,
+  // matching the standalone inverse-square check above).
+  const expectedPullAtStart = gEarth * (earth.radiusUnits / (earth.radiusUnits + 0.5)) ** 2
+  check(
+    '...at exactly gravity(distance) * dt (real Newtonian integration, not a snap)',
+    Math.abs(poweredOff.velocity.x - -expectedPullAtStart * COMBAT_STEP_SECONDS) < 1e-9,
+    `${poweredOff.velocity.x.toFixed(6)} vs expected ${(-expectedPullAtStart * COMBAT_STEP_SECONDS).toFixed(6)}`,
+  )
+
+  // Far from anything, a dead-thrust ship barely accelerates at all —
+  // gravity genuinely falls off, it isn't a constant background pull.
+  const farAway: any = { ...nearBody, position: { x: 50, y: 0, z: 0 } }
+  const farResult = integrateMotion(farAway, 0, 0, COMBAT_STEP_SECONDS, 0, [earth])
+  check('far from any body, gravity is negligible over one step', Math.abs(farResult.velocity.x) < 1e-4, `${farResult.velocity.x}`)
+
+  // Sideways velocity at the moment thrust dies should curve under gravity
+  // rather than falling straight in — "an orbit of sorts."
+  const withSidewaysVelocity: any = { ...nearBody, velocity: { x: 0, y: 0.3, z: 0 } }
+  const curved = integrateMotion(withSidewaysVelocity, 0, 0, COMBAT_STEP_SECONDS, 0, [earth])
+  check('sideways velocity survives (not overwritten) while gravity also pulls inward — a curve, not a straight fall', curved.velocity.y === 0.3 && curved.velocity.x < 0, JSON.stringify(curved.velocity))
+}
+
+console.log('\n=== 38. Chaff: charges, duration, and a severe accuracy penalty at any range ===')
+{
+  const profile = SHIP_CLASSES.find((c) => c.id === 'cruiser')!.combat
+  const fresh = pristineCombatState(profile)
+  check('a fresh hull carries the full charge count', fresh.chaffRemaining === CHAFF_CHARGES, `${fresh.chaffRemaining}`)
+  check('...and starts with no burst up', !isChaffActive(fresh, 0))
+
+  // Deploying spends exactly one charge and starts a burst of the documented
+  // length.
+  const deployed = deployChaff(fresh, 100)
+  check('deploying spends one charge', deployed.chaffRemaining === CHAFF_CHARGES - 1)
+  check('...and the burst is live immediately', isChaffActive(deployed, 100))
+  check(
+    `...for exactly ${CHAFF_DURATION_SECONDS} sim-seconds`,
+    isChaffActive(deployed, 100 + simSecondsToDays(CHAFF_DURATION_SECONDS - 0.01)) &&
+      !isChaffActive(deployed, 100 + simSecondsToDays(CHAFF_DURATION_SECONDS + 0.01)),
+  )
+
+  // No double-dipping, and no spending past empty. Both return the SAME
+  // object, which callers rely on to detect a no-op.
+  check('deploying while already active is a no-op (same object)', deployChaff(deployed, 100 + simSecondsToDays(1)) === deployed)
+  const spentBoth = deployChaff({ ...deployed, chaffActiveUntilSimDays: null }, 200)
+  check('the second charge can be spent once the first lapses', spentBoth.chaffRemaining === 0)
+  const empty = { ...spentBoth, chaffActiveUntilSimDays: null }
+  check('an empty hull cannot deploy at all (same object back)', deployChaff(empty, 300) === empty)
+
+  // The actual mechanic: a non-interceptable weapon (so point defense can't
+  // confound the measurement) fired many times against a chaffed target
+  // should land about half as often.
+  const laser: WeaponMount = { ...WEAPON_TYPES.laser, damage: 10 }
+  check('the test weapon is genuinely not interceptable', !DAMAGE_PROFILES[laser.damageType].interceptable)
+  const trials = 4000
+  let hitsWithout = 0
+  let hitsWith = 0
+  const rng = seededRng(97)
+  for (let i = 0; i < trials; i++) {
+    if (!applyShot(laser, 10, pristineCombatState(profile), profile, null, rng, 0).outcome.missed) hitsWithout++
+    if (!applyShot(laser, 10, pristineCombatState(profile), profile, null, rng, CHAFF_MISS_CHANCE).outcome.missed) hitsWith++
+  }
+  check('without chaff, every shot connects', hitsWithout === trials, `${hitsWithout}/${trials}`)
+  const observedMissRate = 1 - hitsWith / trials
+  check(
+    `with chaff up, about ${CHAFF_MISS_CHANCE * 100}% of shots miss`,
+    Math.abs(observedMissRate - CHAFF_MISS_CHANCE) < 0.03,
+    `observed ${(observedMissRate * 100).toFixed(1)}%`,
+  )
+
+  // A missed shot must do NOTHING — not reduced damage, nothing.
+  const target = pristineCombatState(profile)
+  const alwaysMiss = () => 0 // rng below the miss chance => miss
+  const missed = applyShot(laser, 10, target, profile, null, alwaysMiss, CHAFF_MISS_CHANCE)
+  check('a chaffed miss deals no damage at all', missed.next === target && missed.outcome.missed)
+  check('...and is reported as a miss, not an interception', missed.outcome.missed && !missed.outcome.intercepted)
+
+}
+
+console.log('\n=== 39. Two hulls can never occupy the same point ===')
+{
+  const simDays = 100
+  const ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+
+  // Force both onto EXACTLY the same coordinate — the degenerate case, where
+  // there's no line between them to push along.
+  engagements[0] = {
+    ...engagements[0],
+    participants: engagements[0].participants.map((p) => ({
+      ...p,
+      position: { x: 2, y: 2, z: 2 },
+      velocity: { x: 0, y: 0, z: 0 },
+      path: [],
+      holdPosition: true,
+    })),
+  }
+  const result = stepEngagements([engagements[0]], ships, simDays + COMBAT_STEP_DAYS)
+  const [a, b] = result.engagements[0].participants
+  const gap = pointDistance(a.position, b.position)
+  check('two exactly-coincident hulls are pushed apart', gap > 0, `gap ${gap.toFixed(3)}`)
+  check(
+    `...to at least the separation distance (${SHIP_SEPARATION_UNITS})`,
+    gap >= SHIP_SEPARATION_UNITS - 1e-9,
+    `gap ${gap.toFixed(3)}`,
+  )
+
+  // A partial overlap resolves symmetrically — neither ship is privileged.
+  {
+    const engagement = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p, i) => ({
+        ...p,
+        // y: 5 keeps the pair clear of the body at the arena origin — see
+        // the collision rule; a fixture sitting inside Earth is destroyed,
+        // not separated.
+        position: { x: i === 0 ? -0.1 : 0.1, y: 5, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        path: [],
+        holdPosition: true,
+      })),
+    }
+    const r = stepEngagements([engagement], ships, simDays + COMBAT_STEP_DAYS)
+    const [x, y] = r.engagements[0].participants
+    check('a partial overlap is also resolved', pointDistance(x.position, y.position) >= SHIP_SEPARATION_UNITS - 1e-9)
+    check(
+      '...symmetrically, with the midpoint unmoved',
+      Math.abs((x.position.x + y.position.x) / 2) < 1e-9,
+      `midpoint x ${((x.position.x + y.position.x) / 2).toFixed(6)}`,
+    )
+  }
+
+  // Ships that were already comfortably apart must not be nudged at all.
+  {
+    const engagement = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p, i) => ({
+        ...p,
+        position: { x: i === 0 ? -3 : 3, y: 5, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        path: [],
+        holdPosition: true,
+      })),
+    }
+    const r = stepEngagements([engagement], ships, simDays + COMBAT_STEP_DAYS)
+    const [x, y] = r.engagements[0].participants
+    check('already-separated hulls are left exactly where they were', Math.abs(x.position.x + 3) < 1e-9 && Math.abs(y.position.x - 3) < 1e-9)
+  }
+}
+
+console.log('\n=== 40. Outrunning everyone disengages a ship without needing FTL ===')
+{
+  const simDays = 100
+  const ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+
+  // Just inside the threshold: still a participant.
+  {
+    const engagement = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p, i) => ({
+        ...p,
+        position: { x: i === 0 ? 0 : DISENGAGE_DISTANCE_UNITS - 1, y: 5, z: 0 },
+        path: [],
+        holdPosition: true,
+      })),
+    }
+    const r = stepEngagements([engagement], ships, simDays + COMBAT_STEP_DAYS)
+    check('inside the disengage distance, nobody leaves', r.disengagedShipIds.length === 0 && r.engagements.length === 1)
+  }
+
+  // Past it: the ship leaves, and the fight ends because only one side is left.
+  {
+    const engagement = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p, i) => ({
+        ...p,
+        position: { x: i === 0 ? 0 : DISENGAGE_DISTANCE_UNITS + 5, y: 5, z: 0 },
+        path: [],
+        holdPosition: true,
+      })),
+    }
+    const r = stepEngagements([engagement], ships, simDays + COMBAT_STEP_DAYS)
+    check('past the disengage distance, both ships break contact', r.disengagedShipIds.length === 2, r.disengagedShipIds.join(', '))
+    check('...and the engagement is over', r.engagements.length === 0)
+    check('...without anyone being destroyed', r.destroyedShipIds.length === 0)
+    check('...and without any FTL escape', r.escapedShipIds.length === 0)
+  }
+}
+
+console.log('\n=== 41. Combat catch-up is bounded — no permanent debt from a strategy-time excursion ===')
+{
+  const maxLagDays = MAX_STEPS_PER_TICK * COMBAT_STEP_DAYS
+  const now = 1000
+
+  // Normal case: resolution is a step or two behind, which is just the
+  // sub-step remainder being carried. Must be returned untouched, or combat
+  // would silently skip time during ordinary tactical play.
+  const slightlyBehind = now - COMBAT_STEP_DAYS * 2
+  check('a small, ordinary lag is preserved exactly', combatCatchUpCursor(slightlyBehind, now) === slightlyBehind)
+  check('being fully caught up is preserved exactly', combatCatchUpCursor(now, now) === now)
+
+  // Exactly at the boundary is still "reachable this tick", so still untouched.
+  const atLimit = now - maxLagDays
+  check('a lag exactly at the one-tick limit is preserved', combatCatchUpCursor(atLimit, now) === atLimit)
+
+  // The bug: one real second at strategic pace (6 sim-days/sec) leaves the
+  // resolver ~6 sim-days behind, which it could only work off at 4
+  // sim-seconds per tick.
+  const oneRealSecondOfStrategy = 6
+  const wayBehind = now - oneRealSecondOfStrategy
+  const clamped = combatCatchUpCursor(wayBehind, now)
+  check('a huge backlog is discarded, not queued', clamped > wayBehind, `${wayBehind} -> ${clamped}`)
+  check(
+    '...leaving exactly one tick of work, never more',
+    Math.abs(now - clamped - maxLagDays) < 1e-12,
+    `lag ${(now - clamped).toFixed(9)}d vs one tick ${maxLagDays.toFixed(9)}d`,
+  )
+
+  // Quantify what the old behaviour would have cost, so the regression is
+  // legible rather than abstract: at 60fps the resolver clears
+  // MAX_STEPS_PER_TICK*COMBAT_STEP_SECONDS per frame.
+  const secondsOfCombatPerRealSecond = MAX_STEPS_PER_TICK * COMBAT_STEP_SECONDS * 60
+  const unclampedBacklogSeconds = simDaysToSeconds(oneRealSecondOfStrategy)
+  const realMinutesToBurnDown = unclampedBacklogSeconds / secondsOfCombatPerRealSecond / 60
+  check(
+    'without the clamp, 1s of strategy time would mean >30 real minutes of hyperspeed combat',
+    realMinutesToBurnDown > 30,
+    `${realMinutesToBurnDown.toFixed(1)} minutes`,
+  )
+
+  // And a very long absence (a real pause, or minutes in strategic time) is
+  // bounded identically — the clamp is not a function of how far behind it got.
+  check(
+    'an arbitrarily long absence still leaves exactly one tick of work',
+    Math.abs(now - combatCatchUpCursor(now - 10_000, now) - maxLagDays) < 1e-12,
+  )
+}
+
+console.log('\n=== 42. System-scale gravity: a stranded hull stays with its body and falls in ===')
+{
+  const simDays = 100
+  const earthPosition = bodyLivePosition('Earth', simDays)
+
+  // Earth really is moving, and inheriting that is the whole point below.
+  const earthVelocity = bodyOrbitalVelocity('Earth', simDays)
+  check('Earth has real orbital velocity in system units/day', earthVelocity.length() > 0.3 && earthVelocity.length() < 0.4, `${earthVelocity.length().toFixed(4)}`)
+
+  // What actually binds a ship to a planet is the DIFFERENTIAL field, not the
+  // net one. At 0.08 units out, the Sun pulls on the ship about five times
+  // harder than Earth does — but the Sun pulls Earth essentially the same
+  // way, and both are in free fall around it, so the common part cancels.
+  // (This is exactly why the Hill sphere exists, and why the stranded-hull
+  // simulation below stays bound to Earth despite the Sun dominating the raw
+  // field.) Asserting on the net vector would be testing the wrong quantity —
+  // an earlier version of this test did, and failed while the behaviour it
+  // was checking was correct.
+  const relativeGravity = (offsetUnits: number) => {
+    const at = earthPosition.clone().add(new Vector3(offsetUnits, 0, 0))
+    return systemGravityAcceleration(at, simDays).sub(systemGravityAcceleration(earthPosition, simDays))
+  }
+  const near = earthPosition.clone().add(new Vector3(0.08, 0, 0))
+  const gRelNear = relativeGravity(0.08)
+  check(
+    'relative to its body, gravity near Earth pulls a ship toward Earth',
+    gRelNear.clone().normalize().dot(earthPosition.clone().sub(near).normalize()) > 0.99,
+  )
+  const ratio = gRelNear.length() / relativeGravity(0.16).length()
+  check('doubling distance from Earth roughly quarters that pull', ratio > 3 && ratio < 4.2, `ratio ${ratio.toFixed(2)}`)
+
+  check('a point inside Earth is detected as a collision', systemBodyContaining(earthPosition.clone(), simDays) === 'Earth')
+  check('open space is not', systemBodyContaining(earthPosition.clone().add(new Vector3(0.08, 0, 0)), simDays) === null)
+
+  // The real scenario: seeded exactly the way useCombatResolver seeds a
+  // stranded hull. It must stay gravitationally bound to Earth (never
+  // wandering outside roughly its Hill sphere) and eventually strike it —
+  // NOT drift off and fall into the Sun, which is what happened before the
+  // seed inherited Earth's own orbital velocity.
+  const OFFSET = 0.08
+  const NUDGE = 0.003
+  let position = earthPosition.clone().add(new Vector3(OFFSET, 0, 0))
+  let velocity = bodyOrbitalVelocity('Earth', simDays).add(new Vector3(1, 0, 0).multiplyScalar(NUDGE))
+  const dt = 0.001
+  let days = 0
+  let struck: string | null = null
+  let maxDistanceFromEarth = 0
+  for (let i = 0; i < 250000 && !struck; i++) {
+    velocity.add(systemGravityAcceleration(position, simDays + days).multiplyScalar(dt))
+    position.add(velocity.clone().multiplyScalar(dt))
+    days += dt
+    maxDistanceFromEarth = Math.max(maxDistanceFromEarth, position.distanceTo(bodyLivePosition('Earth', simDays + days)))
+    struck = systemBodyContaining(position, simDays + days)
+    if (days > 200) break
+  }
+  check('a stranded hull stays gravitationally bound to its body', maxDistanceFromEarth < 0.2, `wandered at most ${maxDistanceFromEarth.toFixed(4)} units (Earth Hill sphere ~0.2)`)
+  check('...and eventually falls into that body, not the Sun', struck === 'Earth', `struck ${struck} after ${days.toFixed(1)} days`)
+  check('...within an observable span of sim-days', days < 60, `${days.toFixed(1)} days`)
+}
+
+console.log('\n=== 43. Point defense is answerable — it dies with the gunnery array ===')
+{
+  const destroyer = SHIP_CLASSES.find((c) => c.id === 'destroyer')!.combat
+  check('the destroyer fixture really has point defense', destroyer.defenses.pointDefenseRating > 0.5, `${destroyer.defenses.pointDefenseRating}`)
+  const torpedo: WeaponMount = { ...WEAPON_TYPES.torpedoTube, damage: 40 }
+  check('the test weapon is interceptable', DAMAGE_PROFILES[torpedo.damageType].interceptable)
+
+  const interceptRate = (weaponsHp: number) => {
+    const rng = seededRng(31)
+    let intercepted = 0
+    const trials = 4000
+    for (let i = 0; i < trials; i++) {
+      const state = { ...pristineCombatState(destroyer), componentHp: { ...destroyer.components, weapons: weaponsHp } }
+      if (applyShot(torpedo, 40, state, destroyer, null, rng, 0).outcome.intercepted) intercepted++
+    }
+    return intercepted / trials
+  }
+
+  const full = interceptRate(destroyer.components.weapons)
+  const half = interceptRate(destroyer.components.weapons / 2)
+  const dead = interceptRate(0)
+
+  check('at full weapons health, point defense intercepts at its rated chance',
+    Math.abs(full - destroyer.defenses.pointDefenseRating) < 0.03, `${(full * 100).toFixed(1)}% vs rated ${(destroyer.defenses.pointDefenseRating * 100).toFixed(0)}%`)
+  check('at half weapons health it intercepts about half as often',
+    Math.abs(half - destroyer.defenses.pointDefenseRating / 2) < 0.03, `${(half * 100).toFixed(1)}%`)
+  check('with the gunnery array destroyed, point defense is GONE',
+    dead === 0, `${(dead * 100).toFixed(1)}%`)
+  check('...which is the whole point: torpedoes finally have a setup',
+    weaponsEffectiveness(0, destroyer.components.weapons) === 0)
+}
+
+console.log('\n=== 44. Fleet-wide focus fire — the answer to being outnumbered ===')
+{
+  const simDays = 100
+  const ships = [
+    makeShip('cruiser', 'p1', 'player'),
+    makeShip('cruiser', 'p2', 'player'),
+    makeShip('cruiser', 'e1', 'hostile'),
+    makeShip('cruiser', 'e2', 'hostile'),
+  ]
+  const engagements = syncEngagements(ships, [], simDays)
+  const store = useCombatStore
+  store.setState({ engagements })
+  const engId = engagements[0].id
+
+  const playerIds = ['p1', 'p2']
+  store.getState().setFleetTarget(engId, playerIds, 'e2')
+  const after = store.getState().engagements[0].participants
+  check('every commanded ship is pointed at the same enemy', playerIds.every((id) => after.find((p) => p.shipId === id)?.targetShipId === 'e2'))
+  check('...and enemy ships are left alone', after.filter((p) => p.side === 1).every((p) => p.targetShipId === null))
+
+  store.getState().setFleetTarget(engId, playerIds, null)
+  const released = store.getState().engagements[0].participants
+  check('the whole fleet can be released back to auto in one action', playerIds.every((id) => released.find((p) => p.shipId === id)?.targetShipId === null))
+  store.setState({ engagements: [] })
+}
+
+console.log('\n=== 45. Scuttle: a doomed hull converts itself into a trade ===')
+{
+  // Falloff curve first, on its own.
+  check('a scuttle at zero range does full damage at full core', Math.abs(scuttleDamageAt(0, 1) - SCUTTLE_MAX_DAMAGE) < 1e-9)
+  check('...and nothing at or beyond the blast radius', scuttleDamageAt(SCUTTLE_BLAST_RADIUS_UNITS, 1) === 0 && scuttleDamageAt(99, 1) === 0)
+  check('halfway out it does about half', Math.abs(scuttleDamageAt(SCUTTLE_BLAST_RADIUS_UNITS / 2, 1) - SCUTTLE_MAX_DAMAGE / 2) < 1e-9)
+  // The design tension: a healthy hull detonates hard, a nearly-dead one doesn't.
+  check('a half-wrecked core yields half the blast', Math.abs(scuttleDamageAt(0, 0.5) - SCUTTLE_MAX_DAMAGE / 2) < 1e-9)
+  check('a nearly-dead hull is a poor bomb', scuttleDamageAt(0, 0.05) < SCUTTLE_MAX_DAMAGE * 0.1)
+
+  // End to end through the resolver.
+  const simDays = 100
+  const ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile'), makeShip('cruiser', 'e2', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+  engagements[0] = {
+    ...engagements[0],
+    participants: engagements[0].participants.map((p) => {
+      const base = { ...p, path: [], holdPosition: true, velocity: { x: 0, y: 0, z: 0 } }
+      // p1 detonates; e1 is right next to it; e2 is well outside the blast.
+      if (p.shipId === 'p1') return { ...base, position: { x: 0, y: 6, z: 0 }, scuttleOrdered: true }
+      if (p.shipId === 'e1') return { ...base, position: { x: 0.6, y: 6, z: 0 } }
+      return { ...base, position: { x: 20, y: 6, z: 0 } }
+    }),
+  }
+
+  const before = ships.find((s) => s.id === 'e1')!.combat
+  const result = stepEngagements([engagements[0]], ships, simDays + COMBAT_STEP_DAYS)
+
+  check('the scuttling ship destroys itself', result.destroyedShipIds.includes('p1'))
+  const e1After = result.shipCombat['e1']
+  check('a hostile inside the blast is really hit', !!e1After)
+  if (e1After) {
+    const shieldsLost = before.shieldHp - e1After.shieldHp
+    const armorLost = before.armorHp - e1After.armorHp
+    check('...eating shields first', shieldsLost > 0, `shields -${shieldsLost.toFixed(0)}`)
+    check('...then armor', armorLost > 0, `armor -${armorLost.toFixed(0)}`)
+  }
+  const e2After = result.shipCombat['e2']
+  const e2Untouched = !e2After || (e2After.shieldHp === before.shieldHp && e2After.armorHp === before.armorHp && e2After.componentHp.core === before.componentHp.core)
+  check('a hostile outside the blast radius is untouched', e2Untouched)
+
+  // Friendly fire is deliberately NOT a thing here — the blast only hits the
+  // other side, so scuttling never punishes a player for keeping a formation.
+  {
+    const allies = [makeShip('cruiser', 'a1', 'player'), makeShip('cruiser', 'a2', 'player'), makeShip('cruiser', 'x1', 'hostile')]
+    let e = syncEngagements(allies, [], simDays)
+    e[0] = {
+      ...e[0],
+      participants: e[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true, velocity: { x: 0, y: 0, z: 0 } }
+        if (p.shipId === 'a1') return { ...base, position: { x: 0, y: 6, z: 0 }, scuttleOrdered: true }
+        if (p.shipId === 'a2') return { ...base, position: { x: 0.5, y: 6, z: 0 } }
+        return { ...base, position: { x: 25, y: 6, z: 0 } }
+      }),
+    }
+    const r = stepEngagements([e[0]], allies, simDays + COMBAT_STEP_DAYS)
+    const a2 = r.shipCombat['a2']
+    const pristine = allies.find((s) => s.id === 'a2')!.combat
+    check('an ally standing right beside the blast takes nothing', !a2 || a2.shieldHp === pristine.shieldHp)
+  }
+}
+
+console.log('\n=== 46. Chaff auto-deploys by default, for every allegiance, and can be turned off ===')
+{
+  const simDays = 100
+  const armPlayer = (p: any) => ({ ...p, position: { x: 2, y: 5, z: 2 }, path: [], holdPosition: true, velocity: { x: 0, y: 0, z: 0 } })
+
+  const runOnce = (playerAuto: boolean) => {
+    let ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+    ships = ships.map((s) => (s.id === 'p1' ? { ...s, chaffAutoDeploy: playerAuto } : s))
+    let engagements = syncEngagements(ships, [], simDays)
+    engagements[0] = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p) =>
+        p.shipId === 'p1' ? armPlayer(p) : { ...p, position: { x: 4, y: 5, z: 4 }, path: [], holdPosition: true, velocity: { x: 0, y: 0, z: 0 } },
+      ),
+    }
+    // Damage p1 down into the AI threshold band so there is something to react to.
+    let dmg = ships[0].combat
+    dmg = { ...dmg, componentHp: { ...dmg.componentHp }, shieldHp: 0, armorHp: 0 }
+    ships = ships.map((s) => (s.id === 'p1' ? { ...s, combat: dmg } : s))
+    const result = stepEngagements(engagements, ships, simDays + COMBAT_STEP_DAYS)
+    const after = result.shipCombat['p1']
+    return after ? after.chaffRemaining < CHAFF_CHARGES : false
+  }
+
+  check('with auto-deploy on, a player ship spends a charge on its own', runOnce(true))
+  check('with auto-deploy off, the SAME player ship does not', !runOnce(false))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

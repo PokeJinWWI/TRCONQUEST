@@ -360,6 +360,26 @@
   animation: combat-charging-pulse 900ms ease-in-out infinite;
 }
 
+/* Chaff badge — deliberately a different colour from the FTL badge beside
+   it, since they mean opposite things: FTL is "this ship is leaving and
+   defenceless", chaff is "this ship is hard to hit right now". */
+.combat-marker-chaff {
+  display: inline-block;
+  margin-top: 2px;
+  margin-left: 3px;
+  padding: 0 3px;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: #ffd23f;
+  border: 1px solid #ffd23f;
+  border-radius: 2px;
+}
+
+.combat-roster-tag.chaff {
+  color: #ffd23f;
+  border-color: #ffd23f;
+}
+
 @keyframes combat-charging-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -436,6 +456,30 @@
 
 .combat-roster-bar {
   flex: 0 0 54px;
+}
+
+/* Local odds on a roster row — how many enemies can shoot this hull right
+   now. Neutral at 1 (an even trade), warning-coloured above that, because
+   "this ship is being focused" is the thing worth reacting to. */
+/* Scuttle is destructive and irreversible — coloured like the other
+   danger states in this HUD rather than like an ordinary action button. */
+.scuttle-btn {
+  color: #ff6b4a;
+  border-color: #ff6b4a;
+}
+
+.combat-roster-odds {
+  margin-left: 4px;
+  padding: 0 3px;
+  font-size: 9px;
+  border-radius: 2px;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.combat-roster-odds.outnumbered {
+  color: #ff6b4a;
+  border-color: #ff6b4a;
 }
 
 .combat-roster-pct {
@@ -524,6 +568,7 @@
 .fleet-list {
   max-height: 380px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .fleet-row {
@@ -593,6 +638,7 @@
   flex: 1 1 auto;
   max-height: 400px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .designer-title {
@@ -861,6 +907,21 @@
   color: #9fe8ff;
 }
 
+/* Edge-pinned variants (see DraggableWindow's `anchor` prop). Offsets clear
+   the nav sidebar on the left and the Outliner on the right — both are 191px
+   of content plus a ~28px collapse tab — so a pinned combat panel sits
+   beside them rather than underneath. `left: auto` on the right variant
+   overrides the base rule's `left: 32%`, which would otherwise win and pin
+   it to the wrong edge. */
+.draggable-window.anchor-left {
+  left: 232px;
+}
+
+.draggable-window.anchor-right {
+  left: auto;
+  right: 232px;
+}
+
 .draggable-window-titlebar {
   display: flex;
   align-items: center;
@@ -882,7 +943,14 @@
   cursor: grabbing;
 }
 
-.draggable-window-close {
+.draggable-window-titlebar-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.draggable-window-close,
+.draggable-window-collapse {
   background: none;
   border: none;
   color: #9fe8ff;
@@ -892,8 +960,21 @@
   padding: 0 2px;
 }
 
-.draggable-window-close:hover {
+.draggable-window-collapse {
+  font-size: 11px;
+}
+
+.draggable-window-close:hover,
+.draggable-window-collapse:hover {
   color: #fff;
+}
+
+/* Collapsed to just its title bar — the titlebar's own bottom radius/border
+   normally assumes a body sits below it (see .draggable-window-titlebar);
+   with no body rendered at all, close off that edge here instead. */
+.draggable-window.collapsed .draggable-window-titlebar {
+  border-radius: 4px;
+  border-bottom: none;
 }
 
 .draggable-window-body {
@@ -1002,6 +1083,7 @@
   flex: 1;
   width: 191px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px 10px;
   opacity: 1;
   /* Fading in is delayed until the width transition (0.2s, see .nav-sidebar)
@@ -1131,6 +1213,7 @@
   flex: 1;
   width: 191px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px 10px;
   /* Same transition asymmetry as .nav-sidebar-content — see its comment. */
   opacity: 1;
@@ -1339,6 +1422,10 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   font-family: 'Courier New', monospace;
   color: #ffd9a0;
+  /* A dev-only overlay, not document content — a stray drag shouldn't paint
+     a text selection across it (or worse, across the canvas underneath it). */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .debug-console-header {
@@ -1440,6 +1527,7 @@
   gap: 4px;
   max-height: 140px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .debug-console-ship-row {

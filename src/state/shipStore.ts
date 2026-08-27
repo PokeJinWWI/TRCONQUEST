@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { CombatProfile, CombatStance, ComponentKind } from '../data/combatData'
+import { CHAFF_CHARGES, type CombatProfile, type CombatStance, type ComponentKind } from '../data/combatData'
+import { deployChaff as deployChaffState } from '../scene/combatResolution'
 import type { FleetAllegiance } from '../data/shipData'
 
 // Where a ship rests when it has no active order — always resolved to a
@@ -114,6 +115,15 @@ export interface ShipCombatState {
   // future repair/shipyard system exists to undo it.
   armorHp: number
   ftlCharge: FtlCharge | null
+  // Countermeasure charges left (see combatData's CHAFF_CHARGES). Like armor,
+  // these do NOT come back on their own — a ship that spent both is out of
+  // them until some future resupply system exists.
+  chaffRemaining: number
+  // Absolute simDays the current chaff burst stops working, or null when
+  // none is up. Stored as a deadline rather than a countdown for the same
+  // reason every other timer in this project is (weapon cooldowns, FTL
+  // charge): it stays correct no matter how the clock is stepped.
+  chaffActiveUntilSimDays: number | null
 }
 
 // A fresh, undamaged combat state for a hull. Every ship gets one at spawn
@@ -125,6 +135,8 @@ export function pristineCombatState(profile: CombatProfile): ShipCombatState {
     shieldHp: profile.defenses.shieldHp,
     armorHp: profile.defenses.armorHp,
     ftlCharge: null,
+    chaffRemaining: CHAFF_CHARGES,
+    chaffActiveUntilSimDays: null,
   }
 }
 
@@ -154,6 +166,14 @@ export interface ShipInstance {
   // gravity-well-clearing phase — that always auto-engages once clear,
   // provided warp is otherwise ready. Default false — an opt-in.
   warpWhenReady: boolean
+  // Whether this hull spends its own chaff charges automatically when
+  // actually under threat (see combatResolution's AI countermeasures step,
+  // which every ship — not just AI-controlled ones — now goes through).
+  // Default TRUE: a player who wants to hold charges for a specific moment
+  // can turn this off and use the panel's Deploy button instead, but the
+  // common case is "spend it before I forget I have it," same as the AI
+  // already did for non-player hulls.
+  chaffAutoDeploy: boolean
   // Set when the player orders a hyperdrive jump to this star while the
   // drive is still on cooldown — instead of the order being refused
   // outright, it queues here and fires automatically once
@@ -174,6 +194,17 @@ export interface ShipInstance {
   // present (see pristineCombatState) — a ship that has never fought simply
   // has one at full health.
   combat: ShipCombatState
+  // Unpowered ballistic motion in SYSTEM space, for a ship whose utility
+  // (and therefore thrust) is destroyed — see useShipDriftIntegrator.
+  //
+  // Optional and normally absent: a ship under power has no need of it,
+  // because a powered ship's position is a pure function of its order or its
+  // resting location, exactly as everything else in this project is. Drift is
+  // the one case that genuinely cannot be — an unpowered hull's path depends
+  // on where it was and how fast it was going when the engines died, which is
+  // accumulated state by definition. Velocity is in system units per sim-day;
+  // the position it applies to is the ship's own `system-point` location.
+  drift?: { velocity: [number, number, number]; updatedSimDays: number } | null
   // How this ship fights when the player isn't steering it by hand — set
   // from Fleet Management > Strategizer. Lives on the ship rather than on a
   // CombatParticipant so it can be set *before* a fight (that's the whole
@@ -204,6 +235,7 @@ interface ShipState {
   setShipOrder: (id: string, order: MoveOrder, warpReadySimDays?: number, keepFollowing?: boolean) => void
   setWarpEnabled: (id: string, enabled: boolean) => void
   setWarpWhenReady: (id: string, whenReady: boolean) => void
+  setChaffAutoDeploy: (id: string, auto: boolean) => void
   setShipLocation: (
     id: string,
     location: ShipLocation,
@@ -229,6 +261,14 @@ interface ShipState {
   // Begins or cancels (pass null) an FTL escape charge — see FtlCharge.
   setFtlCharge: (id: string, charge: FtlCharge | null) => void
   setStance: (id: string, stance: CombatStance) => void
+  // Spends one chaff charge on the player's behalf. A no-op when the ship has
+  // none left or a burst is already up — the guard lives in
+  // combatResolution.deployChaff so the player's button and the AI's own
+  // deployment obey exactly one rule.
+  deployChaff: (id: string, simDays: number) => void
+  // Sets (or clears, with null) an unpowered hull's stored ballistic
+  // velocity — see ShipInstance.drift and useShipDriftIntegrator.
+  setDrift: (id: string, drift: ShipInstance['drift']) => void
 }
 
 export const useShipStore = create<ShipState>((set) => ({
@@ -268,6 +308,10 @@ export const useShipStore = create<ShipState>((set) => ({
   setWarpWhenReady: (id, whenReady) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, warpWhenReady: whenReady } : ship)),
+    })),
+  setChaffAutoDeploy: (id, auto) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, chaffAutoDeploy: auto } : ship)),
     })),
   setShipLocation: (id, location, cooldowns, keepFollowing) =>
     set((s) => ({
@@ -313,5 +357,17 @@ export const useShipStore = create<ShipState>((set) => ({
   setStance: (id, stance) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, stance } : ship)),
+    })),
+  deployChaff: (id, simDays) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => {
+        if (ship.id !== id) return ship
+        const next = deployChaffState(ship.combat, simDays)
+        return next === ship.combat ? ship : { ...ship, combat: next }
+      }),
+    })),
+  setDrift: (id, drift) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, drift } : ship)),
     })),
 }))

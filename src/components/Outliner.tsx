@@ -64,10 +64,15 @@ function useInViewEntries(): OutlinerEntry[] {
 
 // Real, not a placeholder — every ship spawned (currently only via the
 // dev-only DebugConsole, since there's no production ship-building system
-// yet) shows up here.
+// yet) shows up here. Player-owned only: this is the player's OWN fleet
+// roster, not a sensor readout of every hull in the system — a hostile or
+// neutral fleet is still inspectable via its marker/presence badge, it just
+// doesn't belong in "my fleets."
 function useFleetEntries(): OutlinerEntry[] {
   const ships = useShipStore((s) => s.ships)
-  return ships.map((ship) => ({ key: ship.id, name: ship.name, color: ALLEGIANCE_COLORS[ship.allegiance], kind: 'ship' as const }))
+  return ships
+    .filter((ship) => ship.allegiance === 'player')
+    .map((ship) => ({ key: ship.id, name: ship.name, color: ALLEGIANCE_COLORS[ship.allegiance], kind: 'ship' as const }))
 }
 
 function OutlinerIcon({ color, kind }: { color: string; kind: EntryKind }) {

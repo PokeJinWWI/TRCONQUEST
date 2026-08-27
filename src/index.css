@@ -11,6 +11,15 @@ body,
   height: 100%;
   background: #020409;
   overflow: hidden;
+  /* A horizontal trackpad swipe over the page would otherwise be handled by
+     the BROWSER as history back/forward, navigating away from a running game
+     and losing everything not in a store. `none` stops the gesture from ever
+     reaching that handler. Set on all three because the gesture is resolved
+     against whichever ancestor could scroll, and none of them should ever
+     scroll horizontally — this app is a fixed-viewport canvas, not a
+     document. */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
 }
 
 body {

@@ -13,7 +13,7 @@ import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { getMoonPosition } from './orbitMath'
-import { PLANETS, SUN_RADIUS_KM, UNITS_PER_AU } from './planetData'
+import { PLANETS, SUN_RADIUS_KM, UNITS_PER_AU, satelliteVisualRadius } from './planetData'
 import { getMoonsForPlanet } from './moonData'
 import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
@@ -28,7 +28,10 @@ interface SatelliteViewSceneProps {
   bodyName: string
 }
 
-const PRIMARY_VISUAL_RADIUS = 3
+// Real-radius fallback for the pathological case where a body name resolves
+// to neither the star nor a known planet — shouldn't happen, matches the
+// same defensive fallback combatArena.arenaBodyRadius uses.
+const EARTH_RADIUS_KM_FALLBACK = 6371
 // Tuned so the body has visibly shrunk to a small, distant shape before
 // handing back to system view — matches the "shrink to a dot" treatment
 // used for the other view-level transitions.
@@ -41,7 +44,7 @@ const MOON_FOCUS_ARRIVE_DISTANCE = 1
 // counts as "entering" that moon's detail view — same idea as system view's
 // manual zoom-to-enter-satellite, just an additional path alongside the
 // explicit "Detailed View" button. Must clear OrbitControls' minDistance
-// (PRIMARY_VISUAL_RADIUS + 1 = 4) so it's actually reachable by scrolling in.
+// (primaryVisualRadius + 1, ~4 for Earth) so it's actually reachable by scrolling in.
 const ENTER_MOON_DISTANCE = 4.5
 // How close the "Go To" fly-in to a selected ship needs to get before it
 // counts as arrived — ships are small, similar scale to moons.
@@ -133,6 +136,13 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   const isStar = bodyName === 'Sol'
   const planetData = useMemo(() => (!isStar ? PLANETS.find((p) => p.name === bodyName) : undefined), [bodyName, isStar])
   const color = isStar ? SOL_COLOR : planetData?.color ?? '#ffffff'
+  // Real body radius, compressed but no longer flattened to one constant —
+  // see satelliteVisualRadius: Sol and Earth used to render at the exact
+  // same size purely because nothing compared them.
+  const primaryVisualRadius = useMemo(
+    () => satelliteVisualRadius(isStar ? SUN_RADIUS_KM : planetData?.radiusKm ?? EARTH_RADIUS_KM_FALLBACK),
+    [isStar, planetData],
+  )
   const orbitAU = planetData ? planetData.orbitRadius / UNITS_PER_AU : undefined
   const moonInfo = useMemo(() => (!isStar ? getMoonsForPlanet(bodyName) : { totalCount: 0, moons: [] }), [bodyName, isStar])
 
@@ -257,7 +267,20 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   return (
     <div key="primary" className="view-transition">
       <div className="satellite-view-wrapper">
-        <Canvas camera={{ position: [0, 2, 9], fov: 50, near: 0.05, far: 2000 }} onPointerMissed={handleUnfocus}>
+        {/* Deliberately a FIXED camera position — not scaled to each body's
+            own radius the way minDistance below is. Sol and Earth are now
+            genuinely different sizes (satelliteVisualRadius), and that's the
+            whole point: a camera that re-framed proportionally per body would
+            make every body fill the same fraction of the screen regardless
+            of its real size, which would hide the exact difference this was
+            built to show. Sized against the largest clamped body
+            (SATELLITE_MAX_VISUAL_RADIUS = 9, i.e. Sol) so nothing ever opens
+            cropped; smaller bodies correspondingly — and visibly — read as
+            smaller within that same fixed frame. Same direction ratio the
+            single old constant [0, 2, 9] used, just scaled up (2, 9 -> 6, 27)
+            so a radius-9 body gets the same quality of framing the old
+            radius-3 constant gave a radius-3 body. */}
+        <Canvas camera={{ position: [0, 6, 27], fov: 50, near: 0.05, far: 2000 }} onPointerMissed={handleUnfocus}>
           <color attach="background" args={['#020409']} />
           <ambientLight intensity={0.25} />
           {!isStar && <directionalLight position={[8, 4, 6]} intensity={2.2} color="#fff4d6" />}
@@ -265,14 +288,14 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
 
           <HologramBody
             color={color}
-            radius={PRIMARY_VISUAL_RADIUS}
+            radius={primaryVisualRadius}
             variant={isStar ? 'star' : 'planet'}
             onSelect={handleSelectPrimary}
             onOrderTo={handleOrderToPrimary}
           />
           <FocusableMarker
             name={primaryBody.name}
-            radius={PRIMARY_VISUAL_RADIUS}
+            radius={primaryVisualRadius}
             onSelect={handleSelectPrimary}
             onOrderTo={handleOrderToPrimary}
           />
@@ -288,14 +311,14 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
           ))}
 
           {shipOrbitInclinations.map((incl) => (
-            <OrbitRing key={incl} radius={PRIMARY_VISUAL_RADIUS + 1.2} inclinationDeg={incl} />
+            <OrbitRing key={incl} radius={primaryVisualRadius + 1.2} inclinationDeg={incl} />
           ))}
 
           {orbitingShips.map((ship, index) => (
             <SatelliteShipMarker
               key={ship.id}
               ship={ship}
-              primaryVisualRadius={PRIMARY_VISUAL_RADIUS}
+              primaryVisualRadius={primaryVisualRadius}
               onOrderFollow={handleFollowShip}
               stackIndex={shipStackInfo.get(ship.id)?.index ?? index}
               stackCount={orbitingShips.length}
@@ -326,7 +349,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
                 new Vector3(
                   ...satelliteOrbitLocalPosition(
                     trackedShipLocation,
-                    PRIMARY_VISUAL_RADIUS,
+                    primaryVisualRadius,
                     useGameTimeStore.getState().simDays,
                   ),
                 )
@@ -349,7 +372,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
                 if (lockOnEnabled) {
                   if (trackedShipLocation)
                     return new Vector3(
-                      ...satelliteOrbitLocalPosition(trackedShipLocation, PRIMARY_VISUAL_RADIUS, useGameTimeStore.getState().simDays),
+                      ...satelliteOrbitLocalPosition(trackedShipLocation, primaryVisualRadius, useGameTimeStore.getState().simDays),
                     )
                   if (selectedMoon) return getMoonPosition(selectedMoon, simDaysToYears(useGameTimeStore.getState().simDays))
                 }
@@ -392,7 +415,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
             enablePan={false}
             enableDamping
             dampingFactor={0.08}
-            minDistance={PRIMARY_VISUAL_RADIUS + 1}
+            minDistance={primaryVisualRadius + 1}
             maxDistance={MAX_DISTANCE}
           />
         </Canvas>

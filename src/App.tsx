@@ -8,6 +8,7 @@ import { Outliner } from './components/Outliner'
 import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
 import { useShipOrderSettler } from './hooks/useShipOrderSettler'
+import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
 import { CombatViewScene } from './scene/CombatViewScene'
 import { GalacticViewScene } from './scene/GalacticViewScene'
@@ -48,6 +49,7 @@ function ActiveScene() {
 function App() {
   useGameClock()
   useShipOrderSettler()
+  useShipDriftIntegrator()
   // Resolves every active engagement independent of which view is mounted —
   // a battle in another system happens whether or not anyone is watching it.
   useCombatResolver()

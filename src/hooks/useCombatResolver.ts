@@ -7,10 +7,40 @@ import {
   COMBAT_STEP_DAYS,
   MAX_STEPS_PER_TICK,
   activeEnemyContacts,
+  combatCatchUpCursor,
   stepEngagements,
   syncEngagements,
 } from '../scene/combatResolution'
-import { planMove } from '../scene/shipPhysics'
+import { bodyLivePosition, bodyOrbitalVelocity, getShipRenderPosition, planMove, shipSystemId, SOL_SYSTEM_ID } from '../scene/shipPhysics'
+import { shipCombatProfile } from '../scene/combatResolution'
+import { utilityEffectiveness } from '../data/combatData'
+import { combatLocationLabel } from '../state/combatStore'
+
+// How far out into system space a disengaging ship is placed, in system
+// units. Small — this is a nudge clear of whatever it was orbiting so it
+// renders as its own contact rather than sitting on the body's marker, not a
+// claim about how far it actually travelled. The arena has no consistent
+// km-per-unit scale (see combatArena's arenaBodyRadius), so there is no
+// honest conversion from "30 arena units from the enemy" into a system-space
+// distance; this is a picked, documented placement instead of a fake one.
+const DISENGAGE_SYSTEM_OFFSET_UNITS = 1.5
+
+// A STRANDED hull (utility destroyed) is placed much closer in, and this is
+// a physical constraint rather than a taste call. A body's gravitational
+// influence ends at its Hill sphere — about 0.2 system units for Earth —
+// and past that the Sun dominates completely. Dropping a powerless wreck at
+// the 1.5 units a powered ship flees to would put it seven Hill radii out,
+// where "falls toward the body or settles into an orbit" is simply not what
+// the physics does: measured, it wanders up to 34 units away and eventually
+// falls into Sol. 0.08 units (~600,000 km, a bit beyond Luna) is comfortably
+// inside Earth's Hill sphere, so local gravity is what governs it.
+const STRANDED_SYSTEM_OFFSET_UNITS = 0.08
+// Outward nudge for a stranded hull, in system units per sim-day. Must stay
+// well UNDER escape velocity at STRANDED_SYSTEM_OFFSET_UNITS (~0.013
+// units/day for Earth) or the wreck simply leaves — which is how an earlier
+// 0.05 value behaved, at nearly twice escape velocity. Small enough that
+// gravity, not this, decides where it ends up.
+const STRANDED_DRIFT_SPEED_UNITS_PER_DAY = 0.003
 
 // Drives combat. Subscribes to the clock exactly the way useShipOrderSettler
 // does — reacting to simDays advancing rather than running its own
@@ -86,11 +116,17 @@ export function useCombatResolver() {
       // stall a frame trying to simulate millions of steps — combat then
       // simply resolves at its own maximum pace.
       let cursor = Math.min(...synced.map((e) => e.resolvedThroughSimDays))
+
+      // ...bounded so a strategic-time excursion can't leave a permanent
+      // catch-up debt that keeps the battle running at ~240x after the clock
+      // returns to tactical. See combatCatchUpCursor for the full reasoning.
+      cursor = combatCatchUpCursor(cursor, simDays)
       let engagements = synced
       let steps = 0
       const pendingDamage: Record<string, ShipCombatState> = {}
       const destroyed = new Set<string>()
       const escaped = new Set<string>()
+      const disengaged = new Set<string>()
 
       // Strictly whole steps only. An earlier cut advanced `cursor` to
       // `simDays` whenever less than a full step remained, which billed a
@@ -115,6 +151,7 @@ export function useCombatResolver() {
         Object.assign(pendingDamage, result.shipCombat)
         for (const id of result.destroyedShipIds) destroyed.add(id)
         for (const id of result.escapedShipIds) escaped.add(id)
+        for (const id of result.disengagedShipIds) disengaged.add(id)
       }
 
       const damageToApply = { ...pendingDamage }
@@ -129,6 +166,67 @@ export function useCombatResolver() {
       // during the steps above, so `engagements` came back empty even though
       // sync had produced a live one.
       if (engagements.length === 0) followCombatWithClock(false)
+
+      // Broke contact by outrunning everyone (no FTL involved) — put the ship
+      // into open system space so it shows on the system map as a real,
+      // separate contact instead of silently snapping back to whatever body
+      // it was nominally orbiting. A `system-point` location is specifically
+      // what makes the disengagement stick: combatLocationKey returns null
+      // for one, so syncEngagements can never pull the ship back into the
+      // fight it just left (every other location kind would re-form it on the
+      // very next tick).
+      if (disengaged.size > 0) {
+        const shipStore = useShipStore.getState()
+        for (const id of disengaged) {
+          if (destroyed.has(id)) continue
+          const ship = shipStore.ships.find((s) => s.id === id)
+          if (!ship) continue
+          const profile = shipCombatProfile(ship)
+          const stranded =
+            !!profile && utilityEffectiveness(ship.combat.componentHp.utility, profile.components.utility) <= 0
+
+          const bodyName = combatLocationLabel(ship.location)
+          const bodyPosition = bodyLivePosition(bodyName, simDays)
+          const { position } = getShipRenderPosition(ship, simDays)
+          const away = position.clone().sub(bodyPosition)
+          if (away.length() < 1e-6) away.set(1, 0, 0)
+          away.normalize()
+
+          // A ship that ran under its own power genuinely travelled; one whose
+          // engines are dead did not, and is left near the body it was
+          // fighting at so local gravity can act on it (see the constants).
+          const offset = stranded ? STRANDED_SYSTEM_OFFSET_UNITS : DISENGAGE_SYSTEM_OFFSET_UNITS
+          const escapePoint = bodyPosition.clone().add(away.clone().multiplyScalar(offset))
+          shipStore.setShipLocation(
+            id,
+            { kind: 'system-point', systemId: shipSystemId(ship) ?? SOL_SYSTEM_ID, position: [escapePoint.x, escapePoint.y, escapePoint.z] },
+            undefined,
+            true,
+          )
+
+          // A hull that left the fight with its utility destroyed has no
+          // engines to hold that position with, so it keeps coasting under
+          // gravity from here (see useShipDriftIntegrator).
+          //
+          // Seeded as the BODY'S OWN orbital velocity plus a small outward
+          // nudge along the direction it left on. Inheriting the body's
+          // velocity is the important half: a ship in Earth orbit is also
+          // moving with Earth around the Sun, and a wreck seeded at
+          // heliocentric rest instead loses that and spirals into Sol over
+          // weeks (measured: 64 sim-days from a stranding near Earth) rather
+          // than staying anywhere near the planet it was fighting at. The
+          // nudge carries only the DIRECTION it left on, since the arena has
+          // no consistent km-per-unit scale (see combatArena's
+          // arenaBodyRadius) and its arena speed therefore cannot be
+          // converted into a system-space one honestly.
+          if (stranded) {
+            const drift = bodyOrbitalVelocity(bodyName, simDays).add(
+              away.clone().multiplyScalar(STRANDED_DRIFT_SPEED_UNITS_PER_DAY),
+            )
+            shipStore.setDrift(id, { velocity: [drift.x, drift.y, drift.z], updatedSimDays: simDays })
+          }
+        }
+      }
 
       // A completed FTL charge is the ship actually leaving — turn the stored
       // intent into a real move now that the drive has fired. Done here

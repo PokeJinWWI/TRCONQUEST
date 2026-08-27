@@ -83,6 +83,10 @@ interface ShipPanelProps {
    * alongside its own order panel and would otherwise stack the two exactly
    * on top of each other. */
   initialOffset?: { x: number; y: number }
+  /** Pins the window to a screen edge — the combat view passes 'right' so
+   * this sits opposite the engagement roster instead of over the arena. See
+   * DraggableWindow's own `anchor` prop. */
+  anchor?: 'left' | 'right'
 }
 
 // The selected ship's info window — subscribes to simDays directly (same
@@ -92,7 +96,7 @@ interface ShipPanelProps {
 // this doubles as a read-only intel view for enemy/neutral/friendly fleets —
 // the right-click-to-redirect hint only applies to a ship the player
 // actually owns; planMove refuses to plan a move for any other ship anyway.
-export function ShipPanel({ onGoTo, goToPending, initialOffset }: ShipPanelProps) {
+export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPanelProps) {
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const ship = useShipStore((s) => s.ships.find((sh) => sh.id === s.selectedShipId))
   const ships = useShipStore((s) => s.ships)
@@ -156,7 +160,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset }: ShipPanelProps
   const chargeSecondsLeft = charge ? Math.max(0, simDaysToSeconds(charge.readySimDays - simDays)) : 0
 
   return (
-    <DraggableWindow title={ship.name} onClose={() => selectShip(null)} initialOffset={initialOffset}>
+    <DraggableWindow title={ship.name} onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
       <div className="inspect-row">
         <span className="inspect-label">Class</span>
         <span className="inspect-value">{shipClass?.name ?? 'Unknown'}</span>

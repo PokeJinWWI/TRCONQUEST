@@ -7,7 +7,7 @@ import { CombatShipMarker } from './CombatShipMarker'
 import { CombatPathLine } from './CombatPathLine'
 import { CombatEngagementLine } from './CombatEngagementLine'
 import { ShipPanel } from './ShipPanel'
-import { CombatPanel, combatPanelGap } from '../components/CombatPanel'
+import { CombatPanel, combatPanelVerticalOffset } from '../components/CombatPanel'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { type ArenaPoint } from './combatArena'
 import { orderParticipantTo } from './combatResolution'
@@ -87,12 +87,16 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
     setCenter(engagement.id, selectedParticipant.position)
   }
 
-  // Right-click a hostile marker: concentrate this ship's fire on it.
+  // Right-click a hostile marker: concentrate this ship's fire on it. A
+  // second right-click on the SAME hostile clears it back to auto-targeting
+  // — the same gesture that sets a target also undoes it, so there's a way
+  // to revert without hunting for the panel's separate "Auto" button.
   const handleOrderTarget = (targetShipId: string) => {
     if (!engagement || !selectedParticipant || !canCommand) return
     const target = engagement.participants.find((p) => p.shipId === targetShipId)
     if (!target || target.side === selectedParticipant.side) return
-    setParticipantTarget(engagement.id, selectedParticipant.shipId, targetShipId)
+    const alreadyTargeted = selectedParticipant.targetShipId === targetShipId
+    setParticipantTarget(engagement.id, selectedParticipant.shipId, alreadyTargeted ? null : targetShipId)
   }
 
   if (!engagement) return null
@@ -160,7 +164,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
       <CombatPanel engagement={engagement} onRecenter={canCommand ? handleRecenter : undefined} />
       {/* Pushed right by the same gap the order panel is pushed left, so
           the two don't open on top of each other. */}
-      {selectedShipId && <ShipPanel initialOffset={{ x: combatPanelGap(), y: 40 }} />}
+      {selectedShipId && <ShipPanel initialOffset={{ x: 0, y: combatPanelVerticalOffset() }} anchor="right" />}
     </div>
   )
 }

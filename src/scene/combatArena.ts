@@ -145,6 +145,12 @@ export interface CombatObstacle {
   position: ArenaPoint
   // Physical radius in arena units.
   radiusUnits: number
+  // Arena-scale surface gravity, in arena-units/s^2 — see arenaSurfaceGravity
+  // for how this is derived from real mass. Consulted only by a ship with no
+  // thrust of its own (see combatResolution.integrateMotion): a working
+  // engine is strong enough that the game treats a fight as flat space (per
+  // the design brief), so this never affects a ship that still has power.
+  surfaceGravityUnitsPerSecondSq: number
 }
 
 export function gridSpacing(density: GridDensity): number {
@@ -177,6 +183,61 @@ const MAX_BODY_RADIUS_UNITS = 4.5
 export function arenaBodyRadius(radiusKm: number): number {
   const scaled = ARENA_BODY_RADIUS_AT_EARTH * Math.pow(radiusKm / EARTH_RADIUS_KM, 0.25)
   return Math.max(MIN_BODY_RADIUS_UNITS, Math.min(MAX_BODY_RADIUS_UNITS, scaled))
+}
+
+// --- Gravity -----------------------------------------------------------
+
+// Real surface gravity (g = GM/R^2, in m/s^2) — the standard inverse-square
+// law evaluated at a body's own surface, so gravitationalAcceleration below
+// only needs to scale it by (R/r)^2 for any distance r >= R.
+const GRAVITATIONAL_CONSTANT_M3_PER_KG_S2 = 6.6743e-11
+
+function realSurfaceGravityMs2(massKg: number, radiusKm: number): number {
+  const radiusM = radiusKm * 1000
+  return (GRAVITATIONAL_CONSTANT_M3_PER_KG_S2 * massKg) / (radiusM * radiusM)
+}
+
+// Real gravity, like real body radii above, is meaningless to convert
+// directly at this scale — there's no consistent km-per-unit factor to even
+// attempt one (see arenaBodyRadius's own note), and a literal real fall time
+// from a planet's surface is on the order of TENS OF MINUTES, worthless
+// against fights that run for tens of SECONDS. Same fix as everywhere else
+// in this file: pick one honest anchor and scale everything else against it
+// by its REAL ratio, rather than pretending real units survive the
+// compression. The anchor here is Earth, and it's chosen for what it does at
+// the OTHER end of the ratio: a ship with dead thrust sitting at rest a
+// modest distance outside Earth's own arena radius should visibly fall and
+// reach the surface within several real seconds — legible within one fight,
+// not an imperceptible drift and not an instant, unavoidable trap. Every
+// other body's arena gravity is then this constant scaled by that body's
+// REAL surface-gravity ratio to Earth's, so Sol pulls roughly 28x harder and
+// Luna about a sixth as hard — exactly like the real solar system, just
+// timed to fit a fight this arena can actually run.
+const ARENA_SURFACE_GRAVITY_AT_EARTH_UNITS_PER_S2 = 0.03
+const EARTH_MASS_KG = PLANETS.find((p) => p.name === 'Earth')?.massKg ?? 5.972e24
+const EARTH_SURFACE_GRAVITY_MS2 = realSurfaceGravityMs2(EARTH_MASS_KG, EARTH_RADIUS_KM)
+
+export function arenaSurfaceGravity(massKg: number, radiusKm: number): number {
+  return ARENA_SURFACE_GRAVITY_AT_EARTH_UNITS_PER_S2 * (realSurfaceGravityMs2(massKg, radiusKm) / EARTH_SURFACE_GRAVITY_MS2)
+}
+
+// Net gravitational pull on a point from every body sharing the arena, each
+// contribution following the real inverse-square law (g(r) = g_surface *
+// (R/r)^2) at its own already-compressed arena-scale surface gravity.
+// Summed rather than nearest-body-only: an Earth fight now shares the arena
+// with Luna too (see combatResolution's EARTH_MOON_OFFSET), and a ship
+// drifting between them should feel the pull of both, not just whichever is
+// closest at that instant.
+export function gravitationalAcceleration(point: ArenaPoint, obstacles: CombatObstacle[]): Vector3 {
+  const total = new Vector3()
+  for (const obstacle of obstacles) {
+    const toBody = toVector3(obstacle.position).sub(toVector3(point))
+    const distance = toBody.length()
+    if (distance < 1e-6) continue
+    const g = obstacle.surfaceGravityUnitsPerSecondSq * (obstacle.radiusUnits / distance) ** 2
+    total.add(toBody.normalize().multiplyScalar(g))
+  }
+  return total
 }
 
 const SPEED_OF_LIGHT_KM_S = 299_792.458

@@ -63,6 +63,7 @@ export function DebugConsole() {
       warpReadySimDays: 0,
       warpEnabled: true,
       warpWhenReady: false,
+      chaffAutoDeploy: true,
       pendingHyperdriveJump: null,
       followingShipId: null,
       combat: pristineCombatState(shipClass.combat),

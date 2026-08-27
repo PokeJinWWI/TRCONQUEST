@@ -19,6 +19,12 @@ import {
   KITE_RANGE_FRACTION,
   KITE_TOLERANCE,
   SWARM_RANGE_FRACTION,
+  CHAFF_MISS_CHANCE,
+  CHAFF_DURATION_SECONDS,
+  scuttleDamageAt,
+  CHAFF_AI_FIRST_THRESHOLD,
+  CHAFF_AI_SECOND_THRESHOLD,
+  CHAFF_CHARGES,
   type CombatProfile,
   type CombatStance,
   type ComponentKind,
@@ -37,6 +43,8 @@ import {
 import {
   ARENA_ORIGIN,
   arenaPositionToNode,
+  arenaSurfaceGravity,
+  gravitationalAcceleration,
   hasLineOfFire,
   isPointBlocked,
   latticePath,
@@ -68,6 +76,28 @@ export const COMBAT_STEP_DAYS = simSecondsToDays(COMBAT_STEP_SECONDS)
 // exactly the "fights resolve offscreen" behavior wanted when a player has
 // opted out of auto-switching to tactical.
 export const MAX_STEPS_PER_TICK = 40
+
+// Where combat resolution should resume from, given how far it previously
+// got and what time it is now.
+//
+// The clamp is the whole point. Combat can advance at most
+// MAX_STEPS_PER_TICK * COMBAT_STEP_SECONDS of simulated time per tick, while
+// strategic pace advances the CLOCK about 2,160x faster than that. Treating
+// the shortfall as a debt to be repaid makes it permanent and compounding:
+// one real second spent in strategic time buys roughly 36 real minutes of
+// catch-up, during which the battle runs at ~240x — which is exactly the
+// reported bug of a fight "still fighting in strategy time" long after the
+// clock returned to tactical.
+//
+// Discarding the excess instead means combat always resolves against the
+// CURRENT moment, so returning to tactical is immediately 1:1 again. Time the
+// fight was never simulated through simply didn't happen to it — the honest
+// reading of "combat is unobservable at strategic pace," which this whole
+// module is already built on.
+export function combatCatchUpCursor(resolvedThroughSimDays: number, simDays: number): number {
+  const maxLagDays = MAX_STEPS_PER_TICK * COMBAT_STEP_DAYS
+  return simDays - resolvedThroughSimDays > maxLagDays ? simDays - maxLagDays : resolvedThroughSimDays
+}
 
 // Injected so tests can supply a seeded generator and assert exact outcomes —
 // the sandbox can't reliably verify combat visually, so deterministic
@@ -106,6 +136,27 @@ export function overallHealthFraction(state: ShipCombatState, profile: CombatPro
 
 export function isDestroyed(state: ShipCombatState): boolean {
   return state.componentHp.core <= 0
+}
+
+// Whether a ship's chaff burst is still up right now. Central so the
+// resolver, the UI readout, and the tests all agree on one definition of
+// "active" rather than each re-deriving the deadline comparison.
+export function isChaffActive(state: ShipCombatState, simDays: number): boolean {
+  return state.chaffActiveUntilSimDays !== null && simDays < state.chaffActiveUntilSimDays
+}
+
+// Spends one charge and starts a burst, or returns the state untouched when
+// the ship has none left or already has one up. Returning the SAME object on
+// a no-op matters: callers use identity to decide whether anything actually
+// changed and needs writing back.
+export function deployChaff(state: ShipCombatState, simDays: number): ShipCombatState {
+  if (state.chaffRemaining <= 0) return state
+  if (isChaffActive(state, simDays)) return state
+  return {
+    ...state,
+    chaffRemaining: state.chaffRemaining - 1,
+    chaffActiveUntilSimDays: simDays + simSecondsToDays(CHAFF_DURATION_SECONDS),
+  }
 }
 
 // How far past its last integration step rendering may extrapolate a ship's
@@ -161,6 +212,7 @@ export function integrateMotion(
   accel: number,
   dt: number,
   simDays: number,
+  obstacles: CombatObstacle[] = [],
 ): CombatParticipant {
   const position = toVector3(p.position)
   const velocity = toVector3(p.velocity)
@@ -185,10 +237,35 @@ export function integrateMotion(
   // so this is also what brings a ship to a controlled stop.
   const budget = accel * dt
   const delta = desired.clone().sub(velocity)
-  if (budget <= 0) delta.set(0, 0, 0)
-  else if (delta.length() > budget) delta.setLength(budget)
-  velocity.add(delta)
-  if (velocity.length() > maxSpeed) velocity.setLength(maxSpeed)
+  if (budget > 0) {
+    if (delta.length() > budget) delta.setLength(budget)
+    velocity.add(delta)
+    // Only enforced where there's thrust to have caused an overshoot in the
+    // first place (steering delta clamped to budget above should never push
+    // speed past maxSpeed by more than float noise, so this is mostly a
+    // safety net) — see the budget<=0 branch below for why it must NOT run
+    // when there's no thrust at all.
+    if (velocity.length() > maxSpeed) velocity.setLength(maxSpeed)
+  } else {
+    // budget <= 0 (utility destroyed — see the caller's utility*accel/
+    // maxSpeed scaling): velocity is left untouched by STEERING — a ship
+    // with no thrust can neither steer NOR brake, so the maxSpeed clamp
+    // above must not run here either (it would otherwise instantly zero out
+    // whatever velocity the ship had the moment thrust died, which is
+    // exactly backwards from "drifts ballistically": momentum should survive
+    // exactly as it was, not snap to a dead stop on the very next step).
+    //
+    // Gravity is not steering, though — a body's pull reaches a ship whether
+    // or not its own engines still work (per the design brief: "in most
+    // cases thrusters let ships treat it as flat space," but nothing is
+    // countering gravity here any more). This is what turns "drifts in a
+    // straight line forever" into "actually falls toward whatever it's
+    // near, or curves into something like an orbit if it had sideways
+    // velocity to begin with" — real Newtonian integration, not a special
+    // case, so it can produce either depending on the ship's velocity at the
+    // moment thrust died.
+    velocity.add(gravitationalAcceleration(p.position, obstacles).multiplyScalar(dt))
+  }
 
   position.add(velocity.clone().multiplyScalar(dt))
 
@@ -243,6 +320,10 @@ export function pickComponent(
 
 export interface ShotOutcome {
   intercepted: boolean
+  // Defeated by the target's active chaff (see combatData's CHAFF_MISS_CHANCE).
+  // Distinct from `intercepted`: point defense shot the round down, chaff
+  // made the round miss. Both consume the mount's cooldown.
+  missed: boolean
   shieldDamage: number
   armorDamage: number
   componentDamage: number
@@ -263,10 +344,16 @@ export function applyShot(
   targetProfile: CombatProfile,
   preferredComponent: ComponentKind | null,
   rng: Rng,
+  // Chaff's miss chance for THIS shot, already resolved against the range it
+  // crosses (see combatData's chaffMissChance). Passed in rather than
+  // computed here so this function stays a dumb consumer of one number and
+  // the falloff curve can be tested on its own.
+  chaffMiss: number = 0,
 ): { next: ShipCombatState; outcome: ShotOutcome } {
   const profile = DAMAGE_PROFILES[weapon.damageType]
   const nothing: ShotOutcome = {
     intercepted: false,
+    missed: false,
     shieldDamage: 0,
     armorDamage: 0,
     componentDamage: 0,
@@ -275,10 +362,31 @@ export function applyShot(
 
   // Point defense gets its shot at anything physical before any layer is
   // touched. An intercepted missile does nothing at all.
+  //
+  // Scaled by the TARGET's own weapons-component health, which is what makes
+  // point defense answerable. It was previously a flat hull stat that no
+  // amount of fire could degrade, so a Destroyer's 0.55 interception rate
+  // held right up until the instant it died — missiles and torpedoes had no
+  // play against it at all. Point defense IS gunnery, so it lives or dies
+  // with the gunnery array: shoot the weapons component out (Focus Fire ->
+  // Weapons) and the screen comes down with it, which is exactly the setup a
+  // torpedo boat wants and previously could not create.
   if (profile.interceptable && targetProfile.defenses.pointDefenseRating > 0) {
-    if (rng() < targetProfile.defenses.pointDefenseRating) {
+    const screen =
+      targetProfile.defenses.pointDefenseRating *
+      weaponsEffectiveness(target.componentHp.weapons, targetProfile.components.weapons)
+    if (screen > 0 && rng() < screen) {
       return { next: target, outcome: { ...nothing, intercepted: true } }
     }
+  }
+
+  // Chaff: the target's decoys spoil the shot outright. Rolled AFTER point
+  // defense so the two stack the way they read — a missile has to survive
+  // interception AND still find its target — and applies to every damage
+  // type, since it degrades the attacker's aim rather than physically
+  // stopping a projectile the way point defense does.
+  if (chaffMiss > 0 && rng() < chaffMiss) {
+    return { next: target, outcome: { ...nothing, missed: true } }
   }
 
   let raw = rawDamage
@@ -312,8 +420,31 @@ export function applyShot(
 
   return {
     next: { ...target, shieldHp, armorHp, componentHp },
-    outcome: { intercepted: false, shieldDamage, armorDamage, componentDamage, component },
+    outcome: { intercepted: false, missed: false, shieldDamage, armorDamage, componentDamage, component },
   }
+}
+
+// Applies undirected blast damage (a scuttle — see scuttleDamageAt) through
+// shields, then armor, then the core. Separate from applyShot because a
+// reactor breach has no damage type, no interception, and no aim: none of the
+// matrix, point defense, or chaff applies to it. Shields and armor still soak
+// it, since absorbing a blast is precisely their job.
+export function applyRawBlast(state: ShipCombatState, damage: number): ShipCombatState {
+  let remaining = damage
+  let shieldHp = state.shieldHp
+  let armorHp = state.armorHp
+
+  const fromShields = Math.min(shieldHp, remaining)
+  shieldHp -= fromShields
+  remaining -= fromShields
+
+  const fromArmor = Math.min(armorHp, remaining)
+  armorHp -= fromArmor
+  remaining -= fromArmor
+
+  const componentHp = { ...state.componentHp }
+  if (remaining > 0) componentHp.core = Math.max(0, componentHp.core - remaining)
+  return { ...state, shieldHp, armorHp, componentHp }
 }
 
 // How long a drive takes to spool, stretched by utility damage. A ship whose
@@ -399,15 +530,34 @@ export function arenaBodyRadius(radiusKm: number): number {
 // body's position is real and fixed from here on — it does not move if the
 // player later recentres the window (see combatArena.ts's header).
 //
-// Moons of the primary are deliberately *not* included: they're far enough
-// out at real scale that putting them in a 12-unit arena would be inventing
-// geometry rather than modelling it. Only the body actually being orbited
-// is here.
+// Moons of the primary are deliberately *not* included in general: they're
+// far enough out at real scale that putting them in a 12-unit arena would be
+// inventing geometry rather than modelling it — Luna's real orbit radius
+// alone (60 Earth radii) is 72 arena units, six times the window's own span.
+// The one deliberate exception is EARTH_MOON_OFFSET below: Luna is famous
+// specifically for being close relative to its primary, and a fight in
+// Earth orbit reads as missing an obvious piece of terrain without it. Its
+// placement is compressed exactly like every body's *size* already is (see
+// arenaBodyRadius) rather than real — there's no honest way to fit a 72-unit
+// separation in a 12-unit window — but it's the same kind of compromise this
+// file already makes everywhere else, just applied to a position instead of
+// a radius, and it's the only body-pair this file invents geometry for.
+const EARTH_MOON_OFFSET: ArenaPoint = { x: 4, y: 0.8, z: -2 }
+
 export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
   if (location.kind === 'star') {
     const star = STARS.find((s) => s.id === location.starId)
     if (!star) return []
-    return [{ name: star.name, kind: 'star', color: star.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(star.radiusKm) }]
+    return [
+      {
+        name: star.name,
+        kind: 'star',
+        color: star.color,
+        position: ARENA_ORIGIN,
+        radiusUnits: arenaBodyRadius(star.radiusKm),
+        surfaceGravityUnitsPerSecondSq: arenaSurfaceGravity(star.massKg, star.radiusKm),
+      },
+    ]
   }
 
   if (location.kind === 'orbiting') {
@@ -415,13 +565,45 @@ export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
     // so check both rosters.
     const star = STARS.find((s) => s.name === location.bodyName)
     if (star) {
-      return [{ name: star.name, kind: 'star', color: star.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(star.radiusKm) }]
+      return [
+        {
+          name: star.name,
+          kind: 'star',
+          color: star.color,
+          position: ARENA_ORIGIN,
+          radiusUnits: arenaBodyRadius(star.radiusKm),
+          surfaceGravityUnitsPerSecondSq: arenaSurfaceGravity(star.massKg, star.radiusKm),
+        },
+      ]
     }
     const planet = PLANETS.find((p) => p.name === location.bodyName)
     if (planet) {
-      return [
-        { name: planet.name, kind: 'planet', color: planet.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(planet.radiusKm) },
+      const obstacles: CombatObstacle[] = [
+        {
+          name: planet.name,
+          kind: 'planet',
+          color: planet.color,
+          position: ARENA_ORIGIN,
+          radiusUnits: arenaBodyRadius(planet.radiusKm),
+          surfaceGravityUnitsPerSecondSq: arenaSurfaceGravity(planet.massKg, planet.radiusKm),
+        },
       ]
+      // See EARTH_MOON_OFFSET above — the one moon close enough (in the
+      // "famous for it," not the "fits to scale" sense) to be worth adding.
+      if (planet.name === 'Earth') {
+        const luna = getMoonsForPlanet('Earth').moons.find((m) => m.name === 'Luna')
+        if (luna) {
+          obstacles.push({
+            name: luna.name,
+            kind: 'moon',
+            color: luna.color,
+            position: EARTH_MOON_OFFSET,
+            radiusUnits: arenaBodyRadius(luna.radiusKm),
+            surfaceGravityUnitsPerSecondSq: arenaSurfaceGravity(luna.massKg ?? 0, luna.radiusKm),
+          })
+        }
+      }
+      return obstacles
     }
     // A moon being orbited directly isn't reachable as a rest location today,
     // but resolve it rather than silently producing an empty arena if it ever
@@ -429,7 +611,20 @@ export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
     for (const p of PLANETS) {
       const moon = getMoonsForPlanet(p.name).moons.find((m) => m.name === location.bodyName)
       if (moon) {
-        return [{ name: moon.name, kind: 'moon', color: p.color, position: ARENA_ORIGIN, radiusUnits: arenaBodyRadius(moon.radiusKm) }]
+        return [
+          {
+            name: moon.name,
+            kind: 'moon',
+            color: p.color,
+            position: ARENA_ORIGIN,
+            radiusUnits: arenaBodyRadius(moon.radiusKm),
+            // Only Luna carries real mass data (see MoonRawData.massKg) —
+            // this branch covers every OTHER moon, none of which currently
+            // reach a combat arena. 0 rather than a guess: no fictional pull
+            // is more honest than an invented one.
+            surfaceGravityUnitsPerSecondSq: arenaSurfaceGravity(moon.massKg ?? 0, moon.radiusKm),
+          },
+        ]
       }
     }
   }
@@ -441,6 +636,14 @@ export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
 // ship's own standoff from a surface, and enough that a route hugging the
 // body doesn't visually clip it.
 export const OBSTACLE_CLEARANCE_UNITS = 0.6
+
+// Minimum centre-to-centre distance between any two hulls — effectively a
+// ship's collision diameter. Enforced as a post-movement correction (see
+// stepEngagements) so two ships can never occupy the same point, however
+// their stances routed them there. Sized against the arena's own scale
+// (12 units across, weapon ranges 3-11) to read as "these are separate
+// ships" without meaningfully changing engagement distances.
+export const SHIP_SEPARATION_UNITS = 0.45
 
 // How close a ship tries to get, as a fraction of its longest weapon's reach.
 // Below 1 so a ship settles just *inside* effective range rather than exactly
@@ -556,21 +759,38 @@ export function approachNode(
 //              when the target closes, within a tolerance band so it isn't
 //              re-planning every step.
 //   stall    — refuse the fight: put the nearest body between itself and the
-//              enemy so line of fire is broken, and stay there.
+//              enemy so line of fire is broken, and stay there. Still a
+//              deliberate CHOICE — an armed ship can pick it to ambush or
+//              hide, which is why it's checked before the disarmed fallback
+//              below rather than being folded into it.
+//   flee     — run from the combined position of every hostile in the fight,
+//              not just the nearest one. The automatic behaviour for any
+//              ship with no weapon mounts at all, or whose weapons are
+//              currently knocked out (weaponsOnline=false) — holding a
+//              firing line makes no sense for a ship that cannot fire,
+//              regardless of which OTHER stance is actually selected.
+//
+// `allParticipants` and `weaponsOnline` only matter for flee (both default
+// to values that make every other stance behave exactly as before) — the
+// other four stances only ever needed the single `target` they're passed.
 export function stanceDestination(
   self: CombatParticipant,
   target: CombatParticipant,
   profile: CombatProfile,
   stance: CombatStance,
   obstacles: CombatObstacle[] = [],
+  allParticipants: CombatParticipant[] = [],
+  weaponsOnline: boolean = true,
 ): ArenaPoint | null {
   const reach = longestWeaponRange(profile)
 
   if (stance === 'stall') return stallDestination(self, target, obstacles)
+  if (stance === 'flee') return fleeDestination(self, allParticipants)
 
-  // An unarmed hull has no range to hold — it behaves as if stalling, which
-  // is the only sensible thing it can do anyway.
-  if (reach <= 0) return stallDestination(self, target, obstacles)
+  // An unarmed hull (no mounts at all) or one whose weapons are currently
+  // knocked out has no firing line worth holding for ANY of the remaining
+  // stances — they all assume a working weapon to close or hold range for.
+  if (reach <= 0 || !weaponsOnline) return fleeDestination(self, allParticipants)
 
   if (stance === 'swarm') {
     const shortest = shortestWeaponRange(profile)
@@ -601,6 +821,27 @@ export function stanceDestination(
   }
 
   return approachNode(self, target, profile, obstacles)
+}
+
+// Flee: run from the combined position of every hostile in the fight, not
+// just the single nearest one — the literal reading of "as far from hostile
+// fleets as possible", and what actually distinguishes this from Kite
+// (which only ever backs off the one ship it's tracking). Deliberately NOT
+// terrain-aware the way Stall is: Stall's whole point is breaking line of
+// fire behind cover, Flee's is pure distance, and folding the two together
+// would erase the reason they're separate stances.
+function fleeDestination(self: CombatParticipant, allParticipants: CombatParticipant[]): ArenaPoint | null {
+  const hostiles = allParticipants.filter((p) => p.side !== self.side)
+  if (hostiles.length === 0) return null
+
+  const selfPos = toVector3(self.position)
+  const centroid = hostiles
+    .reduce((sum, h) => sum.add(toVector3(h.position)), new Vector3())
+    .divideScalar(hostiles.length)
+  const away = selfPos.clone().sub(centroid)
+  if (away.length() < EPSILON) away.set(1, 0, 0)
+  const flee = selfPos.clone().add(away.normalize().multiplyScalar(STALL_FLEE_DISTANCE))
+  return { x: flee.x, y: flee.y, z: flee.z }
 }
 
 // Stall: break line of fire and stay broken. Puts the ship on the far side
@@ -649,10 +890,30 @@ function stallDestination(
   return { x: hide.x, y: hide.y, z: hide.z }
 }
 
-// How far a stalling ship runs when there's no body to hide behind.
+// How far a stalling ship runs when there's no body to hide behind, and how
+// far a fleeing ship runs, period — one shared "get real distance between us"
+// constant for both.
 const STALL_FLEE_DISTANCE = 6
+
+// Put this much space between yourself and every hostile and you have simply
+// left the battle — no FTL required. Comfortably beyond the longest weapon in
+// the game (11 units) and beyond the arena window's own 12-unit span, so
+// disengaging means genuinely out of contact and off the board, not merely
+// "currently out of range and about to come back". Without this, a ship with
+// the Flee stance could run forever and never actually escape, because the
+// only exit from an engagement was an FTL charge — which a ship with wrecked
+// utility can't even attempt.
+export const DISENGAGE_DISTANCE_UNITS = 30
 // Clearance beyond a body's surface a stalling ship holds station at.
 const STALL_SHELTER_MARGIN = 1
+
+// How far a stance's freshly computed destination has to have moved from
+// where the ship's existing route already ends before that's treated as a
+// real change worth re-planning for. Below this, a moving target's own
+// per-step jitter (or plain floating-point noise) would otherwise trigger a
+// fresh lattice route every single 0.1s step for a target that's actually
+// holding roughly still.
+const STANCE_REPLAN_TOLERANCE = 0.25
 
 export interface CombatStepResult {
   engagements: Engagement[]
@@ -663,6 +924,11 @@ export interface CombatStepResult {
   // move order (the resolver can't, since planMove is order-planning, not
   // combat).
   escapedShipIds: string[]
+  // Ships that broke contact by simply outrunning everyone (see
+  // DISENGAGE_DISTANCE_UNITS) rather than by jumping out. The caller relocates
+  // each into open system space — the resolver deliberately doesn't, since
+  // where a ship sits on the system map is strategic-layer state.
+  disengagedShipIds: string[]
 }
 
 // Advances every engagement by exactly one COMBAT_STEP_SECONDS.
@@ -680,6 +946,7 @@ export function stepEngagements(
   const touched = new Set<string>()
   const destroyed = new Set<string>()
   const escaped = new Set<string>()
+  const disengaged = new Set<string>()
 
   const stateOf = (shipId: string): ShipCombatState | null => {
     if (working[shipId]) return working[shipId]
@@ -694,15 +961,25 @@ export function stepEngagements(
   for (const engagement of engagements) {
     // Drop participants whose ship no longer exists (destroyed earlier, lost
     // in hyperspace, etc.) before anything else reads the roster.
-    const participants = engagement.participants.filter((p) => shipsById.has(p.shipId) && !destroyed.has(p.shipId))
+    const participants = engagement.participants
+      .filter((p) => shipsById.has(p.shipId) && !destroyed.has(p.shipId))
+      // Drop any stale sub-waypoint the ship has effectively already passed
+      // — see pruneOvershotWaypoints. Applies to every route regardless of
+      // who queued it (manual order or stance), and runs before approach so
+      // a stance's own "has the destination moved" check below compares
+      // against an already-current path rather than a stale one.
+      .map((p) => (p.path.length > 1 ? { ...p, path: pruneOvershotWaypoints(p.path, p.position, engagement.obstacles) } : p))
 
-    // --- Approach: any ship with nothing queued and nothing in reach closes
-    // on its target. Runs before movement so a freshly queued path starts its
-    // first hop this same step rather than idling one. Skipped entirely for
-    // a ship that already has a path (a player order in progress) or is
-    // spooling a drive to leave. ---
+    // --- Approach: a ship under auto-control (not holding position for a
+    // manual order, not spooling a drive) keeps its route pointed at its
+    // stance's current destination — recomputed every step, not just once
+    // when idle, so a target that moves keeps being tracked instead of the
+    // ship committing to wherever the target happened to be when the route
+    // was first queued. Only actually replans (which re-touches lattice
+    // routing) when the fresh destination has moved meaningfully from where
+    // the existing route already ends, so a target holding still doesn't
+    // cost a fresh plan every 0.1s step. ---
     const withApproach: CombatParticipant[] = participants.map((p) => {
-      if (p.path.length > 0) return p
       // The player has taken manual control of this ship's positioning — never
       // second-guess it by walking the ship back toward the enemy.
       if (p.holdPosition) return p
@@ -713,8 +990,12 @@ export function stepEngagements(
       const explicit = p.targetShipId ? participants.find((o) => o.shipId === p.targetShipId) : undefined
       const target = explicit ?? nearestEnemy(p, participants)
       if (!target) return p
-      const point = stanceDestination(p, target, profile, ship.stance ?? 'balanced', engagement.obstacles)
+      const state = stateOf(p.shipId)
+      const weaponsOnline = !!state && weaponsEffectiveness(state.componentHp.weapons, profile.components.weapons) > 0
+      const point = stanceDestination(p, target, profile, ship.stance ?? 'balanced', engagement.obstacles, participants, weaponsOnline)
       if (!point) return p
+      const currentFinal = p.path.length > 0 ? p.path[p.path.length - 1] : null
+      if (currentFinal && pointDistance(currentFinal, point) <= STANCE_REPLAN_TOLERANCE) return p
       return orderParticipantTo(p, point, engagement.density, simDays, engagement.obstacles)
     })
 
@@ -735,12 +1016,79 @@ export function stepEngagements(
         profile.accelerationUnitsPerSecondSq * utility,
         COMBAT_STEP_SECONDS,
         simDays,
+        engagement.obstacles,
       )
     })
 
+    // --- Separation: no two hulls may occupy the same point. Ships are
+    // treated as spheres of SHIP_SEPARATION_UNITS diameter and pushed apart
+    // symmetrically along the line between them until they no longer
+    // overlap, each giving half the overlap.
+    //
+    // Done as a post-movement correction rather than by teaching the
+    // steering to avoid other ships, deliberately: every stance resolves to
+    // a destination based on the ENEMY's position, so a whole fleet on one
+    // stance legitimately wants the same spot, and any number of them can
+    // converge on it. Trying to encode "and also avoid your squadmates" into
+    // that destination choice would fight the stance logic for control of
+    // the same value. Resolving the overlap afterwards leaves the stance's
+    // intent intact and just enforces that hulls are solid.
+    //
+    // Two passes: one displacement can push a ship into a third one, and a
+    // second sweep settles the common cases without the cost (or the
+    // oscillation risk) of iterating to convergence. A residual overlap on a
+    // dense pile-up is acceptable — this is a readability rule, not a rigid
+    // physical constraint.
+    const separated: CombatParticipant[] = moved.map((p) => ({ ...p, position: { ...p.position } }))
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < separated.length; i++) {
+        for (let j = i + 1; j < separated.length; j++) {
+          const a = separated[i]
+          const b = separated[j]
+          const gap = pointDistance(a.position, b.position)
+          if (gap >= SHIP_SEPARATION_UNITS) continue
+          // Exactly coincident (a fresh spawn stack, or two ships ordered to
+          // the identical point) has no line to push along — nudge along a
+          // fixed axis instead of leaving them fused or dividing by zero.
+          const axis =
+            gap < EPSILON
+              ? new Vector3(1, 0, 0)
+              : toVector3(b.position).sub(toVector3(a.position)).normalize()
+          const push = (SHIP_SEPARATION_UNITS - gap) / 2
+          const shift = axis.multiplyScalar(push)
+          a.position = { x: a.position.x - shift.x, y: a.position.y - shift.y, z: a.position.z - shift.z }
+          b.position = { x: b.position.x + shift.x, y: b.position.y + shift.y, z: b.position.z + shift.z }
+        }
+      }
+    }
+
+    // --- Collision: a ship whose position now lies inside a body is
+    // destroyed. Under ordinary (utility-alive) flight this never fires —
+    // every planned route already refuses a destination inside a body and
+    // detours around one in the way (see isPointBlocked's other call sites,
+    // all of them in planning, above). It exists for the one case that
+    // bypasses planning entirely: a ship with utility knocked out integrates
+    // on pure ballistic momentum (see the movement step just above, and
+    // integrateMotion's own comment on it) — nothing is steering it around
+    // anything any more, and without this it would silently clip straight
+    // through a star or planet's collision sphere as if it weren't there.
+    // Applies the exact same consequence a shot to the core does (zero the
+    // core, let the existing destroyed/surviving machinery take it from
+    // there) rather than a bespoke death path, so a collision this step
+    // correctly also stops that ship firing this same step.
+    for (const p of separated) {
+      if (destroyed.has(p.shipId)) continue
+      if (!isPointBlocked(p.position, engagement.obstacles)) continue
+      const state = stateOf(p.shipId)
+      if (!state) continue
+      working[p.shipId] = { ...state, componentHp: { ...state.componentHp, core: 0 } }
+      touched.add(p.shipId)
+      destroyed.add(p.shipId)
+    }
+
     // --- Shield regeneration, before firing, so a shot this step meets the
     // regenerated value. Armor deliberately does not regenerate. ---
-    for (const p of moved) {
+    for (const p of separated) {
       const ship = shipsById.get(p.shipId)!
       const profile = shipCombatProfile(ship)
       const state = stateOf(p.shipId)
@@ -756,8 +1104,86 @@ export function stepEngagements(
       touched.add(p.shipId)
     }
 
+    // --- Scuttling: a hull the player has written off detonates, damaging
+    // every hostile inside the blast. Resolved here — after movement and
+    // separation, before firing — so the blast uses this step's real
+    // positions and a ship killed by it doesn't also get to shoot this step.
+    //
+    // Damage lands as raw component damage rather than going through
+    // applyShot, deliberately: a reactor breach isn't a weapon, so there's no
+    // damage type for the matrix to resolve, nothing for point defense to
+    // intercept, and no firing solution for chaff to spoil. It does still eat
+    // shields and armor first, because those are physical layers and stopping
+    // a blast is exactly what they're for.
+    for (const p of separated) {
+      if (!p.scuttleOrdered || destroyed.has(p.shipId)) continue
+      const ship = shipsById.get(p.shipId)
+      const profile = shipCombatProfile(ship!)
+      const state = stateOf(p.shipId)
+      if (!ship || !profile || !state) continue
+
+      const coreFraction = profile.components.core > 0 ? state.componentHp.core / profile.components.core : 0
+      for (const other of separated) {
+        if (other.side === p.side || destroyed.has(other.shipId)) continue
+        const damage = scuttleDamageAt(pointDistance(p.position, other.position), coreFraction)
+        if (damage <= 0) continue
+        const otherState = stateOf(other.shipId)
+        if (!otherState) continue
+        const next = applyRawBlast(otherState, damage)
+        working[other.shipId] = next
+        touched.add(other.shipId)
+        if (next.componentHp.core <= 0) destroyed.add(other.shipId)
+      }
+
+      // The scuttling ship is gone regardless of what it hit.
+      working[p.shipId] = { ...stateOf(p.shipId)!, componentHp: { ...state.componentHp, core: 0 } }
+      touched.add(p.shipId)
+      destroyed.add(p.shipId)
+    }
+
+    // --- AI countermeasures: a non-player ship spends a chaff charge when
+    // it's actually under threat and hurt enough to be worth it.
+    //
+    // Runs BEFORE firing so a burst started this step already degrades this
+    // step's incoming volley — a countermeasure that only took effect next
+    // step would routinely be a step late against the exact alpha strike it
+    // was deployed to answer.
+    //
+    // Gated on being ACTIVELY engaged (a live enemy in range with line of
+    // fire — the same test the "Engaged Against" readout uses), not merely
+    // present in the engagement: chaff wasted while nothing can shoot you is
+    // exactly the mistake a player wouldn't make, and there are only two
+    // charges. Applies to every allegiance now, gated on ShipInstance.chaffAutoDeploy
+    // (default true — see its own comment) rather than excluding player ships
+    // outright: the common case is spending chaff automatically the instant
+    // it's worth it, same as the AI always did, with the panel's Deploy
+    // button (and turning this off) there for a player who wants to hold a
+    // charge for a specific moment instead.
+    for (const p of separated) {
+      if (destroyed.has(p.shipId)) continue
+      const ship = shipsById.get(p.shipId)
+      if (!ship || !ship.chaffAutoDeploy) continue
+      const profile = shipCombatProfile(ship)
+      const state = stateOf(p.shipId)
+      if (!profile || !state) continue
+      if (state.chaffRemaining <= 0 || isChaffActive(state, simDays)) continue
+      if (activeEnemyContacts(p, { ...engagement, participants: separated }, ships, simDays).length === 0) continue
+
+      // Which threshold applies depends on how many charges are already
+      // spent, so the first goes in on real damage and the second is held
+      // back for genuine trouble rather than both firing at the same instant.
+      const spent = CHAFF_CHARGES - state.chaffRemaining
+      const threshold = spent === 0 ? CHAFF_AI_FIRST_THRESHOLD : CHAFF_AI_SECOND_THRESHOLD
+      if (overallHealthFraction(state, profile) > threshold) continue
+
+      const next = deployChaff(state, simDays)
+      if (next === state) continue
+      working[p.shipId] = next
+      touched.add(p.shipId)
+    }
+
     // --- Firing. ---
-    const nextParticipants: CombatParticipant[] = moved.map((p) => {
+    const nextParticipants: CombatParticipant[] = separated.map((p) => {
       const ship = shipsById.get(p.shipId)!
       const profile = shipCombatProfile(ship)
       const state = stateOf(p.shipId)
@@ -770,10 +1196,10 @@ export function stepEngagements(
       const effectiveness = weaponsEffectiveness(state.componentHp.weapons, profile.components.weapons)
       if (effectiveness <= 0) return p
 
-      const explicit = p.targetShipId ? moved.find((o) => o.shipId === p.targetShipId) : undefined
+      const explicit = p.targetShipId ? separated.find((o) => o.shipId === p.targetShipId) : undefined
       // An explicitly chosen target that has died or fled falls back to
       // auto-targeting rather than leaving the ship idle.
-      const target = explicit && !destroyed.has(explicit.shipId) ? explicit : nearestEnemy(p, moved)
+      const target = explicit && !destroyed.has(explicit.shipId) ? explicit : nearestEnemy(p, separated)
       if (!target) return p
 
       const targetState = stateOf(target.shipId)
@@ -800,7 +1226,15 @@ export function stepEngagements(
         if (separation > weapon.rangeUnits) return
         if (current.componentHp.core <= 0) return
 
-        const { next, outcome } = applyShot(weapon, weapon.damage * effectiveness, current, targetProfile, p.targetComponent, rng)
+        const { next, outcome } = applyShot(
+          weapon,
+          weapon.damage * effectiveness,
+          current,
+          targetProfile,
+          p.targetComponent,
+          rng,
+          isChaffActive(current, simDays) ? CHAFF_MISS_CHANCE : 0,
+        )
         current = next
         // An intercepted shot still consumed the round.
         void outcome
@@ -825,6 +1259,15 @@ export function stepEngagements(
         escaped.add(p.shipId)
         return false
       }
+      // Broke contact under its own power: every hostile is now further away
+      // than DISENGAGE_DISTANCE_UNITS, so this ship has left the battle. The
+      // second exit from a fight, and the only one available to a hull whose
+      // utility is too wrecked to charge a drive.
+      const enemies = nextParticipants.filter((o) => o.side !== p.side && !destroyed.has(o.shipId))
+      if (enemies.length > 0 && enemies.every((o) => pointDistance(p.position, o.position) > DISENGAGE_DISTANCE_UNITS)) {
+        disengaged.add(p.shipId)
+        return false
+      }
       return true
     })
 
@@ -847,6 +1290,7 @@ export function stepEngagements(
     shipCombat,
     destroyedShipIds: [...destroyed],
     escapedShipIds: [...escaped],
+    disengagedShipIds: [...disengaged],
   }
 }
 
@@ -995,6 +1439,33 @@ export function orderParticipantTo(
   // else. (It's also why the old teleport bug can't recur — this function no
   // longer has any reason to write a position at all.)
   return { ...participant, path }
+}
+
+// A ship can end up closer to its route's FINAL destination than to the very
+// next waypoint on it — steering (integrateMotion's velocity budget means a
+// turn isn't instant) can carry it wide of an intermediate corner faster
+// than it re-approaches that exact point. The old behaviour treated every
+// waypoint as its own sub-destination the ship was required to actually
+// touch, which reads as a real bug once it happens: the ship visibly
+// arrives, then peels back AWAY from the destination to go tag a point
+// behind it that the route no longer needs. The destination is the only
+// point a route is ever required to reach (see combatArena.ts's header —
+// intermediate nodes are a pathfinding aid, not a checkpoint); this drops a
+// stale waypoint the moment going straight to the destination from here is
+// both shorter than the detour still promises AND actually clear.
+//
+// Deliberately independent of who or what queued the route — a manual
+// player order through a detour benefits from this exactly as much as a
+// stance's does, since the underlying route data looks identical either way.
+export function pruneOvershotWaypoints(path: ArenaPoint[], position: ArenaPoint, obstacles: CombatObstacle[]): ArenaPoint[] {
+  while (path.length > 1) {
+    const next = path[0]
+    const destination = path[path.length - 1]
+    if (pointDistance(position, destination) >= pointDistance(next, destination)) break
+    if (!segmentClearsObstacles(toVector3(position), toVector3(destination), obstacles, OBSTACLE_CLEARANCE_UNITS)) break
+    path = path.slice(1)
+  }
+  return path
 }
 
 // Whether a ship is currently pinned in a fight — used to decide whether a

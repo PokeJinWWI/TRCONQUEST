@@ -9,6 +9,26 @@ const auRadius = (km: number) => (km / AU_IN_KM) * UNITS_PER_AU
 export const SUN_RADIUS_KM = 696_000
 export const SUN_RADIUS = auRadius(SUN_RADIUS_KM)
 
+// Satellite view's close-up hologram of a body — see SatelliteViewScene —
+// used to render EVERY inspected body (star or planet) at one flat radius
+// regardless of which one it actually was, so Sol and Earth read as the same
+// size purely because nothing ever compared them. Real radius ratios span
+// too wide a range to draw literally in the same view either (Sol is ~109x
+// Earth's radius — rendered true-to-scale, Earth's own satellite view would
+// be an invisible speck), so this compresses with the same fourth-root curve
+// combatArena.arenaBodyRadius already uses for the same reason, anchored so
+// Earth keeps the visual radius (3) every camera-distance constant in
+// SatelliteViewScene was originally tuned against.
+const SATELLITE_VISUAL_RADIUS_AT_EARTH = 3
+const SATELLITE_MIN_VISUAL_RADIUS = 1.4
+const SATELLITE_MAX_VISUAL_RADIUS = 9
+const EARTH_RADIUS_KM_FOR_SCALE = 6371
+
+export function satelliteVisualRadius(radiusKm: number): number {
+  const scaled = SATELLITE_VISUAL_RADIUS_AT_EARTH * Math.pow(radiusKm / EARTH_RADIUS_KM_FOR_SCALE, 0.25)
+  return Math.max(SATELLITE_MIN_VISUAL_RADIUS, Math.min(SATELLITE_MAX_VISUAL_RADIUS, scaled))
+}
+
 export interface PlanetData {
   name: string
   radius: number
