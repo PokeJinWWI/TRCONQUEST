@@ -1607,7 +1607,7 @@ export function orderParticipantTo(
   return { ...participant, path }
 }
 
-// A ship can end up closer to its route's FINAL destination than to the very
+// A ship can end up closer to some LATER point on its route than to the very
 // next waypoint on it — steering (integrateMotion's velocity budget means a
 // turn isn't instant) can carry it wide of an intermediate corner faster
 // than it re-approaches that exact point. The old behaviour treated every
@@ -1616,20 +1616,34 @@ export function orderParticipantTo(
 // arrives, then peels back AWAY from the destination to go tag a point
 // behind it that the route no longer needs. The destination is the only
 // point a route is ever required to reach (see combatArena.ts's header —
-// intermediate nodes are a pathfinding aid, not a checkpoint); this drops a
-// stale waypoint the moment going straight to the destination from here is
-// both shorter than the detour still promises AND actually clear.
+// intermediate nodes are a pathfinding aid, not a checkpoint); this drops
+// every stale waypoint up to the FARTHEST remaining one that's both closer to
+// here than the immediate next waypoint is, and actually reachable in a
+// straight line.
+//
+// Farthest first (not "only the final destination", and not "only one
+// waypoint at a time"): checking only the final destination meant this
+// essentially never fired mid-detour, since the whole reason a multi-leg
+// route exists is that no direct shot to the end exists yet — a ship that
+// overshoot the first corner of a five-node detour just sat there aimed
+// back at that corner until it was nearly at the last leg. Checking only the
+// very next waypoint fixes that case but then UNDER-prunes the opposite one:
+// overshooting two corners at once (a sharp turn, or a big catch-up step)
+// would only ever drop one of them per call. Trying candidates from the end
+// of the path backward and taking the first that clears gets both right in
+// one pass.
 //
 // Deliberately independent of who or what queued the route — a manual
 // player order through a detour benefits from this exactly as much as a
 // stance's does, since the underlying route data looks identical either way.
 export function pruneOvershotWaypoints(path: ArenaPoint[], position: ArenaPoint, obstacles: CombatObstacle[]): ArenaPoint[] {
-  while (path.length > 1) {
-    const next = path[0]
-    const destination = path[path.length - 1]
-    if (pointDistance(position, destination) >= pointDistance(next, destination)) break
-    if (!segmentClearsObstacles(toVector3(position), toVector3(destination), obstacles, OBSTACLE_CLEARANCE_UNITS)) break
-    path = path.slice(1)
+  if (path.length <= 1) return path
+  const next = path[0]
+  for (let i = path.length - 1; i >= 1; i--) {
+    const candidate = path[i]
+    if (pointDistance(position, candidate) >= pointDistance(next, candidate)) continue
+    if (!segmentClearsObstacles(toVector3(position), toVector3(candidate), obstacles, OBSTACLE_CLEARANCE_UNITS)) continue
+    return path.slice(i)
   }
   return path
 }
