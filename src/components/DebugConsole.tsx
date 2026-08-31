@@ -4,6 +4,7 @@ import type { FleetAllegiance } from '../data/shipData'
 import { SHIP_CLASSES, ALLEGIANCE_LABELS, describeFtlDrive } from '../data/shipData'
 import { PLANETS } from '../scene/planetData'
 import { SOL_SYSTEM_ID, SOL_BODY_NAME, DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from '../scene/shipPhysics'
+import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/scenarios'
 
 const ALLEGIANCE_OPTIONS = Object.keys(ALLEGIANCE_LABELS) as FleetAllegiance[]
 
@@ -25,6 +26,7 @@ export function DebugConsole() {
   const [classId, setClassId] = useState(SHIP_CLASSES[0].id)
   const [nearBody, setNearBody] = useState(SOL_BODY_NAME)
   const [allegiance, setAllegiance] = useState<FleetAllegiance>('player')
+  const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id)
   const spawnCounter = useRef(0)
   const ships = useShipStore((s) => s.ships)
   const spawnShip = useShipStore((s) => s.spawnShip)
@@ -70,6 +72,54 @@ export function DebugConsole() {
       stance: 'balanced',
     })
   }
+
+  // Loads a pre-built fight — see src/data/scenarios.ts for what each
+  // difficulty tier actually means and how it was verified. Clears every
+  // ship currently on the board first: a scenario is meant to be a clean,
+  // reproducible test bed, and a leftover ship from an earlier manual spawn
+  // (or a previous scenario) would silently change the fight without it
+  // being obvious why the outcome doesn't match what was verified.
+  const handleLoadScenario = () => {
+    const scenario = SCENARIOS.find((sc) => sc.id === scenarioId)
+    if (!scenario) return
+    for (const ship of ships) removeShip(ship.id)
+    scenario.ships.forEach((spec, i) => {
+      const shipClass = SHIP_CLASSES.find((c) => c.id === spec.classId)
+      if (!shipClass) return
+      spawnCounter.current += 1
+      const phaseDeg = SPAWN_PHASE_OFFSETS_DEG[i % SPAWN_PHASE_OFFSETS_DEG.length]
+      spawnShip({
+        id: `ship-${Date.now()}-${spawnCounter.current}`,
+        classId: shipClass.id,
+        name: `${shipClass.name} ${spawnCounter.current}`,
+        allegiance: spec.allegiance,
+        location: {
+          kind: 'orbiting',
+          systemId: SOL_SYSTEM_ID,
+          bodyName: scenario.bodyName,
+          periodDays: DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
+          phaseDeg,
+          inclinationDeg: 0,
+        },
+        order: null,
+        hyperdriveReadySimDays: 0,
+        warpReadySimDays: 0,
+        warpEnabled: true,
+        warpWhenReady: false,
+        chaffAutoDeploy: true,
+        pendingHyperdriveJump: null,
+        followingShipId: null,
+        combat: pristineCombatState(shipClass.combat),
+        // Medium scenarios bake the WINNING stance in here directly (see
+        // scenarios.ts) — loading one starts already-tuned, since the point
+        // is showing that one stance change flips the outcome, not making
+        // the player rediscover which one from a cold default.
+        stance: spec.stance ?? 'balanced',
+      })
+    })
+  }
+
+  const selectedScenario: Scenario | undefined = SCENARIOS.find((sc) => sc.id === scenarioId)
 
   return (
     <div className="debug-console">
@@ -121,6 +171,32 @@ export function DebugConsole() {
 
         <button type="button" className="debug-console-spawn-btn" onClick={handleSpawn}>
           Spawn Ship
+        </button>
+
+        <div className="debug-console-divider" />
+
+        {/* Pre-built fights, grouped by what the built-in automation can do
+            against them — see scenarios.ts's own header for exactly what
+            each tier means and how the label was proven, not just picked. */}
+        <div className="debug-console-row">
+          <label htmlFor="debug-scenario">Scenario</label>
+          <select id="debug-scenario" value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
+            {(['easy', 'medium', 'hard'] as const).map((tier) => (
+              <optgroup key={tier} label={SCENARIO_DIFFICULTY_LABELS[tier]}>
+                {SCENARIOS.filter((sc) => sc.difficulty === tier).map((sc) => (
+                  <option key={sc.id} value={sc.id}>
+                    {sc.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
+        {selectedScenario && <div className="debug-console-scenario-desc">{selectedScenario.description}</div>}
+
+        <button type="button" className="debug-console-spawn-btn" onClick={handleLoadScenario}>
+          Load Scenario
         </button>
 
         <div className="debug-console-divider" />

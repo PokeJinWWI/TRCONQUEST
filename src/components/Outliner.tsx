@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { PLANETS } from '../scene/planetData'
-import { STARS } from '../data/starData'
+import { getStarsForNeighborhood } from '../data/starData'
+import { NEIGHBORHOODS } from '../data/neighborhoodData'
 import { getMoonsForPlanet } from '../scene/moonData'
 import { ALLEGIANCE_COLORS } from '../data/shipData'
 
-type EntryKind = 'star' | 'planet' | 'moon' | 'ship'
+type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship'
 // The filter offers a "black holes" toggle even though nothing in the game
-// can be that kind yet (GalacticViewScene is still a stub) — reserving the
-// spot the same way the empty Colonies/Fleets/Starbases sections do.
+// can be that kind yet — reserving the spot the same way the empty
+// Colonies/Fleets/Starbases sections do.
 type FilterKind = EntryKind | 'blackhole'
 
 interface OutlinerEntry {
@@ -23,6 +24,7 @@ const SOL_COLOR = '#ffd27a'
 const SOL_NAME = 'Sol'
 
 const FILTERS: { kind: FilterKind; label: string }[] = [
+  { kind: 'neighborhood', label: 'Neighborhoods' },
   { kind: 'star', label: 'Stars' },
   { kind: 'planet', label: 'Planets' },
   { kind: 'moon', label: 'Moons' },
@@ -33,8 +35,15 @@ const FILTERS: { kind: FilterKind; label: string }[] = [
 // files every scene already reads.
 function useInViewEntries(): OutlinerEntry[] {
   const level = useViewStore((s) => s.level)
+  const selectedNeighborhoodId = useViewStore((s) => s.selectedNeighborhoodId)
   const selectedStarId = useViewStore((s) => s.selectedStarId)
   const selectedBodyName = useViewStore((s) => s.selectedBodyName)
+
+  if (level === 'galactic') {
+    return NEIGHBORHOODS.map((n) => ({ key: n.id, name: n.name, color: n.color, kind: 'neighborhood' }))
+  }
+
+  const STARS = getStarsForNeighborhood(selectedNeighborhoodId)
 
   if (level === 'interstellar') {
     return STARS.map((star) => ({ key: star.id, name: star.name, color: star.color, kind: 'star' }))
@@ -79,7 +88,7 @@ function OutlinerIcon({ color, kind }: { color: string; kind: EntryKind }) {
   return (
     <span
       className={`outliner-icon outliner-icon-${kind}`}
-      style={{ borderColor: color, backgroundColor: kind === 'star' ? color : 'transparent' }}
+      style={{ borderColor: color, backgroundColor: kind === 'star' || kind === 'neighborhood' ? color : 'transparent' }}
     />
   )
 }

@@ -7,7 +7,7 @@
 // it's why the whole thing steps in fixed sim-second increments rather than
 // resolving a variable chunk per frame: outcomes must not depend on framerate.
 
-import { Vector3 } from 'three'
+import { MathUtils, Vector3 } from 'three'
 import {
   DAMAGE_PROFILES,
   HYPERDRIVE_CHARGE_SECONDS,
@@ -19,6 +19,7 @@ import {
   KITE_RANGE_FRACTION,
   KITE_TOLERANCE,
   SWARM_RANGE_FRACTION,
+  CHASE_STANDOFF_UNITS,
   CHAFF_MISS_CHANCE,
   CHAFF_DURATION_SECONDS,
   scuttleDamageAt,
@@ -42,6 +43,8 @@ import {
 } from '../state/combatStore'
 import {
   ARENA_ORIGIN,
+  arenaBodyRadius,
+  arenaDistanceFromKm,
   arenaPositionToNode,
   arenaSurfaceGravity,
   gravitationalAcceleration,
@@ -59,7 +62,8 @@ import {
 } from './combatArena'
 import { PLANETS } from './planetData'
 import { STARS } from '../data/starData'
-import { getMoonsForPlanet } from './moonData'
+import { getMoonsForPlanet, type MoonData } from './moonData'
+import { angleForYear, getOrbitPosition, MOON_TIME_DILATION } from './orbitMath'
 import { simDaysToSeconds, simSecondsToDays } from '../state/gameTimeStore'
 
 // Fixed simulation step, in sim-seconds. Small enough that a 0.8s autocannon
@@ -501,26 +505,8 @@ export function nearestEnemy(self: CombatParticipant, participants: CombatPartic
 }
 
 // --- Celestial bodies in the arena -----------------------------------------
-
-// Earth's radius, the reference the arena sizing below is expressed against.
-const EARTH_RADIUS_KM = PLANETS.find((p) => p.name === 'Earth')?.radiusKm ?? 6371
-
-// Real radii span four orders of magnitude (a small moon to Sol), which is
-// unusable directly — Sol would swallow the whole arena and a moon would be
-// invisible. A fourth-root compression against Earth keeps the *ordering*
-// and rough proportions real while landing everything in a playable band:
-// a moon ≈ 0.9 units, Earth 1.2, Jupiter ≈ 2.2, Sol ≈ 3.9 against a 12-unit
-// arena. Same "real data in, legible game scale out" approach moonData.ts
-// already uses for orbit radii, and the same honesty about it: only the
-// relative sizes are physical, the absolute scale is picked.
-const ARENA_BODY_RADIUS_AT_EARTH = 1.2
-const MIN_BODY_RADIUS_UNITS = 0.8
-const MAX_BODY_RADIUS_UNITS = 4.5
-
-export function arenaBodyRadius(radiusKm: number): number {
-  const scaled = ARENA_BODY_RADIUS_AT_EARTH * Math.pow(radiusKm / EARTH_RADIUS_KM, 0.25)
-  return Math.max(MIN_BODY_RADIUS_UNITS, Math.min(MAX_BODY_RADIUS_UNITS, scaled))
-}
+// arenaBodyRadius itself now lives in combatArena.ts (imported above) — see
+// its own comment there for the true-to-scale sizing this arena uses.
 
 // The bodies present at a fight, placed at the arena origin — which is where
 // a fresh engagement's window is centred too (see syncEngagements), so a
@@ -530,21 +516,44 @@ export function arenaBodyRadius(radiusKm: number): number {
 // body's position is real and fixed from here on — it does not move if the
 // player later recentres the window (see combatArena.ts's header).
 //
-// Moons of the primary are deliberately *not* included in general: they're
-// far enough out at real scale that putting them in a 12-unit arena would be
-// inventing geometry rather than modelling it — Luna's real orbit radius
-// alone (60 Earth radii) is 72 arena units, six times the window's own span.
-// The one deliberate exception is EARTH_MOON_OFFSET below: Luna is famous
-// specifically for being close relative to its primary, and a fight in
-// Earth orbit reads as missing an obvious piece of terrain without it. Its
-// placement is compressed exactly like every body's *size* already is (see
-// arenaBodyRadius) rather than real — there's no honest way to fit a 72-unit
-// separation in a 12-unit window — but it's the same kind of compromise this
-// file already makes everywhere else, just applied to a position instead of
-// a radius, and it's the only body-pair this file invents geometry for.
-const EARTH_MOON_OFFSET: ArenaPoint = { x: 4, y: 0.8, z: -2 }
+// Moons of the primary are deliberately *not* included in general — most
+// don't reach a body a ship can actually rest at (see obstaclesForLocation's
+// last branch). Luna is the one exception, and now that body sizing is
+// linear/true-to-scale (see arenaBodyRadius), its real position doesn't need
+// inventing either: moonArenaState below places it at its actual ~72-unit
+// orbit radius, genuinely orbiting rather than fixed, using the same real
+// period/phase/dilation orbitMath.ts already animates it with in system
+// view. A fight starting anywhere near Earth simply won't have Luna in easy
+// reach most of the time — that's the honest consequence of the Moon
+// actually being that far away, not a bug.
+//
+// Position AND velocity: an orbiting body isn't at rest in this frame the
+// way the primary it's placed relative to always is (see this function's own
+// header comment on that), and CombatParticipant.inheritVelocity needs a
+// real tangential velocity to lock onto, not just a moving point.
+function moonArenaState(moon: MoonData, simDays: number): { position: ArenaPoint; velocity: ArenaPoint } {
+  const orbitRadiusUnits = arenaDistanceFromKm(moon.distanceKm)
+  const simYears = simDays / 365.25 // same simDays -> simYears conversion angleForYear's other callers use
+  const direction = moon.retrograde ? -1 : 1
+  const effectivePeriodYears = (moon.periodDays * MOON_TIME_DILATION) / 365.25
+  const angle = angleForYear(simYears * direction, effectivePeriodYears, MathUtils.degToRad(moon.phaseDeg))
 
-export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
+  const position = getOrbitPosition(orbitRadiusUnits, angle, moon.inclinationDeg, 0)
+
+  // d(angle)/d(simDays) — the derivative of angleForYear's own formula — then
+  // converted to a tangential velocity in the orbital plane the same way
+  // getOrbitPosition builds the position itself: a flat circle in XZ, tilted
+  // by inclination. Differentiating BEFORE tilting and applying the same
+  // rotation afterward is valid because that rotation is linear.
+  const angularVelocityPerSimDay = ((2 * Math.PI) / (effectivePeriodYears * 365.25)) * direction
+  const angularVelocityPerSimSecond = angularVelocityPerSimDay / simDaysToSeconds(1)
+  const tangential = new Vector3(-Math.sin(angle), 0, Math.cos(angle)).multiplyScalar(orbitRadiusUnits * angularVelocityPerSimSecond)
+  tangential.applyAxisAngle(new Vector3(1, 0, 0), MathUtils.degToRad(moon.inclinationDeg))
+
+  return { position: { x: position.x, y: position.y, z: position.z }, velocity: { x: tangential.x, y: tangential.y, z: tangential.z } }
+}
+
+export function obstaclesForLocation(location: ShipLocation, simDays = 0): CombatObstacle[] {
   if (location.kind === 'star') {
     const star = STARS.find((s) => s.id === location.starId)
     if (!star) return []
@@ -588,16 +597,18 @@ export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
           surfaceGravityUnitsPerSecondSq: arenaSurfaceGravity(planet.massKg, planet.radiusKm),
         },
       ]
-      // See EARTH_MOON_OFFSET above — the one moon close enough (in the
-      // "famous for it," not the "fits to scale" sense) to be worth adding.
+      // See moonArenaState above — the one moon close enough (in the "famous
+      // for it," not the "conveniently nearby" sense) to be worth adding.
       if (planet.name === 'Earth') {
         const luna = getMoonsForPlanet('Earth').moons.find((m) => m.name === 'Luna')
         if (luna) {
+          const { position, velocity } = moonArenaState(luna, simDays)
           obstacles.push({
             name: luna.name,
             kind: 'moon',
             color: luna.color,
-            position: EARTH_MOON_OFFSET,
+            position,
+            velocity,
             radiusUnits: arenaBodyRadius(luna.radiusKm),
             surfaceGravityUnitsPerSecondSq: arenaSurfaceGravity(luna.massKg ?? 0, luna.radiusKm),
           })
@@ -636,6 +647,24 @@ export function obstaclesForLocation(location: ShipLocation): CombatObstacle[] {
 // ship's own standoff from a surface, and enough that a route hugging the
 // body doesn't visually clip it.
 export const OBSTACLE_CLEARANCE_UNITS = 0.6
+
+// Extra room past a body's own surface (and OBSTACLE_CLEARANCE_UNITS) that
+// an opening spawn face needs — not just "not inside the body," but far
+// enough out for a fight to actually have room to happen. Picked so it does
+// nothing at Earth's own scale (1.2 + 0.6 + 3 = 4.8, still under
+// startingPoint's own 6-unit default) and only pushes the spawn faces
+// outward for a body big enough to need it — Sol and Jupiter at their real,
+// true-to-scale sizes (see arenaBodyRadius).
+const SPAWN_FIGHTING_ROOM_UNITS = 3
+
+// How far out the two starting faces need to be for THIS engagement's
+// obstacles specifically — see startingPoint's own comment for why a fixed
+// default isn't safe once a body can be arbitrarily large.
+function spawnHalfSpan(obstacles: CombatObstacle[]): number {
+  let clearance = 0
+  for (const o of obstacles) clearance = Math.max(clearance, o.radiusUnits + OBSTACLE_CLEARANCE_UNITS + SPAWN_FIGHTING_ROOM_UNITS)
+  return clearance
+}
 
 // Minimum centre-to-centre distance between any two hulls — effectively a
 // ship's collision diameter. Enforced as a post-movement correction (see
@@ -958,7 +987,36 @@ export function stepEngagements(
 
   const nextEngagements: Engagement[] = []
 
-  for (const engagement of engagements) {
+  for (const rawEngagement of engagements) {
+    // Refresh any moving obstacle (Luna, currently the only one — see
+    // moonArenaState) to its live position for THIS step's simDays, rather
+    // than leaving it wherever it was when the engagement was first synced —
+    // that's what makes the Moon actually orbit during a fight instead of
+    // sitting fixed. Deliberately touches ONLY the moving entries rather
+    // than re-deriving the whole list through obstaclesForLocation: this
+    // runs on every 0.1s step of every engagement (potentially thousands of
+    // times per resolver tick during catch-up), so re-doing the
+    // planet/star lookup and rebuilding every obstacle from scratch that
+    // often is real, needless work — and for every non-Earth engagement
+    // (the overwhelming majority) there's no moving obstacle at all, so this
+    // is a no-op `.some()` scan rather than any reconstruction. Shadows
+    // `engagement` itself (rather than threading a separate `obstacles`
+    // variable through the rest of this loop body) so every existing
+    // `engagement.obstacles` reference below picks this up for free.
+    const hasMovingObstacle = rawEngagement.obstacles.some((o) => o.kind === 'moon')
+    const engagement = hasMovingObstacle
+      ? {
+          ...rawEngagement,
+          obstacles: rawEngagement.obstacles.map((o) => {
+            if (o.kind !== 'moon') return o
+            const luna = getMoonsForPlanet('Earth').moons.find((m) => m.name === o.name)
+            if (!luna) return o
+            const { position, velocity } = moonArenaState(luna, simDays)
+            return { ...o, position, velocity }
+          }),
+        }
+      : rawEngagement
+
     // Drop participants whose ship no longer exists (destroyed earlier, lost
     // in hyperspace, etc.) before anything else reads the roster.
     const participants = engagement.participants
@@ -992,7 +1050,13 @@ export function stepEngagements(
       if (!target) return p
       const state = stateOf(p.shipId)
       const weaponsOnline = !!state && weaponsEffectiveness(state.componentHp.weapons, profile.components.weapons) > 0
-      const point = stanceDestination(p, target, profile, ship.stance ?? 'balanced', engagement.obstacles, participants, weaponsOnline)
+      // Chase overrides whatever the stance would normally hold for — see
+      // CombatParticipant.chasing — but is still just a destination choice,
+      // so it shares the same replan-tolerance/pathing machinery below
+      // rather than needing its own movement pipeline.
+      const point = p.chasing
+        ? approachNode(p, target, profile, engagement.obstacles, CHASE_STANDOFF_UNITS)
+        : stanceDestination(p, target, profile, ship.stance ?? 'balanced', engagement.obstacles, participants, weaponsOnline)
       if (!point) return p
       const currentFinal = p.path.length > 0 ? p.path[p.path.length - 1] : null
       if (currentFinal && pointDistance(currentFinal, point) <= STANCE_REPLAN_TOLERANCE) return p
@@ -1001,6 +1065,29 @@ export function stepEngagements(
 
     // --- Movement: integrate one step of real accelerated motion. ---
     const moved: CombatParticipant[] = withApproach.map((p) => {
+      // Locked onto a body's own velocity (see CombatParticipant.
+      // inheritVelocityFrom) — bypasses thrust/gravity/obstacle-avoidance
+      // integration entirely in favor of just matching however that body is
+      // actually moving THIS step. Only a moving obstacle (currently just an
+      // orbiting Luna — see moonArenaState) has anything but zero here, so
+      // locking onto anything else is a valid, if inert, "hold still in this
+      // frame" choice rather than a special case worth refusing.
+      if (p.inheritVelocityFrom && !p.holdPosition) {
+        const target = engagement.obstacles.find((o) => o.name === p.inheritVelocityFrom)
+        if (target) {
+          const velocity = target.velocity ?? { x: 0, y: 0, z: 0 }
+          return {
+            ...p,
+            velocity,
+            position: {
+              x: p.position.x + velocity.x * COMBAT_STEP_SECONDS,
+              y: p.position.y + velocity.y * COMBAT_STEP_SECONDS,
+              z: p.position.z + velocity.z * COMBAT_STEP_SECONDS,
+            },
+            positionSimDays: simDays,
+          }
+        }
+      }
       const ship = shipsById.get(p.shipId)!
       const profile = shipCombatProfile(ship)
       const state = stateOf(p.shipId)
@@ -1271,9 +1358,15 @@ export function stepEngagements(
       return true
     })
 
-    // An engagement with no live opposition is over.
-    const sidesPresent = new Set(surviving.map((p) => p.side))
-    if (sidesPresent.size < 2) continue
+    // An engagement only actually ends when literally nobody is left in it —
+    // not merely when one side is. A one-sided roster is exactly what a
+    // fight that just resolved (see syncEngagements' own `prior` handling)
+    // or a manually-opened practice arena (createSoloEngagement) looks like,
+    // and both are meant to persist: there's simply nothing left to shoot at
+    // or be shot by, which the rest of this step already handles as a no-op
+    // (nearestEnemy finds nothing, no shots fire) rather than needing this
+    // check to do it.
+    if (surviving.length === 0) continue
 
     nextEngagements.push({
       ...engagement,
@@ -1291,6 +1384,61 @@ export function stepEngagements(
     destroyedShipIds: [...destroyed],
     escapedShipIds: [...escaped],
     disengagedShipIds: [...disengaged],
+  }
+}
+
+// Opens the tactical arena at a ship's current rest location with no fight
+// required — the player looking around, pre-positioning a fleet before an
+// enemy arrives, or just staying to survey the field after a battle they
+// already won. Everyone currently resting at that same location joins the
+// roster (whatever their allegiance — there may be no hostile at all), and
+// syncEngagements' own "an existing engagement persists regardless of
+// contest" rule (see its `prior` handling) is what keeps this alive on
+// later ticks without needing any special-casing there once it exists.
+// Returns null if the ship isn't anywhere a fight could happen (mid-order,
+// or a location with no obstaclesForLocation entry at all).
+export function createSoloEngagement(
+  ship: ShipInstance,
+  allShips: ShipInstance[],
+  simDays: number,
+  density: GridDensity = 'standard',
+): Engagement | null {
+  if (ship.order) return null
+  const key = combatLocationKey(ship.location)
+  if (!key) return null
+
+  const obstacles = obstaclesForLocation(ship.location, simDays)
+  const minHalfSpan = spawnHalfSpan(obstacles)
+  const here = allShips.filter((s) => !s.order && combatLocationKey(s.location) === key)
+  const perSideCount: Record<number, number> = { 0: 0, 1: 0 }
+  const participants: CombatParticipant[] = here.map((s) => {
+    const side = sideFor(s.allegiance)
+    const spawnPosition = startingPoint(side, perSideCount[side]++, density, minHalfSpan)
+    const profile = shipCombatProfile(s)
+    return {
+      shipId: s.id,
+      side,
+      position: spawnPosition,
+      velocity: { x: 0, y: 0, z: 0 },
+      positionSimDays: simDays,
+      path: [],
+      weaponReadySimDays: (profile?.weapons ?? []).map(() => simDays),
+      targetShipId: null,
+      targetComponent: null,
+      holdPosition: false,
+    }
+  })
+
+  return {
+    id: `engagement-${key}-${Math.round(simDays * 1000)}`,
+    locationKey: key,
+    locationLabel: combatLocationLabel(ship.location),
+    startedSimDays: simDays,
+    density,
+    center: ARENA_ORIGIN,
+    obstacles,
+    participants,
+    resolvedThroughSimDays: simDays,
   }
 }
 
@@ -1322,19 +1470,32 @@ export function syncEngagements(
   const result: Engagement[] = []
 
   for (const [key, group] of byLocation) {
-    // A location is contested only if some pair in it is actually hostile —
-    // three player fleets parked together is not a battle.
-    const contested = group.some((a) => group.some((b) => a.id !== b.id && areHostile(a.allegiance, b.allegiance)))
-    if (!contested) continue
-
-    // Neutrals present at a contested location simply aren't part of it.
-    const combatants = group.filter((ship) =>
-      group.some((other) => other.id !== ship.id && areHostile(ship.allegiance, other.allegiance)),
-    )
-
     const prior = existingByKey.get(key)
+    // A location is contested only if some pair in it is actually hostile —
+    // three player fleets parked together doesn't spontaneously start a
+    // battle. An engagement that already exists is exempt from this check
+    // once it's open, though — see createSoloEngagement's own comment for
+    // why (letting the player open/linger in an arena with no fight is a
+    // deliberate feature, not a bug this would otherwise be guarding
+    // against), and it's also what keeps the view from yanking the player
+    // back to system space the instant a real fight resolves in their favor.
+    const contested = group.some((a) => group.some((b) => a.id !== b.id && areHostile(a.allegiance, b.allegiance)))
+    if (!contested && !prior) continue
+
+    // Neutrals present at a contested location simply aren't part of it. An
+    // already-open engagement has no such filter — everyone still present
+    // belongs on its roster, hostile pairing or not.
+    const combatants = prior
+      ? group
+      : group.filter((ship) => group.some((other) => other.id !== ship.id && areHostile(ship.allegiance, other.allegiance)))
+
     const density = prior?.density ?? defaultDensity
     const priorById = new Map(prior?.participants.map((p) => [p.shipId, p]) ?? [])
+    // Reuse the already-open engagement's own obstacles rather than
+    // recomputing — a latecomer joining a fight in progress spawns clear of
+    // the SAME body everyone else is already fighting near.
+    const obstacles = prior?.obstacles ?? obstaclesForLocation((combatants[0] ?? group[0]).location, simDays)
+    const minHalfSpan = spawnHalfSpan(obstacles)
 
     // Ships already in the fight keep their arena position and timers;
     // newcomers are placed on their side's face, indexed past whoever's
@@ -1346,7 +1507,7 @@ export function syncEngagements(
       const kept = priorById.get(ship.id)
       if (kept) return kept
       const side = sideFor(ship.allegiance)
-      const spawnPosition = startingPoint(side, perSideCount[side]++, density)
+      const spawnPosition = startingPoint(side, perSideCount[side]++, density, minHalfSpan)
       const profile = shipCombatProfile(ship)
       return {
         shipId: ship.id,
@@ -1362,7 +1523,12 @@ export function syncEngagements(
       }
     })
 
-    if (new Set(participants.map((p) => p.side)).size < 2) continue
+    // A brand-new engagement still needs both sides actually represented —
+    // that's what "contested" means. An already-open one doesn't: it may
+    // now hold only the victor's side (the fight it was tracking just
+    // resolved) or, for a manually-opened arena, only ever had one.
+    if (!prior && new Set(participants.map((p) => p.side)).size < 2) continue
+    if (participants.length === 0) continue
 
     result.push(
       prior
@@ -1377,7 +1543,7 @@ export function syncEngagements(
             // Whatever the fleets are orbiting is physically present in the
             // arena, sitting between them at the start (see
             // obstaclesForLocation — it anchors at the same origin).
-            obstacles: obstaclesForLocation(combatants[0].location),
+            obstacles,
             participants,
             resolvedThroughSimDays: simDays,
           },

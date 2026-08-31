@@ -4,7 +4,7 @@ import { Html, OrbitControls, Stars } from '@react-three/drei'
 import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { StarData } from '../data/starData'
-import { STARS, starScenePosition } from '../data/starData'
+import { getStarsForNeighborhood, starScenePosition } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
@@ -112,6 +112,7 @@ export function InterstellarScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const enterSystem = useViewStore((s) => s.enterSystem)
   const enterGalactic = useViewStore((s) => s.enterGalactic)
+  const selectedNeighborhoodId = useViewStore((s) => s.selectedNeighborhoodId)
   const selectedId = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
   const lockOnEnabled = useViewStore((s) => s.lockOnEnabled)
@@ -120,8 +121,12 @@ export function InterstellarScene() {
   // unlike flying to a star, arriving doesn't transition to system view.
   // Independent of lockOnEnabled (a one-time fly, not continuous follow).
   const [flyingToShip, setFlyingToShip] = useState(false)
-  const selectedStar = useMemo(() => STARS.find((s) => s.id === selectedId) ?? null, [selectedId])
-  const focusedStar = useMemo(() => STARS.find((s) => s.id === focusedId) ?? null, [focusedId])
+  // Which neighborhood's stars this view is currently showing — see
+  // starData's getStarsForNeighborhood for why only one neighborhood
+  // actually resolves to real data today.
+  const STARS = useMemo(() => getStarsForNeighborhood(selectedNeighborhoodId), [selectedNeighborhoodId])
+  const selectedStar = useMemo(() => STARS.find((s) => s.id === selectedId) ?? null, [STARS, selectedId])
+  const focusedStar = useMemo(() => STARS.find((s) => s.id === focusedId) ?? null, [STARS, focusedId])
 
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
@@ -345,7 +350,14 @@ export function InterstellarScene() {
 
         {!focusedStar && !flyingToShip && (
           <>
-            <DistanceThresholdWatcher mode="min" threshold={ENTER_DISTANCE} onTrigger={() => enterSystem('sol', 'Sol')} />
+            {/* Only the Solar Neighborhood has a 'sol' star to zoom into —
+                every other neighborhood is uncharted (see
+                getStarsForNeighborhood), so this shortcut doesn't apply
+                there; a populated neighborhood would need its own primary
+                star, not necessarily named 'sol'. */}
+            {selectedNeighborhoodId === 'solar-neighborhood' && (
+              <DistanceThresholdWatcher mode="min" threshold={ENTER_DISTANCE} onTrigger={() => enterSystem('sol', 'Sol')} />
+            )}
             <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={enterGalactic} controlsRef={controlsRef} />
           </>
         )}

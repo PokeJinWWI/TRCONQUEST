@@ -151,6 +151,16 @@ export interface CombatObstacle {
   // engine is strong enough that the game treats a fight as flat space (per
   // the design brief), so this never affects a ship that still has power.
   surfaceGravityUnitsPerSecondSq: number
+  // Set only for a body that's actually moving in this frame — an orbiting
+  // moon (see combatResolution's moonArenaState), not the planet/star every
+  // other position in the arena is implicitly anchored to (see this file's
+  // header: the arena is a real coordinate space centred on whatever the
+  // fight is orbiting, so that body is always at rest here BY that framing,
+  // whatever it's actually doing around the Sun). Absent, not zero, for
+  // anything else — "this body doesn't move" and "this body moves at exactly
+  // zero" aren't the same claim, and only the moon needs the first one
+  // spelled out yet. What CombatParticipant.inheritVelocity locks onto.
+  velocity?: ArenaPoint
 }
 
 export function gridSpacing(density: GridDensity): number {
@@ -162,27 +172,35 @@ export function gridSpacing(density: GridDensity): number {
 // Earth's radius, the reference body sizing is expressed against.
 const EARTH_RADIUS_KM = PLANETS.find((p) => p.name === 'Earth')?.radiusKm ?? 6371
 
-// Real radii span four orders of magnitude (a small moon to Sol), which is
-// unusable directly — Sol would swallow the whole arena and a moon would be
-// invisible. A fourth-root compression against Earth keeps the *ordering*
-// and rough proportions real while landing everything in a playable band:
-// a moon ~0.9 units, Earth 1.2, Jupiter ~2.2, Sol ~3.9 against a 12-unit
-// arena. Same "real data in, legible game scale out" approach moonData.ts
-// already uses for orbit radii, and the same honesty about it: only the
-// relative sizes are physical, the absolute scale is picked.
-//
-// A direct consequence worth stating plainly: because the compression is
-// non-linear, the arena has NO single consistent km-per-unit scale. One unit
-// is ~179,000 km measured against Sol but ~5,300 km measured against Earth.
-// That's why the speed-of-light anchor below is defined against one specific
-// body (Sol) rather than pretending a global conversion exists.
+// True to scale: a direct linear ratio against Earth, so 1 arena unit means
+// the same real distance (~5,309 km) no matter which body you're measuring —
+// Earth stays 1.2 units (this is the anchor, so it's unchanged from before),
+// Sol comes out to ~131 units, Jupiter ~13. This project ran on a fourth-root
+// compression here for a long time specifically to dodge the consequence of
+// that: a body over 100 units across doesn't fit any fixed-size arena
+// window. It doesn't need to — the window is a camera frame onto an
+// unbounded lattice (see this file's own header, and Recenter), not the edge
+// of playable space, so a body bigger than one window's span is just a body
+// you fly alongside rather than one you always see the whole of. The
+// intended, accepted consequence: a fight near something Sol-sized reads as
+// genuinely vast, and covering it at a fixed ship speed takes proportionally
+// longer — slower, bigger battles near big bodies, fast tight ones near
+// small ones, exactly because the ratio between "how big" and "how fast" is
+// now real instead of picked. Only the lower clamp remains, so something
+// Luna-sized doesn't shrink into an unclickable dot.
 const ARENA_BODY_RADIUS_AT_EARTH = 1.2
 const MIN_BODY_RADIUS_UNITS = 0.8
-const MAX_BODY_RADIUS_UNITS = 4.5
+
+// The same real linear ratio arenaBodyRadius uses, exposed on its own for
+// anything measuring a real km quantity that ISN'T a body's own radius (a
+// moon's orbit distance, for instance — see combatResolution's
+// moonArenaState) and so has no reason for the size-specific minimum clamp.
+export function arenaDistanceFromKm(km: number): number {
+  return ARENA_BODY_RADIUS_AT_EARTH * (km / EARTH_RADIUS_KM)
+}
 
 export function arenaBodyRadius(radiusKm: number): number {
-  const scaled = ARENA_BODY_RADIUS_AT_EARTH * Math.pow(radiusKm / EARTH_RADIUS_KM, 0.25)
-  return Math.max(MIN_BODY_RADIUS_UNITS, Math.min(MAX_BODY_RADIUS_UNITS, scaled))
+  return Math.max(MIN_BODY_RADIUS_UNITS, arenaDistanceFromKm(radiusKm))
 }
 
 // --- Gravity -----------------------------------------------------------
@@ -243,23 +261,25 @@ export function gravitationalAcceleration(point: ArenaPoint, obstacles: CombatOb
 const SPEED_OF_LIGHT_KM_S = 299_792.458
 const SOL_RADIUS_KM = STARS.find((s) => s.id === 'sol')?.radiusKm ?? 696_000
 
-// How fast light would cross the arena, in arena units per sim-second.
-//
-// Derived against Sol specifically: light takes ~4.6 seconds to cross the
-// Sun's real diameter (1,392,000 km / 299,792 km/s), and Sol renders as a
-// ~7.76-unit-diameter sphere in the arena — so light covers ~1.67 arena
-// units per second *at the scale the player is actually looking at*.
-//
-// This exists to keep ship speeds honest. Every hull's
-// `maneuverUnitsPerSecond` is defined as a fraction of this (see
-// combatData.ts), which guarantees no ship can ever out-run light across the
-// one distance in the arena the player can eyeball against a real number —
-// the width of the star they're fighting next to. An earlier tuning pass set
-// the fastest hull at 1.6 units/s, which was 96% of light speed and crossed
-// Sol in about the same ~4.6 seconds light does; nothing in the code caught
-// it because nothing expressed the relationship.
+// How fast light would cross the arena, in arena units per sim-second — and
+// deliberately NOT derived from arenaBodyRadius(Sol) anymore. It used to be:
+// back when body sizes were fourth-root compressed, Sol's arena radius was a
+// small, arbitrary ~3.9 units, and computing light-speed from "how many of
+// those units light crosses in Sol's real crossing time" was a reasonable
+// way to keep ship speeds honest. Now that body radius is a real linear
+// ratio (see arenaBodyRadius's own comment), Sol's arena radius is ~131
+// units on its own real terms — and re-deriving light-speed from THAT would
+// make every hull's absolute speed balloon by the same ~34x Sol's radius
+// just grew by, which would silently retune combat pacing at every OTHER
+// body too, Earth included, where this project's actual balance testing
+// lives. So this is now a fixed pacing constant instead: the exact value the
+// old Sol-derived formula produced (~1.671 units/s, computed once from Sol's
+// former ~3.88-unit arena radius), kept as a picked number so ship speed and
+// body-radius scale can vary independently — a hull's absolute speed no
+// longer changes just because some body's real size got measured correctly.
+const LEGACY_SOL_PACING_RADIUS_UNITS = 3.8792
 export const ARENA_LIGHT_SPEED_UNITS_PER_SECOND =
-  (2 * arenaBodyRadius(SOL_RADIUS_KM)) / ((2 * SOL_RADIUS_KM) / SPEED_OF_LIGHT_KM_S)
+  (2 * LEGACY_SOL_PACING_RADIUS_UNITS) / ((2 * SOL_RADIUS_KM) / SPEED_OF_LIGHT_KM_S)
 
 // Lattice index -> real point, at a given density's spacing. Used only when
 // converting a freshly-computed route back into real waypoints (see
@@ -686,9 +706,19 @@ export function pathSeconds(from: GridNode, path: GridNode[], density: GridDensi
 // resting offsets. Returns a real point directly (relative to the window
 // centre being the origin at spawn time — see combatResolution.syncEngagements,
 // which anchors a fresh engagement's window at ARENA_ORIGIN).
-export function startingPoint(sideIndex: 0 | 1, shipIndex: number, density: GridDensity): ArenaPoint {
+//
+// `minHalfSpan` defends against a body bigger than the window itself — Sol's
+// true-to-scale radius (see arenaBodyRadius) is ~131 units, comfortably past
+// this constant's own 6-unit default, so without a caller-supplied override
+// a fight starting "at Sol" would spawn both fleets INSIDE the star and the
+// resolver's own collision check (a ship whose position lies inside a body
+// is destroyed — see stepEngagements) would kill everyone on step one. The
+// caller (combatResolution, which already has the engagement's obstacles in
+// hand) is what actually knows how big the local body is; this just refuses
+// to place anyone closer than it's told is safe.
+export function startingPoint(sideIndex: 0 | 1, shipIndex: number, density: GridDensity, minHalfSpan = 0): ArenaPoint {
   const spacing = gridSpacing(density)
-  const half = ARENA_SPAN_UNITS / 2
+  const half = Math.max(ARENA_SPAN_UNITS / 2, minHalfSpan)
   // Fan ships out over a small square on their side's face, wrapping every
   // 3 columns so a large fleet spreads in two dimensions rather than a line.
   const column = shipIndex % 3

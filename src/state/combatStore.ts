@@ -99,6 +99,23 @@ export interface CombatParticipant {
   // enemy — which makes deliberate kiting (the entire point of giving a
   // long-ranged hull a speed advantage) impossible to actually perform.
   holdPosition: boolean
+  // Persistently close on this ship's current target (explicit, or the
+  // nearest enemy if none) rather than holding whatever range the stance
+  // would normally pick — the answer to a target that's actively running
+  // (Flee stance, or just backing off under Kite) drifting back out of reach
+  // between plans. Overridden by holdPosition (a manual move order still
+  // wins outright, same as it already overrides the stance system), and only
+  // ever affects movement — targeting/firing are unrelated to this flag.
+  chasing?: boolean
+  // Locks this ship's velocity to match a named obstacle's own (see
+  // CombatObstacle.velocity and combatResolution's moonArenaState) instead
+  // of flying under its own thrust — the building block for "stay on the
+  // far side of a moving body," ahead of anything actually threatening from
+  // one (a weaponized moon) existing yet. Mutually exclusive with
+  // holdPosition/chasing in the UI (see CombatPanel), though the resolver
+  // itself only enforces holdPosition winning outright — see
+  // stepEngagements' movement step.
+  inheritVelocityFrom?: string | null
   // The player has ordered this hull to detonate. Acted on by the resolver at
   // the top of its next step (see stepEngagements) rather than immediately,
   // so the blast resolves inside the same fixed-step simulation everything
@@ -163,6 +180,10 @@ interface CombatState {
   // project follows (see shipStore.setShipOrder's comment).
   setParticipant: (engagementId: string, participant: CombatParticipant) => void
   setHoldPosition: (engagementId: string, shipId: string, hold: boolean) => void
+  setChasing: (engagementId: string, shipId: string, chasing: boolean) => void
+  // See CombatParticipant.inheritVelocityFrom. Pass an obstacle name to lock
+  // onto it, or null to release back to normal flight.
+  setInheritVelocityFrom: (engagementId: string, shipId: string, obstacleName: string | null) => void
   // Flags a hull to detonate on the resolver's next step — see
   // CombatParticipant.scuttleOrdered.
   orderScuttle: (engagementId: string, shipId: string) => void
@@ -276,6 +297,45 @@ export const useCombatStore = create<CombatState>((set) => ({
                     // than after the ship finishes walking to wherever it was
                     // last sent.
                     hold ? { ...p, holdPosition: true } : { ...p, holdPosition: false, path: [] }
+                  : p,
+              ),
+            }
+          : e,
+      ),
+    })),
+  setChasing: (engagementId, shipId, chasing) =>
+    set((s) => ({
+      engagements: s.engagements.map((e) =>
+        e.id === engagementId
+          ? {
+              ...e,
+              participants: e.participants.map((p) =>
+                p.shipId === shipId
+                  ? // Turning chase ON also drops manual control (same
+                    // "takes effect immediately" reasoning as
+                    // setHoldPosition's own release path) — chase is a form
+                    // of automatic movement, so it doesn't make sense to
+                    // enable it while still latched to a stale manual order.
+                    chasing
+                    ? { ...p, chasing: true, holdPosition: false, path: [], inheritVelocityFrom: null }
+                    : { ...p, chasing: false }
+                  : p,
+              ),
+            }
+          : e,
+      ),
+    })),
+  setInheritVelocityFrom: (engagementId, shipId, obstacleName) =>
+    set((s) => ({
+      engagements: s.engagements.map((e) =>
+        e.id === engagementId
+          ? {
+              ...e,
+              participants: e.participants.map((p) =>
+                p.shipId === shipId
+                  ? obstacleName
+                    ? { ...p, inheritVelocityFrom: obstacleName, holdPosition: false, chasing: false, path: [] }
+                    : { ...p, inheritVelocityFrom: null }
                   : p,
               ),
             }

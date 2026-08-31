@@ -49,6 +49,8 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const setParticipantTarget = useCombatStore((s) => s.setParticipantTarget)
   const setParticipantTargetComponent = useCombatStore((s) => s.setParticipantTargetComponent)
   const setHoldPosition = useCombatStore((s) => s.setHoldPosition)
+  const setChasing = useCombatStore((s) => s.setChasing)
+  const setInheritVelocityFrom = useCombatStore((s) => s.setInheritVelocityFrom)
   const setDensity = useCombatStore((s) => s.setDensity)
   const deployChaff = useShipStore((s) => s.deployChaff)
   const setChaffAutoDeploy = useShipStore((s) => s.setChaffAutoDeploy)
@@ -311,7 +313,13 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           <div className="inspect-row">
             <span className="inspect-label">Movement</span>
             <span className="inspect-value">
-              {selectedParticipant.holdPosition ? 'Manual' : 'Auto-engage'}
+              {selectedParticipant.holdPosition
+                ? 'Manual'
+                : selectedParticipant.chasing
+                  ? 'Chasing'
+                  : selectedParticipant.inheritVelocityFrom
+                    ? `Locked to ${selectedParticipant.inheritVelocityFrom}`
+                    : 'Auto-engage'}
               {selectedParticipant.holdPosition && (
                 <button
                   type="button"
@@ -321,8 +329,56 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   Resume Auto
                 </button>
               )}
+              {!selectedParticipant.holdPosition && sides[1].length > 0 && (
+                <button
+                  type="button"
+                  className={`ship-panel-unfollow-btn${selectedParticipant.chasing ? ' active' : ''}`}
+                  onClick={() => setChasing(engagement.id, selectedParticipant.shipId, !selectedParticipant.chasing)}
+                  title={
+                    selectedParticipant.chasing
+                      ? 'Stop chasing and return to this stance’s normal range-holding'
+                      : 'Close on the current target continuously instead of holding the stance’s usual range — for running down a fleeing ship'
+                  }
+                >
+                  {selectedParticipant.chasing ? 'Stop Chase' : 'Chase'}
+                </button>
+              )}
             </span>
           </div>
+
+          {/* Match a body's own velocity instead of flying under thrust — the
+              building block for staying on the far side of something that
+              moves (an orbiting moon today; a future weaponized one is the
+              actual point). Only offered when NOT under manual control —
+              same reasoning as Chase above, and setInheritVelocityFrom
+              itself drops any manual hold the moment it's used anyway. */}
+          {!selectedParticipant.holdPosition && engagement.obstacles.length > 0 && (
+            <div className="inspect-row">
+              <span className="inspect-label">Inherit Velocity</span>
+              <span className="inspect-value combat-density-row">
+                {engagement.obstacles.map((obstacle) => {
+                  const active = selectedParticipant.inheritVelocityFrom === obstacle.name
+                  return (
+                    <button
+                      key={obstacle.name}
+                      type="button"
+                      className={`combat-density-btn${active ? ' active' : ''}`}
+                      onClick={() =>
+                        setInheritVelocityFrom(engagement.id, selectedParticipant.shipId, active ? null : obstacle.name)
+                      }
+                      title={
+                        obstacle.velocity
+                          ? `Match ${obstacle.name}'s current velocity every step`
+                          : `${obstacle.name} isn't moving in this frame — locking on holds station here`
+                      }
+                    >
+                      {obstacle.name}
+                    </button>
+                  )
+                })}
+              </span>
+            </div>
+          )}
 
           {/* Chaff — a consumable, so the count is shown even at zero rather
               than the row disappearing: "none left" is decision-relevant

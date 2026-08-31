@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Breadcrumb } from './components/Breadcrumb'
 import { ChatPlaceholder } from './components/ChatPlaceholder'
 import { DebugConsole } from './components/DebugConsole'
@@ -5,9 +6,12 @@ import { LocationLabel } from './components/LocationLabel'
 import { LockOnToggle } from './components/LockOnToggle'
 import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
+import { ResourceBar } from './components/ResourceBar'
 import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
+import { useHudBarLayout } from './hooks/useHudBarLayout'
 import { useShipOrderSettler } from './hooks/useShipOrderSettler'
+import { useEscapeBehavior } from './hooks/useEscapeBehavior'
 import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
 import { CombatViewScene } from './scene/CombatViewScene'
@@ -20,6 +24,7 @@ import './App.css'
 
 function ActiveScene() {
   const level = useViewStore((s) => s.level)
+  const selectedNeighborhoodId = useViewStore((s) => s.selectedNeighborhoodId)
   const selectedStarId = useViewStore((s) => s.selectedStarId)
   const selectedBodyName = useViewStore((s) => s.selectedBodyName)
   const combatEngagementId = useViewStore((s) => s.combatEngagementId)
@@ -37,7 +42,7 @@ function ActiveScene() {
   // which retriggers the fade/scale-in animation below — a lightweight
   // "smooth transition" between view levels without needing to keep two
   // WebGL canvases alive at once.
-  const transitionKey = `${level}:${selectedStarId}:${selectedBodyName ?? ''}:${combatEngagementId ?? ''}`
+  const transitionKey = `${level}:${selectedNeighborhoodId}:${selectedStarId}:${selectedBodyName ?? ''}:${combatEngagementId ?? ''}`
 
   return (
     <div key={transitionKey} className="view-transition">
@@ -50,14 +55,24 @@ function App() {
   useGameClock()
   useShipOrderSettler()
   useShipDriftIntegrator()
+  useEscapeBehavior()
   // Resolves every active engagement independent of which view is mounted —
   // a battle in another system happens whether or not anyone is watching it.
   useCombatResolver()
 
+  const topBarRef = useRef<HTMLElement>(null)
+  const bottomBarRef = useRef<HTMLElement>(null)
+  // Publishes the bars' real (content-driven, wrap-aware) heights as CSS
+  // vars so Outliner/NavBar/DebugConsole can dock flush against them instead
+  // of guessing a fixed pixel offset — see the hook's own comment for why a
+  // guess drifts out of sync.
+  useHudBarLayout(topBarRef, bottomBarRef)
+
   return (
     <div id="app-root">
-      <header className="hud-bar hud-top">
+      <header ref={topBarRef} className="hud-bar hud-top">
         <span className="hud-title">TERRA RELICTA: CONQUEST</span>
+        <ResourceBar />
         <div className="hud-top-right">
           <LockOnToggle />
           <Breadcrumb />
@@ -74,7 +89,7 @@ function App() {
           out of what ships to players, not just hidden at runtime. */}
       {import.meta.env.DEV && <DebugConsole />}
 
-      <footer className="hud-bar hud-bottom">
+      <footer ref={bottomBarRef} className="hud-bar hud-bottom">
         <div className="hud-bottom-left">
           <ChatPlaceholder />
           <TimeControls />

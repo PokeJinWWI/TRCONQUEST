@@ -35,3 +35,14 @@ export const STARS: StarData[] = [
   { id: 'luyten-726-8', name: 'Luyten 726-8', color: '#ff7a5a', distanceLy: 8.73, position: [7.542, 3.477, -2.69], hasSystemData: false, massKg: 1.989e29, radiusKm: 97_000 },
   { id: 'ross-154', name: 'Ross 154', color: '#ff6b4a', distanceLy: 9.68, position: [1.879, -8.653, -3.911], hasSystemData: false, massKg: 5.967e29, radiusKm: 167_000 },
 ]
+
+// Interstellar view is generic over "which neighborhood" (see
+// neighborhoodData.ts) even though only one has real interior data today —
+// this is the seam a second populated neighborhood plugs into later without
+// InterstellarScene itself needing another refactor. `hasInterstellarData:
+// false` on every other neighborhood means this never actually gets called
+// for them yet (mirrors how a `hasSystemData: false` star is never entered),
+// but returning [] rather than throwing keeps the function total.
+export function getStarsForNeighborhood(neighborhoodId: string): StarData[] {
+  return neighborhoodId === 'solar-neighborhood' ? STARS : []
+}

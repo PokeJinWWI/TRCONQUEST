@@ -13,7 +13,7 @@ export function Breadcrumb() {
         GALAXY
       </button>
       <span className="crumb-sep">›</span>
-      <button type="button" className="crumb" onClick={enterInterstellar} disabled={level === 'interstellar'}>
+      <button type="button" className="crumb" onClick={() => enterInterstellar()} disabled={level === 'interstellar'}>
         INTERSTELLAR
       </button>
       {(level === 'system' || level === 'satellite' || level === 'combat') && (

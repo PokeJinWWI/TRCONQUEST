@@ -10,6 +10,11 @@ export type ViewLevel = 'galactic' | 'interstellar' | 'system' | 'satellite' | '
 
 interface ViewState {
   level: ViewLevel
+  // Which neighborhood INTERSTELLAR is currently showing — mirrors
+  // selectedStarId one level up. Only 'solar-neighborhood' has real star
+  // data today (see starData's getStarsForNeighborhood), but the level
+  // itself doesn't hardcode that; it's generic from here down.
+  selectedNeighborhoodId: string
   selectedStarId: string
   // The planet, star (e.g. "Sol"), or other body currently open in satellite
   // view — not just planets, hence the generic name. Also doubles as system
@@ -39,7 +44,11 @@ interface ViewState {
   // against), not "following a selection," so it stays on regardless.
   lockOnEnabled: boolean
   toggleLockOn: () => void
-  enterInterstellar: () => void
+  // `neighborhoodId` seeds selectedNeighborhoodId — used when arriving by
+  // entering a neighborhood from galactic view. Omit it for a plain jump
+  // (breadcrumb, or exiting a system back out) that should keep showing
+  // whichever neighborhood was already selected.
+  enterInterstellar: (neighborhoodId?: string) => void
   // `preselectBody` seeds `inViewSelection` — used when arriving here by
   // zooming into a star, so e.g. zooming into Sol from interstellar arrives
   // with Sol already selected (but still framed at the far default, since
@@ -69,6 +78,7 @@ interface ViewState {
 
 export const useViewStore = create<ViewState>((set) => ({
   level: 'system',
+  selectedNeighborhoodId: 'solar-neighborhood',
   selectedStarId: 'sol',
   selectedBodyName: null,
   inViewSelection: null,
@@ -76,7 +86,13 @@ export const useViewStore = create<ViewState>((set) => ({
   lockOnEnabled: true,
   toggleLockOn: () => set((s) => ({ lockOnEnabled: !s.lockOnEnabled })),
   enterGalactic: () => set({ level: 'galactic', selectedBodyName: null, inViewSelection: null }),
-  enterInterstellar: () => set({ level: 'interstellar', selectedBodyName: null, inViewSelection: null }),
+  enterInterstellar: (neighborhoodId) =>
+    set((s) => ({
+      level: 'interstellar',
+      selectedNeighborhoodId: neighborhoodId ?? s.selectedNeighborhoodId,
+      selectedBodyName: null,
+      inViewSelection: null,
+    })),
   enterSystem: (starId, preselectBody) =>
     set({ level: 'system', selectedStarId: starId, selectedBodyName: null, inViewSelection: preselectBody ?? null }),
   enterSatellite: (bodyName) => set({ level: 'satellite', selectedBodyName: bodyName, inViewSelection: null }),

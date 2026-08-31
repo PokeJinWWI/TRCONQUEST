@@ -14,7 +14,7 @@ import {
   warpEscapeLossChance,
   coreHealthFraction,
 } from './shipPhysics'
-import { activeEnemyContacts, overallHealthFraction } from './combatResolution'
+import { activeEnemyContacts, overallHealthFraction, createSoloEngagement } from './combatResolution'
 import { useCombatStore } from '../state/combatStore'
 import { useViewStore } from '../state/viewStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
@@ -105,6 +105,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
   const setWarpWhenReady = useShipStore((s) => s.setWarpWhenReady)
   const setFollowing = useShipStore((s) => s.setFollowing)
   const engagements = useCombatStore((s) => s.engagements)
+  const addEngagement = useCombatStore((s) => s.addEngagement)
   const enterCombat = useViewStore((s) => s.enterCombat)
   const level = useViewStore((s) => s.level)
   const simDays = useGameTimeStore((s) => s.simDays)
@@ -276,6 +277,31 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
             </div>
           )}
         </>
+      )}
+      {/* No fight required — opens (or rejoins) the arena at wherever this
+          ship is resting, purely to look around or pre-position a fleet.
+          Gated the same way createSoloEngagement itself is: the ship has to
+          actually be at a real rest location (not mid-order), and only
+          shown when there's no live Engagement already covering it (that
+          case is the row below instead). */}
+      {!engagement && !ship.order && level !== 'combat' && (
+        <div className="inspect-row">
+          <span className="inspect-label">Arena</span>
+          <span className="inspect-value">
+            <button
+              type="button"
+              className="ship-panel-unfollow-btn"
+              onClick={() => {
+                const solo = createSoloEngagement(ship, ships, simDays)
+                if (!solo) return
+                addEngagement(solo)
+                enterCombat(solo.id)
+              }}
+            >
+              Enter Arena
+            </button>
+          </span>
+        </div>
       )}
       {engagement && (
         <>

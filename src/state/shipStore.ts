@@ -205,6 +205,13 @@ export interface ShipInstance {
   // accumulated state by definition. Velocity is in system units per sim-day;
   // the position it applies to is the ship's own `system-point` location.
   drift?: { velocity: [number, number, number]; updatedSimDays: number } | null
+  // simDays this ship first became "safe" (not in an active engagement) —
+  // see useEscapeBehavior. Optional and normally absent, the same "no
+  // tracked state until there's something to track" reasoning as `drift`:
+  // most ships are never weak-and-alone long enough for this to matter.
+  // Reset to null the moment the ship re-enters combat, so only a truly
+  // continuous stretch of safety counts toward the escape timer.
+  safeSinceSimDays?: number | null
   // How this ship fights when the player isn't steering it by hand — set
   // from Fleet Management > Strategizer. Lives on the ship rather than on a
   // CombatParticipant so it can be set *before* a fight (that's the whole
@@ -246,6 +253,8 @@ interface ShipState {
   // the drive is off cooldown (see useShipOrderSettler). Pass null to cancel
   // a queued jump without issuing a new order/location.
   setPendingHyperdriveJump: (id: string, starId: string | null) => void
+  // See ShipInstance.safeSinceSimDays.
+  setSafeSince: (id: string, simDays: number | null) => void
   // Sets or clears (pass null) this ship's standing follow directive — see
   // ShipInstance.followingShipId. Always a deliberate, direct call (from a
   // scene's right-click-a-ship handler), so no keepFollowing-style guard is
@@ -332,6 +341,10 @@ export const useShipStore = create<ShipState>((set) => ({
   setPendingHyperdriveJump: (id, starId) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingHyperdriveJump: starId } : ship)),
+    })),
+  setSafeSince: (id, simDays) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, safeSinceSimDays: simDays } : ship)),
     })),
   setFollowing: (id, targetShipId) =>
     set((s) => ({

@@ -204,6 +204,12 @@ export const KITE_TOLERANCE = 0.08
 // Swarm closes to inside the SHORTEST mount's range, which is the only
 // distance at which a mixed loadout actually fires everything it has.
 export const SWARM_RANGE_FRACTION = 0.8
+// Chase (see CombatParticipant.chasing) closes far tighter than any stance
+// ever holds for — the point is running a target down, not finding an ideal
+// firing distance, so this is close to point-blank rather than any weapon's
+// range. The ship-separation pass (SHIP_SEPARATION_UNITS) is what actually
+// stops it landing exactly on top of the target once caught.
+export const CHASE_STANDOFF_UNITS = 0.6
 
 // --- Hull speed / handling, expressed against the speed of light ----------
 //
@@ -334,6 +340,20 @@ export const CRUISER_PROFILE: CombatProfile = {
   ...hullMotion(10, 7),
 }
 
+// Multiple live-piloted and scripted-headless attempts at trimming these
+// stats down for a fair 1v1 (first against a Destroyer, then a Cruiser — see
+// the "David and Goliath" Hard scenario) all failed to find a window where
+// skilled play wins reliably AND every automated stance still loses. A
+// scripted "always hold point-blank range" pilot only crossed 50% wins
+// against a Battleship cut by more than half — but at that same cut, the
+// Swarm stance alone (zero player input) was already winning 50% of the
+// time too, and needed an even deeper cut before Swarm stopped winning,
+// deep enough that a "Battleship" would have less HP than a Cruiser. Swarm
+// exploits a weakened Battleship harder than skilled positioning does, at
+// every level tested — this is a structural property of this matchup and
+// the game's weapon/damage model, not a threshold that was almost found.
+// Reverted to the original values; a clean 1v1 win path against a
+// full-strength Battleship needs a different fix than trimming its stats.
 export const BATTLESHIP_PROFILE: CombatProfile = {
   components: { weapons: 220, utility: 190, core: 560 },
   defenses: { shieldHp: 380, shieldRegenPerSecond: 2.2, armorHp: 460, pointDefenseRating: 0.4 },

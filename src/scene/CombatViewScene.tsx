@@ -76,7 +76,12 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
     // exists (the point is inside a body, or walled off) — don't latch
     // manual control off an order that was refused.
     if (ordered === selectedParticipant) return
-    setParticipant(engagement.id, { ...ordered, holdPosition: true })
+    // A manual order also drops chase and inherit-velocity (see
+    // CombatParticipant.chasing/inheritVelocityFrom) — the player is taking
+    // explicit control, so "resume auto" afterward should land back on the
+    // ship's own stance rather than silently resuming a pursuit or a
+    // velocity lock they never re-requested.
+    setParticipant(engagement.id, { ...ordered, holdPosition: true, chasing: false, inheritVelocityFrom: null })
   }
 
   // Slides the window so it re-centres on the selected ship, putting fresh

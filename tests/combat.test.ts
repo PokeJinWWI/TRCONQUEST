@@ -11,7 +11,7 @@
 // Deliberately outside `src/` — tsconfig.app.json only includes `src`, so
 // this never enters the app typecheck or the production bundle.
 import { SHIP_CLASSES, TURING_HYPERDRIVE_COOLDOWN_DAYS, type HyperDrive } from '../src/data/shipData'
-import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, type WeaponMount } from '../src/data/combatData'
+import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, CHASE_STANDOFF_UNITS, type WeaponMount } from '../src/data/combatData'
 import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { useCombatStore } from '../src/state/combatStore'
 import {
@@ -21,6 +21,7 @@ import {
   shipCombatProfile,
   stepEngagements,
   syncEngagements,
+  createSoloEngagement,
   planFtlCharge,
   orderParticipantTo,
   activeEnemyContacts,
@@ -29,6 +30,7 @@ import {
   participantArenaPosition,
   participantSpeed,
   stanceDestination,
+  approachNode,
   pruneOvershotWaypoints,
   obstaclesForLocation,
   isChaffActive,
@@ -256,7 +258,12 @@ console.log('\n=== 8. A full battle still resolves from a cold start ===')
   const rng = seededRng(7)
   let steps = 0
   let destroyed: string[] = []
-  while (engagements.length > 0 && steps < 20000) {
+  // The engagement itself no longer disappears when it does (see
+  // syncEngagements/stepEngagements — a one-sided roster now persists
+  // instead of vanishing, exactly so a just-won fight doesn't yank the
+  // player out of the arena), so "the battle ended" is measured by a kill
+  // happening, not by `engagements` emptying out.
+  while (destroyed.length === 0 && steps < 20000) {
     simDays += COMBAT_STEP_DAYS
     steps++
     const result = stepEngagements(engagements, ships, simDays, rng)
@@ -264,7 +271,7 @@ console.log('\n=== 8. A full battle still resolves from a cold start ===')
     ships = ships.filter((s) => !result.destroyedShipIds.includes(s.id)).map((s) => (result.shipCombat[s.id] ? { ...s, combat: result.shipCombat[s.id] } : s))
     destroyed = [...destroyed, ...result.destroyedShipIds]
   }
-  check('the battle ended', engagements.length === 0)
+  check('the battle resolved before the step cap', steps < 20000, `${steps} steps`)
   check('exactly one ship died', destroyed.length === 1, destroyed.join(','))
 }
 
@@ -411,7 +418,11 @@ console.log('\n=== 14. Escaping still actually leaves the fight (regression) ===
   const past = simDays + simSecondsToDays(5.5)
   const result = stepEngagements(engagements, ships, past, rng)
   check('the escapee is reported as escaped', result.escapedShipIds.includes('p1'))
-  check('the engagement ends when one side leaves', result.engagements.length === 0)
+  // The engagement itself now persists with the corvette alone (see
+  // syncEngagements/stepEngagements — a one-sided roster doesn't vanish
+  // anymore) — what actually matters here is that the escapee is gone FROM
+  // it, not that the whole thing disappeared.
+  check('the escapee is no longer in the engagement', !result.engagements[0]?.participants.some((p) => p.shipId === 'p1'))
 }
 
 console.log('\n=== 15. isInsideWindow no longer needs density (window size is constant) ===')
@@ -468,8 +479,14 @@ console.log('\n=== 18. Player movement latches against the approach AI (ported, 
   engagements = [
     { ...engagements[0], participants: engagements[0].participants.map((p) => (p.shipId === 'p1' ? { ...ordered, holdPosition: true } : p)) },
   ]
+  // Capped well short of 1500: this is a positioning test, not a survival
+  // one, and the held frigate is a sitting duck for the battleship it's
+  // sharing the arena with — it reaches and settles at the corner by ~step
+  // 400, so 600 confirms the hold sticks with a comfortable margin while
+  // stopping before the battleship (still closing at this point) can catch
+  // and kill it, which would tell this test nothing about the hold latch.
   const rng = seededRng(21)
-  for (let i = 0; i < 1500; i++) {
+  for (let i = 0; i < 600; i++) {
     const now = simDays + COMBAT_STEP_DAYS * (i + 1)
     const r = stepEngagements(engagements, ships, now, rng)
     if (r.engagements.length === 0) break
@@ -551,12 +568,21 @@ console.log('\n=== 20. Shield regen is exactly one step per step — framerate i
 
 console.log('\n=== 21. Ships are genuinely sub-light (the reported "faster than light" bug) ===')
 {
-  // The physical claim: light takes ~4.6s to cross the Sun's real diameter.
-  // Every hull must take meaningfully LONGER than that to cross Sol as it's
-  // actually rendered in the arena.
+  // ARENA_LIGHT_SPEED_UNITS_PER_SECOND is no longer derived from Sol's own
+  // (now true-to-scale, ~131-unit) arena radius — see its own comment for
+  // why re-deriving it from a body whose SIZE can change would silently
+  // retune every hull's absolute speed too. It's a fixed pacing constant
+  // now, so the honest sanity check is just that it still equals the exact
+  // value this project has always paced ship speed against, not a claim
+  // about how long light takes to cross whatever Sol's radius happens to be
+  // today.
   const solDiameterUnits = 2 * arenaBodyRadius(696_000)
   const lightSeconds = solDiameterUnits / ARENA_LIGHT_SPEED_UNITS_PER_SECOND
-  check('light crosses Sol in ~4.6s, as physics says', Math.abs(lightSeconds - 4.64) < 0.1, `${lightSeconds.toFixed(2)}s`)
+  check(
+    'the light-speed pacing constant is still the fixed value this project has always used',
+    Math.abs(ARENA_LIGHT_SPEED_UNITS_PER_SECOND - 1.671) < 0.01,
+    `${ARENA_LIGHT_SPEED_UNITS_PER_SECOND.toFixed(3)} units/s`,
+  )
 
   let slowest = Infinity
   let fastest = 0
@@ -1795,6 +1821,196 @@ console.log('\n=== 46. Chaff auto-deploys by default, for every allegiance, and 
 
   check('with auto-deploy on, a player ship spends a charge on its own', runOnce(true))
   check('with auto-deploy off, the SAME player ship does not', !runOnce(false))
+}
+
+console.log('\n=== 47. Chase overrides the stance\'s own range-holding ===')
+{
+  const profile = SHIP_CLASSES.find((c) => c.id === 'cruiser')!.combat // reach 9, standoff 0.7*9=6.3
+  const mk = (position: any, extra: Partial<ReturnType<typeof mk>> = {}) => ({
+    shipId: 'x', side: 0 as const, position, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+    ...extra,
+  })
+  const enemy = { ...mk({ x: 0, y: 0, z: 0 }), shipId: 'e', side: 1 as const }
+
+  // Already well inside Balanced's own hold range — a non-chasing ship would
+  // stop advancing here (stanceDestination returns null, same as the
+  // in-band Kite case above).
+  const settled = mk({ x: 5, y: 0, z: 0 })
+  check('sanity: Balanced already holds station at this range', stanceDestination(settled, enemy, profile, 'balanced', []) === null)
+
+  const chaseDest = approachNode(settled, enemy, profile, [], CHASE_STANDOFF_UNITS)!
+  const chaseDist = pointDistance(chaseDest, enemy.position)
+  check('chase keeps closing well past where Balanced would have stopped', chaseDist < 5, `${chaseDist.toFixed(2)}`)
+  check('chase closes to near point-blank, not any weapon range', chaseDist < 1, `${chaseDist.toFixed(2)}`)
+
+  // holdPosition must win outright over chasing in the real resolver
+  // pipeline, not just in isolated destination math — a ship latched to a
+  // manual order shouldn't drift toward the enemy just because `chasing` is
+  // still (harmlessly, per CombatViewScene) true underneath it.
+  {
+    const simDays = 100
+    const ships = [
+      { ...makeShip('cruiser', 'p1', 'player'), stance: 'swarm' as const },
+      makeShip('corvette', 'e1', 'hostile'),
+    ]
+    let engagements = syncEngagements(ships, [], simDays)
+    engagements = [
+      {
+        ...engagements[0],
+        participants: engagements[0].participants.map((p) =>
+          p.shipId === 'p1' ? { ...p, holdPosition: true, chasing: true, path: [] } : p,
+        ),
+      },
+    ]
+    const before = engagements[0].participants.find((p) => p.shipId === 'p1')!.position
+    const result = stepEngagements(engagements, ships, simDays + COMBAT_STEP_DAYS)
+    const after = result.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check('holdPosition still wins over a stale chasing flag', !!after && pointDistance(after.position, before) < 1e-9)
+  }
+}
+
+console.log('\n=== 48. Entering the arena with no fight — and staying after one ends ===')
+{
+  const simDays = 100
+
+  // A lone player ship, no hostiles anywhere — the normal sync path refuses
+  // this outright (nothing contested), but the manual "just let me look"
+  // path should still produce a real, usable engagement.
+  {
+    const ship = makeShip('cruiser', 'p1', 'player')
+    const solo = createSoloEngagement(ship, [ship], simDays)
+    check('createSoloEngagement works with zero hostiles present', !!solo && solo.participants.length === 1)
+    check('...and the normal sync path refuses the same roster', syncEngagements([ship], [], simDays).length === 0)
+
+    // Once it exists, syncEngagements must not immediately erase it again —
+    // this is what keeps a manually-opened arena (or a just-won battle) from
+    // vanishing on the very next resolver tick.
+    if (solo) {
+      const resynced = syncEngagements([ship], [solo], simDays + COMBAT_STEP_DAYS)
+      check('an already-open engagement survives a sync pass with no hostiles', resynced.length === 1)
+      check('...keeping the same id', resynced[0]?.id === solo.id)
+    }
+  }
+
+  // A real fight that resolves down to one side shouldn't vanish either —
+  // same mechanism, reached the normal way instead of the manual button.
+  {
+    const ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+    const contested = syncEngagements(ships, [], simDays)
+    check('sanity: a real hostile pair still opens an engagement normally', contested.length === 1)
+
+    const victorOnly = [ships[0]] // the hostile is gone — destroyed, disengaged, whatever
+    const afterVictory = syncEngagements(victorOnly, contested, simDays + COMBAT_STEP_DAYS)
+    check('a fight that resolves to one side lingers rather than disappearing', afterVictory.length === 1)
+    check('...with only the survivor on the roster', afterVictory[0]?.participants.length === 1)
+  }
+
+  // createSoloEngagement should still refuse a ship that isn't actually at
+  // rest anywhere combat-relevant.
+  {
+    const ship = { ...makeShip('cruiser', 'p1', 'player'), location: { kind: 'interstellar-point' as const, position: [1, 2, 3] as [number, number, number] } }
+    check('refuses a ship with no combat-location key', createSoloEngagement(ship, [ship], simDays) === null)
+  }
+}
+
+console.log('\n=== 49. Bodies are true to scale, and Luna actually orbits ===')
+{
+  // Earth is the anchor — unchanged by the switch from fourth-root
+  // compression to a real linear ratio, since its own ratio against itself
+  // is always 1. Everything ELSE should now be proportionally real.
+  const earthRadius = arenaBodyRadius(6371)
+  const solRadius = arenaBodyRadius(696_000)
+  check('Earth stays at its historical 1.2-unit radius (the scale anchor)', Math.abs(earthRadius - 1.2) < 0.001)
+  check('Sol is now genuinely vast next to Earth (~109x), not the old ~3x', solRadius / earthRadius > 100, `${(solRadius / earthRadius).toFixed(1)}x`)
+
+  const earthObstaclesA = obstaclesForLocation({ kind: 'orbiting', systemId: 'sol', bodyName: 'Earth', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 }, 0)
+  const lunaA = earthObstaclesA.find((o) => o.name === 'Luna')!
+  const earthObstaclesB = obstaclesForLocation({ kind: 'orbiting', systemId: 'sol', bodyName: 'Earth', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 }, 5)
+  const lunaB = earthObstaclesB.find((o) => o.name === 'Luna')!
+  check('Luna is genuinely far from Earth now (~72 units, real scale) rather than the old ~4.5', pointDistance(lunaA.position, ARENA_ORIGIN) > 60, pointDistance(lunaA.position, ARENA_ORIGIN).toFixed(1))
+  check('Luna has moved between two different simDays — it actually orbits', pointDistance(lunaA.position, lunaB.position) > 0.01, pointDistance(lunaA.position, lunaB.position).toFixed(3))
+  check('Luna carries a live (nonzero) tangential velocity', lunaA.velocity !== undefined && pointDistance(lunaA.velocity, ARENA_ORIGIN) > 0)
+  // A static planet/star has no velocity at all in this frame (undefined,
+  // not zero — see CombatObstacle's own comment on why that distinction
+  // matters), which is the flip side of Luna actually having one.
+  const earth = earthObstaclesA.find((o) => o.name === 'Earth')!
+  check('Earth itself carries no velocity — it defines this frame, it doesn\'t move within it', earth.velocity === undefined)
+
+  // And it keeps moving step-to-step WITHIN a running engagement, not just
+  // between two independent obstaclesForLocation calls.
+  const simDays = 100
+  const ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+  const lunaStart = engagements[0].obstacles.find((o) => o.name === 'Luna')!.position
+  const rng = seededRng(3)
+  for (let i = 0; i < 50; i++) {
+    const now = simDays + COMBAT_STEP_DAYS * (i + 1)
+    const r = stepEngagements(engagements, ships, now, rng)
+    engagements = r.engagements
+  }
+  const lunaEnd = engagements[0]?.obstacles.find((o) => o.name === 'Luna')?.position
+  check('Luna keeps moving across steps within one live engagement', !!lunaEnd && pointDistance(lunaStart, lunaEnd) > 0)
+}
+
+console.log('\n=== 50. Inherit Velocity — locking a ship\'s motion onto a body\'s own ===')
+{
+  const simDays = 100
+  const ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  let engagements = syncEngagements(ships, [], simDays)
+  const luna = engagements[0].obstacles.find((o) => o.name === 'Luna')!
+  engagements = [
+    {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p) =>
+        p.shipId === 'p1' ? { ...p, inheritVelocityFrom: 'Luna', path: [], holdPosition: false } : p,
+      ),
+    },
+  ]
+  const before = engagements[0].participants.find((p) => p.shipId === 'p1')!.position
+  const rng = seededRng(11)
+  const r = stepEngagements(engagements, ships, simDays + COMBAT_STEP_DAYS, rng)
+  const after = r.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+  check('a ship locked to Luna picks up Luna\'s own velocity', !!after && pointDistance(after.velocity, luna.velocity!) < 1e-9)
+  const expectedMove = { x: luna.velocity!.x * COMBAT_STEP_SECONDS, y: luna.velocity!.y * COMBAT_STEP_SECONDS, z: luna.velocity!.z * COMBAT_STEP_SECONDS }
+  const expectedPos = { x: before.x + expectedMove.x, y: before.y + expectedMove.y, z: before.z + expectedMove.z }
+  check('...and moved by exactly that velocity times one step', !!after && pointDistance(after.position, expectedPos) < 1e-9)
+
+  // holdPosition still wins outright, same as it does over chasing.
+  const held = [
+    {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p) =>
+        p.shipId === 'p1' ? { ...p, inheritVelocityFrom: 'Luna', holdPosition: true, path: [] } : p,
+      ),
+    },
+  ]
+  const heldBefore = held[0].participants.find((p) => p.shipId === 'p1')!.position
+  const heldResult = stepEngagements(held, ships, simDays + COMBAT_STEP_DAYS, seededRng(11))
+  const heldAfter = heldResult.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+  check('holdPosition overrides a stale inherit-velocity lock, same as it does chasing', !!heldAfter && pointDistance(heldAfter.position, heldBefore) < 1e-9)
+}
+
+console.log('\n=== 51. Fleets never spawn inside a body bigger than the old fixed spawn face ===')
+{
+  // The actual reported bug: two ships spawned "at Sol" (a real star, whose
+  // true-to-scale arena radius — see arenaBodyRadius — is now ~131 units)
+  // used to spawn at a fixed ±6-unit face, which is WELL inside the star.
+  // The resolver's own body-collision check (a ship whose position lies
+  // inside an obstacle is destroyed) then killed both of them on step one —
+  // "both ships disappear" the instant you unpause. startingPoint now takes
+  // a minimum half-span computed from the engagement's own obstacles.
+  const ships = [makeShip('corvette', 'p1', 'player', 'Sol'), makeShip('corvette', 'e1', 'hostile', 'Sol')]
+  const engagements = syncEngagements(ships, [], 0)
+  check('a fight opens at Sol', engagements.length === 1)
+  const sol = engagements[0].obstacles.find((o) => o.name === 'Sol')
+  check('sanity: Sol really is enormous in the arena now', !!sol && sol.radiusUnits > 100, sol?.radiusUnits.toFixed(1))
+  const insideSol = engagements[0].participants.some((p) => pointDistance(p.position, ARENA_ORIGIN) < (sol?.radiusUnits ?? 0))
+  check('neither fleet spawns inside the star', !insideSol)
+
+  const rng = seededRng(1)
+  const result = stepEngagements(engagements, ships, COMBAT_STEP_DAYS, rng)
+  check('nobody is destroyed on the very first step just by existing there', result.destroyedShipIds.length === 0, result.destroyedShipIds.join(','))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)
