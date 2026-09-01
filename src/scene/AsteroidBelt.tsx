@@ -5,6 +5,10 @@ import { UNITS_PER_AU } from './planetData'
 
 interface AsteroidBeltProps {
   data: AsteroidBeltData
+  /** Scene-unit position of the star this belt encircles — nonzero for a
+   * belt around an offset component star in a multi-star system (see
+   * AsteroidBeltData.parentStar). Defaults to the barycenter. */
+  centerOffset?: [number, number, number]
 }
 
 const PARTICLE_COUNT = 900
@@ -21,7 +25,7 @@ function seededRandom(seed: number): () => number {
   }
 }
 
-export function AsteroidBelt({ data }: AsteroidBeltProps) {
+export function AsteroidBelt({ data, centerOffset = [0, 0, 0] }: AsteroidBeltProps) {
   const geometry = useMemo(() => {
     const rng = seededRandom(data.name.length * 7919 + Math.round(data.innerAU * 1000))
     const innerRadius = data.innerAU * UNITS_PER_AU
@@ -41,7 +45,7 @@ export function AsteroidBelt({ data }: AsteroidBeltProps) {
   }, [data.name, data.innerAU, data.outerAU])
 
   return (
-    <points geometry={geometry}>
+    <points geometry={geometry} position={centerOffset}>
       <pointsMaterial color={data.color} size={0.35} sizeAttenuation transparent opacity={0.6} />
     </points>
   )

@@ -314,7 +314,11 @@ export function SolarSystemScene() {
           />
         ))}
         {BELTS.map((belt) => (
-          <AsteroidBelt key={belt.name} data={belt} />
+          <AsteroidBelt
+            key={belt.name}
+            data={belt}
+            centerOffset={systemStars.find((s) => s.name === belt.parentStar)?.position ?? [0, 0, 0]}
+          />
         ))}
 
         {shipOrbitRings.map((g) => (
