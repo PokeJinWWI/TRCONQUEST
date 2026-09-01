@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { ActionBar } from './components/ActionBar'
 import { Breadcrumb } from './components/Breadcrumb'
 import { ChatPlaceholder } from './components/ChatPlaceholder'
 import { DebugConsole } from './components/DebugConsole'
@@ -99,6 +100,7 @@ function App() {
           <ChatPlaceholder />
           <TimeControls />
         </div>
+        <ActionBar />
         <LocationLabel />
       </footer>
     </div>

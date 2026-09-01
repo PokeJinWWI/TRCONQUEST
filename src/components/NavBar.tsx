@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
 import { FleetManagement } from './FleetManagement'
+import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
 import { usePlayerStore } from '../state/playerStore'
 import { getCountry } from '../data/countryData'
@@ -8,6 +9,7 @@ import { getCountry } from '../data/countryData'
 const SETTINGS_CATEGORY = 'Settings'
 const MILITARY_CATEGORY = 'Military'
 const NAVY_SUBCATEGORY = 'Navy'
+const MAP_MODES_CATEGORY = 'Map Modes'
 
 interface CategoryDef {
   name: string
@@ -26,19 +28,24 @@ const CATEGORIES: CategoryDef[] = [
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: ['Army', NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
   { name: 'Characters', subcategories: ['Characters', 'Families'] },
+  { name: MAP_MODES_CATEGORY },
   { name: SETTINGS_CATEGORY },
 ]
 
-// What actually renders inside a category/subcategory pairing. Only two
-// slots have real content behind them — Fleet Management's existing UI
-// (ship roster, designer, stance strategizer) now lives under Military's
-// Navy sub-tab, since ships are this game's only naval asset, and Settings
-// stays a flat panel with no sub-tabs. Everything else stays a reserved
-// placeholder, same "don't invent content" spirit as the Outliner's empty
-// Starbases section — there's no government/economy/society/characters
-// simulation behind these yet.
+// What actually renders inside a category/subcategory pairing. Three slots
+// have real content behind them — Fleet Management's existing UI (ship
+// roster, designer, stance strategizer) now lives under Military's Navy
+// sub-tab, since ships are this game's only naval asset; Settings stays a
+// flat panel; and Map Modes is a real, working selector (see
+// mapModeStore/mapModeColor.ts), not a placeholder — it's the same map
+// modes the bottom ActionBar's icons switch to as a side effect, just
+// picked directly and without resetting when the window closes. Everything
+// else stays a reserved placeholder, same "don't invent content" spirit as
+// the Outliner's empty Starbases section — there's no
+// government/economy/society/characters simulation behind these yet.
 function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
+  if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   return <div className="nav-placeholder">Not yet available</div>
 }

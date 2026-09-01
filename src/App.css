@@ -65,6 +65,47 @@
   gap: 16px;
 }
 
+/* Bottom-center quick-action bar (see ActionBar.tsx) — position: absolute
+   pulls it out of the footer's own space-between flex flow, so it sits at
+   the footer's true horizontal center regardless of how wide the left
+   (fleet comms + time controls) and right (location label) groups are. */
+.map-action-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+
+.map-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  color: #9fe8ff;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.map-action-btn:hover {
+  background: rgba(111, 227, 255, 0.18);
+  color: #fff;
+}
+
+.map-action-btn.active {
+  background: rgba(111, 227, 255, 0.28);
+  border-color: rgba(111, 227, 255, 0.75);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(111, 227, 255, 0.5);
+}
+
 /* The current location — bottom-right, large and prominent so it reads at
    a glance instead of competing with the title bar's small subtitle. */
 .location-label {

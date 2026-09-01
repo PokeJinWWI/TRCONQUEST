@@ -15,6 +15,8 @@ import { getPlanetsForStar, UNITS_PER_AU, type PlanetData } from './planetData'
 import { getMoonsForPlanet } from './moonData'
 import { getAsteroidBeltsForStar } from '../data/asteroidBeltData'
 import { getSystemStars } from '../data/starData'
+import { mapModeColorsFor } from './mapModeColor'
+import { useMapModeStore } from '../state/mapModeStore'
 import type { InspectableBody } from './inspectableBody'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
@@ -110,6 +112,11 @@ export function SolarSystemScene() {
   )
   const PLANETS = useMemo(() => getPlanetsForStar(selectedStarId), [selectedStarId])
   const BELTS = useMemo(() => getAsteroidBeltsForStar(selectedStarId), [selectedStarId])
+  // Active map mode's per-planet color overrides (see ActionBar/NavBar's Map
+  // Modes selector) — null when no mode is active, in which case every
+  // planet just renders its own natural color.
+  const mapMode = useMapModeStore((s) => s.mode)
+  const mapModeColors = useMemo(() => mapModeColorsFor(mapMode, PLANETS), [mapMode, PLANETS])
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
@@ -311,6 +318,7 @@ export function SolarSystemScene() {
             selected={selectedName === planet.name}
             onSelect={handleSelect}
             onOrderTo={handleOrderToBody}
+            colorOverride={mapModeColors?.get(planet.name)}
           />
         ))}
         {BELTS.map((belt) => (

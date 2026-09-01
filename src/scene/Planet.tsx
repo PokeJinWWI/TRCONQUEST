@@ -14,11 +14,16 @@ interface PlanetProps {
   onSelect: (name: string) => void
   /** Right-click — orders the currently-selected ship (if any) here. */
   onOrderTo?: (name: string) => void
+  /** Active map mode's color for this planet (see mapModeColor.ts) — replaces
+   * `data.color` for the mesh and marker dot when set. Undefined (no map
+   * mode active) falls back to the planet's own natural color. */
+  colorOverride?: string
 }
 
-export function Planet({ data, selected, onSelect, onOrderTo }: PlanetProps) {
+export function Planet({ data, selected, onSelect, onOrderTo, colorOverride }: PlanetProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
+  const displayColor = colorOverride ?? data.color
 
   useFrame(() => {
     const simYears = simDaysToYears(useGameTimeStore.getState().simDays)
@@ -43,8 +48,8 @@ export function Planet({ data, selected, onSelect, onOrderTo }: PlanetProps) {
         <mesh>
           <sphereGeometry args={[data.radius, 24, 24]} />
           <meshStandardMaterial
-            color={data.color}
-            emissive={data.color}
+            color={displayColor}
+            emissive={displayColor}
             emissiveIntensity={0.5}
           />
         </mesh>
@@ -60,7 +65,7 @@ export function Planet({ data, selected, onSelect, onOrderTo }: PlanetProps) {
             }}
             onWheel={forwardWheelToCanvas}
           >
-            <span className="marker-dot" style={{ borderColor: data.color }} />
+            <span className="marker-dot" style={{ borderColor: displayColor }} />
             <span className="marker-label">{data.name}</span>
           </div>
         </Html>
