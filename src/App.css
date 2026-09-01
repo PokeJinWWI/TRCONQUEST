@@ -847,6 +847,61 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Economy panels (Buildings dock + Economy category) — see BuildingsPanel /
+   EconomyPanel. Reuses the design-table look for its data grids. */
+.econ-panel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.econ-summary {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+  font-size: 11px;
+}
+
+.econ-summary-label {
+  color: #6fe3ff;
+  font-weight: 700;
+}
+
+.econ-subtitle {
+  color: #6fe3ff;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.econ-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 2px 0 6px;
+}
+
+.econ-table th {
+  text-align: left;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: normal;
+  padding: 2px 8px 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.econ-table td {
+  padding: 3px 8px 3px 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-variant-numeric: tabular-nums;
+}
+
+.econ-pos {
+  color: #4ade80;
+}
+
+.econ-neg {
+  color: #ff6b4a;
+}
+
 /* Planet / star markers */
 
 .planet-marker {

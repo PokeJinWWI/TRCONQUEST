@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
+import { EconomyPanel } from './EconomyPanel'
 import { FleetManagement } from './FleetManagement'
 import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
@@ -10,6 +11,7 @@ const SETTINGS_CATEGORY = 'Settings'
 const MILITARY_CATEGORY = 'Military'
 const NAVY_SUBCATEGORY = 'Navy'
 const MAP_MODES_CATEGORY = 'Map Modes'
+const ECONOMY_CATEGORY = 'Economy'
 
 interface CategoryDef {
   name: string
@@ -46,6 +48,7 @@ const CATEGORIES: CategoryDef[] = [
 function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
+  if (category.name === ECONOMY_CATEGORY) return <EconomyPanel subcategory={subcategory} />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   return <div className="nav-placeholder">Not yet available</div>
 }

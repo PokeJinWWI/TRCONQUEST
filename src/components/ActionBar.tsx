@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMapModeStore, type MapMode } from '../state/mapModeStore'
+import { BuildingsPanel } from './BuildingsPanel'
 
 type PanelId = 'buildings' | 'politics' | 'diplomacy'
 
@@ -82,7 +83,11 @@ export function ActionBar() {
             </div>
           )}
           <div className="action-dock-content">
-            <div className="nav-placeholder">Not yet available</div>
+            {activePanel.id === 'buildings' ? (
+              <BuildingsPanel subtab={activeSubtab} />
+            ) : (
+              <div className="nav-placeholder">Not yet available</div>
+            )}
           </div>
         </div>
       )}

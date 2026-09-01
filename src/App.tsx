@@ -16,6 +16,7 @@ import { useShipOrderSettler } from './hooks/useShipOrderSettler'
 import { useEscapeBehavior } from './hooks/useEscapeBehavior'
 import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
+import { useEconomyTick } from './hooks/useEconomyTick'
 import { CombatViewScene } from './scene/CombatViewScene'
 import { GalacticViewScene } from './scene/GalacticViewScene'
 import { InterstellarScene } from './scene/InterstellarScene'
@@ -62,6 +63,8 @@ function App() {
   // Resolves every active engagement independent of which view is mounted —
   // a battle in another system happens whether or not anyone is watching it.
   useCombatResolver()
+  // Advances the planetary economy simulation off the game clock.
+  useEconomyTick()
 
   const topBarRef = useRef<HTMLElement>(null)
   const bottomBarRef = useRef<HTMLElement>(null)
