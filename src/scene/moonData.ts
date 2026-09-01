@@ -14,6 +14,9 @@ export interface MoonRawData {
   // just Luna, see combatResolution's EARTH_MOON_OFFSET); every other entry
   // here is display-only and has no reason to carry it.
   massKg?: number
+  // Which country controls this moon, if any — see countryData.ts. Absent
+  // means unclaimed.
+  ownerId?: string
 }
 
 export interface MoonData extends MoonRawData {
@@ -62,14 +65,14 @@ const MOON_TABLE: Record<string, { planetRadiusKm: number; totalCount: number; r
   Earth: {
     planetRadiusKm: 6371,
     totalCount: 1,
-    raw: [{ name: 'Luna', radiusKm: 1737.4, distanceKm: 384400, periodDays: 27.32, color: '#c9c9c9', massKg: 7.342e22 }],
+    raw: [{ name: 'Luna', radiusKm: 1737.4, distanceKm: 384400, periodDays: 27.32, color: '#c9c9c9', massKg: 7.342e22, ownerId: 'imperial-state-of-mars' }],
   },
   Mars: {
     planetRadiusKm: 3389.5,
     totalCount: 2,
     raw: [
-      { name: 'Phobos', radiusKm: 11.1, distanceKm: 9376, periodDays: 0.319, color: '#9c8770' },
-      { name: 'Deimos', radiusKm: 6.2, distanceKm: 23463, periodDays: 1.263, color: '#a89880' },
+      { name: 'Phobos', radiusKm: 11.1, distanceKm: 9376, periodDays: 0.319, color: '#9c8770', ownerId: 'imperial-state-of-mars' },
+      { name: 'Deimos', radiusKm: 6.2, distanceKm: 23463, periodDays: 1.263, color: '#a89880', ownerId: 'imperial-state-of-mars' },
     ],
   },
   Jupiter: {

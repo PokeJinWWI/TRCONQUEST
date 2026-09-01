@@ -11,10 +11,10 @@ import {
   type ShipClass,
 } from '../data/shipData'
 import { ACTIVE_ENGAGEMENT_RISK_BONUS, WARP_BASE_ESCAPE_LOSS_CHANCE, coreDamageRiskBonus } from '../data/combatData'
-import { PLANETS, UNITS_PER_AU, AU_IN_KM, SUN_RADIUS } from './planetData'
+import { PLANETS, PLANETS_BY_STAR, getPlanetsForStar, UNITS_PER_AU, AU_IN_KM, type PlanetData } from './planetData'
 import { getPlanetPosition, getOrbitPosition, angleForYear, MOON_TIME_DILATION } from './orbitMath'
 import type { MoonData } from './moonData'
-import { STARS, UNITS_PER_LY, starScenePosition } from '../data/starData'
+import { STARS, UNITS_PER_LY, starScenePosition, getSystemStars, findSystemStar, type StarComponent } from '../data/starData'
 import { DAYS_PER_YEAR, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 
@@ -56,7 +56,13 @@ const GRAVITATIONAL_CONSTANT_KM3_PER_KG_S2 = 6.6743e-20
 // useShipDriftIntegrator). Sums the star and every planet; each planet's
 // position is live, so a drifting hull is pulled by where the planets
 // actually are at that moment, not where they started.
-export function systemGravityAcceleration(position: Vector3, simDays: number): Vector3 {
+// `starId` scopes which system's star + planets actually pull — defaults to
+// Sol so every call site written before other systems had any data keeps
+// behaving exactly as before. Every system renders in its own star-at-origin
+// local frame (see starData.ts/planetData.ts), so a position in one system
+// must never be summed against another system's bodies — their coordinates
+// are only numerically comparable within the same system.
+export function systemGravityAcceleration(position: Vector3, simDays: number, starId: string = SOL_SYSTEM_ID): Vector3 {
   const total = new Vector3()
   const pull = (bodyPosition: Vector3, massKg: number) => {
     const toBody = bodyPosition.clone().sub(position)
@@ -69,9 +75,11 @@ export function systemGravityAcceleration(position: Vector3, simDays: number): V
     total.add(toBody.normalize().multiplyScalar(accelUnitsPerDay2))
   }
 
-  const sol = STARS.find((star) => star.id === SOL_SYSTEM_ID)
-  if (sol) pull(new Vector3(0, 0, 0), sol.massKg)
-  for (const planet of PLANETS) pull(bodyLivePosition(planet.name, simDays), planet.massKg)
+  // Every star in the system pulls from its own position — one at the origin
+  // for a single-star system, several at their offsets for a multi-star one
+  // (see getSystemStars).
+  for (const star of getSystemStars(starId)) pull(systemStarOffset(star), star.massKg)
+  for (const planet of getPlanetsForStar(starId)) pull(bodyLivePosition(planet.name, simDays), planet.massKg)
   return total
 }
 
@@ -100,10 +108,15 @@ export function bodyOrbitalVelocity(bodyName: string, simDays: number): Vector3 
 // collision test for a drifting hull. Uses each body's true-to-scale rendered
 // radius, so "it fell into the sun" means exactly what it looks like on the
 // map.
-export function systemBodyContaining(position: Vector3, simDays: number): string | null {
-  const sol = STARS.find((star) => star.id === SOL_SYSTEM_ID)
-  if (sol && position.length() <= SUN_RADIUS) return sol.name
-  for (const planet of PLANETS) {
+export function systemBodyContaining(position: Vector3, simDays: number, starId: string = SOL_SYSTEM_ID): string | null {
+  // Each star at its own position, radius from its real km (same AU->units
+  // ratio SUN_RADIUS is built from, generalized since component stars differ
+  // in size — a white dwarf is Earth-sized, a giant is huge).
+  for (const star of getSystemStars(starId)) {
+    const starRadiusUnits = (star.radiusKm / AU_IN_KM) * UNITS_PER_AU
+    if (systemStarOffset(star).distanceTo(position) <= starRadiusUnits) return star.name
+  }
+  for (const planet of getPlanetsForStar(starId)) {
     if (bodyLivePosition(planet.name, simDays).distanceTo(position) <= planet.radius) return planet.name
   }
   return null
@@ -119,9 +132,35 @@ export interface ShipRenderInfo {
   position: Vector3
 }
 
+// Every planet across every system, searched by name — safe because
+// planet/dwarf-planet names are unique game-wide by construction (see
+// planetData.ts), so this needs no starId to disambiguate. Each planet's
+// position is already expressed in its own system's local star-at-origin
+// frame (see getPlanetPosition), which is exactly the frame a caller already
+// operating within that same system wants.
+function findPlanetByName(bodyName: string): PlanetData | undefined {
+  for (const planets of Object.values(PLANETS_BY_STAR)) {
+    const found = planets.find((p) => p.name === bodyName)
+    if (found) return found
+  }
+  return undefined
+}
+
+// A component star's scene-unit position within its own system (barycenter at
+// origin). Zero for a single-star system, offset for a multi-star one — see
+// starData's StarComponent.offsetAU.
+export function systemStarOffset(star: StarComponent): Vector3 {
+  return new Vector3(star.offsetAU[0] * UNITS_PER_AU, 0, star.offsetAU[1] * UNITS_PER_AU)
+}
+
 export function bodyLivePosition(bodyName: string, simDays: number): Vector3 {
-  if (bodyName === SOL_BODY_NAME) return new Vector3(0, 0, 0)
-  const planet = PLANETS.find((p) => p.name === bodyName)
+  // A star sits at its own position in its system's local frame — the
+  // barycenter (origin) in a single-star system, an offset in a multi-star
+  // one. findSystemStar covers both (single-star systems synthesize one star
+  // at [0,0]), so this correctly handles a ship resting at any star.
+  const star = findSystemStar(bodyName)
+  if (star) return systemStarOffset(star)
+  const planet = findPlanetByName(bodyName)
   if (!planet) return new Vector3(0, 0, 0)
   return getPlanetPosition(planet, simDays / DAYS_PER_YEAR)
 }
@@ -268,11 +307,9 @@ function gravityWellEscapeDays(massKg: number, radiusKm: number): number {
 // radiusKm, but keeps this total rather than throwing).
 function gravityWellBody(location: ShipLocation): { massKg: number; radiusKm: number } | null {
   if (location.kind === 'orbiting') {
-    if (location.bodyName === SOL_BODY_NAME) {
-      const sol = STARS.find((s) => s.id === SOL_SYSTEM_ID)
-      return sol ? { massKg: sol.massKg, radiusKm: sol.radiusKm } : null
-    }
-    const planet = PLANETS.find((p) => p.name === location.bodyName)
+    const star = findSystemStar(location.bodyName)
+    if (star) return { massKg: star.massKg, radiusKm: star.radiusKm }
+    const planet = findPlanetByName(location.bodyName)
     return planet ? { massKg: planet.massKg, radiusKm: planet.radiusKm } : null
   }
   if (location.kind === 'star') {
@@ -536,7 +573,15 @@ export function resolveArrivalLocation(destination: MoveDestination, shipId: str
       // with no system data yet has nothing to orbit *into*, so it keeps
       // the old "rest visibly beside it" behavior.
       const star = STARS.find((s) => s.id === destination.starId)
-      if (star?.hasSystemData) return orbitingLocation(star.id, star.name, shipId)
+      // Orbit a REAL star in the system — the system's primary component,
+      // which is the system itself in a single-star system and the dominant
+      // star (e.g. Rigil Kentaurus) in a multi-star one. Using the system's
+      // display name ('Alpha Centauri') would name a body that isn't an
+      // orbitable star, so this always lands on an actual component.
+      if (star?.hasSystemData) {
+        const primary = getSystemStars(star.id)[0]
+        return orbitingLocation(star.id, primary?.name ?? star.name, shipId)
+      }
       return { kind: 'star', starId: destination.starId, offset: restingOffset(shipId) }
     }
     case 'interstellar-point':

@@ -1,9 +1,11 @@
 import { useRef } from 'react'
+import { ActionBar } from './components/ActionBar'
 import { Breadcrumb } from './components/Breadcrumb'
 import { ChatPlaceholder } from './components/ChatPlaceholder'
 import { DebugConsole } from './components/DebugConsole'
 import { LocationLabel } from './components/LocationLabel'
 import { LockOnToggle } from './components/LockOnToggle'
+import { MainMenu } from './components/MainMenu'
 import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
 import { ResourceBar } from './components/ResourceBar'
@@ -14,12 +16,14 @@ import { useShipOrderSettler } from './hooks/useShipOrderSettler'
 import { useEscapeBehavior } from './hooks/useEscapeBehavior'
 import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
+import { useEconomyTick } from './hooks/useEconomyTick'
 import { CombatViewScene } from './scene/CombatViewScene'
 import { GalacticViewScene } from './scene/GalacticViewScene'
 import { InterstellarScene } from './scene/InterstellarScene'
 import { SatelliteViewScene } from './scene/SatelliteViewScene'
 import { SolarSystemScene } from './scene/SolarSystemScene'
 import { useViewStore } from './state/viewStore'
+import { usePlayerStore } from './state/playerStore'
 import './App.css'
 
 function ActiveScene() {
@@ -59,6 +63,8 @@ function App() {
   // Resolves every active engagement independent of which view is mounted —
   // a battle in another system happens whether or not anyone is watching it.
   useCombatResolver()
+  // Advances the planetary economy simulation off the game clock.
+  useEconomyTick()
 
   const topBarRef = useRef<HTMLElement>(null)
   const bottomBarRef = useRef<HTMLElement>(null)
@@ -67,6 +73,9 @@ function App() {
   // of guessing a fixed pixel offset — see the hook's own comment for why a
   // guess drifts out of sync.
   useHudBarLayout(topBarRef, bottomBarRef)
+
+  const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
+  if (!selectedCountryId) return <MainMenu />
 
   return (
     <div id="app-root">
@@ -94,6 +103,7 @@ function App() {
           <ChatPlaceholder />
           <TimeControls />
         </div>
+        <ActionBar />
         <LocationLabel />
       </footer>
     </div>

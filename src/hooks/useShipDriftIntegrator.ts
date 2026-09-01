@@ -60,9 +60,9 @@ export function useShipDriftIntegrator() {
         const dt = elapsed / substeps
         let struck: string | null = null
         for (let i = 0; i < substeps; i++) {
-          velocity.add(systemGravityAcceleration(position, simDays).multiplyScalar(dt))
+          velocity.add(systemGravityAcceleration(position, simDays, ship.location.systemId).multiplyScalar(dt))
           position.add(velocity.clone().multiplyScalar(dt))
-          struck = systemBodyContaining(position, simDays)
+          struck = systemBodyContaining(position, simDays, ship.location.systemId)
           if (struck) break
         }
 

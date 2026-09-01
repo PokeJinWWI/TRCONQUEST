@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { pristineCombatState, useShipStore } from '../state/shipStore'
 import type { FleetAllegiance } from '../data/shipData'
 import { SHIP_CLASSES, ALLEGIANCE_LABELS, describeFtlDrive } from '../data/shipData'
-import { PLANETS } from '../scene/planetData'
+import { getPlanetsForStar } from '../scene/planetData'
+import { STARS, getSystemStars } from '../data/starData'
 import { SOL_SYSTEM_ID, SOL_BODY_NAME, DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from '../scene/shipPhysics'
 import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/scenarios'
 
 const ALLEGIANCE_OPTIONS = Object.keys(ALLEGIANCE_LABELS) as FleetAllegiance[]
 
-const SPAWN_NEAR_OPTIONS = [SOL_BODY_NAME, ...PLANETS.map((p) => p.name)]
+// Only charted systems (hasSystemData) have anything to spawn near.
+const SPAWNABLE_STARS = STARS.filter((s) => s.hasSystemData)
 
 // A small, fixed ring of starting orbital phases so ships spawned at the
 // same body don't all start at the same point in their orbit — purely
@@ -24,6 +26,7 @@ const SPAWN_PHASE_OFFSETS_DEG = [0, 90, 180, 270]
 export function DebugConsole() {
   const [open, setOpen] = useState(false)
   const [classId, setClassId] = useState(SHIP_CLASSES[0].id)
+  const [starId, setStarId] = useState(SOL_SYSTEM_ID)
   const [nearBody, setNearBody] = useState(SOL_BODY_NAME)
   const [allegiance, setAllegiance] = useState<FleetAllegiance>('player')
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id)
@@ -31,6 +34,10 @@ export function DebugConsole() {
   const ships = useShipStore((s) => s.ships)
   const spawnShip = useShipStore((s) => s.spawnShip)
   const removeShip = useShipStore((s) => s.removeShip)
+
+  // Every real star in the system (component stars for a multi-star system)
+  // plus its planets — all valid bodies to spawn a ship orbiting.
+  const spawnNearOptions = [...getSystemStars(starId).map((c) => c.name), ...getPlanetsForStar(starId).map((p) => p.name)]
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -54,7 +61,7 @@ export function DebugConsole() {
       allegiance,
       location: {
         kind: 'orbiting',
-        systemId: SOL_SYSTEM_ID,
+        systemId: starId,
         bodyName: nearBody,
         periodDays: DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
         phaseDeg,
@@ -144,9 +151,30 @@ export function DebugConsole() {
         </div>
 
         <div className="debug-console-row">
+          <label htmlFor="debug-spawn-system">System</label>
+          <select
+            id="debug-spawn-system"
+            value={starId}
+            onChange={(e) => {
+              const nextStarId = e.target.value
+              setStarId(nextStarId)
+              // Default to orbiting the system's primary star (a real
+              // component, not the system's display name).
+              setNearBody(getSystemStars(nextStarId)[0]?.name ?? SOL_BODY_NAME)
+            }}
+          >
+            {SPAWNABLE_STARS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="debug-console-row">
           <label htmlFor="debug-spawn-near">Spawn near</label>
           <select id="debug-spawn-near" value={nearBody} onChange={(e) => setNearBody(e.target.value)}>
-            {SPAWN_NEAR_OPTIONS.map((name) => (
+            {spawnNearOptions.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>
