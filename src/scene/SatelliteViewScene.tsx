@@ -13,12 +13,13 @@ import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { getMoonPosition } from './orbitMath'
-import { PLANETS, SUN_RADIUS_KM, UNITS_PER_AU, satelliteVisualRadius } from './planetData'
+import { getPlanetsForStar, SUN_RADIUS_KM, UNITS_PER_AU, satelliteVisualRadius } from './planetData'
 import { getMoonsForPlanet } from './moonData'
 import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
 import { OrbitRing } from './OrbitRing'
-import { planMove, satelliteOrbitLocalPosition, canFollow, oppositeMoonSyncOrbit, SOL_SYSTEM_ID } from './shipPhysics'
+import { getSystemStars } from '../data/starData'
+import { planMove, satelliteOrbitLocalPosition, canFollow, oppositeMoonSyncOrbit } from './shipPhysics'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
@@ -50,6 +51,7 @@ const ENTER_MOON_DISTANCE = 4.5
 // counts as arrived — ships are small, similar scale to moons.
 const SHIP_FOCUS_ARRIVE_DISTANCE = 0.8
 const SOL_COLOR = '#ffd27a'
+const SOL_NAME = 'Sol'
 // The primary body always sits at the origin in this view — the pan-back
 // target once no moon is selected (deselecting, or clicking the primary
 // body's own marker/hologram after having a moon focused).
@@ -60,6 +62,15 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   const inViewSelection = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
   const lockOnEnabled = useViewStore((s) => s.lockOnEnabled)
+  const selectedStarId = useViewStore((s) => s.selectedStarId)
+  // The component star this satellite view is showing, if the body is one of
+  // the system's stars (Sol, or Rigil Kentaurus / Sirius A / ... in a
+  // multi-star system). getSystemStars covers single- and multi-star systems.
+  const currentStar = useMemo(
+    () => getSystemStars(selectedStarId).find((c) => c.name === bodyName),
+    [selectedStarId, bodyName],
+  )
+  const PLANETS = useMemo(() => getPlanetsForStar(selectedStarId), [selectedStarId])
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const [flyingToMoon, setFlyingToMoon] = useState<MoonData | null>(null)
   // Set once CameraFocusRig arrives at a moon — swaps this scene over to
@@ -88,10 +99,10 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
         (ship) =>
           !ship.order &&
           ship.location.kind === 'orbiting' &&
-          ship.location.systemId === SOL_SYSTEM_ID &&
+          ship.location.systemId === selectedStarId &&
           ship.location.bodyName === bodyName,
       ),
-    [ships, bodyName],
+    [ships, bodyName, selectedStarId],
   )
   // Only track a selected ship for the camera lock while it's actually
   // rendered here (an orbitingShips member) — same "focusing logic like a
@@ -133,22 +144,22 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (focusedMoon && inViewSelection !== focusedMoon.name) setFocusedMoon(null)
   }, [inViewSelection, focusedMoon])
 
-  const isStar = bodyName === 'Sol'
-  const planetData = useMemo(() => (!isStar ? PLANETS.find((p) => p.name === bodyName) : undefined), [bodyName, isStar])
-  const color = isStar ? SOL_COLOR : planetData?.color ?? '#ffffff'
+  const isStar = !!currentStar
+  const planetData = useMemo(() => (!isStar ? PLANETS.find((p) => p.name === bodyName) : undefined), [bodyName, isStar, PLANETS])
+  const color = isStar ? currentStar?.color ?? SOL_COLOR : planetData?.color ?? '#ffffff'
   // Real body radius, compressed but no longer flattened to one constant —
   // see satelliteVisualRadius: Sol and Earth used to render at the exact
   // same size purely because nothing compared them.
   const primaryVisualRadius = useMemo(
-    () => satelliteVisualRadius(isStar ? SUN_RADIUS_KM : planetData?.radiusKm ?? EARTH_RADIUS_KM_FALLBACK),
-    [isStar, planetData],
+    () => satelliteVisualRadius(isStar ? currentStar?.radiusKm ?? SUN_RADIUS_KM : planetData?.radiusKm ?? EARTH_RADIUS_KM_FALLBACK),
+    [isStar, planetData, currentStar],
   )
   const orbitAU = planetData ? planetData.orbitRadius / UNITS_PER_AU : undefined
   const moonInfo = useMemo(() => (!isStar ? getMoonsForPlanet(bodyName) : { totalCount: 0, moons: [] }), [bodyName, isStar])
 
   const primaryBody: InspectableBody = useMemo(() => {
     if (isStar) {
-      return { name: 'Sol', kind: 'star', color, radiusKm: SUN_RADIUS_KM }
+      return { name: currentStar?.name ?? SOL_NAME, kind: 'star', color, radiusKm: currentStar?.radiusKm ?? SUN_RADIUS_KM }
     }
     return {
       name: planetData?.name ?? bodyName,
@@ -158,8 +169,9 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
       orbitAU,
       orbitPeriodYears: planetData?.orbitPeriodYears,
       moonCount: moonInfo.totalCount,
+      planetClass: planetData?.planetClass,
     }
-  }, [isStar, planetData, color, orbitAU, moonInfo, bodyName])
+  }, [isStar, planetData, color, orbitAU, moonInfo, bodyName, currentStar])
 
   // The moon currently selected, if any — derived from viewStore's
   // inViewSelection so the Outliner can drive it exactly like clicking the
@@ -204,7 +216,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'body', systemId: SOL_SYSTEM_ID, bodyName }, useGameTimeStore.getState().simDays)
+    const result = planMove(ship, { kind: 'body', systemId: selectedStarId, bodyName }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
     // Pinned in a firefight: the destination becomes an FTL escape charge
     // instead of a move order (see planMove's 'engaged' result).
@@ -225,7 +237,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (!ship) return
     const result = planMove(
       ship,
-      { kind: 'body', systemId: SOL_SYSTEM_ID, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) },
+      { kind: 'body', systemId: selectedStarId, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) },
       useGameTimeStore.getState().simDays,
     )
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)

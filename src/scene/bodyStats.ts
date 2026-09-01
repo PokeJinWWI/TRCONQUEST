@@ -1,4 +1,25 @@
+import type { PlanetClass } from './planetData'
+
 const GAS_GIANTS = new Set(['Jupiter', 'Saturn', 'Uranus', 'Neptune'])
+
+// Flavor taxonomy describing a planet's physical/climate character —
+// independent of estimateHabitability below (a terraformed Venus reads as
+// "Favorable" there purely by orbital distance, but its class, Ocean, is
+// what actually explains why). Assigned by hand per planet in planetData.ts,
+// same "hand-authored, not computed" approach as color/orbit values.
+export const PLANET_CLASS_LABELS: Record<PlanetClass, string> = {
+  continental: 'Continental World',
+  ocean: 'Ocean World',
+  hycean: 'Hycean World',
+  desert: 'Desert World',
+  toxic: 'Toxic World',
+  barren: 'Barren World',
+  ice: 'Ice World',
+  lava: 'Lava World',
+  eyeball: 'Eyeball World',
+  'gas-giant': 'Gas Giant',
+  'ice-giant': 'Ice Giant',
+}
 
 export interface HabitabilityInfo {
   label: string

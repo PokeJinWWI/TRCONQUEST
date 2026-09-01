@@ -2,28 +2,30 @@ import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
 import { FleetManagement } from './FleetManagement'
 import { SettingsPanel } from './SettingsPanel'
-
-const NATION_NAME = 'Imperial State of Mars'
+import { usePlayerStore } from '../state/playerStore'
+import { getCountry } from '../data/countryData'
 
 const FLEET_CATEGORY = 'Fleet Management'
 const SETTINGS_CATEGORY = 'Settings'
 
 const CATEGORIES = ['Situations', 'Government', 'Technology', 'Society', 'Species', 'Contacts', FLEET_CATEGORY, SETTINGS_CATEGORY]
 
-// Stellaris-style left-side nation nav — real nation name (hardcoded for
-// now, no empire/player system exists yet) and a row of category buttons,
-// each opening a placeholder window. No fake data behind any of them, same
+// Stellaris-style left-side nation nav — the real selected country's name
+// (see playerStore/MainMenu) and a row of category buttons, each opening a
+// placeholder window. No fake data behind the category windows, same
 // "reserve the spot, don't invent content" spirit as ChatPlaceholder and the
-// Outliner's empty Colonies/Fleets/Starbases sections.
+// Outliner's empty Starbases section.
 export function NavBar() {
   const [collapsed, setCollapsed] = useState(false)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const nationName = (selectedCountryId && getCountry(selectedCountryId)?.name) ?? ''
 
   return (
     <>
       <div className={`nav-sidebar${collapsed ? ' collapsed' : ''}`}>
         <div className="nav-sidebar-content">
-          <div className="nav-nation-name">{NATION_NAME}</div>
+          <div className="nav-nation-name">{nationName}</div>
           <div className="nav-category-list">
             {CATEGORIES.map((category) => (
               <button

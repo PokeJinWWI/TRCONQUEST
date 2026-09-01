@@ -61,8 +61,8 @@ import {
   type CombatObstacle,
   type GridDensity,
 } from './combatArena'
-import { PLANETS } from './planetData'
-import { STARS } from '../data/starData'
+import { getPlanetsForStar } from './planetData'
+import { STARS, findSystemStar } from '../data/starData'
 import { getMoonsForPlanet, type MoonData } from './moonData'
 import { angleForYear, getOrbitPosition, MOON_TIME_DILATION } from './orbitMath'
 import { simDaysToSeconds, simSecondsToDays } from '../state/gameTimeStore'
@@ -571,9 +571,12 @@ export function obstaclesForLocation(location: ShipLocation, simDays = 0): Comba
   }
 
   if (location.kind === 'orbiting') {
-    // A system's star doubles as a body you can orbit (Sol in system view),
-    // so check both rosters.
-    const star = STARS.find((s) => s.name === location.bodyName)
+    // A star doubles as a body you can orbit (Sol, or any component star in a
+    // multi-star system — Rigil Kentaurus, Sirius A, ...). findSystemStar
+    // covers single- and multi-star systems alike. The arena centers on
+    // whatever the fight orbits, so the star sits at the origin here
+    // regardless of its position in the wider system.
+    const star = findSystemStar(location.bodyName)
     if (star) {
       return [
         {
@@ -586,7 +589,8 @@ export function obstaclesForLocation(location: ShipLocation, simDays = 0): Comba
         },
       ]
     }
-    const planet = PLANETS.find((p) => p.name === location.bodyName)
+    const systemPlanets = getPlanetsForStar(location.systemId)
+    const planet = systemPlanets.find((p) => p.name === location.bodyName)
     if (planet) {
       const obstacles: CombatObstacle[] = [
         {
@@ -620,7 +624,7 @@ export function obstaclesForLocation(location: ShipLocation, simDays = 0): Comba
     // A moon being orbited directly isn't reachable as a rest location today,
     // but resolve it rather than silently producing an empty arena if it ever
     // becomes one.
-    for (const p of PLANETS) {
+    for (const p of systemPlanets) {
       const moon = getMoonsForPlanet(p.name).moons.find((m) => m.name === location.bodyName)
       if (moon) {
         return [

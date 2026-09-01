@@ -1,5 +1,5 @@
 import type { InspectableBody } from '../scene/inspectableBody'
-import { estimateHabitability, estimateSize } from '../scene/bodyStats'
+import { estimateHabitability, estimateSize, PLANET_CLASS_LABELS } from '../scene/bodyStats'
 import { DraggableWindow } from './DraggableWindow'
 
 export interface InspectPanelAction {
@@ -64,6 +64,12 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
       {body.kind !== 'star' && (
         <>
           <div className="inspect-divider" />
+          {body.planetClass && (
+            <div className="inspect-row">
+              <span className="inspect-label">Class</span>
+              <span className="inspect-value">{PLANET_CLASS_LABELS[body.planetClass]}</span>
+            </div>
+          )}
           <div className="inspect-row">
             <span className="inspect-label">Size class</span>
             <span className="inspect-value">{size.label}</span>

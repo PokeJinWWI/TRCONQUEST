@@ -36,7 +36,14 @@ export function angleForYear(simYears: number, periodYears: number, phase: numbe
  */
 export function getPlanetPosition(data: PlanetData, simYears: number, out = new Vector3()): Vector3 {
   const angle = angleForYear(simYears, data.orbitPeriodYears, MathUtils.degToRad(data.phaseDeg))
-  return getOrbitPosition(data.orbitRadius, angle, data.inclinationDeg, data.ascendingNodeDeg, out)
+  getOrbitPosition(data.orbitRadius, angle, data.inclinationDeg, data.ascendingNodeDeg, out)
+  // Shift the whole orbit onto the planet's parent star, which in a
+  // multi-star system sits away from the barycenter (see PlanetData.
+  // centerOffset). [0,0,0] for a single-star system, so this is a no-op there.
+  out.x += data.centerOffset[0]
+  out.y += data.centerOffset[1]
+  out.z += data.centerOffset[2]
+  return out
 }
 
 // Real moon orbital periods (hours to a couple weeks) are far too fast to

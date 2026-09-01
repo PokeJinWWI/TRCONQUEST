@@ -5,13 +5,16 @@ import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { Sun } from './Sun'
 import { Planet } from './Planet'
+import { AsteroidBelt } from './AsteroidBelt'
 import { ShipMarker } from './ShipMarker'
 import { NavigationLine } from './NavigationLine'
 import { ShipOrbitRing } from './ShipOrbitRing'
 import { ShipPanel } from './ShipPanel'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
-import { PLANETS, SUN_RADIUS_KM, UNITS_PER_AU } from './planetData'
+import { getPlanetsForStar, UNITS_PER_AU, type PlanetData } from './planetData'
 import { getMoonsForPlanet } from './moonData'
+import { getAsteroidBeltsForStar } from '../data/asteroidBeltData'
+import { getSystemStars } from '../data/starData'
 import type { InspectableBody } from './inspectableBody'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
@@ -24,7 +27,6 @@ import {
   canFollow,
   bodyLivePosition,
   SYSTEM_SHIP_ORBIT_RADIUS,
-  SOL_SYSTEM_ID,
 } from './shipPhysics'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
@@ -42,8 +44,6 @@ const ENTER_SATELLITE_DISTANCE = 3
 // How close the "Go To" fly-in to a selected ship needs to get before it
 // counts as arrived.
 const SHIP_FOCUS_ARRIVE_DISTANCE = 1.2
-const SOL_NAME = 'Sol'
-const SOL_COLOR = '#ffd27a'
 // How far a route line's arrowhead reaches back from its destination, in
 // this view's own units (UNITS_PER_AU = 20, so this is ~1.25 AU) — sized
 // against typical in-system hop lengths (tens to hundreds of units), not
@@ -68,9 +68,20 @@ const NEAR_START_DISTANCE = 18
 
 const ORIGIN = new Vector3(0, 0, 0)
 
-function getBodyPosition(name: string): Vector3 {
-  if (name === SOL_NAME) return ORIGIN.clone()
-  const data = PLANETS.find((p) => p.name === name)
+// A component star (see starData) at its scene-unit position in the system
+// view: offsetAU * UNITS_PER_AU in the X/Z plane, barycenter at the origin.
+interface SystemStarRender {
+  name: string
+  color: string
+  radiusKm: number
+  massKg: number
+  position: [number, number, number]
+}
+
+function getBodyPosition(name: string, stars: SystemStarRender[], planets: PlanetData[]): Vector3 {
+  const star = stars.find((s) => s.name === name)
+  if (star) return new Vector3(...star.position)
+  const data = planets.find((p) => p.name === name)
   if (!data) return ORIGIN.clone()
   return getPlanetPosition(data, simDaysToYears(useGameTimeStore.getState().simDays))
 }
@@ -82,13 +93,30 @@ export function SolarSystemScene() {
   const selectedName = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
   const lockOnEnabled = useViewStore((s) => s.lockOnEnabled)
+  const selectedStarId = useViewStore((s) => s.selectedStarId)
+  // Every physical star in this system, at its scene position — one entry for
+  // a single-star system, several for a multi-star one (Alpha Centauri's 3,
+  // Sirius's 2, Luyten 726-8's 2). See starData.getSystemStars.
+  const systemStars = useMemo<SystemStarRender[]>(
+    () =>
+      getSystemStars(selectedStarId).map((c) => ({
+        name: c.name,
+        color: c.color,
+        radiusKm: c.radiusKm,
+        massKg: c.massKg,
+        position: [c.offsetAU[0] * UNITS_PER_AU, 0, c.offsetAU[1] * UNITS_PER_AU],
+      })),
+    [selectedStarId],
+  )
+  const PLANETS = useMemo(() => getPlanetsForStar(selectedStarId), [selectedStarId])
+  const BELTS = useMemo(() => getAsteroidBeltsForStar(selectedStarId), [selectedStarId])
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const setShipOrder = useShipStore((s) => s.setShipOrder)
   const setFtlCharge = useShipStore((s) => s.setFtlCharge)
   const setFollowing = useShipStore((s) => s.setFollowing)
-  const systemShips = useMemo(() => ships.filter((ship) => shipSystemId(ship) === SOL_SYSTEM_ID), [ships])
+  const systemShips = useMemo(() => ships.filter((ship) => shipSystemId(ship) === selectedStarId), [ships, selectedStarId])
   // Every resting-orbiting ship's position among the others sharing its
   // exact body — lets ShipMarker stack their markers/labels instead of
   // letting them overlap into an unreadable pile (most likely once one ship
@@ -149,7 +177,7 @@ export function SolarSystemScene() {
 
   const initialCameraPosition = useMemo<[number, number, number]>(() => {
     if (!continuityBodyRef.current) return [FAR_START.x, FAR_START.y, FAR_START.z]
-    const target = getBodyPosition(continuityBodyRef.current)
+    const target = getBodyPosition(continuityBodyRef.current, systemStars, PLANETS)
     const dir = FAR_START.clone().normalize().multiplyScalar(NEAR_START_DISTANCE)
     const pos = target.add(dir)
     return [pos.x, pos.y, pos.z]
@@ -158,13 +186,19 @@ export function SolarSystemScene() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const selectedStar = useMemo(
+    () => (selectedName ? systemStars.find((s) => s.name === selectedName) : undefined),
+    [selectedName, systemStars],
+  )
   const selectedPlanetData = useMemo(
-    () => (selectedName && selectedName !== SOL_NAME ? PLANETS.find((p) => p.name === selectedName) : undefined),
-    [selectedName],
+    () => (selectedName && !selectedStar ? PLANETS.find((p) => p.name === selectedName) : undefined),
+    [selectedName, selectedStar, PLANETS],
   )
   const selectedBody: InspectableBody | null = useMemo(() => {
     if (!selectedName) return null
-    if (selectedName === SOL_NAME) return { name: SOL_NAME, kind: 'star', color: SOL_COLOR, radiusKm: SUN_RADIUS_KM }
+    if (selectedStar) {
+      return { name: selectedStar.name, kind: 'star', color: selectedStar.color, radiusKm: selectedStar.radiusKm }
+    }
     if (!selectedPlanetData) return null
     return {
       name: selectedPlanetData.name,
@@ -174,11 +208,19 @@ export function SolarSystemScene() {
       orbitAU: selectedPlanetData.orbitRadius / UNITS_PER_AU,
       orbitPeriodYears: selectedPlanetData.orbitPeriodYears,
       moonCount: getMoonsForPlanet(selectedPlanetData.name).totalCount,
+      planetClass: selectedPlanetData.planetClass,
     }
-  }, [selectedName, selectedPlanetData])
+  }, [selectedName, selectedStar, selectedPlanetData])
   const flyingPlanetData = useMemo(
-    () => (flyingToName && flyingToName !== SOL_NAME ? PLANETS.find((p) => p.name === flyingToName) : undefined),
-    [flyingToName],
+    () => (flyingToName ? PLANETS.find((p) => p.name === flyingToName) : undefined),
+    [flyingToName, PLANETS],
+  )
+  // The star being flown to (a component star), if the fly target is one —
+  // used so a Detailed-View fly-in to an offset star aims at that star's
+  // actual position, not the barycenter.
+  const flyingStar = useMemo(
+    () => (flyingToName ? systemStars.find((s) => s.name === flyingToName) : undefined),
+    [flyingToName, systemStars],
   )
 
   const handleSelect = (name: string) => {
@@ -211,7 +253,7 @@ export function SolarSystemScene() {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'body', systemId: SOL_SYSTEM_ID, bodyName }, useGameTimeStore.getState().simDays)
+    const result = planMove(ship, { kind: 'body', systemId: selectedStarId, bodyName }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
     // Pinned in a firefight: the destination becomes an FTL escape charge
     // instead of a move order (see planMove's 'engaged' result).
@@ -222,7 +264,7 @@ export function SolarSystemScene() {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'point', systemId: SOL_SYSTEM_ID, position: point }, useGameTimeStore.getState().simDays)
+    const result = planMove(ship, { kind: 'point', systemId: selectedStarId, position: point }, useGameTimeStore.getState().simDays)
     if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
     // Pinned in a firefight: the destination becomes an FTL escape charge
     // instead of a move order (see planMove's 'engaged' result).
@@ -251,7 +293,17 @@ export function SolarSystemScene() {
 
         <DeepSpaceClickPlane onDeselect={() => selectInView(null)} onOrderTo={handleOrderToPoint} />
 
-        <Sun selected={selectedName === SOL_NAME} onSelect={() => handleSelect(SOL_NAME)} onOrderTo={() => handleOrderToBody(SOL_NAME)} />
+        {systemStars.map((star) => (
+          <Sun
+            key={star.name}
+            selected={selectedName === star.name}
+            onSelect={() => handleSelect(star.name)}
+            onOrderTo={() => handleOrderToBody(star.name)}
+            name={star.name}
+            color={star.color}
+            position={star.position}
+          />
+        ))}
         {PLANETS.map((planet) => (
           <Planet
             key={planet.name}
@@ -260,6 +312,9 @@ export function SolarSystemScene() {
             onSelect={handleSelect}
             onOrderTo={handleOrderToBody}
           />
+        ))}
+        {BELTS.map((belt) => (
+          <AsteroidBelt key={belt.name} data={belt} />
         ))}
 
         {shipOrbitRings.map((g) => (
@@ -299,7 +354,9 @@ export function SolarSystemScene() {
             getTargetPosition={() =>
               flyingPlanetData
                 ? getPlanetPosition(flyingPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
-                : ORIGIN
+                : flyingStar
+                  ? new Vector3(...flyingStar.position)
+                  : ORIGIN
             }
             onArrive={() => enterSatellite(flyingToName)}
           />
@@ -331,6 +388,7 @@ export function SolarSystemScene() {
               if (lockOnEnabled) {
                 if (trackedShip) return getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
                 if (selectedPlanetData) return getPlanetPosition(selectedPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
+                if (selectedStar) return new Vector3(...selectedStar.position)
               }
               return ORIGIN
             }}

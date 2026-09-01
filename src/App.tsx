@@ -4,6 +4,7 @@ import { ChatPlaceholder } from './components/ChatPlaceholder'
 import { DebugConsole } from './components/DebugConsole'
 import { LocationLabel } from './components/LocationLabel'
 import { LockOnToggle } from './components/LockOnToggle'
+import { MainMenu } from './components/MainMenu'
 import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
 import { ResourceBar } from './components/ResourceBar'
@@ -20,6 +21,7 @@ import { InterstellarScene } from './scene/InterstellarScene'
 import { SatelliteViewScene } from './scene/SatelliteViewScene'
 import { SolarSystemScene } from './scene/SolarSystemScene'
 import { useViewStore } from './state/viewStore'
+import { usePlayerStore } from './state/playerStore'
 import './App.css'
 
 function ActiveScene() {
@@ -67,6 +69,9 @@ function App() {
   // of guessing a fixed pixel offset — see the hook's own comment for why a
   // guess drifts out of sync.
   useHudBarLayout(topBarRef, bottomBarRef)
+
+  const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
+  if (!selectedCountryId) return <MainMenu />
 
   return (
     <div id="app-root">

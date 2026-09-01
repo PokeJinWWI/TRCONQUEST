@@ -28,11 +28,17 @@ export function Planet({ data, selected, onSelect, onOrderTo }: PlanetProps) {
 
   return (
     <group>
-      <OrbitRing
-        radius={data.orbitRadius}
-        inclinationDeg={data.inclinationDeg}
-        ascendingNodeDeg={data.ascendingNodeDeg}
-      />
+      {/* The orbit ring is centered on the planet's parent star, which in a
+          multi-star system is offset from the barycenter (see
+          PlanetData.centerOffset) — a no-op [0,0,0] in a single-star system.
+          The orbiting mesh below is already offset via getPlanetPosition. */}
+      <group position={data.centerOffset}>
+        <OrbitRing
+          radius={data.orbitRadius}
+          inclinationDeg={data.inclinationDeg}
+          ascendingNodeDeg={data.ascendingNodeDeg}
+        />
+      </group>
       <group ref={groupRef}>
         <mesh>
           <sphereGeometry args={[data.radius, 24, 24]} />

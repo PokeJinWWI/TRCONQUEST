@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
-import { PLANETS } from '../scene/planetData'
-import { getStarsForNeighborhood } from '../data/starData'
+import { usePlayerStore } from '../state/playerStore'
+import { getPlanetsForStar } from '../scene/planetData'
+import { getStarsForNeighborhood, getSystemStars } from '../data/starData'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
 import { getMoonsForPlanet } from '../scene/moonData'
 import { ALLEGIANCE_COLORS } from '../data/shipData'
@@ -19,9 +20,6 @@ interface OutlinerEntry {
   color: string
   kind: EntryKind
 }
-
-const SOL_COLOR = '#ffd27a'
-const SOL_NAME = 'Sol'
 
 const FILTERS: { kind: FilterKind; label: string }[] = [
   { kind: 'neighborhood', label: 'Neighborhoods' },
@@ -50,17 +48,19 @@ function useInViewEntries(): OutlinerEntry[] {
   }
 
   if (level === 'system') {
-    const starName = STARS.find((s) => s.id === selectedStarId)?.name ?? SOL_NAME
+    // Every component star (one for a single-star system, several for a
+    // multi-star one — see getSystemStars), then the planets.
     return [
-      { key: 'sol', name: starName, color: SOL_COLOR, kind: 'star' },
-      ...PLANETS.map((p) => ({ key: p.name, name: p.name, color: p.color, kind: 'planet' as const })),
+      ...getSystemStars(selectedStarId).map((c) => ({ key: c.name, name: c.name, color: c.color, kind: 'star' as const })),
+      ...getPlanetsForStar(selectedStarId).map((p) => ({ key: p.name, name: p.name, color: p.color, kind: 'planet' as const })),
     ]
   }
 
   if (level === 'satellite' && selectedBodyName) {
-    const isStar = selectedBodyName === SOL_NAME
-    const planetData = !isStar ? PLANETS.find((p) => p.name === selectedBodyName) : undefined
-    const color = isStar ? SOL_COLOR : planetData?.color ?? '#ffffff'
+    const componentStar = getSystemStars(selectedStarId).find((c) => c.name === selectedBodyName)
+    const isStar = !!componentStar
+    const planetData = !isStar ? getPlanetsForStar(selectedStarId).find((p) => p.name === selectedBodyName) : undefined
+    const color = componentStar?.color ?? planetData?.color ?? '#ffffff'
     const moons = !isStar ? getMoonsForPlanet(selectedBodyName).moons : []
     return [
       { key: selectedBodyName, name: selectedBodyName, color, kind: isStar ? 'star' : 'planet' },
@@ -82,6 +82,21 @@ function useFleetEntries(): OutlinerEntry[] {
   return ships
     .filter((ship) => ship.allegiance === 'player')
     .map((ship) => ({ key: ship.id, name: ship.name, color: ALLEGIANCE_COLORS[ship.allegiance], kind: 'ship' as const }))
+}
+
+// Bodies in the currently-viewed system that belong to the player's own
+// country — real ownership data (see planetData.ts's ownerId), not a
+// placeholder. Scoped to the system currently in view, same as
+// useInViewEntries, rather than the player's full territory across every
+// system, since this panel is about what's around you right now.
+function useColonyEntries(): OutlinerEntry[] {
+  const level = useViewStore((s) => s.level)
+  const selectedStarId = useViewStore((s) => s.selectedStarId)
+  const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
+  if (!selectedCountryId || (level !== 'system' && level !== 'satellite')) return []
+  return getPlanetsForStar(selectedStarId)
+    .filter((p) => p.ownerId === selectedCountryId)
+    .map((p) => ({ key: p.name, name: p.name, color: p.color, kind: 'planet' as const }))
 }
 
 function OutlinerIcon({ color, kind }: { color: string; kind: EntryKind }) {
@@ -145,11 +160,12 @@ function OutlinerSection({
   )
 }
 
-// Stellaris-style right-side outliner: what's currently in view (real,
-// derived from viewStore + the game's actual body data) plus placeholder
-// sections for nation assets this project doesn't have gameplay systems for
-// yet (colonies/fleets/starbases) — reserving their spot the same way
-// ChatPlaceholder reserves the comms panel's, rather than inventing fake data.
+// Stellaris-style right-side outliner: what's currently in view and which of
+// it the player's own country owns (both real, derived from viewStore +
+// planetData's ownerId), plus a placeholder Starbases section for a nation
+// asset this project doesn't have a gameplay system for yet — reserving its
+// spot the same way ChatPlaceholder reserves the comms panel's, rather than
+// inventing fake data.
 export function Outliner() {
   const [collapsed, setCollapsed] = useState(false)
   const [search, setSearch] = useState('')
@@ -158,6 +174,7 @@ export function Outliner() {
   )
   const inViewEntries = useInViewEntries()
   const fleetEntries = useFleetEntries()
+  const colonyEntries = useColonyEntries()
   const inViewSelection = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
@@ -236,7 +253,13 @@ export function Outliner() {
           selectedKey={inViewSelection}
           onEntryClick={handleInViewClick}
         />
-        <OutlinerSection title="Colonies" entries={[]} emptyText="No colonies established" />
+        <OutlinerSection
+          title="Colonies"
+          entries={colonyEntries}
+          emptyText="No colonies established"
+          selectedKey={inViewSelection}
+          onEntryClick={handleInViewClick}
+        />
         <OutlinerSection
           title="Fleets"
           entries={filteredFleets}
