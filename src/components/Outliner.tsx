@@ -246,6 +246,9 @@ export function Outliner() {
           ))}
         </div>
 
+        {/* Your own market, not a list of every market that exists — same
+            player-only scope as Fleets/Colonies, hence singular. */}
+        <OutlinerSection title="Market" entries={[]} emptyText="No market established" />
         <OutlinerSection
           title="In View"
           entries={filteredInView}
@@ -268,6 +271,19 @@ export function Outliner() {
           onEntryClick={handleFleetClick}
         />
         <OutlinerSection title="Starbases" entries={[]} emptyText="No starbases built" />
+        {/* Reserved sections below, matching categories this game doesn't
+            have a system for yet but that the new bottom ActionBar
+            (Politics/Diplomacy/Buildings) and left NavBar (Economy/Military)
+            categories already gesture at — Army and Navy are the two
+            military branches; Navy is already the real "Fleets" section
+            above, so only Army is new here. Same "reserve the spot, don't
+            invent content" rule as every other empty section in this file. */}
+        <OutlinerSection title="Interest Groups" entries={[]} emptyText="No interest groups formed" />
+        <OutlinerSection title="Political Movements" entries={[]} emptyText="No political movements active" />
+        <OutlinerSection title="Political Lobbies" entries={[]} emptyText="No political lobbies formed" />
+        <OutlinerSection title="Treaties" entries={[]} emptyText="No treaties signed" />
+        <OutlinerSection title="Army" entries={[]} emptyText="No army raised" />
+        <OutlinerSection title="Companies" entries={[]} emptyText="No companies chartered" />
       </div>
     </div>
   )

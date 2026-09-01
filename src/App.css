@@ -65,6 +65,114 @@
   gap: 16px;
 }
 
+/* ActionBar's docked category panel — spans between the nav sidebar and the
+   outliner (both a fixed 220px, see .nav-sidebar/.outliner) and sits flush
+   above the bottom HUD bar, sliding up on open. Same overall shape as
+   Victoria 3's build/politics/diplomacy menu: a titled header, a row of
+   category tabs, and a content area below — rather than a small floating
+   window. */
+.action-dock-panel {
+  position: absolute;
+  left: 220px;
+  right: 220px;
+  /* This panel is a child of the footer (.hud-bar.hud-bottom), which is
+     itself position: absolute and therefore the containing block here —
+     100% of the FOOTER's own height (not the viewport's) is what actually
+     lands the panel's bottom edge flush with the footer's top edge. */
+  bottom: 100%;
+  z-index: 15;
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(2, 6, 12, 0.94);
+  border-top: 1px solid rgba(111, 227, 255, 0.4);
+  border-left: 1px solid rgba(111, 227, 255, 0.3);
+  border-right: 1px solid rgba(111, 227, 255, 0.3);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+  color: #9fe8ff;
+  animation: action-dock-open 160ms ease-out;
+}
+
+@keyframes action-dock-open {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.action-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(111, 227, 255, 0.1);
+  border-bottom: 1px solid rgba(111, 227, 255, 0.35);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: #fff;
+}
+
+.action-dock-close {
+  background: none;
+  border: none;
+  color: #9fe8ff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.action-dock-close:hover {
+  color: #fff;
+}
+
+.action-dock-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px 0;
+  flex-wrap: wrap;
+}
+
+/* Folder-tab look (square top corners, no bottom border where it meets the
+   content area below) — distinct from .nav-subtab's pill style so this
+   docked panel reads visually distinct from the sidebar's own sub-tabs. */
+.action-dock-tab {
+  background: transparent;
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px 3px 0 0;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 6px 16px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.action-dock-tab:hover {
+  color: #fff;
+  background: rgba(111, 227, 255, 0.1);
+}
+
+.action-dock-tab.active {
+  color: #6fe3ff;
+  background: rgba(111, 227, 255, 0.18);
+  border-color: rgba(111, 227, 255, 0.6);
+  border-bottom-color: transparent;
+}
+
+.action-dock-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 14px;
+  border-top: 1px solid rgba(111, 227, 255, 0.15);
+}
+
 /* Bottom-center quick-action bar (see ActionBar.tsx) — position: absolute
    pulls it out of the footer's own space-between flex flow, so it sits at
    the footer's true horizontal center regardless of how wide the left

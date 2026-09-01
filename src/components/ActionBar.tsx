@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { DraggableWindow } from './DraggableWindow'
 import { useMapModeStore, type MapMode } from '../state/mapModeStore'
 
 type PanelId = 'buildings' | 'politics' | 'diplomacy'
@@ -19,7 +18,7 @@ interface PanelDef {
 // there's no separate diplomatic-standing data to visualize yet that would
 // justify a distinct overlay.
 const PANELS: PanelDef[] = [
-  { id: 'buildings', title: 'Buildings', icon: '⚙', mapMode: 'gdp' },
+  { id: 'buildings', title: 'Buildings', icon: '⚙', mapMode: 'gdp', subtabs: ['Development', 'Agriculture', 'Resources', 'Urban'] },
   { id: 'politics', title: 'Politics', icon: '⚖', mapMode: 'political', subtabs: ['Decrees', 'Government Actions'] },
   { id: 'diplomacy', title: 'Diplomacy', icon: '⚑', mapMode: 'political', subtabs: ['Diplomatic Actions', 'Diplomatic Demands'] },
 ]
@@ -27,8 +26,12 @@ const PANELS: PanelDef[] = [
 // Bottom-center quick-action bar — each icon opens a category panel AND
 // switches the system view's map mode for as long as that panel is open
 // (see mapModeStore/mapModeColor.ts), same dual behavior Victoria 3's
-// construction/politics buttons have. Closing the panel (or picking another
-// icon) returns the map to its normal per-planet colors.
+// construction/politics/diplomacy buttons have. The panel itself docks to
+// the bottom of the screen (between the nav sidebar and the outliner,
+// sitting right above this bar) with a row of category tabs across the top,
+// the same "slides up, tabbed" shape Victoria 3's build menu uses — rather
+// than a small floating window. Closing the panel (or picking another icon)
+// returns the map to its normal per-planet colors.
 export function ActionBar() {
   const [activePanelId, setActivePanelId] = useState<PanelId | null>(null)
   const [activeSubtab, setActiveSubtab] = useState<string | null>(null)
@@ -56,6 +59,34 @@ export function ActionBar() {
 
   return (
     <>
+      {activePanel && (
+        <div className="action-dock-panel">
+          <div className="action-dock-header">
+            <span>{activePanel.title}</span>
+            <button type="button" className="action-dock-close" onClick={handleClose} aria-label="Close">
+              ×
+            </button>
+          </div>
+          {activePanel.subtabs && (
+            <div className="action-dock-tabs">
+              {activePanel.subtabs.map((sub) => (
+                <button
+                  key={sub}
+                  type="button"
+                  className={`action-dock-tab${activeSubtab === sub ? ' active' : ''}`}
+                  onClick={() => setActiveSubtab(sub)}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="action-dock-content">
+            <div className="nav-placeholder">Not yet available</div>
+          </div>
+        </div>
+      )}
+
       <div className="map-action-bar">
         {PANELS.map((panel) => (
           <button
@@ -70,26 +101,6 @@ export function ActionBar() {
           </button>
         ))}
       </div>
-
-      {activePanel && (
-        <DraggableWindow title={activePanel.title} onClose={handleClose} initialOffset={{ x: 0, y: -180 }}>
-          {activePanel.subtabs && (
-            <div className="nav-subtabs">
-              {activePanel.subtabs.map((sub) => (
-                <button
-                  key={sub}
-                  type="button"
-                  className={`nav-subtab${activeSubtab === sub ? ' active' : ''}`}
-                  onClick={() => setActiveSubtab(sub)}
-                >
-                  {sub}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="nav-placeholder">Not yet available</div>
-        </DraggableWindow>
-      )}
     </>
   )
 }
