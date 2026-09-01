@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
+import { useFleetStore } from '../state/fleetStore'
 import { PLANETS } from '../scene/planetData'
 import { getStarsForNeighborhood } from '../data/starData'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
@@ -10,7 +11,7 @@ import { ALLEGIANCE_COLORS } from '../data/shipData'
 type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship'
 // The filter offers a "black holes" toggle even though nothing in the game
 // can be that kind yet — reserving the spot the same way the empty
-// Colonies/Fleets/Starbases sections do.
+// Colonies/Starbases sections do.
 type FilterKind = EntryKind | 'blackhole'
 
 interface OutlinerEntry {
@@ -18,6 +19,10 @@ interface OutlinerEntry {
   name: string
   color: string
   kind: EntryKind
+  /** Fleet entries only — the ship a click actually selects (see
+   * handleFleetClick). A fleet's own id isn't a ship id, so this is what
+   * lets the row still resolve to something ShipPanel can inspect. */
+  leadShipId?: string
 }
 
 const SOL_COLOR = '#ffd27a'
@@ -73,15 +78,30 @@ function useInViewEntries(): OutlinerEntry[] {
 
 // Real, not a placeholder — every ship spawned (currently only via the
 // dev-only DebugConsole, since there's no production ship-building system
-// yet) shows up here. Player-owned only: this is the player's OWN fleet
-// roster, not a sensor readout of every hull in the system — a hostile or
-// neutral fleet is still inspectable via its marker/presence badge, it just
-// doesn't belong in "my fleets."
+// yet) shows up here, grouped by fleet rather than one row per hull (see
+// ShipInstance.fleetId) — a hundred ships is a hundred rows of noise if
+// they're not merged into fleets first, but a manageable list once they are.
+// Player-owned only: this is the player's OWN fleet roster, not a sensor
+// readout of every hull in the system — a hostile or neutral fleet is still
+// inspectable via its marker/presence badge, it just doesn't belong in "my
+// fleets."
 function useFleetEntries(): OutlinerEntry[] {
   const ships = useShipStore((s) => s.ships)
-  return ships
-    .filter((ship) => ship.allegiance === 'player')
-    .map((ship) => ({ key: ship.id, name: ship.name, color: ALLEGIANCE_COLORS[ship.allegiance], kind: 'ship' as const }))
+  const fleets = useFleetStore((s) => s.fleets)
+  return useMemo(() => {
+    const owned = ships.filter((ship) => ship.allegiance === 'player')
+    const byFleet = new Map<string, typeof owned>()
+    for (const ship of owned) {
+      const arr = byFleet.get(ship.fleetId) ?? []
+      arr.push(ship)
+      byFleet.set(ship.fleetId, arr)
+    }
+    return Array.from(byFleet.entries()).map(([fleetId, members]) => {
+      const fleet = fleets.find((f) => f.id === fleetId)
+      const name = members.length > 1 ? `${fleet?.name ?? 'Fleet'} (${members.length})` : members[0].name
+      return { key: fleetId, name, color: ALLEGIANCE_COLORS.player, kind: 'ship' as const, leadShipId: members[0].id }
+    })
+  }, [ships, fleets])
 }
 
 function OutlinerIcon({ color, kind }: { color: string; kind: EntryKind }) {
@@ -160,8 +180,13 @@ export function Outliner() {
   const fleetEntries = useFleetEntries()
   const inViewSelection = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
+  const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
+  // A fleet entry's own key is its fleetId (see useFleetEntries), not any
+  // one ship's id, so the row highlights whichever member is actually
+  // selected — not just whichever one happens to be listed as the lead.
+  const selectedFleetId = ships.find((s) => s.id === selectedShipId)?.fleetId ?? null
 
   // Mirrors exactly what clicking the entry's own in-scene marker does: pick
   // it in viewStore (engaging that scene's SelectionTracker camera lock) and
@@ -172,7 +197,7 @@ export function Outliner() {
     selectInView(entry.key)
   }
   const handleFleetClick = (entry: OutlinerEntry) => {
-    selectShip(entry.key)
+    if (entry.leadShipId) selectShip(entry.leadShipId)
   }
 
   const toggleKind = (kind: FilterKind) => {
@@ -241,7 +266,7 @@ export function Outliner() {
           title="Fleets"
           entries={filteredFleets}
           emptyText="No fleets deployed"
-          selectedKey={selectedShipId}
+          selectedKey={selectedFleetId}
           onEntryClick={handleFleetClick}
         />
         <OutlinerSection title="Starbases" entries={[]} emptyText="No starbases built" />

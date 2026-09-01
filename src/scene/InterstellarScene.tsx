@@ -17,7 +17,7 @@ import { HyperlaneLine } from './HyperlaneLine'
 import { ShipMarker } from './ShipMarker'
 import { NavigationLine } from './NavigationLine'
 import { ShipPanel } from './ShipPanel'
-import { getShipRenderPosition, planMove, shipSystemId, canFollow } from './shipPhysics'
+import { getShipRenderPosition, planMove, shipSystemId, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 import { DraggableWindow } from '../components/DraggableWindow'
@@ -143,6 +143,9 @@ export function InterstellarScene() {
     () => ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)),
     [ships],
   )
+  // One marker per fleet resting together, not per ship — see
+  // shipPhysics.clusterRestingShipsByFleet.
+  const interstellarClusters = useMemo(() => clusterRestingShipsByFleet(interstellarShips), [interstellarShips])
   // Only track a selected ship for the camera lock while it's actually
   // present in interstellar space — same "focusing logic like a star" idea,
   // but a star is always here to lock onto while a ship might currently be
@@ -280,8 +283,8 @@ export function InterstellarScene() {
           />
         ))}
 
-        {interstellarShips.map((ship) => (
-          <ShipMarker key={ship.id} ship={ship} onOrderFollow={handleFollowShip} />
+        {interstellarClusters.map((cluster) => (
+          <ShipMarker key={cluster.key} ships={cluster.ships} onOrderFollow={handleFollowShip} />
         ))}
 
         {/* Committed orders for the player's own and allied ships only —

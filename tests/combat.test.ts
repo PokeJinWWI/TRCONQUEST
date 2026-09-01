@@ -41,7 +41,12 @@ import {
   MAX_STEPS_PER_TICK,
   COMBAT_STEP_DAYS,
   COMBAT_STEP_SECONDS,
+  effectiveStrategy,
+  divideAssignment,
+  condenseDestination,
+  screenDestination,
 } from '../src/scene/combatResolution'
+import type { Fleet } from '../src/state/fleetStore'
 import {
   arenaDistance,
   latticePath,
@@ -89,7 +94,13 @@ function check(label: string, cond: boolean, detail = '') {
   }
 }
 
-function makeShip(classId: string, id: string, allegiance: ShipInstance['allegiance'], bodyName = 'Earth'): ShipInstance {
+function makeShip(
+  classId: string,
+  id: string,
+  allegiance: ShipInstance['allegiance'],
+  bodyName = 'Earth',
+  fleetId = `solo-${id}`,
+): ShipInstance {
   const cls = SHIP_CLASSES.find((c) => c.id === classId)!
   return {
     id,
@@ -107,6 +118,7 @@ function makeShip(classId: string, id: string, allegiance: ShipInstance['allegia
     followingShipId: null,
     combat: pristineCombatState(cls.combat),
     stance: 'balanced',
+    fleetId,
   }
 }
 
@@ -2015,6 +2027,164 @@ console.log('\n=== 51. Fleets never spawn inside a body bigger than the old fixe
   const rng = seededRng(1)
   const result = stepEngagements(engagements, ships, COMBAT_STEP_DAYS, rng)
   check('nobody is destroyed on the very first step just by existing there', result.destroyedShipIds.length === 0, result.destroyedShipIds.join(','))
+}
+
+console.log('\n=== 52. The "fleet" stance is a sentinel — it borrows its Fleet\'s actual strategy ===')
+{
+  const ship = { ...makeShip('cruiser', 'p1', 'player'), stance: 'fleet' as const, fleetId: 'f1' }
+  const withStrategy: Fleet[] = [{ id: 'f1', name: '1st Fleet', allegiance: 'player', strategy: 'kite' }]
+  check("resolves to the fleet's own strategy", effectiveStrategy(ship, withStrategy) === 'kite')
+
+  const noStrategy: Fleet[] = [{ id: 'f1', name: '1st Fleet', allegiance: 'player', strategy: null }]
+  check('falls back to Balanced when the fleet has no strategy set', effectiveStrategy(ship, noStrategy) === 'balanced')
+
+  const normalShip = { ...makeShip('cruiser', 'p2', 'player'), stance: 'kite' as const }
+  check("a ship not on 'fleet' just uses its own stance, fleets or not", effectiveStrategy(normalShip, withStrategy) === 'kite')
+}
+
+console.log('\n=== 53. Divide — spreads target assignment across the fleet, not just movement ===')
+{
+  const simDays = 100
+  const p1 = makeShip('cruiser', 'p1', 'player', 'Earth', 'divide-fleet')
+  const p2 = makeShip('cruiser', 'p2', 'player', 'Earth', 'divide-fleet')
+  const e1 = makeShip('cruiser', 'e1', 'hostile', 'Earth')
+  const e2 = makeShip('cruiser', 'e2', 'hostile', 'Earth')
+  const ships = [p1, p2, e1, e2]
+  const fleets: Fleet[] = [{ id: 'divide-fleet', name: 'Test', allegiance: 'player', strategy: 'divide' }]
+  const shipsById = new Map(ships.map((s) => [s.id, s]))
+  const engagements = syncEngagements(ships, [], simDays)
+  check('a real fight opens', engagements.length === 1)
+  const eng = engagements[0]
+
+  const profile1 = shipCombatProfile(p1)!
+  const assign1 = divideAssignment(
+    eng.participants.find((p) => p.shipId === 'p1')!,
+    p1,
+    profile1,
+    eng.participants,
+    shipsById,
+    fleets,
+    eng.obstacles,
+  )
+  check('divide assigns p1 a real target', !!assign1.targetShipId)
+
+  // p1 has now locked onto its pick, same as stepEngagements would persist
+  // it (see the approach step's targetShipId handling) — p2's own pick has
+  // to route around that claim.
+  const afterP1 = eng.participants.map((p) => (p.shipId === 'p1' ? { ...p, targetShipId: assign1.targetShipId ?? null } : p))
+  const profile2 = shipCombatProfile(p2)!
+  const assign2 = divideAssignment(
+    afterP1.find((p) => p.shipId === 'p2')!,
+    p2,
+    profile2,
+    afterP1,
+    shipsById,
+    fleets,
+    eng.obstacles,
+  )
+  check(
+    "divide gives p2 the OTHER enemy, not the one p1 already claimed",
+    !!assign2.targetShipId && assign2.targetShipId !== assign1.targetShipId,
+    `p1 -> ${assign1.targetShipId}, p2 -> ${assign2.targetShipId}`,
+  )
+
+  // Once p2 is ALSO locked on, asking again should keep both picks stable
+  // rather than reshuffling every call — same "don't flicker" reasoning the
+  // real per-step replan tolerance relies on.
+  const afterBoth = afterP1.map((p) => (p.shipId === 'p2' ? { ...p, targetShipId: assign2.targetShipId ?? null } : p))
+  const reassign1 = divideAssignment(
+    afterBoth.find((p) => p.shipId === 'p1')!,
+    p1,
+    profile1,
+    afterBoth,
+    shipsById,
+    fleets,
+    eng.obstacles,
+  )
+  check('an already-locked ship keeps its own pick rather than re-rolling', reassign1.targetShipId === assign1.targetShipId)
+}
+
+console.log('\n=== 54. Condense — regroups the fleet on its own centroid ===')
+{
+  const simDays = 100
+  const p1 = makeShip('cruiser', 'p1', 'player', 'Earth', 'condense-fleet')
+  const p2 = makeShip('cruiser', 'p2', 'player', 'Earth', 'condense-fleet')
+  const p3 = makeShip('cruiser', 'p3', 'player', 'Earth', 'condense-fleet')
+  const ships = [p1, p2, p3]
+  const shipsById = new Map(ships.map((s) => [s.id, s]))
+  const solo = createSoloEngagement(p1, ships, simDays)!
+  check('a solo (no-fight) engagement opens for the whole fleet', solo.participants.length === 3)
+
+  // Spread out along x so the centroid (x=0) is unambiguous and distinct
+  // from any one ship's own position.
+  const spread = solo.participants.map((p) => {
+    if (p.shipId === 'p1') return { ...p, position: { x: -9, y: 0, z: p.position.z } }
+    if (p.shipId === 'p2') return { ...p, position: { x: 0, y: 0, z: p.position.z } }
+    return { ...p, position: { x: 9, y: 0, z: p.position.z } }
+  })
+
+  const dest1 = condenseDestination(spread.find((p) => p.shipId === 'p1')!, p1, spread, shipsById)
+  check('condense pulls an off-center ship toward the centroid', !!dest1 && Math.abs(dest1.x) < 1, dest1 ? dest1.x.toFixed(2) : 'null')
+
+  const dest2 = condenseDestination(spread.find((p) => p.shipId === 'p2')!, p2, spread, shipsById)
+  check('a ship already at the centroid holds rather than nudging in place', dest2 === null)
+
+  const lonely = makeShip('cruiser', 'lonely', 'player', 'Earth', 'lonely-fleet')
+  const loneEngagement = createSoloEngagement(lonely, [lonely], simDays)!
+  const loneShipsById = new Map([[lonely.id, lonely]])
+  check(
+    'alone in the fight, condense has nothing to regroup toward',
+    condenseDestination(loneEngagement.participants[0], lonely, loneEngagement.participants, loneShipsById) === null,
+  )
+}
+
+console.log('\n=== 55. Screen — the toughest half forms a wall between the fleet and the enemy ===')
+{
+  const simDays = 100
+  const b1 = makeShip('battleship', 'b1', 'player', 'Earth', 'screen-fleet')
+  const b2 = makeShip('battleship', 'b2', 'player', 'Earth', 'screen-fleet')
+  const c1 = makeShip('corvette', 'c1', 'player', 'Earth', 'screen-fleet')
+  const c2 = makeShip('corvette', 'c2', 'player', 'Earth', 'screen-fleet')
+  const e1 = makeShip('cruiser', 'e1', 'hostile', 'Earth')
+  const ships = [b1, b2, c1, c2, e1]
+  const shipsById = new Map(ships.map((s) => [s.id, s]))
+  const engagements = syncEngagements(ships, [], simDays)
+  check('a real fight opens', engagements.length === 1)
+  const eng = engagements[0]
+
+  // Cluster the fleet together, off to one side, so its centroid is
+  // well-defined and distinct both from the enemy and from any one member's
+  // own position.
+  const clustered = eng.participants.map((p) => {
+    if (p.shipId === 'b1') return { ...p, position: { x: -1, y: 0, z: -5 } }
+    if (p.shipId === 'b2') return { ...p, position: { x: 1, y: 0, z: -5 } }
+    if (p.shipId === 'c1') return { ...p, position: { x: -1, y: 0, z: -4 } }
+    if (p.shipId === 'c2') return { ...p, position: { x: 1, y: 0, z: -4 } }
+    return p
+  })
+  const enemyPos = clustered.find((p) => p.shipId === 'e1')!.position
+
+  const screenerDest = screenDestination(clustered.find((p) => p.shipId === 'b1')!, b1, clustered, shipsById, eng.obstacles)
+  const screenedDest = screenDestination(clustered.find((p) => p.shipId === 'c1')!, c1, clustered, shipsById, eng.obstacles)
+  check('the tougher (battleship) half gets a wall position', !!screenerDest)
+  check('the frailer (corvette) half falls back toward the centroid instead', !!screenedDest)
+  if (screenerDest && screenedDest) {
+    const dScreener = pointDistance(screenerDest, enemyPos)
+    const dScreened = pointDistance(screenedDest, enemyPos)
+    check(
+      'the wall position sits closer to the enemy than the fallback position',
+      dScreener < dScreened,
+      `wall ${dScreener.toFixed(2)} vs fallback ${dScreened.toFixed(2)}`,
+    )
+  }
+
+  const lonelyScreen = makeShip('battleship', 'lonely', 'player', 'Earth', 'lonely-screen-fleet')
+  const loneEngagement = createSoloEngagement(lonelyScreen, [lonelyScreen], simDays)!
+  const loneShipsById = new Map([[lonelyScreen.id, lonelyScreen]])
+  check(
+    'alone in the fight, screen has no one to shield and no wall to form',
+    screenDestination(loneEngagement.participants[0], lonelyScreen, loneEngagement.participants, loneShipsById, loneEngagement.obstacles) === null,
+  )
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import type { ShipInstance, ShipLocation, MoveDestination, MoveOrder, FtlCharge } from '../state/shipStore'
-import { useCombatStore } from '../state/combatStore'
+import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { findEngagementFor, planFtlCharge } from './combatResolution'
 import {
   SHIP_CLASSES,
@@ -150,6 +150,35 @@ export function shipSystemId(ship: Pick<ShipInstance, 'order' | 'location'>): st
   const { location } = ship
   if (location.kind === 'orbiting' || location.kind === 'system-point') return location.systemId
   return null
+}
+
+// One visible marker per fleet resting at a shared spot, not one per ship —
+// see ShipInstance.fleetId. Grouped by fleet AND location together, not
+// fleet alone: a fleet whose members have drifted apart (one pulled off on
+// its own order that hasn't resettled yet) must not visually merge into a
+// single marker just because they still share a fleetId — shipStore already
+// guarantees ships sharing BOTH a fleetId and a rest location are actually
+// together, so this key is exactly what makes that guarantee visible. A ship
+// still under an order, or resting at a bare point in space rather than a
+// named anchor (combatLocationKey returns null there), is never grouped —
+// it always renders as its own single-ship cluster, same as every ship did
+// before fleets existed.
+export interface FleetCluster {
+  key: string
+  fleetId: string
+  ships: ShipInstance[]
+}
+
+export function clusterRestingShipsByFleet(ships: ShipInstance[]): FleetCluster[] {
+  const groups = new Map<string, ShipInstance[]>()
+  for (const ship of ships) {
+    const key = ship.order ? null : combatLocationKey(ship.location)
+    const groupKey = key ? `${ship.fleetId}::${key}` : `solo::${ship.id}`
+    const arr = groups.get(groupKey) ?? []
+    arr.push(ship)
+    groups.set(groupKey, arr)
+  }
+  return Array.from(groups.entries()).map(([key, ships]) => ({ key, fleetId: ships[0].fleetId, ships }))
 }
 
 // A deterministic angle from a ship's id, in [0, 2π) — the shared basis for

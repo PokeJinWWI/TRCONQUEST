@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useShipStore } from '../state/shipStore'
 import { ALLEGIANCE_LABELS, SHIP_CLASSES, describeFtlDrive, type HyperDrive } from '../data/shipData'
 import {
@@ -16,6 +17,7 @@ import {
 } from './shipPhysics'
 import { activeEnemyContacts, overallHealthFraction, createSoloEngagement } from './combatResolution'
 import { useCombatStore, areHostile, combatLocationKey } from '../state/combatStore'
+import { useFleetStore } from '../state/fleetStore'
 import { useViewStore } from '../state/viewStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { DraggableWindow } from '../components/DraggableWindow'
@@ -104,11 +106,19 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
   const setWarpEnabled = useShipStore((s) => s.setWarpEnabled)
   const setWarpWhenReady = useShipStore((s) => s.setWarpWhenReady)
   const setFollowing = useShipStore((s) => s.setFollowing)
+  const mergeFleets = useShipStore((s) => s.mergeFleets)
+  const splitFleet = useShipStore((s) => s.splitFleet)
+  const fleets = useFleetStore((s) => s.fleets)
   const engagements = useCombatStore((s) => s.engagements)
   const addEngagement = useCombatStore((s) => s.addEngagement)
   const enterCombat = useViewStore((s) => s.enterCombat)
   const level = useViewStore((s) => s.level)
   const simDays = useGameTimeStore((s) => s.simDays)
+  // Which roster members are checked for a Split Off — see the Fleet row
+  // below. Reset whenever the selection changes fleets, so a stale check
+  // from one fleet's roster can't silently apply to a different one.
+  const [splitPicks, setSplitPicks] = useState<Set<string>>(new Set())
+  useEffect(() => setSplitPicks(new Set()), [ship?.fleetId])
 
   if (!selectedShipId || !ship) return null
 
@@ -138,6 +148,23 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
     !engagement &&
     locationKey !== null &&
     ships.some((s) => s.id !== ship.id && combatLocationKey(s.location) === locationKey && areHostile(ship.allegiance, s.allegiance))
+  // Every other hull sharing this ship's fleet — see ShipInstance.fleetId.
+  // Shown whenever there's more than just this ship, so the roster is
+  // reachable from any member, not only whichever one happens to be "lead"
+  // on the marker.
+  const fleet = fleets.find((f) => f.id === ship.fleetId)
+  const fleetMates = ships.filter((s) => s.fleetId === ship.fleetId)
+  // A same-allegiance fleet already resting at this exact spot — the thing
+  // Merge Fleets combines this one with. Requires this ship to itself be at
+  // rest (mid-order, there's no stable "here" to compare against) and uses
+  // the same combatLocationKey test as every other co-location check in this
+  // project (spawning, arrival auto-join, the arena's own contested check).
+  const mergeableFleetId =
+    !ship.order && locationKey !== null
+      ? ships.find(
+          (s) => s.fleetId !== ship.fleetId && s.allegiance === ship.allegiance && !s.order && combatLocationKey(s.location) === locationKey,
+        )?.fleetId
+      : undefined
   const participant = engagement?.participants.find((p) => p.shipId === ship.id)
   // "In combat" (part of an Engagement — the row below) and "actively
   // engaged" (has a live target right now) are different questions: a fleet
@@ -174,6 +201,71 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
 
   return (
     <DraggableWindow title={ship.name} onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
+      {/* Only shown once there's an actual fleet to talk about — a solo
+          hull's own name already says everything this row would. */}
+      {fleetMates.length > 1 && (
+        <div className="inspect-row">
+          <span className="inspect-label">Fleet</span>
+          <span className="inspect-value">
+            {fleet?.name ?? 'Fleet'} ({fleetMates.length})
+            <div className="ship-panel-fleet-roster">
+              {fleetMates.map((mate) => (
+                <span key={mate.id} className="ship-panel-fleet-mate-row">
+                  {/* Splitting is a player action — a hostile/neutral fleet's
+                      roster is still browsable (selectShip below), just not
+                      reorganizable. */}
+                  {owned && (
+                    <input
+                      type="checkbox"
+                      checked={splitPicks.has(mate.id)}
+                      onChange={(e) =>
+                        setSplitPicks((prev) => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(mate.id)
+                          else next.delete(mate.id)
+                          return next
+                        })
+                      }
+                      aria-label={`Select ${mate.name} to split off`}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className={`ship-panel-fleet-mate${mate.id === ship.id ? ' active' : ''}`}
+                    onClick={() => selectShip(mate.id)}
+                  >
+                    {mate.name}
+                  </button>
+                </span>
+              ))}
+            </div>
+            {owned && (
+              <button
+                type="button"
+                className="ship-panel-unfollow-btn"
+                onClick={() => {
+                  const ids = splitPicks.size > 0 ? Array.from(splitPicks) : [ship.id]
+                  splitFleet(ids)
+                  setSplitPicks(new Set())
+                }}
+              >
+                {splitPicks.size > 0 ? `Split Off (${splitPicks.size})` : 'Split Off This Ship'}
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+      {owned && mergeableFleetId && (
+        <div className="inspect-row">
+          <span className="inspect-label">Nearby</span>
+          <span className="inspect-value">
+            Another fleet is here
+            <button type="button" className="ship-panel-unfollow-btn" onClick={() => mergeFleets(ship.fleetId, mergeableFleetId)}>
+              Merge Fleets
+            </button>
+          </span>
+        </div>
+      )}
       <div className="inspect-row">
         <span className="inspect-label">Class</span>
         <span className="inspect-value">{shipClass?.name ?? 'Unknown'}</span>

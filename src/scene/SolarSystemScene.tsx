@@ -23,6 +23,7 @@ import {
   shipSystemId,
   canFollow,
   bodyLivePosition,
+  clusterRestingShipsByFleet,
   SYSTEM_SHIP_ORBIT_RADIUS,
   SOL_SYSTEM_ID,
 } from './shipPhysics'
@@ -89,22 +90,26 @@ export function SolarSystemScene() {
   const setFtlCharge = useShipStore((s) => s.setFtlCharge)
   const setFollowing = useShipStore((s) => s.setFollowing)
   const systemShips = useMemo(() => ships.filter((ship) => shipSystemId(ship) === SOL_SYSTEM_ID), [ships])
-  // Every resting-orbiting ship's position among the others sharing its
+  // One marker per fleet resting together, not per ship — see
+  // shipPhysics.clusterRestingShipsByFleet.
+  const systemClusters = useMemo(() => clusterRestingShipsByFleet(systemShips), [systemShips])
+  // Every resting-orbiting cluster's position among the others sharing its
   // exact body — lets ShipMarker stack their markers/labels instead of
-  // letting them overlap into an unreadable pile (most likely once one ship
-  // is following another there — see ShipInstance.followingShipId).
-  const shipStackInfo = useMemo(() => {
+  // letting them overlap into an unreadable pile (now most likely once two
+  // different fleets share a body, rather than two ships within one).
+  const clusterStackInfo = useMemo(() => {
     const groups = new Map<string, string[]>()
-    for (const ship of systemShips) {
-      if (ship.order || ship.location.kind !== 'orbiting') continue
-      const arr = groups.get(ship.location.bodyName) ?? []
-      arr.push(ship.id)
-      groups.set(ship.location.bodyName, arr)
+    for (const cluster of systemClusters) {
+      const lead = cluster.ships[0]
+      if (lead.order || lead.location.kind !== 'orbiting') continue
+      const arr = groups.get(lead.location.bodyName) ?? []
+      arr.push(cluster.key)
+      groups.set(lead.location.bodyName, arr)
     }
     const info = new Map<string, { index: number; count: number }>()
-    for (const ids of groups.values()) ids.forEach((id, index) => info.set(id, { index, count: ids.length }))
+    for (const keys of groups.values()) keys.forEach((key, index) => info.set(key, { index, count: keys.length }))
     return info
-  }, [systemShips])
+  }, [systemClusters])
   // One ring per distinct (body, inclination) pair with at least one
   // resting orbiting ship — every ship sharing both traces the identical
   // circle (radius is a shared per-view constant, not per-ship state), so
@@ -271,13 +276,13 @@ export function SolarSystemScene() {
           />
         ))}
 
-        {systemShips.map((ship) => (
+        {systemClusters.map((cluster) => (
           <ShipMarker
-            key={ship.id}
-            ship={ship}
+            key={cluster.key}
+            ships={cluster.ships}
             onOrderFollow={handleFollowShip}
-            stackIndex={shipStackInfo.get(ship.id)?.index ?? 0}
-            stackCount={shipStackInfo.get(ship.id)?.count ?? 1}
+            stackIndex={clusterStackInfo.get(cluster.key)?.index ?? 0}
+            stackCount={clusterStackInfo.get(cluster.key)?.count ?? 1}
           />
         ))}
 

@@ -1,7 +1,14 @@
 import { COMPONENT_LABELS, CHAFF_DURATION_SECONDS, SCUTTLE_BLAST_RADIUS_UNITS, type ComponentKind } from '../data/combatData'
 import { GRID_DENSITIES, GRID_DENSITY_LABELS, GRID_DIVISIONS, isInsideWindow } from '../scene/combatArena'
 import { useEffect, useState } from 'react'
-import { activeEnemyContacts, arenaWindowSpan, isChaffActive, overallHealthFraction, shipCombatProfile } from '../scene/combatResolution'
+import {
+  activeEnemyContacts,
+  arenaWindowSpan,
+  isChaffActive,
+  overallHealthFraction,
+  shipCombatProfile,
+  totalHitPoints,
+} from '../scene/combatResolution'
 import { useCombatStore, type Engagement } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
@@ -82,6 +89,28 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
     engagement.participants.filter((p) => p.side === 0),
     engagement.participants.filter((p) => p.side === 1),
   ]
+
+  // Total current HP each side is fielding — every hull's own Integrity %
+  // (the same figure its roster row already shows) scaled by its actual
+  // capacity, so a side's total genuinely reflects both how many ships it
+  // has AND how big/healthy they are, not just a head count. `side === 0`
+  // is always "your side" by construction (see syncEngagements — the
+  // player's own fleet is placed there), so this reads directly as "you vs
+  // them" without needing to know allegiance at all.
+  const sideTotalHp = (group: typeof engagement.participants) =>
+    group.reduce((sum, p) => {
+      const ship = shipsById.get(p.shipId)
+      const profile = ship ? shipCombatProfile(ship) : null
+      if (!ship || !profile) return sum
+      return sum + overallHealthFraction(ship.combat, profile) * totalHitPoints(profile)
+    }, 0)
+  const yourTotalHp = sideTotalHp(sides[0])
+  const hostileTotalHp = sideTotalHp(sides[1])
+  const combinedHp = yourTotalHp + hostileTotalHp
+  // Even at 0/0 (both sides already wiped, an edge case the panel can still
+  // briefly render before the view exits) the bar renders as an even split
+  // rather than dividing by zero.
+  const yourShare = combinedHp > 0 ? yourTotalHp / combinedHp : 0.5
 
   // Every ship the player may actually give orders to — the roster for
   // fleet-wide focus fire below.
@@ -177,6 +206,18 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
       initialOffset={combatPanelOffset()}
       anchor="left"
     >
+      {/* At-a-glance "how is this fight actually going" — total current HP
+          on each side, not headcount, so five wounded corvettes and one
+          fresh battleship don't read as an even fight just because the
+          roster below shows the same box either way. */}
+      <div className="combat-totals-bar" title={`You: ${Math.round(yourTotalHp)} HP · Hostiles: ${Math.round(hostileTotalHp)} HP`}>
+        <span className="combat-totals-fill you" style={{ width: `${yourShare * 100}%` }} />
+        <span className="combat-totals-fill them" style={{ width: `${(1 - yourShare) * 100}%` }} />
+      </div>
+      <div className="combat-totals-labels">
+        <span>You {Math.round(yourShare * 100)}%</span>
+        <span>Hostiles {Math.round((1 - yourShare) * 100)}%</span>
+      </div>
       {renderSide('Your Forces', sides[0], false)}
       {renderSide('Hostiles', sides[1], true)}
 

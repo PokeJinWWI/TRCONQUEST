@@ -170,9 +170,21 @@ export interface CombatProfile {
 // How a ship behaves when the player isn't steering it directly — the
 // auto-combat options surfaced in the Fleet Management > Strategizer tab.
 // Each one is a genuinely different answer to "where should I be standing",
-// resolved by combatResolution.stanceDestination.
-export type CombatStance = 'balanced' | 'swarm' | 'kite' | 'stall' | 'flee'
+// resolved by combatResolution.stanceDestination. 'fleet' is a sentinel
+// rather than a behavior of its own — it means "follow whatever strategy my
+// Fleet (see fleetStore.ts) currently has active" (see combatResolution's
+// effectiveStrategy), which is what makes an individual ship's own choice
+// able to override fleet-wide coordination: setting a ship to anything ELSE
+// just stops it deferring, no separate "detached" flag needed. Never a
+// player's free choice on its own — only reachable by a fleet-wide strategy
+// bulk-assigning it (see shipStore.setFleetStrategy), or by the player
+// re-selecting it for one ship whose fleet already has an active strategy to
+// rejoin (see COMBAT_STANCES vs the Strategizer's own gating).
+export type CombatStance = 'balanced' | 'swarm' | 'kite' | 'stall' | 'flee' | 'fleet'
 
+// The stances a player can freely pick for one ship at any time — 'fleet'
+// deliberately excluded, since it's only ever offered conditionally (see
+// this type's own comment).
 export const COMBAT_STANCES: CombatStance[] = ['balanced', 'swarm', 'kite', 'stall', 'flee']
 
 export const STANCE_LABELS: Record<CombatStance, string> = {
@@ -181,6 +193,7 @@ export const STANCE_LABELS: Record<CombatStance, string> = {
   kite: 'Kite',
   stall: 'Stall',
   flee: 'Flee',
+  fleet: 'Fleet',
 }
 
 export const STANCE_DESCRIPTIONS: Record<CombatStance, string> = {
@@ -193,6 +206,48 @@ export const STANCE_DESCRIPTIONS: Record<CombatStance, string> = {
   // the automatic behaviour for any ship with no weapons or none currently
   // online — see stanceDestination's own fallback.
   flee: 'Run as far from every hostile fleet as possible. Automatic for an unarmed ship, or one whose weapons are offline.',
+  fleet: "Follow this ship's fleet-wide strategy.",
+}
+
+// What a Fleet itself (as opposed to one ship) can be ordered to do — the
+// five ordinary stances above, bulk-applied to every member, plus three that
+// only make sense as coordinated, multi-ship behavior (see
+// combatResolution's divideDestination/condenseDestination/screenAssignment).
+// Deliberately NOT including 'fleet' itself — a fleet strategy can't defer to
+// its own fleet.
+export type FleetStrategy = Exclude<CombatStance, 'fleet'> | 'divide' | 'condense' | 'screen'
+
+export const FLEET_STRATEGIES: FleetStrategy[] = [
+  'balanced',
+  'swarm',
+  'kite',
+  'stall',
+  'flee',
+  'divide',
+  'condense',
+  'screen',
+]
+
+export const FLEET_STRATEGY_LABELS: Record<FleetStrategy, string> = {
+  balanced: 'Balanced',
+  swarm: 'Swarm',
+  kite: 'Kite',
+  stall: 'Stall',
+  flee: 'Flee',
+  divide: 'Divide',
+  condense: 'Condense',
+  screen: 'Screen',
+}
+
+export const FLEET_STRATEGY_DESCRIPTIONS: Record<FleetStrategy, string> = {
+  balanced: STANCE_DESCRIPTIONS.balanced,
+  swarm: STANCE_DESCRIPTIONS.swarm,
+  kite: STANCE_DESCRIPTIONS.kite,
+  stall: STANCE_DESCRIPTIONS.stall,
+  flee: STANCE_DESCRIPTIONS.flee,
+  divide: 'Split up and each take a different enemy, instead of piling onto whoever is nearest.',
+  condense: "Regroup on the fleet's own center — the follow-up to Divide once a fight is won, though it works any time.",
+  screen: "The toughest hulls hold a line between the fleet and the enemy; the rest hold back behind it.",
 }
 
 // Kite holds this fraction of its longest weapon's range — just inside the

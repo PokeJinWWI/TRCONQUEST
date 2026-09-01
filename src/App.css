@@ -414,6 +414,39 @@
   50% { opacity: 0.35; }
 }
 
+/* Total-HP comparison bar — see CombatPanel's own comment on why this reads
+   the fight better than a headcount does. */
+.combat-totals-bar {
+  display: flex;
+  width: 100%;
+  height: 8px;
+  margin-bottom: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.combat-totals-fill {
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.combat-totals-fill.you {
+  background: #4ade80;
+}
+
+.combat-totals-fill.them {
+  background: #ff3b3b;
+}
+
+.combat-totals-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 10px;
+}
+
 .combat-side {
   margin-bottom: 8px;
 }
@@ -598,6 +631,18 @@
   max-height: 380px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.fleet-group-header {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(159, 232, 255, 0.6);
+  margin: 10px 0 4px;
+}
+
+.fleet-group:first-child .fleet-group-header {
+  margin-top: 0;
 }
 
 .fleet-row {
@@ -797,6 +842,30 @@
   filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.9));
 }
 
+/* A fleet marker representing more than one hull — see
+   shipPhysics.clusterRestingShipsByFleet. */
+.ship-marker-count {
+  position: absolute;
+  top: -13px;
+  left: 2px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: rgba(2, 6, 12, 0.92);
+  border: 1px solid #9fe8ff;
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+  color: #9fe8ff;
+}
+
+.ship-marker.selected .ship-marker-count {
+  border-color: #fff;
+  color: #fff;
+}
+
 .ship-marker .marker-label {
   color: #fff;
   opacity: 0.9;
@@ -984,6 +1053,17 @@
 
 .draggable-window-body {
   padding: 10px 12px;
+  /* Windows are free-floating (position: absolute, no parent flex/grid to
+     bound their height), so a panel with enough content — a big fleet
+     roster, a long ship inspector — would otherwise just grow past the
+     viewport with no way to reach what's below the fold. Capped and made
+     independently scrollable instead; overscroll-behavior keeps a scroll
+     gesture from bleeding through to the 3D view underneath once this
+     region hits its own end, same as the nav sidebar's own list. */
+  max-height: min(64vh, 640px);
+  overflow-y: auto;
+  overflow-x: auto;
+  overscroll-behavior: contain;
 }
 
 .inspect-row {
@@ -1049,6 +1129,46 @@
 }
 
 .ship-panel-unfollow-btn.active {
+  background: rgba(111, 227, 255, 0.25);
+  border-color: rgba(111, 227, 255, 0.8);
+  color: #fff;
+}
+
+.ship-panel-fleet-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.ship-panel-fleet-mate-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ship-panel-fleet-mate-row input[type='checkbox'] {
+  width: 11px;
+  height: 11px;
+  accent-color: #6fe3ff;
+  cursor: pointer;
+}
+
+.ship-panel-fleet-mate {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.ship-panel-fleet-mate:hover {
+  background: rgba(111, 227, 255, 0.12);
+}
+
+.ship-panel-fleet-mate.active {
   background: rgba(111, 227, 255, 0.25);
   border-color: rgba(111, 227, 255, 0.8);
   color: #fff;
@@ -1577,12 +1697,23 @@
   width: 560px;
 }
 
-.draggable-window-body {
-  overflow-x: auto;
-}
-
 .strategizer-intro {
   margin-bottom: 8px;
+}
+
+.strategizer-fleet-strategy {
+  padding: 6px 7px 8px;
+  margin-bottom: 4px;
+  background: rgba(111, 227, 255, 0.05);
+  border: 1px solid rgba(111, 227, 255, 0.25);
+  border-radius: 3px;
+}
+
+.strategizer-disclaimer {
+  margin-top: 4px;
+  font-size: 10px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .strategizer-name {

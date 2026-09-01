@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipCombatState } from '../state/shipStore'
+import { useFleetStore } from '../state/fleetStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { useCombatStore } from '../state/combatStore'
 import {
@@ -60,6 +61,7 @@ export function useCombatResolver() {
     const resolve = (simDays: number) => {
       const combat = useCombatStore.getState()
       const { ships } = useShipStore.getState()
+      const { fleets } = useFleetStore.getState()
 
       const synced = syncEngagements(ships, combat.engagements, simDays)
       const hadEngagements = combat.engagements.length > 0
@@ -146,7 +148,7 @@ export function useCombatResolver() {
         const shipsForStep = useShipStore.getState().ships.map((s) =>
           pendingDamage[s.id] ? { ...s, combat: pendingDamage[s.id] } : s,
         )
-        const result = stepEngagements(engagements, shipsForStep, cursor)
+        const result = stepEngagements(engagements, shipsForStep, cursor, undefined, fleets)
         engagements = result.engagements
         Object.assign(pendingDamage, result.shipCombat)
         for (const id of result.destroyedShipIds) destroyed.add(id)

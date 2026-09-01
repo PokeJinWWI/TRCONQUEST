@@ -1,6 +1,8 @@
 import { create } from 'zustand'
-import { CHAFF_CHARGES, type CombatProfile, type CombatStance, type ComponentKind } from '../data/combatData'
+import { CHAFF_CHARGES, type CombatProfile, type CombatStance, type ComponentKind, type FleetStrategy } from '../data/combatData'
 import { deployChaff as deployChaffState } from '../scene/combatResolution'
+import { combatLocationKey } from './combatStore'
+import { useFleetStore, nextFleetName } from './fleetStore'
 import type { FleetAllegiance } from '../data/shipData'
 
 // Where a ship rests when it has no active order — always resolved to a
@@ -219,12 +221,24 @@ export interface ShipInstance {
   // next. A manual move order still overrides it for the rest of that fight
   // (see CombatParticipant.holdPosition).
   stance: CombatStance
+  // Which Fleet (see fleetStore.ts) this hull currently belongs to — always
+  // set, never null; a single ship on its own is still a fleet of one, not a
+  // special unfleeted state. Assigned automatically by spawnShip/
+  // setShipLocation (join whatever same-allegiance fleet is already resting
+  // at the same spot, or start a new one) and changeable directly via
+  // mergeFleets. Every marker/list that groups ships visually groups by this
+  // field, not by ship identity.
+  fleetId: string
 }
 
 interface ShipState {
   ships: ShipInstance[]
   selectedShipId: string | null
-  spawnShip: (ship: ShipInstance) => void
+  // fleetId is deliberately omitted here rather than accepted — spawnShip
+  // always resolves it itself (join a same-allegiance fleet already resting
+  // at this exact spot, or start a new one), so no caller has to know
+  // fleetStore exists just to bring a ship into being.
+  spawnShip: (ship: Omit<ShipInstance, 'fleetId'>) => void
   removeShip: (id: string) => void
   selectShip: (id: string | null) => void
   // Store stays dependency-free of the scene/physics layer — callers
@@ -278,17 +292,85 @@ interface ShipState {
   // Sets (or clears, with null) an unpowered hull's stored ballistic
   // velocity — see ShipInstance.drift and useShipDriftIntegrator.
   setDrift: (id: string, drift: ShipInstance['drift']) => void
+  // Absorbs every ship in `fromFleetId` into `intoFleetId` and removes the
+  // now-empty former fleet. Doesn't check that the two are actually at the
+  // same place — the caller (see ShipPanel's Merge Fleets button) only ever
+  // offers this when they already are, and this action just does what it's
+  // told rather than re-deriving a gate that already happened in the UI.
+  mergeFleets: (intoFleetId: string, fromFleetId: string) => void
+  // Pulls the given ships out of whatever fleet(s) they're currently in and
+  // groups them together into one brand-new fleet, pruning any source fleet
+  // left empty. All the named ships end up on the SAME new fleet, not one
+  // solo fleet each — "split the fleet in two" is the point, not "disband
+  // it entirely" (a ship that really should be alone can still be split off
+  // one at a time). A no-op if fewer than one id is given, or if every given
+  // ship is already alone together in one fleet already.
+  splitFleet: (shipIds: string[]) => void
+  // Sets (or clears, with null) a fleet's standing coordinated strategy —
+  // see Fleet.strategy. Pairs the fleet-level write with the matching bulk
+  // update every current member needs: setting a real strategy puts every
+  // member's own stance to 'fleet' (so they all defer to it — see
+  // CombatStance's own comment), and clearing one resets any member still
+  // on 'fleet' back to Balanced rather than leaving it deferring to
+  // nothing. A ship the player has already switched to some OTHER
+  // individual stance is left alone either way — that's what makes an
+  // individual choice an override rather than something this would stomp.
+  setFleetStrategy: (fleetId: string, strategy: FleetStrategy | null) => void
+}
+
+// Picks the fleet a ship now resting at `location` should belong to: an
+// existing same-allegiance fleet already resting at that exact spot (see
+// combatLocationKey — a ship still travelling, or resting at a bare point in
+// space rather than a named anchor, never matches), or a freshly created
+// solo fleet otherwise. `excludeShipId` keeps a ship already in `ships` from
+// matching itself (setShipLocation's case); spawnShip has no such ship yet
+// to exclude.
+function resolveFleetId(
+  ships: ShipInstance[],
+  allegiance: FleetAllegiance,
+  location: ShipLocation,
+  excludeShipId?: string,
+): string {
+  const locKey = combatLocationKey(location)
+  if (locKey) {
+    const mate = ships.find(
+      (s) => s.id !== excludeShipId && s.allegiance === allegiance && !s.order && combatLocationKey(s.location) === locKey,
+    )
+    if (mate) return mate.fleetId
+  }
+  const fleetState = useFleetStore.getState()
+  const id = `fleet-${Date.now()}-${Math.round(Math.random() * 1e6)}`
+  fleetState.createFleet({ id, name: nextFleetName(fleetState.fleets, allegiance), allegiance, strategy: null })
+  return id
+}
+
+// A fleet with nobody left in it has nothing to show in any list — pruned
+// the moment its last ship leaves (a merge, a death, a removal) rather than
+// left to accumulate as a dead entry. `remainingShips` is the POST-change
+// roster, not the store's stale snapshot, so this only fires on an actual
+// departure.
+function pruneFleetIfEmpty(fleetId: string, remainingShips: ShipInstance[]): void {
+  if (remainingShips.some((s) => s.fleetId === fleetId)) return
+  useFleetStore.getState().removeFleet(fleetId)
 }
 
 export const useShipStore = create<ShipState>((set) => ({
   ships: [],
   selectedShipId: null,
-  spawnShip: (ship) => set((s) => ({ ships: [...s.ships, ship] })),
-  removeShip: (id) =>
+  spawnShip: (ship) =>
     set((s) => ({
-      ships: s.ships.filter((ship) => ship.id !== id),
-      selectedShipId: s.selectedShipId === id ? null : s.selectedShipId,
+      ships: [...s.ships, { ...ship, fleetId: resolveFleetId(s.ships, ship.allegiance, ship.location) }],
     })),
+  removeShip: (id) =>
+    set((s) => {
+      const ship = s.ships.find((sh) => sh.id === id)
+      const ships = s.ships.filter((sh) => sh.id !== id)
+      if (ship) pruneFleetIfEmpty(ship.fleetId, ships)
+      return {
+        ships,
+        selectedShipId: s.selectedShipId === id ? null : s.selectedShipId,
+      }
+    }),
   // Selecting a ship (any ship, regardless of allegiance) is just "look at
   // its info" — always allowed, so players can inspect enemy/neutral/
   // friendly fleets too. *Commanding* one is the privileged action, gated
@@ -323,21 +405,34 @@ export const useShipStore = create<ShipState>((set) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, chaffAutoDeploy: auto } : ship)),
     })),
   setShipLocation: (id, location, cooldowns, keepFollowing) =>
-    set((s) => ({
-      ships: s.ships.map((ship) =>
-        ship.id === id
+    set((s) => {
+      const ship = s.ships.find((sh) => sh.id === id)
+      if (!ship) return s
+      // Every call here is a ship coming to rest somewhere — the moment it's
+      // worth checking whether a same-allegiance fleet is already sitting
+      // right there and folding in rather than staying its own separate
+      // one-ship entry. Covers every path a ship can settle through (a
+      // normal order arriving, an instant hyperdrive jump, drift settling,
+      // combat relocating a disengaged hull) since they all funnel through
+      // this one action.
+      const fleetId = resolveFleetId(s.ships, ship.allegiance, location, id)
+      const ships = s.ships.map((sh) =>
+        sh.id === id
           ? {
-              ...ship,
+              ...sh,
               location,
+              fleetId,
               order: null,
-              hyperdriveReadySimDays: cooldowns?.hyperdriveReadySimDays ?? ship.hyperdriveReadySimDays,
-              warpReadySimDays: cooldowns?.warpReadySimDays ?? ship.warpReadySimDays,
+              hyperdriveReadySimDays: cooldowns?.hyperdriveReadySimDays ?? sh.hyperdriveReadySimDays,
+              warpReadySimDays: cooldowns?.warpReadySimDays ?? sh.warpReadySimDays,
               pendingHyperdriveJump: null,
-              followingShipId: keepFollowing ? ship.followingShipId : null,
+              followingShipId: keepFollowing ? sh.followingShipId : null,
             }
-          : ship,
-      ),
-    })),
+          : sh,
+      )
+      if (fleetId !== ship.fleetId) pruneFleetIfEmpty(ship.fleetId, ships)
+      return { ships }
+    }),
   setPendingHyperdriveJump: (id, starId) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingHyperdriveJump: starId } : ship)),
@@ -353,9 +448,11 @@ export const useShipStore = create<ShipState>((set) => ({
   applyCombatDamage: (next, destroyedIds) =>
     set((s) => {
       const destroyed = new Set(destroyedIds)
+      const lostFleetIds = new Set(s.ships.filter((sh) => destroyed.has(sh.id)).map((sh) => sh.fleetId))
       const ships = s.ships
         .filter((ship) => !destroyed.has(ship.id))
         .map((ship) => (next[ship.id] ? { ...ship, combat: next[ship.id] } : ship))
+      for (const fleetId of lostFleetIds) pruneFleetIfEmpty(fleetId, ships)
       return {
         ships,
         // A destroyed ship can't stay selected — same cleanup removeShip
@@ -383,4 +480,45 @@ export const useShipStore = create<ShipState>((set) => ({
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, drift } : ship)),
     })),
+  mergeFleets: (intoFleetId, fromFleetId) =>
+    set((s) => {
+      if (intoFleetId === fromFleetId) return s
+      const ships = s.ships.map((sh) => (sh.fleetId === fromFleetId ? { ...sh, fleetId: intoFleetId } : sh))
+      useFleetStore.getState().removeFleet(fromFleetId)
+      return { ships }
+    }),
+  splitFleet: (shipIds) =>
+    set((s) => {
+      const idSet = new Set(shipIds)
+      const moving = s.ships.filter((sh) => idSet.has(sh.id))
+      if (moving.length === 0) return s
+      const sourceFleetIds = new Set(moving.map((sh) => sh.fleetId))
+      // Already alone together on one fleet, with nothing else in it —
+      // there's nothing to actually split.
+      if (sourceFleetIds.size === 1) {
+        const [onlyFleetId] = sourceFleetIds
+        if (s.ships.every((sh) => sh.fleetId !== onlyFleetId || idSet.has(sh.id))) return s
+      }
+      const fleetState = useFleetStore.getState()
+      const newFleetId = `fleet-${Date.now()}-${Math.round(Math.random() * 1e6)}`
+      fleetState.createFleet({
+        id: newFleetId,
+        name: nextFleetName(fleetState.fleets, moving[0].allegiance),
+        allegiance: moving[0].allegiance,
+        strategy: null,
+      })
+      const ships = s.ships.map((sh) => (idSet.has(sh.id) ? { ...sh, fleetId: newFleetId, stance: sh.stance === 'fleet' ? 'balanced' as CombatStance : sh.stance } : sh))
+      for (const fleetId of sourceFleetIds) pruneFleetIfEmpty(fleetId, ships)
+      return { ships }
+    }),
+  setFleetStrategy: (fleetId, strategy) =>
+    set((s) => {
+      useFleetStore.getState().setStrategy(fleetId, strategy)
+      const ships = s.ships.map((sh) => {
+        if (sh.fleetId !== fleetId) return sh
+        if (strategy !== null) return sh.stance === 'fleet' ? sh : { ...sh, stance: 'fleet' as CombatStance }
+        return sh.stance === 'fleet' ? { ...sh, stance: 'balanced' as CombatStance } : sh
+      })
+      return { ships }
+    }),
 }))

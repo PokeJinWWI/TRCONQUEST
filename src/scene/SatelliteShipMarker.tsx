@@ -4,6 +4,7 @@ import { Html } from '@react-three/drei'
 import type { Group } from 'three'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
+import { useFleetStore } from '../state/fleetStore'
 import { ALLEGIANCE_COLORS } from '../data/shipData'
 import { satelliteOrbitLocalPosition } from './shipPhysics'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -15,21 +16,27 @@ const STACK_STEP_PX = 14
 const BASE_OFFSET_PX = { x: 4, y: -18 }
 
 interface SatelliteShipMarkerProps {
-  ship: ShipInstance
+  /** Every hull this one marker represents — a fleet resting together (see
+   * shipPhysics.clusterRestingShipsByFleet). Always non-empty; the FIRST
+   * entry is this cluster's lead, whose position/color/name drive the
+   * marker. */
+  ships: ShipInstance[]
   primaryVisualRadius: number
   /** Right-click — orders the currently-selected ship (if any, and if it
-   * isn't this one) to follow this ship instead of a normal move order. */
+   * isn't this one) to follow this cluster's lead ship instead of a normal
+   * move order. */
   onOrderFollow?: (targetShipId: string) => void
-  /** This ship's position (0-based) among every other ship orbiting this
-   * same body (every ship this component ever renders already shares one —
-   * see SatelliteViewScene's orbitingShips filter) — stacks their markers
-   * vertically and brings back their name labels once there's more than one
-   * to distinguish (see ShipMarker's identical stackIndex/stackCount). */
+  /** This cluster's position (0-based) among every other cluster orbiting
+   * this same body (every ship this component ever renders already shares
+   * one — see SatelliteViewScene's orbitingShips filter) — stacks their
+   * markers vertically and brings back their name labels once there's more
+   * than one to distinguish (see ShipMarker's identical stackIndex/
+   * stackCount). */
   stackIndex?: number
   stackCount?: number
 }
 
-// A ship resting in orbit around the body a satellite view is currently
+// A fleet resting in orbit around the body a satellite view is currently
 // showing — the "correct corresponding view" a move order to that body
 // should actually be visible in, not just an abstract system-AU point that
 // only system view could ever render. Same triangle-marker visual language
@@ -37,7 +44,7 @@ interface SatelliteShipMarkerProps {
 // live, continuously-animated orbit (see satelliteOrbitLocalPosition), not a
 // static parking spot.
 export function SatelliteShipMarker({
-  ship,
+  ships,
   primaryVisualRadius,
   onOrderFollow,
   stackIndex = 0,
@@ -47,13 +54,17 @@ export function SatelliteShipMarker({
   const [hovered, setHovered] = useState(false)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const selected = ship.id === selectedShipId
-  const color = ALLEGIANCE_COLORS[ship.allegiance]
+  const fleets = useFleetStore((s) => s.fleets)
+  const lead = ships[0]
+  const selected = ships.some((s) => s.id === selectedShipId)
+  const color = ALLEGIANCE_COLORS[lead.allegiance]
+  const multi = ships.length > 1
+  const fleetName = multi ? fleets.find((f) => f.id === lead.fleetId)?.name : undefined
 
   useFrame(() => {
-    if (ship.location.kind !== 'orbiting') return
+    if (lead.location.kind !== 'orbiting') return
     const simDays = useGameTimeStore.getState().simDays
-    const pos = satelliteOrbitLocalPosition(ship.location, primaryVisualRadius, simDays)
+    const pos = satelliteOrbitLocalPosition(lead.location, primaryVisualRadius, simDays)
     groupRef.current?.position.set(...pos)
   })
 
@@ -69,15 +80,16 @@ export function SatelliteShipMarker({
           }
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
-          onClick={() => selectShip(ship.id)}
+          onClick={() => selectShip(lead.id)}
           onContextMenu={(e) => {
             e.preventDefault()
-            onOrderFollow?.(ship.id)
+            onOrderFollow?.(lead.id)
           }}
           onWheel={forwardWheelToCanvas}
         >
           <span className="ship-marker-icon" style={{ borderBottomColor: color }} />
-          {stackCount > 1 && <span className="marker-label">{ship.name}</span>}
+          {multi && <span className="ship-marker-count">{ships.length}</span>}
+          {stackCount > 1 && <span className="marker-label">{fleetName ?? lead.name}</span>}
         </div>
       </Html>
     </group>

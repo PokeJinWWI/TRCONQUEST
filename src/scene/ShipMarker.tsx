@@ -4,6 +4,7 @@ import { Html } from '@react-three/drei'
 import type { Group } from 'three'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
+import { useFleetStore } from '../state/fleetStore'
 import { ALLEGIANCE_COLORS } from '../data/shipData'
 import { getShipRenderPosition } from './shipPhysics'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -16,48 +17,64 @@ const STACK_STEP_PX = 14
 const BASE_OFFSET_PX = { x: 4, y: -18 }
 
 interface ShipMarkerProps {
-  ship: ShipInstance
+  /** Every hull this one marker represents — a fleet resting together (see
+   * shipPhysics.clusterRestingShipsByFleet), or just one ship travelling
+   * alone or resting somewhere not shared with anyone. Always non-empty; the
+   * FIRST entry is this cluster's "lead" — whose position/color/name drive
+   * the marker, and whose id is what gets selected/followed. */
+  ships: ShipInstance[]
   /** Right-click — orders the currently-selected ship (if any, and if it
-   * isn't this one) to follow this ship instead of a normal move order. */
+   * isn't this one) to follow this cluster's lead ship instead of a normal
+   * move order. */
   onOrderFollow?: (targetShipId: string) => void
-  /** This ship's position (0-based) among every other ship resting/orbiting
-   * the same body — used to stack their markers vertically instead of
-   * letting them overlap into an unreadable pile, and to decide whether a
-   * name label is needed at all (see isOrbiting below). Defaults as if this
-   * were the only ship there. */
+  /** This cluster's position (0-based) among every other cluster
+   * resting/orbiting the same body — used to stack their markers vertically
+   * instead of letting them overlap into an unreadable pile (most likely
+   * once two different fleets share a body), and to decide whether a name
+   * label is needed at all (see isOrbiting below). Defaults as if this were
+   * the only cluster there. */
   stackIndex?: number
   stackCount?: number
 }
 
-// A spawned ship's marker — a triangle instead of the celestial-body dot, so
-// ships read as distinct from planets/stars at a glance. Position is a pure
-// function of simDays (getShipRenderPosition), same as planets/moons — no
-// accumulated per-frame movement. Noticing an order has finished and
-// settling the ship into its resting location is handled globally by
-// useShipOrderSettler, not here — this marker isn't guaranteed to be mounted
-// in every view a ship's order could complete in (see that hook's comment).
-export function ShipMarker({ ship, onOrderFollow, stackIndex = 0, stackCount = 1 }: ShipMarkerProps) {
+// One marker per fleet resting together — a triangle instead of the
+// celestial-body dot, so ships read as distinct from planets/stars at a
+// glance, plus a count badge once more than one hull shares it. Position is
+// a pure function of simDays (getShipRenderPosition), same as planets/moons
+// — no accumulated per-frame movement, tracked off the cluster's lead ship
+// since every member here is, by construction, resting at the exact same
+// spot (see clusterRestingShipsByFleet). Noticing an order has finished and
+// settling a ship into its resting location — which is also where it might
+// join this fleet — is handled globally by useShipOrderSettler, not here.
+export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 1 }: ShipMarkerProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const color = ALLEGIANCE_COLORS[ship.allegiance]
-  const selected = ship.id === selectedShipId
-  // A single resting, orbiting fleet reads as clutter with a name label
+  const fleets = useFleetStore((s) => s.fleets)
+  const lead = ships[0]
+  const color = ALLEGIANCE_COLORS[lead.allegiance]
+  // Selected if ANY member is the current selection, not just the lead — the
+  // player can inspect a specific hull within a fleet (see ShipPanel's
+  // roster) without that losing the marker's own highlighted state.
+  const selected = ships.some((s) => s.id === selectedShipId)
+  const multi = ships.length > 1
+  const fleetName = multi ? fleets.find((f) => f.id === lead.fleetId)?.name : undefined
+  // A single resting, orbiting cluster reads as clutter with a name label
   // always on — Stellaris-style, just the triangle. But once more than one
-  // ship shares a body (e.g. one following another there — see
-  // ShipInstance.followingShipId), hiding every name defeats the purpose of
-  // being able to tell them apart at all — so the label comes back exactly
-  // when there's another ship to distinguish it from, stacked vertically
-  // (see stackIndex) so the labels themselves don't overlap either. A ship
+  // cluster shares a body (two different fleets both resting at the same
+  // planet), hiding every name defeats the purpose of being able to tell
+  // them apart — so the label comes back exactly when there's another
+  // cluster to distinguish this one from, stacked vertically (see
+  // stackIndex) so the labels themselves don't overlap either. A cluster
   // still travelling (order in progress) or resting somewhere else (a star,
   // a bare point in space) always keeps its label regardless.
-  const isOrbiting = !ship.order && ship.location.kind === 'orbiting'
+  const isOrbiting = !lead.order && lead.location.kind === 'orbiting'
   const hideLabel = isOrbiting && stackCount <= 1
 
   useFrame(() => {
     const simDays = useGameTimeStore.getState().simDays
-    const { position } = getShipRenderPosition(ship, simDays)
+    const { position } = getShipRenderPosition(lead, simDays)
     groupRef.current?.position.copy(position)
   })
 
@@ -73,15 +90,16 @@ export function ShipMarker({ ship, onOrderFollow, stackIndex = 0, stackCount = 1
           }
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
-          onClick={() => selectShip(ship.id)}
+          onClick={() => selectShip(lead.id)}
           onContextMenu={(e) => {
             e.preventDefault()
-            onOrderFollow?.(ship.id)
+            onOrderFollow?.(lead.id)
           }}
           onWheel={forwardWheelToCanvas}
         >
           <span className="ship-marker-icon" style={{ borderBottomColor: color }} />
-          {!hideLabel && <span className="marker-label">{ship.name}</span>}
+          {multi && <span className="ship-marker-count">{ships.length}</span>}
+          {!hideLabel && <span className="marker-label">{fleetName ?? lead.name}</span>}
         </div>
       </Html>
     </group>

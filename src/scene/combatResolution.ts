@@ -29,10 +29,12 @@ import {
   type CombatProfile,
   type CombatStance,
   type ComponentKind,
+  type FleetStrategy,
   type WeaponMount,
 } from '../data/combatData'
 import { SHIP_CLASSES } from '../data/shipData'
 import type { MoveDestination, ShipCombatState, ShipInstance, ShipLocation, FtlCharge } from '../state/shipStore'
+import type { Fleet } from '../state/fleetStore'
 import {
   areHostile,
   combatLocationKey,
@@ -137,6 +139,16 @@ export function overallHealthFraction(state: ShipCombatState, profile: CombatPro
   if (totalWeight <= 0) return 0
   const blended = pools.reduce((sum, p) => sum + p.fraction * p.weight, 0) / totalWeight
   return Math.max(0, Math.min(1, blended))
+}
+
+// A hull's total HP capacity across every pool (every component, plus
+// shields and armor) — the "how big is this ship" figure Screen's own
+// toughness ranking and the engagement panel's aggregate health bar both
+// need. Deliberately unweighted, unlike overallHealthFraction (which blends
+// pools by WEIGHT, not by raw size) — "how much mass does this hull
+// represent" is a different question from "how healthy is it right now."
+export function totalHitPoints(profile: CombatProfile): number {
+  return COMPONENT_KINDS.reduce((sum, k) => sum + profile.components[k], 0) + profile.defenses.shieldHp + profile.defenses.armorHp
 }
 
 export function isDestroyed(state: ShipCombatState): boolean {
@@ -952,6 +964,173 @@ export const DISENGAGE_DISTANCE_UNITS = 30
 // Clearance beyond a body's surface a stalling ship holds station at.
 const STALL_SHELTER_MARGIN = 1
 
+// --- Fleet-wide coordinated strategies -------------------------------------
+//
+// A ship whose own stance is 'fleet' has no behavior of its own — it
+// borrows its Fleet's (see fleetStore.ts). Five of the eight possible fleet
+// strategies are just the ordinary per-ship stances above, bulk-applied;
+// the other three (Divide, Condense, Screen) only mean anything for a
+// GROUP, so they're resolved here instead of by stanceDestination.
+
+// Resolves a ship's actual behavior for this step. 'fleet' is a sentinel
+// (see CombatStance's own comment) — everything else is already a real
+// stance/strategy and passes through unchanged. Falls back to Balanced if a
+// ship is somehow left on 'fleet' with no active fleet strategy to follow
+// (shouldn't happen — shipStore.setFleetStrategy keeps the two in lockstep
+// — but a ship needs SOME behavior rather than silently freezing).
+export function effectiveStrategy(ship: ShipInstance, fleets: Fleet[]): FleetStrategy {
+  if (ship.stance !== 'fleet') return ship.stance
+  return fleets.find((f) => f.id === ship.fleetId)?.strategy ?? 'balanced'
+}
+
+// Every fleet-mate of `self` actually present in this fight — the group
+// Divide/Condense/Screen coordinate across. Never includes ships from other
+// fleets, even same-side ones (a Balanced escort flying alongside a Screen
+// fleet doesn't get pulled into the wall).
+function fleetMatesPresent(
+  participants: CombatParticipant[],
+  shipsById: Map<string, ShipInstance>,
+  fleetId: string,
+): CombatParticipant[] {
+  return participants.filter((p) => shipsById.get(p.shipId)?.fleetId === fleetId)
+}
+
+function centroidOf(points: CombatParticipant[]): Vector3 {
+  return points.reduce((sum, p) => sum.add(toVector3(p.position)), new Vector3()).divideScalar(points.length)
+}
+
+// Divide: spreads the fleet's fire and position across multiple enemies
+// instead of everyone dogpiling whoever's nearest. Sets targetShipId
+// directly (not just a movement destination) so firing — which reads
+// targetShipId first, same as an explicit player order — actually follows
+// through on the diversified pick, rather than the ship walking toward one
+// enemy while shooting at whichever one is nearest. A ship already locked
+// onto a live target (its own past Divide pick, or the player's explicit
+// choice) stays locked — re-deciding every step would make the fleet's
+// fire visibly flicker between targets for no reason. Only once un-anchored
+// does it pick again, preferring whichever enemy no OTHER Divide-mode
+// fleet-mate has already claimed.
+export function divideAssignment(
+  self: CombatParticipant,
+  selfShip: ShipInstance,
+  profile: CombatProfile,
+  participants: CombatParticipant[],
+  shipsById: Map<string, ShipInstance>,
+  fleets: Fleet[],
+  obstacles: CombatObstacle[],
+): { point: ArenaPoint | null; targetShipId?: string } {
+  const enemies = participants.filter((p) => p.side !== self.side)
+  if (enemies.length === 0) return { point: null }
+
+  const already = self.targetShipId ? enemies.find((e) => e.shipId === self.targetShipId) : undefined
+  let target = already
+  if (!target) {
+    const claimed = new Set<string>()
+    for (const p of participants) {
+      if (p.side !== self.side || p.shipId === self.shipId || !p.targetShipId) continue
+      const mateShip = shipsById.get(p.shipId)
+      if (mateShip && mateShip.fleetId === selfShip.fleetId && effectiveStrategy(mateShip, fleets) === 'divide') {
+        claimed.add(p.targetShipId)
+      }
+    }
+    const pool = enemies.filter((e) => !claimed.has(e.shipId))
+    const candidates = pool.length > 0 ? pool : enemies
+    target = candidates.reduce((best, e) =>
+      pointDistance(self.position, e.position) < pointDistance(self.position, best.position) ? e : best,
+    )
+  }
+
+  return { point: approachNode(self, target, profile, obstacles), targetShipId: target.shipId }
+}
+
+// How close to a rally point (the fleet centroid, for Condense; the wall
+// line, for Screen) counts as "arrived" — below this, holding station
+// exactly rather than endlessly nudging into place.
+const RALLY_ARRIVAL_TOLERANCE = 1
+
+// Condense: every member just moves toward the fleet's own centroid,
+// ignoring the enemy entirely for POSITIONING (targeting/firing is
+// unaffected — a condensing ship still defends itself on the way in, it's
+// not disengaging). Alone in the fight, there's nothing to condense toward.
+export function condenseDestination(
+  self: CombatParticipant,
+  selfShip: ShipInstance,
+  participants: CombatParticipant[],
+  shipsById: Map<string, ShipInstance>,
+): ArenaPoint | null {
+  const mates = fleetMatesPresent(participants, shipsById, selfShip.fleetId)
+  if (mates.length <= 1) return null
+  const centroid = centroidOf(mates)
+  if (toVector3(self.position).distanceTo(centroid) < RALLY_ARRIVAL_TOLERANCE) return null
+  return { x: centroid.x, y: centroid.y, z: centroid.z }
+}
+
+// How far in front of the fleet's own centroid, toward the nearest enemy,
+// the wall holds.
+const SCREEN_STANDOFF_UNITS = 2
+
+// A hull's design toughness (max shields + armor, NOT current damage —
+// reshuffling who's "the tank" every time someone takes a hit would make
+// the wall visibly crumble and reform for no tactical reason) — Screen's
+// own ranking for who stands the line.
+function toughness(ship: ShipInstance): number {
+  const profile = shipCombatProfile(ship)
+  return profile ? profile.defenses.shieldHp + profile.defenses.armorHp : 0
+}
+
+// Screen: the toughest half of the fleet (by design toughness — see
+// toughness above) holds a line between the fleet's own centroid and
+// whichever enemy is nearest to that centroid; everyone else falls back to
+// the centroid itself, the same rally point Condense uses. Existing nearest-
+// enemy targeting (see nearestEnemy) is left completely alone — the wall
+// draws fire PURELY by being the closest thing to shoot at, not by any
+// artificial taunt mechanic, which is also why this only affects
+// positioning, never targetShipId, unlike Divide. A ship's role is which
+// HALF it's in, not a fixed identity — toggle Screen off and back on and the
+// ranking is recomputed fresh from who's actually present.
+export function screenDestination(
+  self: CombatParticipant,
+  selfShip: ShipInstance,
+  participants: CombatParticipant[],
+  shipsById: Map<string, ShipInstance>,
+  obstacles: CombatObstacle[],
+): ArenaPoint | null {
+  const mates = fleetMatesPresent(participants, shipsById, selfShip.fleetId)
+  const enemies = participants.filter((p) => p.side !== self.side)
+  if (enemies.length === 0 || mates.length <= 1) return null
+
+  const centroid = centroidOf(mates)
+  let nearestToFleet = enemies[0]
+  let bestDist = centroid.distanceTo(toVector3(enemies[0].position))
+  for (const e of enemies) {
+    const d = centroid.distanceTo(toVector3(e.position))
+    if (d < bestDist) {
+      bestDist = d
+      nearestToFleet = e
+    }
+  }
+
+  const ranked = [...mates].sort((a, b) => {
+    const shipA = shipsById.get(a.shipId)
+    const shipB = shipsById.get(b.shipId)
+    return (shipB ? toughness(shipB) : 0) - (shipA ? toughness(shipA) : 0)
+  })
+  const screenerCount = Math.max(1, Math.ceil(ranked.length / 2))
+  const isScreener = ranked.slice(0, screenerCount).some((p) => p.shipId === self.shipId)
+
+  if (!isScreener) {
+    if (toVector3(self.position).distanceTo(centroid) < RALLY_ARRIVAL_TOLERANCE) return null
+    return { x: centroid.x, y: centroid.y, z: centroid.z }
+  }
+
+  const towardEnemy = toVector3(nearestToFleet.position).sub(centroid)
+  if (towardEnemy.length() < EPSILON) towardEnemy.set(1, 0, 0)
+  const wallPoint = centroid.clone().add(towardEnemy.normalize().multiplyScalar(SCREEN_STANDOFF_UNITS))
+  if (isPointBlocked({ x: wallPoint.x, y: wallPoint.y, z: wallPoint.z }, obstacles, OBSTACLE_CLEARANCE_UNITS)) return null
+  if (toVector3(self.position).distanceTo(wallPoint) < RALLY_ARRIVAL_TOLERANCE) return null
+  return { x: wallPoint.x, y: wallPoint.y, z: wallPoint.z }
+}
+
 // How far a stance's freshly computed destination has to have moved from
 // where the ship's existing route already ends before that's treated as a
 // real change worth re-planning for. Below this, a moving target's own
@@ -994,6 +1173,7 @@ export function stepEngagements(
   ships: ShipInstance[],
   simDays: number,
   rng: Rng = Math.random,
+  fleets: Fleet[] = [],
 ): CombatStepResult {
   const shipsById = new Map(ships.map((s) => [s.id, s]))
   // Working copy of every participant ship's combat state, mutated across the
@@ -1075,17 +1255,36 @@ export function stepEngagements(
       if (!profile) return p
       const explicit = p.targetShipId ? participants.find((o) => o.shipId === p.targetShipId) : undefined
       const target = explicit ?? nearestEnemy(p, participants)
-      if (!target) return p
       const state = stateOf(p.shipId)
       const weaponsOnline = !!state && weaponsEffectiveness(state.componentHp.weapons, profile.components.weapons) > 0
-      // Chase overrides whatever the stance would normally hold for — see
-      // CombatParticipant.chasing — but is still just a destination choice,
-      // so it shares the same replan-tolerance/pathing machinery below
-      // rather than needing its own movement pipeline.
-      const point = p.chasing
-        ? approachNode(p, target, profile, engagement.obstacles, CHASE_STANDOFF_UNITS)
-        : stanceDestination(p, target, profile, ship.stance ?? 'balanced', engagement.obstacles, participants, weaponsOnline)
-      if (!point) return p
+
+      // 'fleet' on the ship resolves to whatever its Fleet is actually
+      // running (see effectiveStrategy) — five of the eight possible values
+      // are just the stances below with a different name; Divide/Condense/
+      // Screen are coordinated, multi-ship behaviors resolved separately
+      // (see each function's own comment). Chase still wins over all of it,
+      // same precedence it already had over a plain stance.
+      const strategy = effectiveStrategy(ship, fleets)
+      let point: ArenaPoint | null
+      let newTargetShipId: string | undefined
+      if (p.chasing) {
+        if (!target) return p
+        point = approachNode(p, target, profile, engagement.obstacles, CHASE_STANDOFF_UNITS)
+      } else if (strategy === 'divide') {
+        const assignment = divideAssignment(p, ship, profile, participants, shipsById, fleets, engagement.obstacles)
+        point = assignment.point
+        newTargetShipId = assignment.targetShipId
+      } else if (strategy === 'condense') {
+        point = condenseDestination(p, ship, participants, shipsById)
+      } else if (strategy === 'screen') {
+        point = screenDestination(p, ship, participants, shipsById, engagement.obstacles)
+      } else {
+        if (!target) return p
+        point = stanceDestination(p, target, profile, strategy, engagement.obstacles, participants, weaponsOnline)
+      }
+
+      const retargeted = newTargetShipId && newTargetShipId !== p.targetShipId ? { targetShipId: newTargetShipId } : null
+      if (!point) return retargeted ? { ...p, ...retargeted } : p
       // Checked against the last destination actually PLANNED for, not just
       // path's own final point — orderParticipantTo leaves path untouched
       // when no route exists (see its own comment), so falling back to
@@ -1102,9 +1301,9 @@ export function stepEngagements(
       // so only that case gets the wider tolerance.
       const needsRouting = !segmentClearsObstacles(toVector3(p.position), toVector3(point), engagement.obstacles, OBSTACLE_CLEARANCE_UNITS)
       const tolerance = needsRouting ? STANCE_REPLAN_TOLERANCE_ROUTED : STANCE_REPLAN_TOLERANCE
-      if (lastAttempt && pointDistance(lastAttempt, point) <= tolerance) return p
+      if (lastAttempt && pointDistance(lastAttempt, point) <= tolerance) return retargeted ? { ...p, ...retargeted } : p
       const ordered = orderParticipantTo(p, point, engagement.density, simDays, engagement.obstacles)
-      return { ...ordered, lastPlanAttempt: point }
+      return { ...ordered, lastPlanAttempt: point, ...retargeted }
     })
 
     // --- Movement: integrate one step of real accelerated motion. ---

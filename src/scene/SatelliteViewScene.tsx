@@ -18,7 +18,14 @@ import { getMoonsForPlanet } from './moonData'
 import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
 import { OrbitRing } from './OrbitRing'
-import { planMove, satelliteOrbitLocalPosition, canFollow, oppositeMoonSyncOrbit, SOL_SYSTEM_ID } from './shipPhysics'
+import {
+  planMove,
+  satelliteOrbitLocalPosition,
+  canFollow,
+  oppositeMoonSyncOrbit,
+  clusterRestingShipsByFleet,
+  SOL_SYSTEM_ID,
+} from './shipPhysics'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
@@ -104,15 +111,20 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   // TypeScript can't see that through .find() — narrow it once here instead
   // of re-checking at every call site below.
   const trackedShipLocation = trackedShip && trackedShip.location.kind === 'orbiting' ? trackedShip.location : null
-  // Every ship here already shares one body by construction (see
-  // orbitingShips above) — stacking just needs each one's position within
-  // this same array (see ShipMarker's identical system-view version, which
-  // needs the extra per-body grouping this view doesn't).
-  const shipStackInfo = useMemo(() => {
+  // One marker per fleet resting together, not per ship — see
+  // shipPhysics.clusterRestingShipsByFleet. Every ship here already shares
+  // one body by construction (see orbitingShips above), so this reduces to
+  // grouping by fleet alone.
+  const orbitingClusters = useMemo(() => clusterRestingShipsByFleet(orbitingShips), [orbitingShips])
+  // Every cluster here already shares one body by construction — stacking
+  // just needs each one's position within this same array (see ShipMarker's
+  // identical system-view version, which needs the extra per-body grouping
+  // this view doesn't).
+  const clusterStackInfo = useMemo(() => {
     const info = new Map<string, { index: number; count: number }>()
-    orbitingShips.forEach((ship, index) => info.set(ship.id, { index, count: orbitingShips.length }))
+    orbitingClusters.forEach((cluster, index) => info.set(cluster.key, { index, count: orbitingClusters.length }))
     return info
-  }, [orbitingShips])
+  }, [orbitingClusters])
   // One ring per distinct inclination present (almost always just one, 0° —
   // see ShipMarker's system-view version for why rings are deduped instead
   // of one-per-ship: everyone at the same inclination traces the same
@@ -314,14 +326,14 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
             <OrbitRing key={incl} radius={primaryVisualRadius + 1.2} inclinationDeg={incl} />
           ))}
 
-          {orbitingShips.map((ship, index) => (
+          {orbitingClusters.map((cluster, index) => (
             <SatelliteShipMarker
-              key={ship.id}
-              ship={ship}
+              key={cluster.key}
+              ships={cluster.ships}
               primaryVisualRadius={primaryVisualRadius}
               onOrderFollow={handleFollowShip}
-              stackIndex={shipStackInfo.get(ship.id)?.index ?? index}
-              stackCount={orbitingShips.length}
+              stackIndex={clusterStackInfo.get(cluster.key)?.index ?? index}
+              stackCount={orbitingClusters.length}
             />
           ))}
 
