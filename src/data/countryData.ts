@@ -32,6 +32,14 @@ export const COUNTRIES: Country[] = [
     capitalStarId: 'alpha-centauri',
     capitalBodyName: 'Arcadia',
   },
+  {
+    // An alien empire — the Tidalians of Lalande 21185 d.
+    id: 'kingdom-of-lalande',
+    name: 'Kingdom of Lalande',
+    color: '#5ad1a0',
+    capitalStarId: 'lalande-21185',
+    capitalBodyName: 'Lalande 21185 d',
+  },
 ]
 
 export function getCountry(id: string): Country | undefined {

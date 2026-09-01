@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMapModeStore, type MapMode } from '../state/mapModeStore'
 import { BuildingsPanel } from './BuildingsPanel'
+import { useContextEconomy } from '../hooks/useContextEconomy'
 
 type PanelId = 'buildings' | 'politics' | 'diplomacy'
 
@@ -37,6 +38,10 @@ export function ActionBar() {
   const [activePanelId, setActivePanelId] = useState<PanelId | null>(null)
   const [activeSubtab, setActiveSubtab] = useState<string | null>(null)
   const setMapMode = useMapModeStore((s) => s.setMode)
+  // The panels follow whatever planet the player is focused on (falls back to
+  // the capital when nothing is in focus) — look at Luna and it's about Luna,
+  // not Mars.
+  const context = useContextEconomy()
 
   const activePanel = PANELS.find((p) => p.id === activePanelId) ?? null
 
@@ -63,7 +68,10 @@ export function ActionBar() {
       {activePanel && (
         <div className="action-dock-panel">
           <div className="action-dock-header">
-            <span>{activePanel.title}</span>
+            <span>
+              {activePanel.title}
+              {context.worldName && <span className="action-dock-scope"> · {context.worldName}</span>}
+            </span>
             <button type="button" className="action-dock-close" onClick={handleClose} aria-label="Close">
               ×
             </button>
@@ -84,7 +92,7 @@ export function ActionBar() {
           )}
           <div className="action-dock-content">
             {activePanel.id === 'buildings' ? (
-              <BuildingsPanel subtab={activeSubtab} />
+              <BuildingsPanel subtab={activeSubtab} worldName={context.worldName} world={context.world} country={context.country} />
             ) : (
               <div className="nav-placeholder">Not yet available</div>
             )}

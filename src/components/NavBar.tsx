@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
-import { EconomyPanel } from './EconomyPanel'
+import { NationEconomyPanel } from './EconomyPanel'
 import { FleetManagement } from './FleetManagement'
 import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
@@ -23,7 +23,7 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
-  { name: 'Economy', subcategories: ['Market', 'Budget', 'Welfare'] },
+  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Welfare'] },
   { name: 'Technology' },
   { name: 'Society', subcategories: ['Culture', 'Religion', 'Species'] },
   { name: 'Diplomacy' },
@@ -48,7 +48,7 @@ const CATEGORIES: CategoryDef[] = [
 function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
-  if (category.name === ECONOMY_CATEGORY) return <EconomyPanel subcategory={subcategory} />
+  if (category.name === ECONOMY_CATEGORY) return <NationEconomyPanel subcategory={subcategory} />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   return <div className="nav-placeholder">Not yet available</div>
 }

@@ -213,7 +213,7 @@ const BARNARDS_STAR_RAW: RawPlanet[] = [
 // lower-confidence real candidate; the rest generated.
 const LALANDE_21185_RAW: RawPlanet[] = [
   { name: 'Lalande 21185 b', radiusKm: 8282, massKg: 1.79e25, auDistance: 0.0786, color: '#b8623a', periodYears: 0.02703, inclinationDeg: 2.3, ascendingNodeDeg: 80, phaseDeg: 10, planetClass: 'lava' },
-  { name: 'Lalande 21185 d', radiusKm: 6690, massKg: 6.57e24, auDistance: 0.35, color: '#7fb8a0', periodYears: 0.3053, inclinationDeg: 1.8, ascendingNodeDeg: 190, phaseDeg: 150, planetClass: 'eyeball' },
+  { name: 'Lalande 21185 d', radiusKm: 6690, massKg: 6.57e24, auDistance: 0.35, color: '#7fb8a0', periodYears: 0.3053, inclinationDeg: 1.8, ascendingNodeDeg: 190, phaseDeg: 150, planetClass: 'eyeball', ownerId: 'kingdom-of-lalande' },
   { name: 'Lalande 21185 c', radiusKm: 11468, massKg: 7.76e25, auDistance: 2.9, color: '#8fb0c9', periodYears: 7.28, inclinationDeg: 3.5, ascendingNodeDeg: 300, phaseDeg: 250, planetClass: 'ice-giant' },
   { name: 'Lalande’s Hollow', radiusKm: 550, massKg: 3e20, auDistance: 8, color: '#c9d8dc', periodYears: 33.4, inclinationDeg: 11, ascendingNodeDeg: 40, phaseDeg: 300, planetClass: 'ice', isDwarfPlanet: true },
 ]

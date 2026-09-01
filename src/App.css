@@ -118,6 +118,14 @@
   color: #fff;
 }
 
+/* The focused-planet name after the panel title (see ActionBar) — dimmer
+   than the title so it reads as "· scoped to this planet". */
+.action-dock-scope {
+  color: #9fe8ff;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
 .action-dock-close {
   background: none;
   border: none;
@@ -899,6 +907,211 @@
 }
 
 .econ-neg {
+  color: #ff6b4a;
+}
+
+/* Budget controls (tax / welfare +/−) */
+.econ-control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 3px 0;
+}
+
+.econ-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.econ-control button {
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  background: rgba(111, 227, 255, 0.08);
+  color: #9fe8ff;
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.econ-control button:hover {
+  background: rgba(111, 227, 255, 0.2);
+  color: #fff;
+}
+
+.econ-control-value {
+  min-width: 42px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+/* Politics — interest-group strength bars */
+.pol-group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 3px 0;
+}
+.pol-group-name {
+  flex: 0 0 90px;
+}
+.pol-group-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.pol-group-fill {
+  display: block;
+  height: 100%;
+}
+.pol-group-share {
+  flex: 0 0 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Construction — queue rows with progress + build buttons */
+.econ-build-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 0;
+}
+.econ-build-name {
+  flex: 0 0 70px;
+}
+.econ-build-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.econ-build-fill {
+  display: block;
+  height: 100%;
+  background: #6fe3ff;
+}
+.econ-build-pct {
+  flex: 0 0 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.econ-build-cancel {
+  background: none;
+  border: none;
+  color: #ff6b4a;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.econ-build-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.econ-build-btn {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.econ-build-btn:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.2);
+  color: #fff;
+}
+.econ-build-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Finance headline + graphs */
+.econ-fiscal-headline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+}
+.econ-fiscal-headline b {
+  color: #fff;
+}
+
+.econ-graph {
+  margin-bottom: 10px;
+}
+
+.econ-graph-title {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 2px;
+}
+
+.econ-graph-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(111, 227, 255, 0.15);
+  border-radius: 3px;
+}
+
+.econ-graph-empty {
+  font-size: 10px;
+  opacity: 0.5;
+  padding: 12px 0;
+  text-align: center;
+}
+
+.econ-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 2px;
+}
+.econ-graph-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.econ-graph-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Credit-rating colors, best (green) to worst (red). */
+.rating-AAA,
+.rating-AA,
+.rating-A {
+  color: #4ade80;
+}
+.rating-BBB,
+.rating-BB {
+  color: #ffd23f;
+}
+.rating-B,
+.rating-CCC {
   color: #ff6b4a;
 }
 

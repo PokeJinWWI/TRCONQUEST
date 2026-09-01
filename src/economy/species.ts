@@ -43,6 +43,26 @@ export const BASELINE_ORGANIC: SpeciesTemplate = {
   },
 }
 
+// The Tidalians — the aquatic aliens of Lalande 21185 d (an eyeball/tidally-
+// locked world). A different needs template: they consume water and biomass as
+// their basic staples rather than terrestrial food, and reef-culture goods
+// where humans want consumer goods. Same tier shape, different baskets — the
+// whole point of species being data (design doc: adding a species is content,
+// not code). For Milestone 1 they map onto the existing goods; later milestones
+// give them their own (water, biomass) once those goods exist.
+export const TIDALIAN: SpeciesTemplate = {
+  id: 'tidalian',
+  name: 'Tidalian',
+  needs: {
+    basic: [{ good: 'food', amountPerPop: 1.1 }],
+    everyday: [{ good: 'consumerGoods', amountPerPop: 0.4 }],
+    healthcare: [{ good: 'medicine', amountPerPop: 0.15 }],
+    comfort: [],
+    luxury: [],
+  },
+}
+
 export const SPECIES_TEMPLATES: Record<string, SpeciesTemplate> = {
   [BASELINE_ORGANIC.id]: BASELINE_ORGANIC,
+  [TIDALIAN.id]: TIDALIAN,
 }

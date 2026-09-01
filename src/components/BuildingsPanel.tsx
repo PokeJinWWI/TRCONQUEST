@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
-import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { RECIPES } from '../economy/recipes'
 import { GOODS } from '../economy/goods'
-import { estimateGdp } from '../economy/economyTick'
+import { estimateWorldGdp, constructionCost } from '../economy/economyTick'
+import { useEconomyStore } from '../state/economyStore'
+import { usePlayerStore } from '../state/playerStore'
+import { formatPop } from '../economy/format'
+import type { Country, World } from '../economy/economyTypes'
 
-// Which recipe categories each Buildings sub-tab (see ActionBar) shows.
-// 'Development' is the whole-economy overview; the others filter to a sector,
-// the same way Victoria 3's build menu groups building types.
 const TAB_CATEGORIES: Record<string, string[] | null> = {
-  Development: null, // all
+  Development: null,
   Agriculture: ['agriculture'],
   Resources: ['extraction'],
   Urban: ['industry', 'healthcare'],
@@ -16,38 +16,46 @@ const TAB_CATEGORIES: Record<string, string[] | null> = {
 
 interface BuildingsPanelProps {
   subtab: string | null
+  worldName?: string
+  world?: World
+  // The owning country — its treasury funds construction here.
+  country?: Country
 }
 
-// Real read-only view of the player's capital-planet economy driven by the
-// live simulation (see economyStore / useEconomyTick). Milestone 1 has no
-// construction system yet, so this reports the existing buildings — their
-// level, staffing, output good and last-tick profit — rather than letting you
-// place new ones; that arrives with a later milestone's cost/construction
-// layer.
-export function BuildingsPanel({ subtab }: BuildingsPanelProps) {
-  const econ = usePlayerEconomy()
+// A world's buildings from the live simulation, plus construction on a world
+// you govern (funded from the national treasury, see economyTick). Read-only on
+// worlds you don't own.
+export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsPanelProps) {
+  const countryId = usePlayerStore((s) => s.selectedCountryId)
+  const queueConstruction = useEconomyStore((s) => s.queueConstruction)
+  const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
 
+  const cats = subtab ? TAB_CATEGORIES[subtab] : null
   const rows = useMemo(() => {
-    if (!econ) return []
-    const cats = subtab ? TAB_CATEGORIES[subtab] : null
-    return econ.buildings
+    if (!world) return []
+    return world.buildings
       .map((b) => ({ b, recipe: RECIPES[b.recipeId] }))
       .filter(({ recipe }) => recipe && (!cats || cats.includes(recipe.category)))
-  }, [econ, subtab])
+  }, [world, cats])
 
-  if (!econ) {
-    return <div className="nav-placeholder">No developed economy on your capital yet.</div>
+  if (!world) {
+    return <div className="nav-placeholder">{worldName ? `${worldName} is uninhabited — no economy.` : 'No world in focus.'}</div>
   }
 
-  const totalPop = econ.pops.reduce((s, p) => s + p.populationSize, 0)
+  const totalPop = world.pops.reduce((s, p) => s + p.populationSize, 0)
+  const owned = !!countryId && world.ownerId === countryId
+  const treasury = country?.treasury ?? 0
+  const buildable = Object.values(RECIPES).filter((r) => !cats || cats.includes(r.category))
 
   return (
     <div className="econ-panel">
       <div className="econ-summary">
         <span>
-          <span className="econ-summary-label">{econ.name}</span> · Pop {totalPop.toFixed(1)} · GDP {estimateGdp(econ).toFixed(0)}
+          <span className="econ-summary-label">{world.name}</span> · Pop {formatPop(totalPop)} · GDP {estimateWorldGdp(world).toFixed(0)}
+          {owned && <> · Treasury {treasury.toFixed(0)}</>}
         </span>
       </div>
+
       {rows.length === 0 ? (
         <div className="nav-placeholder">No buildings in this sector.</div>
       ) : (
@@ -67,15 +75,65 @@ export function BuildingsPanel({ subtab }: BuildingsPanelProps) {
                 <tr key={b.id}>
                   <td>{recipe!.label}</td>
                   <td>{b.level}</td>
-                  <td>{out ? `${GOODS[out.good].label}` : '—'}</td>
-                  <td className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{b.lastProfit.toFixed(1)}</td>
+                  <td>{out ? GOODS[out.good].label : '—'}</td>
+                  <td className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{b.lastProfit.toFixed(0)}</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       )}
-      <div className="ship-panel-hint">Construction is not yet available — this reports your standing buildings.</div>
+
+      {world.constructionQueue.length > 0 && (
+        <>
+          <div className="econ-subtitle" style={{ marginTop: 8 }}>
+            Under construction
+          </div>
+          {world.constructionQueue.map((o) => {
+            const recipe = RECIPES[o.recipeId]
+            const pct = Math.max(0, Math.min(100, (o.progress / o.cost) * 100))
+            return (
+              <div key={o.id} className="econ-build-row">
+                <span className="econ-build-name">{recipe?.label ?? o.recipeId}</span>
+                <span className="econ-build-bar">
+                  <span className="econ-build-fill" style={{ width: `${pct}%` }} />
+                </span>
+                <span className="econ-build-pct">{Math.round(pct)}%</span>
+                {owned && (
+                  <button type="button" className="econ-build-cancel" onClick={() => cancelConstruction(world.id, o.id)} aria-label="Cancel">
+                    ×
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
+
+      {owned ? (
+        <>
+          <div className="econ-subtitle" style={{ marginTop: 8 }}>
+            Build (cost {constructionCost()} each)
+          </div>
+          <div className="econ-build-buttons">
+            {buildable.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className="econ-build-btn"
+                onClick={() => queueConstruction(world.id, r.id)}
+                disabled={treasury <= 0}
+                title={treasury <= 0 ? 'National treasury empty — no funds to build' : `Queue a ${r.label}`}
+              >
+                + {r.label}
+              </button>
+            ))}
+          </div>
+          {treasury <= 0 && <div className="ship-panel-hint">National treasury is empty — build savings (or raise tax) first.</div>}
+        </>
+      ) : (
+        <div className="ship-panel-hint">You don't govern {world.name} — construction is only available on your own worlds.</div>
+      )}
     </div>
   )
 }
