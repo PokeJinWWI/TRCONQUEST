@@ -5,21 +5,71 @@ import { SettingsPanel } from './SettingsPanel'
 import { usePlayerStore } from '../state/playerStore'
 import { getCountry } from '../data/countryData'
 
-const FLEET_CATEGORY = 'Fleet Management'
 const SETTINGS_CATEGORY = 'Settings'
+const MILITARY_CATEGORY = 'Military'
+const NAVY_SUBCATEGORY = 'Navy'
 
-const CATEGORIES = ['Situations', 'Government', 'Technology', 'Society', 'Species', 'Contacts', FLEET_CATEGORY, SETTINGS_CATEGORY]
+interface CategoryDef {
+  name: string
+  // Sub-tabs shown inside the category's own window (see .nav-subtabs).
+  // Omitted entirely for a category that's still a single flat panel.
+  subcategories?: string[]
+}
+
+const CATEGORIES: CategoryDef[] = [
+  { name: 'Situations' },
+  { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
+  { name: 'Economy', subcategories: ['Market', 'Budget', 'Welfare'] },
+  { name: 'Technology' },
+  { name: 'Society', subcategories: ['Culture', 'Religion', 'Species'] },
+  { name: 'Diplomacy' },
+  { name: 'International Organizations' },
+  { name: MILITARY_CATEGORY, subcategories: ['Army', NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
+  { name: 'Characters', subcategories: ['Characters', 'Families'] },
+  { name: SETTINGS_CATEGORY },
+]
+
+// What actually renders inside a category/subcategory pairing. Only two
+// slots have real content behind them — Fleet Management's existing UI
+// (ship roster, designer, stance strategizer) now lives under Military's
+// Navy sub-tab, since ships are this game's only naval asset, and Settings
+// stays a flat panel with no sub-tabs. Everything else stays a reserved
+// placeholder, same "don't invent content" spirit as the Outliner's empty
+// Starbases section — there's no government/economy/society/characters
+// simulation behind these yet.
+function renderContent(category: CategoryDef, subcategory: string | null) {
+  if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
+  if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
+  return <div className="nav-placeholder">Not yet available</div>
+}
 
 // Stellaris-style left-side nation nav — the real selected country's name
-// (see playerStore/MainMenu) and a row of category buttons, each opening a
-// placeholder window. No fake data behind the category windows, same
-// "reserve the spot, don't invent content" spirit as ChatPlaceholder and the
-// Outliner's empty Starbases section.
+// (see playerStore/MainMenu), a row of top-level category buttons, and (for
+// most categories) a further row of sub-tabs inside the opened window. No
+// fake data behind any placeholder panel.
 export function NavBar() {
   const [collapsed, setCollapsed] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [activeCategoryName, setActiveCategoryName] = useState<string | null>(null)
+  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null)
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
   const nationName = (selectedCountryId && getCountry(selectedCountryId)?.name) ?? ''
+
+  const activeCategory = CATEGORIES.find((c) => c.name === activeCategoryName) ?? null
+
+  const handleCategoryClick = (category: CategoryDef) => {
+    if (activeCategoryName === category.name) {
+      setActiveCategoryName(null)
+      setActiveSubcategory(null)
+      return
+    }
+    setActiveCategoryName(category.name)
+    setActiveSubcategory(category.subcategories?.[0] ?? null)
+  }
+
+  const handleClose = () => {
+    setActiveCategoryName(null)
+    setActiveSubcategory(null)
+  }
 
   return (
     <>
@@ -29,12 +79,12 @@ export function NavBar() {
           <div className="nav-category-list">
             {CATEGORIES.map((category) => (
               <button
-                key={category}
+                key={category.name}
                 type="button"
-                className={`nav-category-btn${activeCategory === category ? ' active' : ''}`}
-                onClick={() => setActiveCategory((c) => (c === category ? null : category))}
+                className={`nav-category-btn${activeCategoryName === category.name ? ' active' : ''}`}
+                onClick={() => handleCategoryClick(category)}
               >
-                {category}
+                {category.name}
               </button>
             ))}
           </div>
@@ -50,17 +100,26 @@ export function NavBar() {
       </div>
 
       {activeCategory && (
-        <DraggableWindow title={activeCategory} onClose={() => setActiveCategory(null)} wide={activeCategory === FLEET_CATEGORY}>
-          {/* Fleet Management and Settings are the first of these categories
-              to have real content behind them; the rest stay reserved
-              placeholders until there's something true to put in them. */}
-          {activeCategory === FLEET_CATEGORY ? (
-            <FleetManagement />
-          ) : activeCategory === SETTINGS_CATEGORY ? (
-            <SettingsPanel />
-          ) : (
-            <div className="nav-placeholder">Not yet available</div>
+        <DraggableWindow
+          title={activeCategory.name}
+          onClose={handleClose}
+          wide={activeCategory.name === MILITARY_CATEGORY && activeSubcategory === NAVY_SUBCATEGORY}
+        >
+          {activeCategory.subcategories && (
+            <div className="nav-subtabs">
+              {activeCategory.subcategories.map((sub) => (
+                <button
+                  key={sub}
+                  type="button"
+                  className={`nav-subtab${activeSubcategory === sub ? ' active' : ''}`}
+                  onClick={() => setActiveSubcategory(sub)}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
           )}
+          {renderContent(activeCategory, activeSubcategory)}
         </DraggableWindow>
       )}
     </>

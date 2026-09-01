@@ -903,6 +903,7 @@
   z-index: 20;
   width: 240px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
   box-sizing: border-box;
   background: rgba(2, 6, 12, 0.92);
   border: 1px solid rgba(111, 227, 255, 0.4);
@@ -910,6 +911,47 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   font-family: 'Courier New', monospace;
   color: #9fe8ff;
+  /* Flex column so an explicit resized `height` (see DraggableWindow's
+     `size` state) actually gives the body more/less room instead of the
+     window just growing past its own content — harmless at the default
+     content-sized height, since a column of two children behaves the same
+     whether it's flex or block. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Right/bottom edge strips plus a corner square — thin invisible hit areas
+   for resizing (see DraggableWindow's handleResizePointerDown). Positioned
+   over the window's own border so the cursor change reads as "grab the
+   edge," not a separate control floating beside it. */
+.draggable-window-resize-right {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.draggable-window-resize-bottom {
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.draggable-window-resize-corner {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  touch-action: none;
 }
 
 /* Edge-pinned variants (see DraggableWindow's `anchor` prop). Offsets clear
@@ -984,6 +1026,15 @@
 
 .draggable-window-body {
   padding: 10px 12px;
+  /* Lets an explicit resized height (see .draggable-window) actually hand
+     this element the extra/reduced room instead of the flex column just
+     leaving it its natural content size — min-height: 0 is what allows a
+     flex child to shrink below its content size at all, which is also what
+     makes overflow-y: auto (added alongside overflow-x below) actually
+     scroll instead of just being ignored. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .inspect-row {
@@ -1181,6 +1232,40 @@
   font-size: 11px;
   opacity: 0.5;
   padding: 6px 0;
+}
+
+/* Category sub-tabs (see NavBar's CATEGORIES) — same look as Fleet
+   Management's own .fleet-tabs/.fleet-tab, kept as separate rules since
+   these aren't fleet-specific: every category with sub-tabs uses them. */
+.nav-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+  padding-bottom: 6px;
+}
+
+.nav-subtab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.nav-subtab:hover {
+  color: #fff;
+  background: rgba(111, 227, 255, 0.1);
+}
+
+.nav-subtab.active {
+  color: #6fe3ff;
+  border-color: rgba(111, 227, 255, 0.5);
+  background: rgba(111, 227, 255, 0.14);
 }
 
 /* Outliner */

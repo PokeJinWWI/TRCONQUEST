@@ -26,9 +26,18 @@ interface DraggableWindowProps {
   children: ReactNode
 }
 
-// A movable HUD window (title bar drag, no resize) for the satellite-view
-// inspection panel — re-centers on whichever body is selected but stays
-// wherever the player last dragged it until they select something else.
+// Smallest a window can be dragged down to — small enough to still show a
+// title and a line or two of content, not so small it collapses to nothing
+// useful (which .collapse already covers, deliberately, via a real toggle).
+const MIN_WIDTH = 200
+const MIN_HEIGHT = 120
+
+type ResizeAxis = 'x' | 'y' | 'xy'
+
+// A movable, resizable HUD window (title bar drag, edge/corner resize) for
+// the satellite-view inspection panel and the nav sidebar's category
+// windows — re-centers on whichever body is selected but stays wherever the
+// player last dragged/resized it until they select something else.
 export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, children }: DraggableWindowProps) {
   const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   // Collapsed to just its title bar — independent of `onClose`: a window
@@ -36,12 +45,38 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
   // lives in) can still be tucked out of the way without losing it, which a
   // close button couldn't do for it anyway.
   const [collapsed, setCollapsed] = useState(false)
+  // Explicit size once the player has dragged an edge/corner — null means
+  // "still whatever the CSS default (or `wide`) is," so a window that's
+  // never been resized keeps behaving exactly as before.
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number; axis: ResizeAxis } | null>(null)
   const windowRef = useRef<HTMLDivElement>(null)
   // The body's own rendered height at the moment it was last collapsed —
   // needed to reverse the compensation below on the way back out, since the
   // body isn't in the DOM to re-measure while collapsed.
   const collapsedBodyHeightRef = useRef(0)
+
+  const handleResizePointerDown = (axis: ResizeAxis) => (e: React.PointerEvent) => {
+    const rect = windowRef.current?.getBoundingClientRect()
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, startW: rect?.width ?? MIN_WIDTH, startH: rect?.height ?? MIN_HEIGHT, axis }
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handleResizePointerMove = (e: React.PointerEvent) => {
+    if (!resizeRef.current) return
+    const { startX, startY, startW, startH, axis } = resizeRef.current
+    const dx = e.clientX - startX
+    const dy = e.clientY - startY
+    setSize({
+      width: axis === 'y' ? startW : Math.max(MIN_WIDTH, Math.min(window.innerWidth - 32, startW + dx)),
+      height: axis === 'x' ? startH : Math.max(MIN_HEIGHT, Math.min(window.innerHeight - 32, startH + dy)),
+    })
+  }
+
+  const handleResizePointerUp = () => {
+    resizeRef.current = null
+  }
 
   const handlePointerDown = (e: React.PointerEvent) => {
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
@@ -114,6 +149,9 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
         transform: anchor
           ? `translate(${pos.x}px, calc(-50% + ${pos.y}px))`
           : `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
+        // Only overrides the CSS default (240px, or 560px for `wide`) once
+        // the player has actually dragged an edge/corner — see `size`.
+        ...(size && !collapsed ? { width: size.width, height: size.height } : {}),
       }}
     >
       <div
@@ -141,6 +179,32 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
         </span>
       </div>
       {!collapsed && <div className="draggable-window-body">{children}</div>}
+      {/* Resize handles — hidden while collapsed, since there's no body to
+          resize into (only the title bar is showing). Corner comes last so
+          it layers above the edge strips near the corner, where they'd
+          otherwise both be hit-testable at once. */}
+      {!collapsed && (
+        <>
+          <div
+            className="draggable-window-resize-right"
+            onPointerDown={handleResizePointerDown('x')}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+          />
+          <div
+            className="draggable-window-resize-bottom"
+            onPointerDown={handleResizePointerDown('y')}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+          />
+          <div
+            className="draggable-window-resize-corner"
+            onPointerDown={handleResizePointerDown('xy')}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+          />
+        </>
+      )}
     </div>
   )
 }
