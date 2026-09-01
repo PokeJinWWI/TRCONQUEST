@@ -1529,7 +1529,11 @@ console.log('\n=== 39. Two hulls can never occupy the same point ===')
 console.log('\n=== 40. Outrunning everyone disengages a ship without needing FTL ===')
 {
   const simDays = 100
-  const ships = [makeShip('cruiser', 'p1', 'player'), makeShip('cruiser', 'e1', 'hostile')]
+  // Open space (no orbiting body) means zero obstacles, so the disengage
+  // threshold is exactly DISENGAGE_DISTANCE_UNITS with no body-clearance
+  // padding — the flat-constant case. The padded, body-scaled case (Sol) is
+  // covered separately by section 51.
+  const ships = [makeShip('cruiser', 'p1', 'player', 'Deep Space'), makeShip('cruiser', 'e1', 'hostile', 'Deep Space')]
   let engagements = syncEngagements(ships, [], simDays)
 
   // Just inside the threshold: still a participant.

@@ -9,23 +9,40 @@ import { CombatEngagementLine } from './CombatEngagementLine'
 import { ShipPanel } from './ShipPanel'
 import { CombatPanel, combatPanelVerticalOffset } from '../components/CombatPanel'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
-import { type ArenaPoint } from './combatArena'
-import { orderParticipantTo } from './combatResolution'
+import { ARENA_SPAN_UNITS, type ArenaPoint } from './combatArena'
+import { arenaWindowSpan, orderParticipantTo } from './combatResolution'
 import { useCombatStore } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { useViewStore } from '../state/viewStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { ALLEGIANCE_COLORS } from '../data/shipData'
 
-// The arena is 12 units across, so these frame it the way satellite view's
-// constants frame a 3-unit hologram — far enough out to see the whole cage,
-// close enough that individual nodes stay pickable.
+// Camera distances at the arena's own base span (ARENA_SPAN_UNITS, 12) —
+// far enough out to see the whole cage, close enough that individual nodes
+// stay pickable, same spirit as satellite view's constants framing a 3-unit
+// hologram. arenaFrameDistances scales these by the SAME ratio to whatever
+// span the engagement's own window actually is (see
+// combatResolution.arenaWindowSpan): the window (CombatGrid's cage) and the
+// camera framing it are now one proportional system instead of two
+// independently-tuned ones, so a body big enough to need a bigger window
+// (Sol) gets a camera that's framed for that window by construction, not a
+// separate guess.
 const INITIAL_DISTANCE = 26
 const MIN_DISTANCE = 4
 const MAX_DISTANCE = 90
 // Zoom out past this and the view hands back to the system, same
 // scroll-past-the-edge gesture every other view level uses.
 const EXIT_DISTANCE = 70
+
+function arenaFrameDistances(windowSpan: number) {
+  const ratio = windowSpan / ARENA_SPAN_UNITS
+  return {
+    initial: INITIAL_DISTANCE * ratio,
+    min: MIN_DISTANCE * ratio,
+    max: MAX_DISTANCE * ratio,
+    exit: EXIT_DISTANCE * ratio,
+  }
+}
 
 interface CombatViewSceneProps {
   engagementId: string
@@ -59,6 +76,22 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
   )
   const selectedShip = ships.find((s) => s.id === selectedShipId)
   const canCommand = selectedShip?.allegiance === 'player' && !!selectedParticipant
+
+  // Reduced to a primitive before memoizing — engagement.obstacles is a new
+  // array reference practically every tick (a moon's obstacle entry gets
+  // rebuilt as its position updates), even though the obstacles' own radii
+  // never change. Memoizing on the array would recompute (and hand the
+  // Canvas a brand new `camera` prop object) every tick, which fights
+  // OrbitControls: its own per-frame update() keeps recentering on ITS
+  // spherical state, so a camera prop that churns produces a camera that's
+  // technically at the right distance but pointed the wrong way —
+  // indistinguishable from nothing being rendered at all.
+  const windowSpan = engagement ? arenaWindowSpan(engagement.obstacles) : ARENA_SPAN_UNITS
+  const frame = useMemo(() => arenaFrameDistances(windowSpan), [windowSpan])
+  const initialCamera = useMemo(
+    () => ({ position: [frame.initial * 0.6, frame.initial * 0.5, frame.initial * 0.7] as [number, number, number], fov: 50 }),
+    [frame.initial],
+  )
 
   // Right-click the grid: walk the selected ship to the picked destination,
   // which CombatGrid has already resolved to a fine-lattice node (see
@@ -108,7 +141,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
 
   return (
     <div className="solar-system-wrapper">
-      <Canvas camera={{ position: [INITIAL_DISTANCE * 0.6, INITIAL_DISTANCE * 0.5, INITIAL_DISTANCE * 0.7], fov: 50 }}>
+      <Canvas camera={initialCamera}>
         <ambientLight intensity={0.6} />
         <Stars radius={300} depth={60} count={2000} factor={4} saturation={0} fade speed={0} />
 
@@ -116,6 +149,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
           center={engagement.center}
           density={engagement.density}
           obstacles={engagement.obstacles}
+          span={windowSpan}
           onPickPoint={handlePickPoint}
         />
 
@@ -154,15 +188,15 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
           />
         ))}
 
-        <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitCombat} controlsRef={controlsRef} />
+        <DistanceThresholdWatcher mode="max" threshold={frame.exit} onTrigger={exitCombat} controlsRef={controlsRef} />
 
         <OrbitControls
           ref={controlsRef}
           enablePan={false}
           enableDamping
           dampingFactor={0.08}
-          minDistance={MIN_DISTANCE}
-          maxDistance={MAX_DISTANCE}
+          minDistance={frame.min}
+          maxDistance={frame.max}
         />
       </Canvas>
 

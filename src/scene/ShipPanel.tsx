@@ -15,7 +15,7 @@ import {
   coreHealthFraction,
 } from './shipPhysics'
 import { activeEnemyContacts, overallHealthFraction, createSoloEngagement } from './combatResolution'
-import { useCombatStore } from '../state/combatStore'
+import { useCombatStore, areHostile, combatLocationKey } from '../state/combatStore'
 import { useViewStore } from '../state/viewStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { DraggableWindow } from '../components/DraggableWindow'
@@ -126,6 +126,18 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
 
   const combatProfile = shipClass?.combat
   const engagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
+  // The "no fight" Arena button and the real Engagement row are mutually
+  // exclusive, but the resolver's own tick (which turns a hostile encounter
+  // into an actual Engagement) can lag a frame behind a ship just having
+  // arrived or spawned. Checking for a hostile here directly — the same
+  // same-location + allegiance test the resolver itself uses — means the
+  // button reads "Enter Combat" the instant that's true, rather than only
+  // once syncEngagements has caught up.
+  const locationKey = combatLocationKey(ship.location)
+  const hostilePresent =
+    !engagement &&
+    locationKey !== null &&
+    ships.some((s) => s.id !== ship.id && combatLocationKey(s.location) === locationKey && areHostile(ship.allegiance, s.allegiance))
   const participant = engagement?.participants.find((p) => p.shipId === ship.id)
   // "In combat" (part of an Engagement — the row below) and "actively
   // engaged" (has a live target right now) are different questions: a fleet
@@ -286,7 +298,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
           case is the row below instead). */}
       {!engagement && !ship.order && level !== 'combat' && (
         <div className="inspect-row">
-          <span className="inspect-label">Arena</span>
+          <span className="inspect-label">{hostilePresent ? 'Combat' : 'Arena'}</span>
           <span className="inspect-value">
             <button
               type="button"
@@ -298,7 +310,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
                 enterCombat(solo.id)
               }}
             >
-              Enter Arena
+              {hostilePresent ? 'Enter Combat' : 'Enter Arena'}
             </button>
           </span>
         </div>

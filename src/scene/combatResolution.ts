@@ -43,6 +43,7 @@ import {
 } from '../state/combatStore'
 import {
   ARENA_ORIGIN,
+  ARENA_SPAN_UNITS,
   arenaBodyRadius,
   arenaDistanceFromKm,
   arenaPositionToNode,
@@ -666,6 +667,21 @@ function spawnHalfSpan(obstacles: CombatObstacle[]): number {
   return clearance
 }
 
+// The arena WINDOW's own span, in real arena units — proportional to the
+// widest body sharing the engagement rather than a fixed 12 units. Sized
+// directly off spawnHalfSpan (doubled, since a span is edge-to-edge and a
+// half-span is centre-to-edge) so the window a player sees, the lattice a
+// click resolves against, and the faces the fleets actually spawn on are all
+// the same span by construction — no separate tuning, and no "ship spawned
+// outside the frame" mismatch to Recenter away. Floored at ARENA_SPAN_UNITS
+// so nothing changes for a body small enough the old fixed window already
+// covered it (Earth included). Every renderer/picker/router that cares about
+// the window's size (CombatGrid, pickLatticeNode, orderParticipantTo) takes
+// this as its `span`.
+export function arenaWindowSpan(obstacles: CombatObstacle[]): number {
+  return Math.max(ARENA_SPAN_UNITS, 2 * spawnHalfSpan(obstacles))
+}
+
 // Minimum centre-to-centre distance between any two hulls — effectively a
 // ship's collision diameter. Enforced as a post-movement correction (see
 // stepEngagements) so two ships can never occupy the same point, however
@@ -943,6 +959,18 @@ const STALL_SHELTER_MARGIN = 1
 // fresh lattice route every single 0.1s step for a target that's actually
 // holding roughly still.
 const STANCE_REPLAN_TOLERANCE = 0.25
+// The same idea, but for a destination that needs an actual lattice route
+// around a body — a straight-line replan is ~free (one segment/obstacle
+// check), but a lattice route costs a real A* search (see
+// combatArena.astarPath), and a ship closing on a moving target near a large
+// body has its destination drift past the tight tolerance above on nearly
+// every step, which was re-running that search up to ten times a second per
+// ship — the actual source of "laggy near bigger planets," not the search
+// itself being slow so much as being asked for constantly. Wide enough that
+// ordinary closing/maneuvering near a body doesn't retrigger a search every
+// step; still tight enough that a real change (target reverses, a new body
+// enters the way) is caught within a second or so.
+const STANCE_REPLAN_TOLERANCE_ROUTED = 5
 
 export interface CombatStepResult {
   engagements: Engagement[]
@@ -1058,9 +1086,25 @@ export function stepEngagements(
         ? approachNode(p, target, profile, engagement.obstacles, CHASE_STANDOFF_UNITS)
         : stanceDestination(p, target, profile, ship.stance ?? 'balanced', engagement.obstacles, participants, weaponsOnline)
       if (!point) return p
-      const currentFinal = p.path.length > 0 ? p.path[p.path.length - 1] : null
-      if (currentFinal && pointDistance(currentFinal, point) <= STANCE_REPLAN_TOLERANCE) return p
-      return orderParticipantTo(p, point, engagement.density, simDays, engagement.obstacles)
+      // Checked against the last destination actually PLANNED for, not just
+      // path's own final point — orderParticipantTo leaves path untouched
+      // when no route exists (see its own comment), so falling back to
+      // path's final point here would re-trigger the exact same doomed,
+      // potentially-expensive lattice search every single step for as long
+      // as the destination stays unreachable (a body big enough to exhaust
+      // the A* search near it makes this common, not rare). Recording the
+      // attempt regardless of outcome — below — is what makes a failure
+      // count as "handled" until the destination itself moves.
+      const lastAttempt = p.lastPlanAttempt ?? (p.path.length > 0 ? p.path[p.path.length - 1] : null)
+      // A clear line straight to the destination is ~free to re-check every
+      // step; a destination a body is actually in the way of costs a real
+      // lattice search (see STANCE_REPLAN_TOLERANCE_ROUTED's own comment) —
+      // so only that case gets the wider tolerance.
+      const needsRouting = !segmentClearsObstacles(toVector3(p.position), toVector3(point), engagement.obstacles, OBSTACLE_CLEARANCE_UNITS)
+      const tolerance = needsRouting ? STANCE_REPLAN_TOLERANCE_ROUTED : STANCE_REPLAN_TOLERANCE
+      if (lastAttempt && pointDistance(lastAttempt, point) <= tolerance) return p
+      const ordered = orderParticipantTo(p, point, engagement.density, simDays, engagement.obstacles)
+      return { ...ordered, lastPlanAttempt: point }
     })
 
     // --- Movement: integrate one step of real accelerated motion. ---
@@ -1347,11 +1391,24 @@ export function stepEngagements(
         return false
       }
       // Broke contact under its own power: every hostile is now further away
-      // than DISENGAGE_DISTANCE_UNITS, so this ship has left the battle. The
+      // than the disengage threshold, so this ship has left the battle. The
       // second exit from a fight, and the only one available to a hull whose
       // utility is too wrecked to charge a drive.
+      //
+      // DISENGAGE_DISTANCE_UNITS alone isn't safe to use directly any more —
+      // it was calibrated against the old fixed ~12-unit arena, and a fight
+      // near a true-to-scale huge body (see arenaBodyRadius) now starts BOTH
+      // fleets already spawned farther apart than that (Sol's own spawn
+      // clearance alone is well over 260 units — see spawnHalfSpan). Without
+      // this, every fight at a big body would disengage both sides on step
+      // one, before anyone could even close distance — from the player's
+      // seat, entering combat and immediately getting bounced back to system
+      // view, indistinguishable from the fight just not working. Scaled to
+      // whatever THIS engagement's own obstacles actually needed for a safe
+      // spawn, so a normal small-body fight is completely unaffected.
+      const disengageDistance = Math.max(DISENGAGE_DISTANCE_UNITS, 2 * spawnHalfSpan(engagement.obstacles) + DISENGAGE_DISTANCE_UNITS)
       const enemies = nextParticipants.filter((o) => o.side !== p.side && !destroyed.has(o.shipId))
-      if (enemies.length > 0 && enemies.every((o) => pointDistance(p.position, o.position) > DISENGAGE_DISTANCE_UNITS)) {
+      if (enemies.length > 0 && enemies.every((o) => pointDistance(p.position, o.position) > disengageDistance)) {
         disengaged.add(p.shipId)
         return false
       }
@@ -1408,12 +1465,12 @@ export function createSoloEngagement(
   if (!key) return null
 
   const obstacles = obstaclesForLocation(ship.location, simDays)
-  const minHalfSpan = spawnHalfSpan(obstacles)
+  const windowSpan = arenaWindowSpan(obstacles)
   const here = allShips.filter((s) => !s.order && combatLocationKey(s.location) === key)
   const perSideCount: Record<number, number> = { 0: 0, 1: 0 }
   const participants: CombatParticipant[] = here.map((s) => {
     const side = sideFor(s.allegiance)
-    const spawnPosition = startingPoint(side, perSideCount[side]++, density, minHalfSpan)
+    const spawnPosition = startingPoint(side, perSideCount[side]++, density, windowSpan)
     const profile = shipCombatProfile(s)
     return {
       shipId: s.id,
@@ -1453,20 +1510,34 @@ export function syncEngagements(
   simDays: number,
   defaultDensity: GridDensity = 'standard',
 ): Engagement[] {
-  // Only ships at rest at a real anchor can meet. A ship mid-order is
-  // crossing interplanetary distance and isn't anywhere another fleet could
-  // be sitting.
-  const byLocation = new Map<string, ShipInstance[]>()
+  // Only ships at rest at a real anchor can meet, so a ship mid-order can't
+  // be party to a BRAND NEW encounter. But dropping an already-ordered ship
+  // the instant the order is issued — rather than once it's actually gone —
+  // erases a lingering/solo engagement (see createSoloEngagement's "pre-
+  // position a fleet" case) before the ship has moved an inch, kicking the
+  // player straight back out of a view they just opened. Only a ship
+  // leaving a genuinely two-sided hostile standoff gets pulled immediately,
+  // preserving the existing "ordering a ship away from combat extracts it
+  // now" behavior; everyone else (a lone looker, or the last ship on a
+  // fight that already resolved) keeps their seat until their location key
+  // actually changes.
+  const existingByKey = new Map(existing.map((e) => [e.locationKey, e]))
+  const rawByLocation = new Map<string, ShipInstance[]>()
   for (const ship of ships) {
-    if (ship.order) continue
     const key = combatLocationKey(ship.location)
     if (!key) continue
-    const group = byLocation.get(key)
+    const group = rawByLocation.get(key)
     if (group) group.push(ship)
-    else byLocation.set(key, [ship])
+    else rawByLocation.set(key, [ship])
+  }
+  const byLocation = new Map<string, ShipInstance[]>()
+  for (const [key, raw] of rawByLocation) {
+    const prior = existingByKey.get(key)
+    const hostilePairPresent = raw.some((a) => raw.some((b) => a.id !== b.id && areHostile(a.allegiance, b.allegiance)))
+    const kept = raw.filter((ship) => !ship.order || (!!prior && !hostilePairPresent))
+    if (kept.length > 0) byLocation.set(key, kept)
   }
 
-  const existingByKey = new Map(existing.map((e) => [e.locationKey, e]))
   const result: Engagement[] = []
 
   for (const [key, group] of byLocation) {
@@ -1495,7 +1566,7 @@ export function syncEngagements(
     // recomputing — a latecomer joining a fight in progress spawns clear of
     // the SAME body everyone else is already fighting near.
     const obstacles = prior?.obstacles ?? obstaclesForLocation((combatants[0] ?? group[0]).location, simDays)
-    const minHalfSpan = spawnHalfSpan(obstacles)
+    const windowSpan = arenaWindowSpan(obstacles)
 
     // Ships already in the fight keep their arena position and timers;
     // newcomers are placed on their side's face, indexed past whoever's
@@ -1507,7 +1578,7 @@ export function syncEngagements(
       const kept = priorById.get(ship.id)
       if (kept) return kept
       const side = sideFor(ship.allegiance)
-      const spawnPosition = startingPoint(side, perSideCount[side]++, density, minHalfSpan)
+      const spawnPosition = startingPoint(side, perSideCount[side]++, density, windowSpan)
       const profile = shipCombatProfile(ship)
       return {
         shipId: ship.id,
@@ -1585,14 +1656,24 @@ export function orderParticipantTo(
   if (segmentClearsObstacles(toVector3(current), toVector3(destination), obstacles, OBSTACLE_CLEARANCE_UNITS)) {
     path = [destination]
   } else {
-    const fromNode = arenaPositionToNode(toVector3(current), density)
-    const toNode = arenaPositionToNode(toVector3(destination), density)
-    const latticeNodes = latticePath(fromNode, toNode, density, { obstacles, clearance: OBSTACLE_CLEARANCE_UNITS })
+    // Must match the SAME span the rendered/clickable lattice uses (see
+    // arenaWindowSpan) — otherwise a click resolves against one lattice
+    // (CombatGrid's, sized to this engagement's window) while the route gets
+    // planned against a different, unscaled one, and the two disagree about
+    // where the nodes even are.
+    const windowSpan = arenaWindowSpan(obstacles)
+    const fromNode = arenaPositionToNode(toVector3(current), density, windowSpan)
+    const toNode = arenaPositionToNode(toVector3(destination), density, windowSpan)
+    const latticeNodes = latticePath(fromNode, toNode, density, {
+      obstacles,
+      clearance: OBSTACLE_CLEARANCE_UNITS,
+      span: windowSpan,
+    })
     // No route (destination inside a body, or unreachable) — the order is
     // simply refused rather than flying the ship through the obstacle.
     if (latticeNodes.length === 0) return participant
     path = latticeNodes.map((n) => {
-      const v = nodeToArenaPosition(n, density)
+      const v = nodeToArenaPosition(n, density, windowSpan)
       return { x: v.x, y: v.y, z: v.z }
     })
     path[path.length - 1] = destination

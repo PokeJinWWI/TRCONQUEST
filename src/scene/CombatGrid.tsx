@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import { BufferGeometry, Float32BufferAttribute, DoubleSide, Vector3 } from 'three'
 import {
-  ARENA_SPAN_UNITS,
   GRID_DIVISIONS,
   gridSpacing,
   isPointBlocked,
@@ -48,10 +47,10 @@ const NODE_SIZE: Record<GridDensity, number> = {
 // For D subdivisions that's 3*(D+1)^2 segments (867 at 'fine'), all in a
 // single draw call — cheap enough that there's no reason to cull interior
 // lines or fade by distance.
-function useLatticeGeometry(density: GridDensity): BufferGeometry {
+function useLatticeGeometry(density: GridDensity, span: number): BufferGeometry {
   return useMemo(() => {
     const divisions = GRID_DIVISIONS[density]
-    const spacing = gridSpacing(density)
+    const spacing = gridSpacing(density, span)
     const half = divisions / 2
     const positions: number[] = []
     const at = (x: number, y: number, z: number) => [(x - half) * spacing, (y - half) * spacing, (z - half) * spacing]
@@ -71,13 +70,13 @@ function useLatticeGeometry(density: GridDensity): BufferGeometry {
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
     return geometry
-  }, [density])
+  }, [density, span])
 }
 
-function useNodeGeometry(density: GridDensity): BufferGeometry {
+function useNodeGeometry(density: GridDensity, span: number): BufferGeometry {
   return useMemo(() => {
     const divisions = GRID_DIVISIONS[density]
-    const spacing = gridSpacing(density)
+    const spacing = gridSpacing(density, span)
     const half = divisions / 2
     const positions: number[] = []
     for (let x = 0; x <= divisions; x++) {
@@ -90,15 +89,15 @@ function useNodeGeometry(density: GridDensity): BufferGeometry {
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
     return geometry
-  }, [density])
+  }, [density, span])
 }
 
 // The 12 edges of the window cube — drawn separately and brighter so the
 // boundary of what can be ordered in one move always reads clearly, however
 // faint the interior is.
-function useCageGeometry(): BufferGeometry {
+function useCageGeometry(span: number): BufferGeometry {
   return useMemo(() => {
-    const half = ARENA_SPAN_UNITS / 2
+    const half = span / 2
     const corners: [number, number, number][] = []
     for (const x of [-half, half]) for (const y of [-half, half]) for (const z of [-half, half]) corners.push([x, y, z])
     const positions: number[] = []
@@ -113,13 +112,19 @@ function useCageGeometry(): BufferGeometry {
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
     return geometry
-  }, [])
+  }, [span])
 }
 
 interface CombatGridProps {
   center: ArenaPoint
   density: GridDensity
   obstacles: CombatObstacle[]
+  // The window's own real span, in arena units — see
+  // combatResolution.arenaWindowSpan. Proportional to the widest obstacle
+  // sharing the engagement rather than a fixed size, so a body big enough to
+  // matter (Sol) gets a window that actually contains it and the fleets
+  // fighting near it, not a tiny fixed cage that needs constant Recentring.
+  span: number
    /** Fires with the picked destination, in real absolute arena coordinates:
    * one of the nodes currently DRAWN at this density, which by the nesting
    * rule on GRID_DIVISIONS is always a fine-lattice point too. See
@@ -132,17 +137,17 @@ interface CombatGridProps {
 // Drawn in window-local space and positioned by the caller — see
 // CombatViewScene, which offsets the whole arena so the window centre sits at
 // the scene origin.
-export function CombatGrid({ center, density, obstacles, onPickPoint }: CombatGridProps) {
-  const lattice = useLatticeGeometry(density)
-  const nodes = useNodeGeometry(density)
-  const cage = useCageGeometry()
-  const spacing = gridSpacing(density)
+export function CombatGrid({ center, density, obstacles, span, onPickPoint }: CombatGridProps) {
+  const lattice = useLatticeGeometry(density, span)
+  const nodes = useNodeGeometry(density, span)
+  const cage = useCageGeometry(span)
+  const spacing = gridSpacing(density, span)
   // Needed to turn projected NDC into the pixel distances pickLatticeNode
   // reasons about — a capture radius means nothing until it's in screen units.
   const size = useThree((s) => s.size)
   // One node's worth of padding so the window's outer faces are still
   // comfortably inside the click-catcher.
-  const catcherSize = ARENA_SPAN_UNITS + spacing
+  const catcherSize = span + spacing
 
   return (
     <group>
@@ -228,6 +233,7 @@ export function CombatGrid({ center, density, obstacles, onPickPoint }: CombatGr
               return { ...screen, depth, visible: world.z >= -1 && world.z <= 1 }
             },
             { isBlocked: (point) => isPointBlocked(point, obstacles) },
+            span,
           )
           if (picked) onPickPoint(picked)
         }}

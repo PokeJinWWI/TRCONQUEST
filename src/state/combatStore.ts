@@ -123,6 +123,19 @@ export interface CombatParticipant {
   // outside the step ordering and could kill a ship that had already fired
   // this step, or miss one that had already moved.
   scuttleOrdered?: boolean
+  // The stance/chase destination the resolver last tried to plan a route
+  // to — recorded whether or not that attempt actually found one (see
+  // stepEngagements' approach step and orderParticipantTo's "no route
+  // exists" fallback). Distinct from path's own final point specifically
+  // for the failure case: a destination on the far side of a body big
+  // enough to exhaust the pathfinding search returns the participant with
+  // its path untouched, and without this field the replan-tolerance check
+  // couldn't tell "already tried and failed" from "never tried" — so it
+  // re-ran the same expensive, doomed search every single 0.1s step for as
+  // long as the target kept being on the wrong side of the body. This is
+  // what lets a failed attempt count as "handled" until the destination
+  // itself actually moves.
+  lastPlanAttempt?: ArenaPoint | null
 }
 
 export interface Engagement {

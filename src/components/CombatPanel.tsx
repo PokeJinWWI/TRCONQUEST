@@ -1,7 +1,7 @@
 import { COMPONENT_LABELS, CHAFF_DURATION_SECONDS, SCUTTLE_BLAST_RADIUS_UNITS, type ComponentKind } from '../data/combatData'
 import { GRID_DENSITIES, GRID_DENSITY_LABELS, GRID_DIVISIONS, isInsideWindow } from '../scene/combatArena'
 import { useEffect, useState } from 'react'
-import { activeEnemyContacts, isChaffActive, overallHealthFraction, shipCombatProfile } from '../scene/combatResolution'
+import { activeEnemyContacts, arenaWindowSpan, isChaffActive, overallHealthFraction, shipCombatProfile } from '../scene/combatResolution'
 import { useCombatStore, type Engagement } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
@@ -62,7 +62,8 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const selectedParticipant = engagement.participants.find((p) => p.shipId === selectedShipId)
   const selectedShip = selectedShipId ? shipsById.get(selectedShipId) : undefined
   const commandable = selectedShip?.allegiance === 'player' && selectedParticipant
-  const selectedOutsideWindow = !!selectedParticipant && !isInsideWindow(selectedParticipant.position, engagement.center)
+  const selectedOutsideWindow =
+    !!selectedParticipant && !isInsideWindow(selectedParticipant.position, engagement.center, arenaWindowSpan(engagement.obstacles))
   const chaffActive = !!selectedShip && isChaffActive(selectedShip.combat, simDays)
   // Reset the arm state whenever the selection moves, so an armed Scuttle
   // can never carry over onto a different ship.

@@ -163,8 +163,15 @@ export interface CombatObstacle {
   velocity?: ArenaPoint
 }
 
-export function gridSpacing(density: GridDensity): number {
-  return ARENA_SPAN_UNITS / GRID_DIVISIONS[density]
+// `span` defaults to ARENA_SPAN_UNITS (the fixed grain used for arranging
+// ships within one fleet's own spawn face — see startingPoint) but every
+// caller reasoning about the WINDOW itself (rendering, click-picking, and
+// route-finding around obstacles) passes the engagement's own real span —
+// see combatResolution.arenaWindowSpan — so the lattice a player sees, the
+// lattice a click resolves against, and the lattice a route is planned
+// through are always the same one.
+export function gridSpacing(density: GridDensity, span: number = ARENA_SPAN_UNITS): number {
+  return span / GRID_DIVISIONS[density]
 }
 
 // --- Body sizing, and the arena's one real physical anchor -----------------
@@ -284,15 +291,15 @@ export const ARENA_LIGHT_SPEED_UNITS_PER_SECOND =
 // Lattice index -> real point, at a given density's spacing. Used only when
 // converting a freshly-computed route back into real waypoints (see
 // latticePath's callers) — never to derive where anything currently *is*.
-export function nodeToArenaPosition(node: GridNode, density: GridDensity): Vector3 {
-  const spacing = gridSpacing(density)
+export function nodeToArenaPosition(node: GridNode, density: GridDensity, span: number = ARENA_SPAN_UNITS): Vector3 {
+  const spacing = gridSpacing(density, span)
   return new Vector3(node.x * spacing, node.y * spacing, node.z * spacing)
 }
 
 // Inverse — snaps a real point to the nearest lattice index at a given
 // density. Used only to find a start/end node for route planning.
-export function arenaPositionToNode(position: Vector3, density: GridDensity): GridNode {
-  const spacing = gridSpacing(density)
+export function arenaPositionToNode(position: Vector3, density: GridDensity, span: number = ARENA_SPAN_UNITS): GridNode {
+  const spacing = gridSpacing(density, span)
   return {
     x: Math.round(position.x / spacing),
     y: Math.round(position.y / spacing),
@@ -304,22 +311,33 @@ export function nodesEqual(a: GridNode, b: GridNode): boolean {
   return a.x === b.x && a.y === b.y && a.z === b.z
 }
 
-export function arenaDistance(a: GridNode, b: GridNode, density: GridDensity): number {
-  return nodeToArenaPosition(a, density).distanceTo(nodeToArenaPosition(b, density))
+// Plain arithmetic rather than nodeToArenaPosition + Vector3.distanceTo —
+// this is A*'s innermost hot path (every neighbor of every expanded node,
+// twice: once for the running cost, once for the heuristic), and allocating
+// two Vector3 objects per call turned out to be the real cost of a search
+// near a big body, not the node count itself. Same spacing, same result,
+// zero allocation.
+export function arenaDistance(a: GridNode, b: GridNode, density: GridDensity, span: number = ARENA_SPAN_UNITS): number {
+  const spacing = gridSpacing(density, span)
+  const dx = (a.x - b.x) * spacing
+  const dy = (a.y - b.y) * spacing
+  const dz = (a.z - b.z) * spacing
+  return Math.sqrt(dx * dx + dy * dy + dz * dz)
 }
 
 // Whether a real point falls inside the currently-visible window — the
-// physical window size (ARENA_SPAN_UNITS) never changes with density, so
-// this needs no density parameter at all. Used to bound what the player can
-// order in a single move and what the grid draws — never to constrain where
-// a ship may actually be (recentring is what extends reach).
-const WINDOW_HALF_EXTENT = ARENA_SPAN_UNITS / 2
-
-export function isInsideWindow(point: ArenaPoint, center: ArenaPoint): boolean {
+// window's physical size never changes with density, so this needs no
+// density parameter at all. It DOES change per engagement (see
+// combatResolution.arenaWindowSpan), so callers pass their own span rather
+// than relying on the ARENA_SPAN_UNITS default. Used to bound what the
+// player can order in a single move and what the grid draws — never to
+// constrain where a ship may actually be (recentring is what extends reach).
+export function isInsideWindow(point: ArenaPoint, center: ArenaPoint, span: number = ARENA_SPAN_UNITS): boolean {
+  const half = span / 2
   return (
-    Math.abs(point.x - center.x) <= WINDOW_HALF_EXTENT &&
-    Math.abs(point.y - center.y) <= WINDOW_HALF_EXTENT &&
-    Math.abs(point.z - center.z) <= WINDOW_HALF_EXTENT
+    Math.abs(point.x - center.x) <= half &&
+    Math.abs(point.y - center.y) <= half &&
+    Math.abs(point.z - center.z) <= half
   )
 }
 
@@ -332,10 +350,17 @@ export function isPointBlocked(point: ArenaPoint, obstacles: CombatObstacle[], c
 // Same check for a lattice node, used only inside route planning (A*/greedy
 // clip detection) — converts to a real point at the given density, then
 // defers to isPointBlocked.
-export function isNodeBlocked(node: GridNode, obstacles: CombatObstacle[], density: GridDensity, clearance = 0): boolean {
+export function isNodeBlocked(
+  node: GridNode,
+  obstacles: CombatObstacle[],
+  density: GridDensity,
+  clearance = 0,
+  span: number = ARENA_SPAN_UNITS,
+): boolean {
   if (obstacles.length === 0) return false
-  const p = nodeToArenaPosition(node, density)
-  return isPointBlocked({ x: p.x, y: p.y, z: p.z }, obstacles, clearance)
+  const spacing = gridSpacing(density, span)
+  const p = { x: node.x * spacing, y: node.y * spacing, z: node.z * spacing }
+  return isPointBlocked(p, obstacles, clearance)
 }
 
 // --- Picking a destination from a click ------------------------------------
@@ -358,8 +383,13 @@ export function isNodeBlocked(node: GridNode, obstacles: CombatObstacle[], densi
 // A density's nodes are laid out relative to the WINDOW CENTRE (see
 // CombatGrid), not to the arena origin, so anything reasoning about "which
 // node is this" has to use the same origin. Clamped to the window's extent.
-export function snapToLatticeNode(point: ArenaPoint, center: ArenaPoint, density: GridDensity): ArenaPoint {
-  const spacing = gridSpacing(density)
+export function snapToLatticeNode(
+  point: ArenaPoint,
+  center: ArenaPoint,
+  density: GridDensity,
+  span: number = ARENA_SPAN_UNITS,
+): ArenaPoint {
+  const spacing = gridSpacing(density, span)
   const half = GRID_DIVISIONS[density] / 2
   const axis = (value: number, origin: number): number => {
     const steps = Math.max(-half, Math.min(half, Math.round((value - origin) / spacing)))
@@ -426,10 +456,11 @@ export function pickLatticeNode(
   cursor: { x: number; y: number },
   project: (point: ArenaPoint) => ProjectedNode,
   options: PickLatticeOptions = {},
+  span: number = ARENA_SPAN_UNITS,
 ): ArenaPoint | null {
   const { isBlocked, tieRadius = DEFAULT_TIE_RADIUS_PX } = options
   const divisions = GRID_DIVISIONS[density]
-  const spacing = gridSpacing(density)
+  const spacing = gridSpacing(density, span)
   const half = divisions / 2
 
   const nodeAt = (ix: number, iy: number, iz: number): ArenaPoint => ({
@@ -551,9 +582,15 @@ export function neighborsOf(node: GridNode, bounds?: NodeBounds): GridNode[] {
 
 // How long one hop between adjacent lattice nodes takes, in sim-seconds, at
 // a given speed — used only while planning a route in index space.
-export function traversalSeconds(from: GridNode, to: GridNode, density: GridDensity, unitsPerSecond: number): number {
+export function traversalSeconds(
+  from: GridNode,
+  to: GridNode,
+  density: GridDensity,
+  unitsPerSecond: number,
+  span: number = ARENA_SPAN_UNITS,
+): number {
   if (unitsPerSecond <= 0) return Infinity
-  return arenaDistance(from, to, density) / unitsPerSecond
+  return arenaDistance(from, to, density, span) / unitsPerSecond
 }
 
 // The real-coordinate equivalent, used once a route has been converted to
@@ -596,6 +633,73 @@ function greedyPath(from: GridNode, to: GridNode): GridNode[] {
 // keeps the search finite without coupling it to the display window — a
 // route must be plannable regardless of where the player has the camera
 // framed.
+// Hard cap on how many nodes a single detour search will ever expand.
+// Node count in the search box scales with the CUBE of (widest obstacle's
+// radius / grid spacing) — see detourMargin — which was a small, safe number
+// back when every body's arena radius topped out around ~4 units. Now that
+// body radius is true-to-scale (see combatResolution's arenaBodyRadius),
+// Sol's ~131-unit radius alone implies a search box tens of millions of
+// nodes wide, and the frontier scan below is a linear scan per iteration on
+// top of that — undoubtedly what an unbounded search actually hung on. This
+// doesn't fix that ships can't (yet) find a good detour around something
+// Sol-sized, but a route the search gives up early on has the SAME "no route
+// found, hold position" fallback latticePath already has for a genuinely
+// unreachable destination — a real UX gap, not a crash or a hang.
+const MAX_ASTAR_EXPANSIONS = 20000
+
+// The open set's frontier, ordered by f-score. A body big enough to need a
+// real detour (Sol) routinely produces search boxes in the low thousands of
+// nodes (see boundsFor/detourMargin) — nowhere near MAX_ASTAR_EXPANSIONS, but
+// still enough that re-scanning the WHOLE frontier on every single pop (the
+// previous plain-array implementation) cost multiple milliseconds per call,
+// and this search reruns every 0.1s step for every ship whose route needs
+// one. A binary heap turns each pop into O(log n) instead of O(n), which is
+// what actually made combat near a large body slow — not the geometry, not
+// the node count itself, just this one re-scan.
+class OpenSet {
+  private items: { node: GridNode; f: number }[] = []
+
+  get size(): number {
+    return this.items.length
+  }
+
+  push(node: GridNode, f: number): void {
+    this.items.push({ node, f })
+    let i = this.items.length - 1
+    while (i > 0) {
+      const parent = (i - 1) >> 1
+      if (this.items[parent].f <= this.items[i].f) break
+      ;[this.items[parent], this.items[i]] = [this.items[i], this.items[parent]]
+      i = parent
+    }
+  }
+
+  // Lowest-f entry. Duplicate, since-improved entries for an already-popped
+  // node can still be sitting in here — same as the array version tolerated,
+  // and handled the same way: the caller skips anything already `closed`.
+  pop(): GridNode | undefined {
+    const top = this.items[0]
+    if (!top) return undefined
+    const last = this.items.pop()!
+    if (this.items.length > 0) {
+      this.items[0] = last
+      let i = 0
+      const n = this.items.length
+      for (;;) {
+        const left = 2 * i + 1
+        const right = 2 * i + 2
+        let smallest = i
+        if (left < n && this.items[left].f < this.items[smallest].f) smallest = left
+        if (right < n && this.items[right].f < this.items[smallest].f) smallest = right
+        if (smallest === i) break
+        ;[this.items[smallest], this.items[i]] = [this.items[i], this.items[smallest]]
+        i = smallest
+      }
+    }
+    return top.node
+  }
+}
+
 function astarPath(
   from: GridNode,
   to: GridNode,
@@ -603,19 +707,18 @@ function astarPath(
   density: GridDensity,
   obstacles: CombatObstacle[],
   clearance: number,
+  span: number = ARENA_SPAN_UNITS,
 ): GridNode[] | null {
   const goalKey = nodeKey(to)
   const cameFrom = new Map<string, GridNode>()
   const gScore = new Map<string, number>([[nodeKey(from), 0]])
-  // A plain array used as the open set — the frontier stays small enough at
-  // these node counts that a binary heap wouldn't earn its complexity.
-  const open: { node: GridNode; f: number }[] = [{ node: from, f: arenaDistance(from, to, density) }]
+  const open = new OpenSet()
+  open.push(from, arenaDistance(from, to, density, span))
   const closed = new Set<string>()
 
-  while (open.length > 0) {
-    let bestIndex = 0
-    for (let i = 1; i < open.length; i++) if (open[i].f < open[bestIndex].f) bestIndex = i
-    const { node: current } = open.splice(bestIndex, 1)[0]
+  while (open.size > 0) {
+    if (closed.size > MAX_ASTAR_EXPANSIONS) return null
+    const current = open.pop()!
     const currentKey = nodeKey(current)
     if (currentKey === goalKey) {
       const path: GridNode[] = []
@@ -634,12 +737,12 @@ function astarPath(
     for (const neighbor of neighborsOf(current, bounds)) {
       const key = nodeKey(neighbor)
       if (closed.has(key)) continue
-      if (isNodeBlocked(neighbor, obstacles, density, clearance)) continue
-      const tentative = (gScore.get(currentKey) ?? Infinity) + arenaDistance(current, neighbor, density)
+      if (isNodeBlocked(neighbor, obstacles, density, clearance, span)) continue
+      const tentative = (gScore.get(currentKey) ?? Infinity) + arenaDistance(current, neighbor, density, span)
       if (tentative >= (gScore.get(key) ?? Infinity)) continue
       cameFrom.set(key, current)
       gScore.set(key, tentative)
-      open.push({ node: neighbor, f: tentative + arenaDistance(neighbor, to, density) })
+      open.push(neighbor, tentative + arenaDistance(neighbor, to, density, span))
     }
   }
   return null
@@ -650,13 +753,19 @@ export interface PathOptions {
   obstacles?: CombatObstacle[]
   /** Extra margin around each body, in arena units. */
   clearance?: number
+  /** The window span this route is being planned against — see
+   * combatResolution.arenaWindowSpan. Must match whatever span the caller's
+   * `from`/`to` nodes were snapped against (arenaPositionToNode), or the
+   * route will be planned on a differently-spaced lattice than the one the
+   * endpoints actually sit on. */
+  span?: number
 }
 
 // How much room beyond the two endpoints the detour search is allowed, in
 // nodes. Sized from the largest body present so there's always space to go
 // around it, plus a couple of nodes of slack.
-export function detourMargin(obstacles: CombatObstacle[], density: GridDensity): number {
-  const spacing = gridSpacing(density)
+export function detourMargin(obstacles: CombatObstacle[], density: GridDensity, span: number = ARENA_SPAN_UNITS): number {
+  const spacing = gridSpacing(density, span)
   const widest = obstacles.reduce((max, o) => Math.max(max, o.radiusUnits), 0)
   return Math.ceil(widest / spacing) + 2
 }
@@ -673,15 +782,15 @@ export function detourMargin(obstacles: CombatObstacle[], density: GridDensity):
 // the real waypoints a ship actually walks, and for why it's only consulted
 // at all when the straight-line real path is blocked.
 export function latticePath(from: GridNode, to: GridNode, density: GridDensity, options: PathOptions = {}): GridNode[] {
-  const { obstacles = [], clearance = 0 } = options
+  const { obstacles = [], clearance = 0, span = ARENA_SPAN_UNITS } = options
   const greedy = greedyPath(from, to)
   if (obstacles.length === 0) return greedy
 
-  const clips = greedy.some((node) => isNodeBlocked(node, obstacles, density, clearance))
+  const clips = greedy.some((node) => isNodeBlocked(node, obstacles, density, clearance, span))
   if (!clips) return greedy
 
-  const bounds = boundsFor(from, to, detourMargin(obstacles, density))
-  const routed = astarPath(from, to, bounds, density, obstacles, clearance)
+  const bounds = boundsFor(from, to, detourMargin(obstacles, density, span))
+  const routed = astarPath(from, to, bounds, density, obstacles, clearance, span)
   // No route exists — the destination is inside a body. Hold position rather
   // than flying through it.
   return routed ?? []
@@ -689,11 +798,17 @@ export function latticePath(from: GridNode, to: GridNode, density: GridDensity, 
 
 // Total sim-seconds to walk a whole lattice-index path at a given speed —
 // used by tests exercising latticePath directly in index space.
-export function pathSeconds(from: GridNode, path: GridNode[], density: GridDensity, unitsPerSecond: number): number {
+export function pathSeconds(
+  from: GridNode,
+  path: GridNode[],
+  density: GridDensity,
+  unitsPerSecond: number,
+  span: number = ARENA_SPAN_UNITS,
+): number {
   let total = 0
   let prev = from
   for (const node of path) {
-    total += traversalSeconds(prev, node, density, unitsPerSecond)
+    total += traversalSeconds(prev, node, density, unitsPerSecond, span)
     prev = node
   }
   return total
@@ -707,18 +822,23 @@ export function pathSeconds(from: GridNode, path: GridNode[], density: GridDensi
 // centre being the origin at spawn time — see combatResolution.syncEngagements,
 // which anchors a fresh engagement's window at ARENA_ORIGIN).
 //
-// `minHalfSpan` defends against a body bigger than the window itself — Sol's
-// true-to-scale radius (see arenaBodyRadius) is ~131 units, comfortably past
-// this constant's own 6-unit default, so without a caller-supplied override
-// a fight starting "at Sol" would spawn both fleets INSIDE the star and the
-// resolver's own collision check (a ship whose position lies inside a body
-// is destroyed — see stepEngagements) would kill everyone on step one. The
-// caller (combatResolution, which already has the engagement's obstacles in
-// hand) is what actually knows how big the local body is; this just refuses
-// to place anyone closer than it's told is safe.
-export function startingPoint(sideIndex: 0 | 1, shipIndex: number, density: GridDensity, minHalfSpan = 0): ArenaPoint {
+// `windowSpan` is the engagement's own real span (see
+// combatResolution.arenaWindowSpan) — defends against a body bigger than the
+// default window itself. Sol's true-to-scale radius (see arenaBodyRadius) is
+// ~131 units, comfortably past ARENA_SPAN_UNITS's own 12-unit default, so
+// without a caller-supplied override a fight starting "at Sol" would spawn
+// both fleets INSIDE the star and the resolver's own collision check (a ship
+// whose position lies inside a body is destroyed — see stepEngagements)
+// would kill everyone on step one. The caller (combatResolution, which
+// already has the engagement's obstacles in hand) is what actually knows how
+// big the local body is; this just refuses to place anyone closer than it's
+// told is safe. Deliberately NOT used for the ship-fan-out spacing below —
+// that's about keeping a handful of hulls from stacking on one point within
+// their own side's face, which stays at the same fine grain regardless of
+// how big the window itself has grown.
+export function startingPoint(sideIndex: 0 | 1, shipIndex: number, density: GridDensity, windowSpan: number = ARENA_SPAN_UNITS): ArenaPoint {
   const spacing = gridSpacing(density)
-  const half = Math.max(ARENA_SPAN_UNITS / 2, minHalfSpan)
+  const half = windowSpan / 2
   // Fan ships out over a small square on their side's face, wrapping every
   // 3 columns so a large fleet spreads in two dimensions rather than a line.
   const column = shipIndex % 3
