@@ -9,6 +9,8 @@ import { LockOnToggle } from './components/LockOnToggle'
 import { MainMenu } from './components/MainMenu'
 import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
+import { FiscalIndicators } from './components/FiscalIndicators'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
 import { useHudBarLayout } from './hooks/useHudBarLayout'
@@ -81,6 +83,7 @@ function App() {
     <div id="app-root">
       <header ref={topBarRef} className="hud-bar hud-top">
         <span className="hud-title">TERRA RELICTA: CONQUEST</span>
+        <FiscalIndicators />
         <HudCenterSwap />
         <div className="hud-top-right">
           <LockOnToggle />
@@ -106,6 +109,7 @@ function App() {
         <ActionBar />
         <LocationLabel />
       </footer>
+      <ConfirmDialog />
     </div>
   )
 }

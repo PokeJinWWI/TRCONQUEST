@@ -33,13 +33,22 @@ export interface SpeciesTemplate {
 // adds real luxury goods for.
 export const BASELINE_ORGANIC: SpeciesTemplate = {
   id: 'baseline-organic',
-  name: 'Baseline Organic',
+  // Martians, Venusians and Arcadians are all HUMANS — different cultures, one
+  // species. Only the Tidalians are a separate (alien) species.
+  name: 'Human',
   needs: {
-    basic: [{ good: 'food', amountPerPop: 1.0 }],
-    everyday: [{ good: 'consumerGoods', amountPerPop: 0.5 }],
-    healthcare: [{ good: 'medicine', amountPerPop: 0.2 }],
-    comfort: [],
-    luxury: [],
+    basic: [{ good: 'food', amountPerPop: 0.8 }],
+    everyday: [
+      { good: 'consumerGoods', amountPerPop: 0.3 },
+      { good: 'electricity', amountPerPop: 0.15 },
+      { good: 'retail', amountPerPop: 0.12 },
+    ],
+    healthcare: [{ good: 'healthcare', amountPerPop: 0.15 }],
+    comfort: [
+      { good: 'electronics', amountPerPop: 0.03 },
+      { good: 'education', amountPerPop: 0.08 },
+    ],
+    luxury: [{ good: 'luxuryGoods', amountPerPop: 0.02 }],
   },
 }
 
@@ -54,11 +63,15 @@ export const TIDALIAN: SpeciesTemplate = {
   id: 'tidalian',
   name: 'Tidalian',
   needs: {
-    basic: [{ good: 'food', amountPerPop: 1.1 }],
-    everyday: [{ good: 'consumerGoods', amountPerPop: 0.4 }],
-    healthcare: [{ good: 'medicine', amountPerPop: 0.15 }],
-    comfort: [],
-    luxury: [],
+    basic: [{ good: 'food', amountPerPop: 0.85 }],
+    everyday: [
+      { good: 'consumerGoods', amountPerPop: 0.25 },
+      { good: 'electricity', amountPerPop: 0.12 },
+      { good: 'retail', amountPerPop: 0.1 },
+    ],
+    healthcare: [{ good: 'healthcare', amountPerPop: 0.13 }],
+    comfort: [{ good: 'education', amountPerPop: 0.06 }],
+    luxury: [{ good: 'luxuryGoods', amountPerPop: 0.02 }],
   },
 }
 

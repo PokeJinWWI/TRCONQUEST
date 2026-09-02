@@ -1258,6 +1258,676 @@
   font-variant-numeric: tabular-nums;
 }
 
+.econ-method-select {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 3px;
+  color: #cdeeff;
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 2px;
+  max-width: 108px;
+  cursor: pointer;
+}
+.econ-method-select:hover {
+  background: rgba(111, 227, 255, 0.18);
+  color: #fff;
+}
+
+/* Building ownership / production-method control */
+.econ-method-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.econ-owner-tag {
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.econ-owner-owner {
+  color: #7ee0b0;
+  background: rgba(74, 222, 128, 0.12);
+}
+.econ-owner-state {
+  color: #9fd0ff;
+  background: rgba(111, 175, 255, 0.14);
+}
+.econ-owner-pinned {
+  color: #ffcf8f;
+  background: rgba(255, 180, 80, 0.14);
+}
+.econ-release-btn {
+  background: none;
+  border: 1px solid rgba(255, 207, 143, 0.4);
+  color: #ffcf8f;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 3px;
+}
+.econ-release-btn:hover {
+  background: rgba(255, 207, 143, 0.18);
+  color: #fff;
+}
+.econ-econsystem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.econ-econsystem-name {
+  color: #9fd0ff;
+}
+.econ-econsystem-hint {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* Building pin badge (state overriding a private method) */
+.econ-pin-badge {
+  font-size: 9px;
+  color: #ffcf8f;
+  background: rgba(255, 180, 80, 0.14);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+/* Corporation cards (Corporations panel) */
+.corp-card {
+  border: 1px solid rgba(111, 227, 255, 0.2);
+  border-radius: 5px;
+  padding: 7px 9px;
+  margin-bottom: 7px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.corp-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.corp-card-name {
+  color: #cdeeff;
+  font-weight: 700;
+  font-size: 12px;
+}
+.corp-card-sector {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.corp-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 4px;
+}
+.corp-card-stats b {
+  color: #fff;
+}
+.corp-card-leader {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 5px;
+}
+.corp-card-traits {
+  color: rgba(255, 255, 255, 0.4);
+}
+.corp-card-actions {
+  display: flex;
+  gap: 6px;
+}
+.corp-btn {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.corp-btn:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.2);
+  color: #fff;
+}
+.corp-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.corp-btn-danger {
+  border-color: rgba(255, 107, 74, 0.5);
+  color: #ff9b82;
+  background: rgba(255, 107, 74, 0.08);
+}
+.corp-btn-danger:hover:not(:disabled) {
+  background: rgba(255, 107, 74, 0.2);
+  color: #fff;
+}
+.corp-create {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.corp-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+/* Stock exchange trade buttons */
+.stock-trade {
+  display: inline-flex;
+  gap: 4px;
+}
+.stock-btn {
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  background: rgba(111, 227, 255, 0.08);
+  color: #9fe8ff;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+.stock-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.stock-buy:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.2);
+  color: #fff;
+}
+.stock-sell:hover:not(:disabled) {
+  background: rgba(255, 107, 74, 0.2);
+  color: #fff;
+}
+
+/* Demographics bars */
+.demo-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 0;
+}
+.demo-bar-label {
+  flex: 0 0 118px;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.demo-bar-track {
+  flex: 1;
+  height: 9px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.demo-bar-fill {
+  display: block;
+  height: 100%;
+}
+.demo-bar-val {
+  flex: 0 0 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Pops meta (species/culture line) + needs basket */
+.pops-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 3px;
+}
+.pops-meta b {
+  color: #9fd0ff;
+}
+.pops-needs-basket {
+  margin-bottom: 6px;
+}
+.pops-basket-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  padding: 1px 0;
+}
+.pops-basket-tier {
+  flex: 0 0 66px;
+  text-transform: capitalize;
+  color: rgba(255, 255, 255, 0.55);
+}
+.pops-basket-goods {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.8);
+}
+.pops-basket-met {
+  flex: 0 0 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Characters panel */
+.char-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.char-list-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+}
+.char-list-item.active {
+  border-color: rgba(111, 227, 255, 0.5);
+  background: rgba(111, 227, 255, 0.08);
+}
+.char-list-name {
+  font-size: 11px;
+  color: #cdeeff;
+}
+.char-list-role {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+}
+.char-detail {
+  border-top: 1px solid rgba(111, 227, 255, 0.2);
+  padding-top: 6px;
+}
+.char-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.char-detail-name {
+  color: #cdeeff;
+  font-weight: 700;
+  font-size: 13px;
+}
+.char-detail-role {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.char-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 5px 0;
+}
+.char-trait {
+  font-size: 10px;
+  color: #ffcf8f;
+  background: rgba(255, 180, 80, 0.12);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.char-skills {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 4px;
+}
+.char-skills b {
+  color: #fff;
+}
+.char-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.char-log {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.char-log-line {
+  padding: 1px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.char-family-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.char-member-chip {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  color: #cdeeff;
+  font: inherit;
+  font-size: 10px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.char-member-chip:hover {
+  background: rgba(111, 227, 255, 0.2);
+}
+
+/* Top-bar fiscal indicators */
+.fiscal-indicators {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-left: 16px;
+}
+.fiscal-ind {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.fiscal-ind-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.4);
+}
+.fiscal-ind-val {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+.fiscal-ind-sub {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: 2px;
+}
+
+/* Debt panel */
+.debt-setting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 4px;
+  cursor: pointer;
+}
+.debt-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.debt-offer-text {
+  color: rgba(255, 255, 255, 0.8);
+}
+.debt-offer-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Market buyers/sellers expansion */
+.market-row {
+  cursor: pointer;
+}
+.market-row:hover td {
+  color: #fff;
+}
+.market-caret {
+  display: inline-block;
+  width: 12px;
+  color: #6fe3ff;
+  font-size: 9px;
+}
+.market-detail-row td {
+  padding: 2px 8px 6px 12px;
+}
+.market-detail {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.4;
+}
+.market-detail-label {
+  font-weight: 700;
+}
+
+/* Building detail (click a building row) */
+.bld-name-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.bld-name-btn:hover {
+  color: #fff;
+}
+.bld-detail {
+  padding: 6px 4px 4px;
+}
+.bld-detail-title {
+  font-size: 11px;
+  color: #cdeeff;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.bld-detail-owner {
+  color: #9fd0ff;
+  font-weight: 400;
+}
+.bld-detail-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 6px;
+}
+.bld-detail-cols {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bld-detail-col {
+  flex: 1;
+  min-width: 120px;
+}
+.bld-detail-h {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 2px;
+}
+.bld-detail-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 0;
+}
+.bld-detail-none {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.bld-detail-foot {
+  margin-top: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 4px;
+}
+
+/* Confirmation dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+.confirm-box {
+  background: #0b1622;
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 6px;
+  padding: 16px 18px;
+  width: 340px;
+  max-width: 90vw;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+.confirm-title {
+  font-size: 14px;
+  color: #cdeeff;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.confirm-body {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 6px;
+}
+.confirm-effects {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  font-size: 12px;
+}
+.confirm-effect {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+.confirm-effect::before {
+  content: '•';
+  color: #6fe3ff;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.confirm-btn {
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 14px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+}
+.confirm-btn-go {
+  border-color: rgba(111, 227, 255, 0.5);
+  background: rgba(111, 227, 255, 0.15);
+  color: #cdeeff;
+}
+.confirm-btn-go:hover {
+  background: rgba(111, 227, 255, 0.3);
+  color: #fff;
+}
+.confirm-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Pops panel — faith colour dot */
+.pops-faith-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* Laws panel — enactable law options */
+.laws-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.laws-option {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.laws-option.active {
+  border-color: rgba(111, 227, 255, 0.5);
+  background: rgba(111, 227, 255, 0.06);
+}
+.laws-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+.laws-option-name {
+  color: #cdeeff;
+  font-weight: 700;
+  font-size: 11px;
+}
+.laws-option-current {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6fe3ff;
+}
+.laws-enact-btn {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.laws-enact-btn:hover {
+  background: rgba(111, 227, 255, 0.2);
+  color: #fff;
+}
+.laws-option-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 4px;
+}
+.laws-option-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
 /* .econ-pos/.econ-neg themselves are defined further down (right after
    .inspect-value) — every real usage combines one of them with
    .inspect-value (`className="inspect-value econ-neg"` etc.), and with
