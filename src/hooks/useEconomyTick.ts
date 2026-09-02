@@ -3,10 +3,10 @@ import { useGameTimeStore } from '../state/gameTimeStore'
 import { useEconomyStore } from '../state/economyStore'
 
 // How many sim-days pass per economy tick. The economy moves at a coarse,
-// strategic cadence (one tick a week or so of game time) rather than every
-// frame — it's a slow macro simulation, not a per-frame physics loop, and
-// this keeps it cheap regardless of how fast the clock is running.
-const SIM_DAYS_PER_ECONOMY_TICK = 7
+// strategic cadence — ONE TICK PER IN-GAME MONTH — rather than every frame. It's
+// a slow macro simulation, not a per-frame physics loop, so 12 ticks make a
+// year (see TICKS_PER_YEAR in economyTick, kept in step).
+const SIM_DAYS_PER_ECONOMY_TICK = 30
 
 // Advances the economy off the game clock, the same subscribe-to-simDays
 // pattern useShipDriftIntegrator uses. Whole ticks only — it accumulates game

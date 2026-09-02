@@ -1,10 +1,34 @@
+import { Fragment, useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { LineGraph } from './LineGraph'
-import { GOOD_IDS, GOODS } from '../economy/goods'
-import { NEED_TIERS } from '../economy/species'
+import { GOOD_IDS, GOODS, type GoodId } from '../economy/goods'
+import { RECIPES, getMethod } from '../economy/recipes'
+import { NEED_TIERS, SPECIES_TEMPLATES } from '../economy/species'
 import { formatPop, formatMoney, formatPrice } from '../economy/format'
 import type { Country, World } from '../economy/economyTypes'
+
+// For a good on a world: which buildings produce it (sellers) and which
+// buildings + household needs consume it (buyers).
+function marketParticipants(world: World, good: GoodId) {
+  const sellers: string[] = []
+  const buyers: string[] = []
+  for (const b of world.buildings) {
+    const method = getMethod(b.recipeId, b.methodId)
+    if (!method) continue
+    const label = RECIPES[b.recipeId]?.label ?? b.recipeId
+    if (method.outputs.some((o) => o.good === good)) sellers.push(`${label} (L${b.level})`)
+    if (method.inputs.some((i) => i.good === good)) buyers.push(`${label} (L${b.level})`)
+  }
+  // Households consume it if any species on the world needs it.
+  const speciesIds = [...new Set(world.pops.map((p) => p.speciesTemplateId))]
+  const householdNeeds = speciesIds.some((id) => {
+    const sp = SPECIES_TEMPLATES[id]
+    return sp && NEED_TIERS.some((t) => sp.needs[t].some((n) => n.good === good))
+  })
+  if (householdNeeds) buyers.push('Households')
+  return { sellers, buyers }
+}
 
 interface EconomyPanelProps {
   subcategory: string | null
@@ -28,6 +52,7 @@ export function NationEconomyPanel({ subcategory }: { subcategory: string | null
 }
 
 export function EconomyPanel({ subcategory, worldName, world, country }: EconomyPanelProps) {
+  const [expandedGood, setExpandedGood] = useState<GoodId | null>(null)
   const worldReports = useEconomyStore((s) => s.worldReports)
   const countryReports = useEconomyStore((s) => s.countryReports)
   const history = useEconomyStore((s) => s.history)
@@ -54,18 +79,39 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
           <tbody>
             {GOOD_IDS.map((g) => {
               const r = report?.goods[g]
+              const open = expandedGood === g
+              const parts = open ? marketParticipants(world, g) : null
               return (
-                <tr key={g}>
-                  <td>{GOODS[g].label}</td>
-                  <td>{formatPrice(world.market.prices[g])}</td>
-                  <td>{r ? r.supply.toFixed(0) : '—'}</td>
-                  <td>{r ? r.demand.toFixed(0) : '—'}</td>
-                </tr>
+                <Fragment key={g}>
+                  <tr className="market-row" onClick={() => setExpandedGood(open ? null : g)} title="Click to see buyers & sellers">
+                    <td>
+                      <span className="market-caret">{open ? '▾' : '▸'}</span>
+                      {GOODS[g].label}
+                    </td>
+                    <td>{formatPrice(world.market.prices[g])}</td>
+                    <td>{r ? r.supply.toFixed(0) : '—'}</td>
+                    <td>{r ? r.demand.toFixed(0) : '—'}</td>
+                  </tr>
+                  {open && parts && (
+                    <tr className="market-detail-row">
+                      <td colSpan={4}>
+                        <div className="market-detail">
+                          <div>
+                            <span className="market-detail-label econ-pos">Sellers:</span> {parts.sellers.length ? parts.sellers.join(', ') : 'none on this world'}
+                          </div>
+                          <div>
+                            <span className="market-detail-label econ-neg">Buyers:</span> {parts.buyers.length ? parts.buyers.join(', ') : 'none on this world'}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               )
             })}
           </tbody>
         </table>
-        <div className="ship-panel-hint">Prices clear each tick against what pops and buildings can actually buy.</div>
+        <div className="ship-panel-hint">Prices clear each tick against what pops and buildings can actually buy. Click a good for its buyers & sellers.</div>
       </div>
     )
   }
@@ -85,7 +131,8 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
           Expenditure
         </div>
         <FiscalRow label="Welfare" value={fiscal?.welfare} tone="neg" />
-        <FiscalRow label="Administration" value={fiscal?.admin} tone="neg" />
+        <FiscalRow label="Public services (healthcare)" value={fiscal?.services} tone="neg" />
+        <FiscalRow label="Administration & defense" value={fiscal?.admin} tone="neg" />
         <FiscalRow label="Construction" value={fiscal?.construction} tone="neg" />
         <FiscalRow label="Debt interest" value={fiscal?.interest} tone="neg" />
         <div className="inspect-divider" />

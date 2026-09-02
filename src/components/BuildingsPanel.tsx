@@ -1,19 +1,96 @@
-import { useMemo } from 'react'
-import { RECIPES, getMethod } from '../economy/recipes'
+import { Fragment, useMemo, useState } from 'react'
+import { RECIPES, getMethod, BUREAUCRACY_OUTPUT } from '../economy/recipes'
 import { GOODS } from '../economy/goods'
-import { estimateWorldGdp, constructionCost } from '../economy/economyTick'
-import { economicSystemDef, STATE_OWNERSHIP_THRESHOLD, type EconomicSystem } from '../economy/laws'
+import { estimateWorldGdp, constructionCost, JOB_SCALE, canBuild } from '../economy/economyTick'
+import { DISTRICT_LABELS, districtOfRecipe } from '../economy/recipes'
+import { economicSystemDef, type EconomicSystem } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { getCountry } from '../data/countryData'
 import { formatPop, formatMoney } from '../economy/format'
-import type { Building, Country, World } from '../economy/economyTypes'
+import type { Building, Corporation, Country, World } from '../economy/economyTypes'
+
+const CLASS_LABEL: Record<string, string> = {
+  subsistence: 'Subsistence',
+  labor: 'Labor',
+  technical: 'Technical',
+  professional: 'Professional',
+  investor: 'Investor',
+  political: 'Political',
+}
+
+// The full detail of one building — its inputs, outputs, employment by class,
+// owner and finances — shown when a building row is clicked.
+function BuildingDetail({ b, corporations }: { b: Building; corporations: Corporation[] }) {
+  const recipe = RECIPES[b.recipeId]
+  const method = getMethod(b.recipeId, b.methodId)
+  if (!recipe || !method) return null
+  const t = b.throughput
+  const perTick = (amount: number) => amount * b.level * t
+  const owner = ownerLabel(b, corporations)
+  const bureaucracy = BUREAUCRACY_OUTPUT[b.recipeId]
+
+  return (
+    <div className="bld-detail">
+      <div className="bld-detail-title">
+        {recipe.label} · Level {b.level} · <span className="bld-detail-owner">{owner}</span>
+      </div>
+      <div className="bld-detail-desc">{method.description}</div>
+
+      <div className="bld-detail-cols">
+        <div className="bld-detail-col">
+          <div className="bld-detail-h econ-neg">Inputs / tick</div>
+          {method.inputs.length === 0 ? (
+            <div className="bld-detail-none">none</div>
+          ) : (
+            method.inputs.map((i) => (
+              <div className="bld-detail-line" key={i.good}>
+                <span>{GOODS[i.good].label}</span>
+                <span>{perTick(i.amount).toFixed(0)}</span>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="bld-detail-col">
+          <div className="bld-detail-h econ-pos">Outputs / tick</div>
+          {method.outputs.length === 0 ? (
+            <div className="bld-detail-none">{bureaucracy ? `${(bureaucracy * b.level * t).toFixed(0)} bureaucracy` : 'none (overhead)'}</div>
+          ) : (
+            method.outputs.map((o) => (
+              <div className="bld-detail-line" key={o.good}>
+                <span>{GOODS[o.good].label}</span>
+                <span>{perTick(o.amount).toFixed(0)}</span>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="bld-detail-col">
+          <div className="bld-detail-h">Employment</div>
+          {method.jobs.map((j) => {
+            const posted = j.count * b.level * JOB_SCALE
+            const filled = posted * t
+            return (
+              <div className="bld-detail-line" key={j.class}>
+                <span>{CLASS_LABEL[j.class] ?? j.class}</span>
+                <span>{formatPop(filled)}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div className="bld-detail-foot">
+        Throughput {Math.round(t * 100)}% · Employs {formatPop(b.employed)} of {formatPop(b.jobsPosted)} jobs · Profit{' '}
+        <span className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</span>/tick
+      </div>
+    </div>
+  )
+}
 
 const TAB_CATEGORIES: Record<string, string[] | null> = {
   Development: null,
   Agriculture: ['agriculture'],
-  Resources: ['extraction'],
-  Urban: ['industry', 'healthcare'],
+  Resources: ['extraction', 'energy'],
+  Urban: ['industry', 'services', 'corporate'],
 }
 
 interface BuildingsPanelProps {
@@ -24,16 +101,27 @@ interface BuildingsPanelProps {
   country?: Country
 }
 
-type Control = 'state' | 'owner' | 'pinned'
+type Control = 'state' | 'corporation' | 'worker'
 
-// Who runs a building and whether the state is interfering: state-run (player
-// directs freely), owner-run (the owner picks the method), or pinned (a private
-// building the state has overridden — which under a market economy carries the
-// interference malus).
-function buildingControl(b: Building, system: EconomicSystem): { control: Control; malus: number } {
-  if (b.stateFraction >= STATE_OWNERSHIP_THRESHOLD) return { control: 'state', malus: 1 }
-  if (b.methodLocked) return { control: 'pinned', malus: economicSystemDef(system).interferenceMalus }
-  return { control: 'owner', malus: 1 }
+// Who owns/runs a building, and whether the state is interfering. State-owned
+// buildings the player directs freely; corporation- and worker-owned ones are
+// run by their owners, and pinning a non-state building's method is the
+// interference that carries the economic-system malus (laws.ts).
+function buildingControl(b: Building, system: EconomicSystem): { control: Control; pinned: boolean; malus: number } {
+  const control: Control = b.owner.kind === 'state' ? 'state' : b.owner.kind === 'corporation' ? 'corporation' : 'worker'
+  const pinned = b.owner.kind !== 'state' && b.methodLocked
+  const malus = pinned ? economicSystemDef(system).interferenceMalus : 1
+  return { control, pinned, malus }
+}
+
+// The short display name of a building's owner.
+function ownerLabel(b: Building, corporations: Corporation[]): string {
+  if (b.owner.kind === 'worker') return 'Co-op'
+  if (b.owner.kind === 'corporation') {
+    const corpId = b.owner.corporationId
+    return corporations.find((c) => c.id === corpId)?.name ?? 'Corporation'
+  }
+  return 'State'
 }
 
 // A world's buildings from the live simulation: level, the production method in
@@ -47,6 +135,8 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
   const setProductionMethod = useEconomyStore((s) => s.setProductionMethod)
   const releaseProductionMethod = useEconomyStore((s) => s.releaseProductionMethod)
+  const corporations = useEconomyStore((s) => s.corporations)
+  const [detailId, setDetailId] = useState<string | null>(null)
 
   const cats = subtab ? TAB_CATEGORIES[subtab] : null
   const rows = useMemo(() => {
@@ -91,6 +181,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
             <tr>
               <th>Building</th>
               <th>Lvl</th>
+              <th>Owner</th>
               <th>Method</th>
               <th>Output</th>
               <th>Run</th>
@@ -104,22 +195,37 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
               const out = method?.outputs[0]
               const runPct = Math.round(b.throughput * 100)
               const jobPct = b.jobsPosted > 0 ? Math.round((b.employed / b.jobsPosted) * 100) : 0
-              const { control, malus } = buildingControl(b, country?.economicSystem ?? 'interventionism')
+              const { control, pinned, malus } = buildingControl(b, country?.economicSystem ?? 'interventionism')
               const malusPct = Math.round((1 - malus) * 100)
               const nation = country ? getCountry(country.id)?.name ?? 'the state' : 'the state'
-              const tagText = control === 'state' ? 'State' : control === 'pinned' ? (malusPct > 0 ? `State-set −${malusPct}%` : 'State-set') : 'Private'
-              const tagTitle =
+              const ownerName = ownerLabel(b, corporations)
+              const ownerTitle =
                 control === 'state'
-                  ? `State-owned: run directly by ${nation}'s government.`
-                  : control === 'pinned'
-                    ? malusPct > 0
-                      ? `Privately owned, but ${nation} has pinned its method — resented under a market economy: −${malusPct}% output. Release (↩) to hand it back to the owner.`
-                      : `Privately owned; ${nation} has set its method (no penalty under a command economy).`
-                    : `Privately owned — run by private investors within ${nation}, who pick the most profitable method themselves.`
+                  ? `State-owned: run directly by ${nation}. Profit flows to the treasury.`
+                  : control === 'corporation'
+                    ? `Owned by the corporation ${ownerName}. Profit accrues to the company.`
+                    : `Worker co-op: owned by the pops who work here. Profit is paid to them as dividends.`
+              const open = detailId === b.id
               return (
-                <tr key={b.id}>
-                  <td>{recipe!.label}</td>
+                <Fragment key={b.id}>
+                <tr className="bld-row">
+                  <td>
+                    <button type="button" className="bld-name-btn" onClick={() => setDetailId(open ? null : b.id)} title="Click for full details">
+                      <span className="market-caret">{open ? '▾' : '▸'}</span>
+                      {recipe!.label}
+                    </button>
+                  </td>
                   <td>{b.level}</td>
+                  <td>
+                    <span className={`econ-owner-tag econ-owner-${control}`} title={ownerTitle}>
+                      {ownerName}
+                    </span>
+                    {pinned && (
+                      <span className="econ-pin-badge" title={`State-directed against the market: −${malusPct}% output.`}>
+                        pinned −{malusPct}%
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <div className="econ-method-cell">
                       {owned && recipe!.methods.length > 1 ? (
@@ -138,10 +244,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                       ) : (
                         <span title={method?.description}>{method?.label ?? '—'}</span>
                       )}
-                      <span className={`econ-owner-tag econ-owner-${control}`} title={tagTitle}>
-                        {tagText}
-                      </span>
-                      {owned && control === 'pinned' && (
+                      {owned && pinned && (
                         <button
                           type="button"
                           className="econ-release-btn"
@@ -160,6 +263,14 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                   </td>
                   <td className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</td>
                 </tr>
+                {open && (
+                  <tr className="market-detail-row">
+                    <td colSpan={8}>
+                      <BuildingDetail b={b} corporations={corporations} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )
             })}
           </tbody>
@@ -195,27 +306,29 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
       {owned ? (
         <>
           <div className="econ-subtitle" style={{ marginTop: 8 }}>
-            Build (cost {constructionCost()} each)
+            Build (cost {formatMoney(constructionCost())} each — government pool)
           </div>
           <div className="econ-build-buttons">
-            {buildable.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className="econ-build-btn"
-                onClick={() => queueConstruction(world.id, r.id)}
-                disabled={treasury <= 0}
-                title={treasury <= 0 ? 'National treasury empty — no funds to build' : `Queue a ${r.label}`}
-              >
-                + {r.label}
-              </button>
-            ))}
+            {buildable.map((r) => {
+              const room = canBuild(world, r.id)
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  className="econ-build-btn"
+                  onClick={() => queueConstruction(world.id, r.id)}
+                  disabled={!room}
+                  title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district`}
+                >
+                  + {r.label}
+                </button>
+              )
+            })}
           </div>
           <div className="ship-panel-hint">
-            New buildings ramp up throughput gradually. Private buildings are <b>owner-run</b> — owners pick their own method; overriding one pins it,
-            which under a market economy costs output. Release (↩) hands it back.
+            Buildings occupy their district (see Economy → Construction for space, private pools and materials). Private
+            buildings are <b>owner-run</b>; overriding one pins it (a market-economy output cost). Release (↩) hands it back.
           </div>
-          {treasury <= 0 && <div className="ship-panel-hint">National treasury is empty — build savings (or raise tax) first.</div>}
         </>
       ) : (
         <div className="ship-panel-hint">You don't govern {world.name} — construction is only available on your own worlds.</div>

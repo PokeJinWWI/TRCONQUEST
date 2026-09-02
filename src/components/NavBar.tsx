@@ -3,6 +3,12 @@ import { DraggableWindow } from './DraggableWindow'
 import { NationEconomyPanel } from './EconomyPanel'
 import { FleetManagement } from './FleetManagement'
 import { LawsPanel } from './LawsPanel'
+import { CorporationsPanel } from './CorporationsPanel'
+import { StockExchangePanel } from './StockExchangePanel'
+import { DemographicsPanel } from './DemographicsPanel'
+import { CharactersPanel } from './CharactersPanel'
+import { DebtPanel } from './DebtPanel'
+import { ConstructionPanel } from './ConstructionPanel'
 import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
 import { usePlayerStore } from '../state/playerStore'
@@ -15,6 +21,11 @@ const MAP_MODES_CATEGORY = 'Map Modes'
 const ECONOMY_CATEGORY = 'Economy'
 const GOVERNMENT_CATEGORY = 'Government'
 const LAWS_SUBCATEGORY = 'Laws'
+const CORPORATIONS_CATEGORY = 'Corporations'
+const STOCK_EXCHANGE_CATEGORY = 'Stock Exchange'
+const SOCIETY_CATEGORY = 'Society'
+const DEMOGRAPHICS_SUBCATEGORY = 'Demographics'
+const CHARACTERS_CATEGORY = 'Characters'
 
 interface CategoryDef {
   name: string
@@ -26,13 +37,15 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
-  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Welfare'] },
+  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Debt', 'Construction', 'Welfare'] },
+  { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private'] },
+  { name: STOCK_EXCHANGE_CATEGORY },
   { name: 'Technology' },
-  { name: 'Society', subcategories: ['Culture', 'Religion', 'Species'] },
+  { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
   { name: 'Diplomacy' },
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: ['Army', NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
-  { name: 'Characters', subcategories: ['Characters', 'Families'] },
+  { name: CHARACTERS_CATEGORY, subcategories: ['Characters', 'Families'] },
   { name: MAP_MODES_CATEGORY },
   { name: SETTINGS_CATEGORY },
 ]
@@ -51,8 +64,14 @@ const CATEGORIES: CategoryDef[] = [
 function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
+  if (category.name === ECONOMY_CATEGORY && subcategory === 'Debt') return <DebtPanel />
+  if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />
   if (category.name === ECONOMY_CATEGORY) return <NationEconomyPanel subcategory={subcategory} />
   if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />
+  if (category.name === CORPORATIONS_CATEGORY) return <CorporationsPanel subcategory={subcategory} />
+  if (category.name === STOCK_EXCHANGE_CATEGORY) return <StockExchangePanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return <DemographicsPanel />
+  if (category.name === CHARACTERS_CATEGORY) return <CharactersPanel subcategory={subcategory} />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   return <div className="nav-placeholder">Not yet available</div>
 }

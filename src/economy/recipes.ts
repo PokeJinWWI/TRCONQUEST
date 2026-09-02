@@ -63,32 +63,296 @@ export interface ProductionMethod {
   jobs: RecipeJob[]
 }
 
+export type BuildingCategory = 'energy' | 'extraction' | 'agriculture' | 'industry' | 'services' | 'corporate' | 'government'
+
+// Bureaucracy a government building produces per level at full throughput (a
+// national resource, not a market good — handled in economyTick).
+export const BUREAUCRACY_OUTPUT: Record<string, number> = {
+  governmentOffice: 260,
+  ministry: 620,
+}
+
+// A planet is not unlimited: buildings occupy DISTRICTS by category. The core
+// holds government + finance; the urban district holds services; the industrial
+// district holds power + heavy industry; the resource district holds mines and
+// farms. Each district has a bounded number of slots (a building's level = its
+// slots), so construction competes for space.
+export type DistrictType = 'core' | 'urban' | 'industrial' | 'resource'
+export const DISTRICT_TYPES: DistrictType[] = ['core', 'urban', 'industrial', 'resource']
+export const DISTRICT_LABELS: Record<DistrictType, string> = {
+  core: 'Core',
+  urban: 'Urban',
+  industrial: 'Industrial',
+  resource: 'Resource',
+}
+const CATEGORY_DISTRICT: Record<BuildingCategory, DistrictType> = {
+  government: 'core',
+  corporate: 'core',
+  services: 'urban',
+  industry: 'industrial',
+  energy: 'industrial',
+  extraction: 'resource',
+  agriculture: 'resource',
+}
+export function districtOfRecipe(recipeId: string): DistrictType {
+  const cat = RECIPES[recipeId]?.category
+  return cat ? CATEGORY_DISTRICT[cat] : 'urban'
+}
+
 export interface Recipe {
   id: string
   label: string
-  category: 'extraction' | 'agriculture' | 'industry' | 'healthcare'
+  category: BuildingCategory
   // Selectable production methods; the first is the default a fresh building
   // starts on.
   methods: ProductionMethod[]
 }
 
-// Four building types forming one connected chain (design doc Section 4's
-// "minimum: one Extraction, one food-producing, one Industry" plus a
-// healthcare producer so the Healthcare needs tier has a real supplier):
-//   mine  → minerals
-//   farm  → food
-//   factory: minerals → consumer goods
-//   clinic:  consumer goods → medicine
-// So a shock to mining ripples through industry into healthcare, and the
-// labor market spans all four working classes. Each type now offers a manual
-// and a mechanized method: the manual one preserves Milestone 1's numbers (so
-// the seeded economy behaves as before), the mechanized one is the player's
-// upgrade lever — more output for fewer but more-skilled workers plus a
-// material input.
+// The building roster (design doc Section 4). Real production chains with
+// ELECTRICITY as a near-universal input: power plants feed extraction,
+// processing and manufacturing; farms take fertilizer + machinery; ore + coal
+// become steel; steel becomes machinery; and so on down to the consumer goods
+// and medicine pops actually need. Extraction and power keep a *manual* method
+// that needs no electricity, so an economy can bootstrap before the grid is up;
+// their mechanized methods trade labor for power + machinery and far higher
+// output. Every building is data — the tick loop is generic over these.
 export const RECIPES: Record<string, Recipe> = {
-  farm: {
-    id: 'farm',
-    label: 'Farm',
+  // ---------------- Energy ----------------
+  solarPlant: {
+    id: 'solarPlant',
+    label: 'Solar Array',
+    category: 'energy',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Photovoltaic Array',
+        description: 'Clean baseline power from sunlight — no fuel, modest output. Bootstraps the grid.',
+        inputs: [],
+        outputs: [{ good: 'electricity', amount: 500 }],
+        jobs: [
+          { class: 'labor', count: 80 },
+          { class: 'technical', count: 40 },
+        ],
+      },
+    ],
+  },
+  coalPowerPlant: {
+    id: 'coalPowerPlant',
+    label: 'Coal Power Plant',
+    category: 'energy',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Thermal Generation',
+        description: 'Burns coal for reliable bulk electricity.',
+        inputs: [{ good: 'coal', amount: 300 }],
+        outputs: [{ good: 'electricity', amount: 1400 }],
+        jobs: [
+          { class: 'labor', count: 200 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
+  fusionReactor: {
+    id: 'fusionReactor',
+    label: 'Fusion Reactor',
+    category: 'energy',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Magnetic Confinement',
+        description: 'Enormous clean output from a trickle of rare metals — but a specialist workforce.',
+        inputs: [{ good: 'rareMetals', amount: 40 }],
+        outputs: [{ good: 'electricity', amount: 2600 }],
+        jobs: [
+          { class: 'technical', count: 200 },
+          { class: 'professional', count: 40 },
+        ],
+      },
+    ],
+  },
+
+  // ---------------- Extraction ----------------
+  ironMine: {
+    id: 'ironMine',
+    label: 'Iron Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Pick & Shovel',
+        description: 'Labor-intensive extraction. No power needed.',
+        inputs: [],
+        outputs: [{ good: 'ironOre', amount: 500 }],
+        jobs: [{ class: 'labor', count: 300 }],
+      },
+      {
+        id: 'mechanized',
+        label: 'Mechanized Extraction',
+        description: 'Drills and haulers double output, running on power and machinery.',
+        inputs: [
+          { good: 'electricity', amount: 120 },
+          { good: 'machinery', amount: 30 },
+        ],
+        outputs: [{ good: 'ironOre', amount: 1000 }],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 100 },
+        ],
+      },
+    ],
+  },
+  coalMine: {
+    id: 'coalMine',
+    label: 'Coal Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Hand Hewing',
+        description: 'Pick-and-cart coal digging. No power needed.',
+        inputs: [],
+        outputs: [{ good: 'coal', amount: 600 }],
+        jobs: [{ class: 'labor', count: 300 }],
+      },
+      {
+        id: 'mechanized',
+        label: 'Longwall Mining',
+        description: 'Cutting machines lift output sharply on grid power.',
+        inputs: [{ good: 'electricity', amount: 100 }],
+        outputs: [{ good: 'coal', amount: 1150 }],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 80 },
+        ],
+      },
+    ],
+  },
+  oilWell: {
+    id: 'oilWell',
+    label: 'Oil Well',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Shallow Derrick',
+        description: 'Simple pumping of accessible crude.',
+        inputs: [],
+        outputs: [{ good: 'oil', amount: 500 }],
+        jobs: [
+          { class: 'labor', count: 200 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Deep Drilling',
+        description: 'Powered rigs and machinery reach far more crude.',
+        inputs: [
+          { good: 'electricity', amount: 150 },
+          { good: 'machinery', amount: 40 },
+        ],
+        outputs: [{ good: 'oil', amount: 1000 }],
+        jobs: [
+          { class: 'labor', count: 120 },
+          { class: 'technical', count: 120 },
+        ],
+      },
+    ],
+  },
+  rareMetalsMine: {
+    id: 'rareMetalsMine',
+    label: 'Rare Metals Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Hand Sorting',
+        description: 'Painstaking manual extraction of scarce metals.',
+        inputs: [],
+        outputs: [{ good: 'rareMetals', amount: 220 }],
+        jobs: [
+          { class: 'labor', count: 300 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Ore Refining Line',
+        description: 'Powered refining more than doubles yield of rare metals.',
+        inputs: [
+          { good: 'electricity', amount: 200 },
+          { good: 'machinery', amount: 40 },
+        ],
+        outputs: [{ good: 'rareMetals', amount: 460 }],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 150 },
+        ],
+      },
+    ],
+  },
+  loggingCamp: {
+    id: 'loggingCamp',
+    label: 'Logging Camp',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Hand Felling',
+        description: 'Axes and saws. No power needed.',
+        inputs: [],
+        outputs: [{ good: 'timber', amount: 700 }],
+        jobs: [{ class: 'labor', count: 250 }],
+      },
+      {
+        id: 'mechanized',
+        label: 'Mechanized Harvesting',
+        description: 'Powered harvesters and machinery nearly double the cut.',
+        inputs: [
+          { good: 'electricity', amount: 80 },
+          { good: 'machinery', amount: 30 },
+        ],
+        outputs: [{ good: 'timber', amount: 1300 }],
+        jobs: [
+          { class: 'labor', count: 120 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
+  phosphateMine: {
+    id: 'phosphateMine',
+    label: 'Phosphate Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Open Digging',
+        description: 'Manual phosphate rock extraction.',
+        inputs: [],
+        outputs: [{ good: 'phosphate', amount: 520 }],
+        jobs: [{ class: 'labor', count: 280 }],
+      },
+      {
+        id: 'mechanized',
+        label: 'Strip Mining',
+        description: 'Powered strip mining doubles output.',
+        inputs: [{ good: 'electricity', amount: 110 }],
+        outputs: [{ good: 'phosphate', amount: 1050 }],
+        jobs: [
+          { class: 'labor', count: 140 },
+          { class: 'technical', count: 80 },
+        ],
+      },
+    ],
+  },
+
+  // ---------------- Agriculture ----------------
+  wheatFarm: {
+    id: 'wheatFarm',
+    label: 'Wheat Farm',
     category: 'agriculture',
     methods: [
       {
@@ -96,7 +360,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Subsistence Farming',
         description: 'Hands and simple tools. Employs many, needs no inputs.',
         inputs: [],
-        outputs: [{ good: 'food', amount: 1200 }],
+        outputs: [{ good: 'wheat', amount: 1200 }],
         jobs: [
           { class: 'subsistence', count: 300 },
           { class: 'labor', count: 100 },
@@ -105,9 +369,13 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mechanized',
         label: 'Mechanized Farming',
-        description: 'Machinery raises yields with fewer, more skilled hands — but consumes minerals for equipment.',
-        inputs: [{ good: 'minerals', amount: 120 }],
-        outputs: [{ good: 'food', amount: 1900 }],
+        description: 'Fertilizer, machinery and power raise yields with fewer, more skilled hands.',
+        inputs: [
+          { good: 'fertilizer', amount: 120 },
+          { good: 'machinery', amount: 30 },
+          { good: 'electricity', amount: 60 },
+        ],
+        outputs: [{ good: 'wheat', amount: 2000 }],
         jobs: [
           { class: 'subsistence', count: 100 },
           { class: 'labor', count: 90 },
@@ -116,73 +384,411 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
   },
-  mine: {
-    id: 'mine',
-    label: 'Mine',
-    category: 'extraction',
+  riceFarm: {
+    id: 'riceFarm',
+    label: 'Rice Farm',
+    category: 'agriculture',
     methods: [
       {
         id: 'manual',
-        label: 'Pick & Shovel',
-        description: 'Labor-intensive extraction. No inputs, modest yield.',
+        label: 'Paddy Farming',
+        description: 'Traditional flooded-paddy cultivation. Labor-heavy, no inputs.',
         inputs: [],
-        outputs: [{ good: 'minerals', amount: 600 }],
-        jobs: [{ class: 'labor', count: 300 }],
+        outputs: [{ good: 'rice', amount: 1150 }],
+        jobs: [
+          { class: 'subsistence', count: 320 },
+          { class: 'labor', count: 100 },
+        ],
       },
       {
         id: 'mechanized',
-        label: 'Mechanized Extraction',
-        description: 'Drilling rigs lift output sharply, run on consumer-grade equipment and a skilled crew.',
-        inputs: [{ good: 'consumerGoods', amount: 90 }],
-        outputs: [{ good: 'minerals', amount: 1050 }],
+        label: 'Mechanized Paddy',
+        description: 'Fertilizer, machinery and pumps lift yields.',
+        inputs: [
+          { good: 'fertilizer', amount: 110 },
+          { good: 'machinery', amount: 25 },
+          { good: 'electricity', amount: 50 },
+        ],
+        outputs: [{ good: 'rice', amount: 1900 }],
         jobs: [
-          { class: 'labor', count: 160 },
+          { class: 'subsistence', count: 110 },
+          { class: 'labor', count: 90 },
+          { class: 'technical', count: 50 },
+        ],
+      },
+    ],
+  },
+  livestockRanch: {
+    id: 'livestockRanch',
+    label: 'Livestock Ranch',
+    category: 'agriculture',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Open Grazing',
+        description: 'Herds fed on feed grain, tended by hand.',
+        inputs: [{ good: 'wheat', amount: 200 }],
+        outputs: [{ good: 'livestock', amount: 500 }],
+        jobs: [
+          { class: 'subsistence', count: 200 },
+          { class: 'labor', count: 120 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Intensive Ranching',
+        description: 'Feedlots and powered handling raise more stock on more feed.',
+        inputs: [
+          { good: 'wheat', amount: 300 },
+          { good: 'electricity', amount: 60 },
+          { good: 'machinery', amount: 20 },
+        ],
+        outputs: [{ good: 'livestock', amount: 900 }],
+        jobs: [
+          { class: 'labor', count: 120 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
+
+  // ---------------- Industry ----------------
+  steelMill: {
+    id: 'steelMill',
+    label: 'Steel Mill',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Blast Furnace',
+        description: 'Smelts iron ore with coal into steel.',
+        inputs: [
+          { good: 'ironOre', amount: 300 },
+          { good: 'coal', amount: 200 },
+          { good: 'electricity', amount: 250 },
+        ],
+        outputs: [{ good: 'steel', amount: 700 }],
+        jobs: [
+          { class: 'labor', count: 200 },
+          { class: 'technical', count: 150 },
+        ],
+      },
+      {
+        id: 'electricArc',
+        label: 'Electric Arc',
+        description: 'Coal-free arc smelting — more power, more output, more skill.',
+        inputs: [
+          { good: 'ironOre', amount: 320 },
+          { good: 'electricity', amount: 500 },
+        ],
+        outputs: [{ good: 'steel', amount: 950 }],
+        jobs: [
+          { class: 'labor', count: 100 },
+          { class: 'technical', count: 220 },
+        ],
+      },
+    ],
+  },
+  sawmill: {
+    id: 'sawmill',
+    label: 'Sawmill',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Powered Sawmill',
+        description: 'Cuts timber into lumber.',
+        inputs: [
+          { good: 'timber', amount: 400 },
+          { good: 'electricity', amount: 120 },
+        ],
+        outputs: [{ good: 'lumber', amount: 900 }],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
+  oilRefinery: {
+    id: 'oilRefinery',
+    label: 'Oil Refinery',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Fractional Distillation',
+        description: 'Refines crude oil into fuel.',
+        inputs: [
+          { good: 'oil', amount: 400 },
+          { good: 'electricity', amount: 200 },
+        ],
+        outputs: [{ good: 'fuel', amount: 850 }],
+        jobs: [
+          { class: 'labor', count: 150 },
           { class: 'technical', count: 120 },
         ],
       },
     ],
   },
-  factory: {
-    id: 'factory',
-    label: 'Factory',
+  chemicalPlant: {
+    id: 'chemicalPlant',
+    label: 'Chemical Plant',
     category: 'industry',
     methods: [
       {
-        id: 'manual',
-        label: 'Assembly Line',
-        description: 'A balanced line of labor and technicians turning minerals into goods.',
-        inputs: [{ good: 'minerals', amount: 300 }],
-        outputs: [{ good: 'consumerGoods', amount: 800 }],
+        id: 'standard',
+        label: 'Petrochemistry',
+        description: 'Cracks oil into industrial chemicals.',
+        inputs: [
+          { good: 'oil', amount: 300 },
+          { good: 'electricity', amount: 220 },
+        ],
+        outputs: [{ good: 'chemicals', amount: 720 }],
+        jobs: [
+          { class: 'labor', count: 120 },
+          { class: 'technical', count: 180 },
+        ],
+      },
+    ],
+  },
+  fertilizerPlant: {
+    id: 'fertilizerPlant',
+    label: 'Fertilizer Plant',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Nitrate Synthesis',
+        description: 'Combines phosphate and chemicals into fertilizer for farms.',
+        inputs: [
+          { good: 'phosphate', amount: 300 },
+          { good: 'chemicals', amount: 150 },
+          { good: 'electricity', amount: 180 },
+        ],
+        outputs: [{ good: 'fertilizer', amount: 800 }],
+        jobs: [
+          { class: 'labor', count: 140 },
+          { class: 'technical', count: 120 },
+        ],
+      },
+    ],
+  },
+  explosivesFactory: {
+    id: 'explosivesFactory',
+    label: 'Explosives Factory',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Ordnance Synthesis',
+        description: 'Turns chemicals into industrial and military explosives.',
+        inputs: [
+          { good: 'chemicals', amount: 250 },
+          { good: 'electricity', amount: 200 },
+        ],
+        outputs: [{ good: 'explosives', amount: 560 }],
+        jobs: [
+          { class: 'labor', count: 120 },
+          { class: 'technical', count: 160 },
+        ],
+      },
+    ],
+  },
+  semiconductorFab: {
+    id: 'semiconductorFab',
+    label: 'Semiconductor Fab',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Photolithography',
+        description: 'Etches rare metals and chemicals into semiconductors — power-hungry and specialist.',
+        inputs: [
+          { good: 'rareMetals', amount: 180 },
+          { good: 'chemicals', amount: 120 },
+          { good: 'electricity', amount: 400 },
+        ],
+        outputs: [{ good: 'semiconductors', amount: 520 }],
+        jobs: [
+          { class: 'technical', count: 200 },
+          { class: 'professional', count: 120 },
+        ],
+      },
+    ],
+  },
+  machineryFactory: {
+    id: 'machineryFactory',
+    label: 'Machinery Factory',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Heavy Machining',
+        description: 'Forms steel into the machinery mines and farms run on.',
+        inputs: [
+          { good: 'steel', amount: 300 },
+          { good: 'electricity', amount: 220 },
+        ],
+        outputs: [{ good: 'machinery', amount: 640 }],
+        jobs: [
+          { class: 'labor', count: 180 },
+          { class: 'technical', count: 200 },
+        ],
+      },
+    ],
+  },
+  electronicsFactory: {
+    id: 'electronicsFactory',
+    label: 'Electronics Factory',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Assembly',
+        description: 'Builds electronics from semiconductors and steel.',
+        inputs: [
+          { good: 'semiconductors', amount: 200 },
+          { good: 'steel', amount: 100 },
+          { good: 'electricity', amount: 300 },
+        ],
+        outputs: [{ good: 'electronics', amount: 700 }],
+        jobs: [
+          { class: 'labor', count: 120 },
+          { class: 'technical', count: 240 },
+          { class: 'professional', count: 50 },
+        ],
+      },
+    ],
+  },
+  foodProcessor: {
+    id: 'foodProcessor',
+    label: 'Food Processing Plant',
+    category: 'industry',
+    methods: [
+      {
+        id: 'grain',
+        label: 'Grain Milling',
+        description: 'Mills wheat into staple food — a simple, robust food supply.',
+        inputs: [
+          { good: 'wheat', amount: 500 },
+          { good: 'electricity', amount: 100 },
+        ],
+        outputs: [{ good: 'food', amount: 1500 }],
         jobs: [
           { class: 'labor', count: 200 },
+          { class: 'technical', count: 80 },
+        ],
+      },
+      {
+        id: 'mixed',
+        label: 'Full Processing',
+        description: 'A varied diet from wheat, rice and livestock — more food per plant.',
+        inputs: [
+          { good: 'wheat', amount: 400 },
+          { good: 'rice', amount: 300 },
+          { good: 'livestock', amount: 150 },
+          { good: 'electricity', amount: 120 },
+        ],
+        outputs: [{ good: 'food', amount: 2100 }],
+        jobs: [
+          { class: 'labor', count: 200 },
+          { class: 'technical', count: 100 },
+        ],
+      },
+    ],
+  },
+  consumerGoodsFactory: {
+    id: 'consumerGoodsFactory',
+    label: 'Consumer Goods Factory',
+    category: 'industry',
+    methods: [
+      {
+        id: 'basic',
+        label: 'Basic Workshop',
+        description: 'Turns steel into everyday consumer goods — a simple, robust supply.',
+        inputs: [
+          { good: 'steel', amount: 250 },
+          { good: 'electricity', amount: 200 },
+        ],
+        outputs: [{ good: 'consumerGoods', amount: 1000 }],
+        jobs: [
+          { class: 'labor', count: 200 },
+          { class: 'technical', count: 150 },
+        ],
+      },
+      {
+        id: 'refined',
+        label: 'Refined Line',
+        description: 'Steel and lumber for finer goods.',
+        inputs: [
+          { good: 'steel', amount: 200 },
+          { good: 'lumber', amount: 200 },
+          { good: 'electricity', amount: 250 },
+        ],
+        outputs: [{ good: 'consumerGoods', amount: 1300 }],
+        jobs: [
+          { class: 'labor', count: 180 },
           { class: 'technical', count: 200 },
         ],
       },
       {
         id: 'automated',
         label: 'Automated Line',
-        description: 'Automation raises throughput and skill demand, consuming more minerals per run.',
-        inputs: [{ good: 'minerals', amount: 380 }],
-        outputs: [{ good: 'consumerGoods', amount: 1150 }],
+        description: 'Automation raises throughput and skill demand, on more power.',
+        inputs: [
+          { good: 'steel', amount: 260 },
+          { good: 'lumber', amount: 180 },
+          { good: 'electricity', amount: 400 },
+        ],
+        outputs: [{ good: 'consumerGoods', amount: 1650 }],
         jobs: [
           { class: 'labor', count: 90 },
-          { class: 'technical', count: 240 },
+          { class: 'technical', count: 260 },
           { class: 'professional', count: 60 },
         ],
       },
     ],
   },
+  luxuryFactory: {
+    id: 'luxuryFactory',
+    label: 'Luxury Manufactory',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Fine Manufacture',
+        description: 'Electronics and consumer goods into luxuries for the wealthy.',
+        inputs: [
+          { good: 'electronics', amount: 200 },
+          { good: 'consumerGoods', amount: 200 },
+          { good: 'electricity', amount: 200 },
+        ],
+        outputs: [{ good: 'luxuryGoods', amount: 520 }],
+        jobs: [
+          { class: 'labor', count: 100 },
+          { class: 'technical', count: 180 },
+          { class: 'professional', count: 120 },
+        ],
+      },
+    ],
+  },
+
+  // ---------------- Services ----------------
   clinic: {
     id: 'clinic',
     label: 'Clinic',
-    category: 'healthcare',
+    category: 'services',
     methods: [
       {
-        id: 'manual',
+        id: 'basic',
         label: 'General Practice',
-        description: 'Technicians and physicians providing basic care from consumer supplies.',
-        inputs: [{ good: 'consumerGoods', amount: 200 }],
-        outputs: [{ good: 'medicine', amount: 400 }],
+        description: 'Technicians and physicians providing basic healthcare from medical supplies.',
+        inputs: [
+          { good: 'consumerGoods', amount: 150 },
+          { good: 'electricity', amount: 100 },
+        ],
+        outputs: [{ good: 'healthcare', amount: 400 }],
         jobs: [
           { class: 'technical', count: 100 },
           { class: 'professional', count: 100 },
@@ -190,13 +796,136 @@ export const RECIPES: Record<string, Recipe> = {
       },
       {
         id: 'advanced',
-        label: 'Advanced Medicine',
-        description: 'A specialist-heavy hospital producing far more care from a larger supply bill.',
-        inputs: [{ good: 'consumerGoods', amount: 300 }],
-        outputs: [{ good: 'medicine', amount: 680 }],
+        label: 'Hospital',
+        description: 'A specialist hospital delivering far more healthcare from chemicals and power.',
+        inputs: [
+          { good: 'chemicals', amount: 150 },
+          { good: 'consumerGoods', amount: 100 },
+          { good: 'electricity', amount: 200 },
+        ],
+        outputs: [{ good: 'healthcare', amount: 700 }],
         jobs: [
           { class: 'technical', count: 120 },
           { class: 'professional', count: 190 },
+        ],
+      },
+    ],
+  },
+  school: {
+    id: 'school',
+    label: 'School',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Public Schooling',
+        description: 'Educators providing schooling — raises the population it serves.',
+        inputs: [
+          { good: 'consumerGoods', amount: 120 },
+          { good: 'electricity', amount: 100 },
+        ],
+        outputs: [{ good: 'education', amount: 500 }],
+        jobs: [
+          { class: 'technical', count: 80 },
+          { class: 'professional', count: 160 },
+        ],
+      },
+    ],
+  },
+  retailShop: {
+    id: 'retailShop',
+    label: 'Retail Center',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Shops & Services',
+        description: 'Shops, repairs and everyday services staffed by the working class.',
+        inputs: [
+          { good: 'consumerGoods', amount: 200 },
+          { good: 'electricity', amount: 80 },
+        ],
+        outputs: [{ good: 'retail', amount: 900 }],
+        jobs: [
+          { class: 'labor', count: 220 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
+
+  // ---------------- Corporate ----------------
+  // A company's headquarters — pure overhead: it produces nothing but employs
+  // administrators and consumes supplies, a cost that scales with the company's
+  // size (its level tracks the number of buildings the company owns).
+  corporateHq: {
+    id: 'corporateHq',
+    label: 'Corporate HQ',
+    category: 'corporate',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Head Office',
+        description: 'Management, administration and overhead. Grows as the company grows.',
+        inputs: [
+          { good: 'consumerGoods', amount: 60 },
+          { good: 'electricity', amount: 80 },
+          { good: 'retail', amount: 40 },
+        ],
+        outputs: [],
+        jobs: [
+          { class: 'professional', count: 120 },
+          { class: 'technical', count: 80 },
+          { class: 'political', count: 20 },
+        ],
+      },
+    ],
+  },
+
+  // ---------------- Government (produce bureaucracy) ----------------
+  governmentOffice: {
+    id: 'governmentOffice',
+    label: 'Government Office',
+    category: 'government',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Civil Service',
+        description: 'Clerks and administrators producing the bureaucratic capacity the state runs on.',
+        inputs: [
+          { good: 'consumerGoods', amount: 80 },
+          { good: 'electricity', amount: 60 },
+          { good: 'retail', amount: 30 },
+        ],
+        outputs: [],
+        jobs: [
+          { class: 'professional', count: 140 },
+          { class: 'political', count: 60 },
+          { class: 'technical', count: 40 },
+        ],
+      },
+    ],
+  },
+  ministry: {
+    id: 'ministry',
+    label: 'Ministry',
+    category: 'government',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Great Department of State',
+        description: 'A vast department generating far more bureaucratic capacity — at a far greater cost.',
+        inputs: [
+          { good: 'consumerGoods', amount: 160 },
+          { good: 'electricity', amount: 140 },
+          { good: 'retail', amount: 80 },
+          { good: 'education', amount: 40 },
+        ],
+        outputs: [],
+        jobs: [
+          { class: 'professional', count: 300 },
+          { class: 'political', count: 140 },
+          { class: 'technical', count: 90 },
         ],
       },
     ],

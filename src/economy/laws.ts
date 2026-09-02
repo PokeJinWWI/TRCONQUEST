@@ -58,6 +58,67 @@ export function economicSystemDef(system: EconomicSystem): EconomicSystemDef {
 // the state holds at least half of it.
 export const STATE_OWNERSHIP_THRESHOLD = 0.5
 
+// --- Healthcare law ---
+// How healthcare (a service, goods.ts) is paid for. The more the state funds,
+// the better the poor are covered — but the heavier the budget burden. This is
+// a major driver of deficits.
+export type HealthcareSystem = 'public' | 'mixed' | 'private'
+export const HEALTHCARE_SYSTEMS: HealthcareSystem[] = ['public', 'mixed', 'private']
+
+export interface HealthcareSystemDef {
+  id: HealthcareSystem
+  name: string
+  description: string
+  // Fraction of each pop's healthcare bill the state pays (the pop pays the
+  // rest). 1 = universal public system; 0 = pops buy their own care.
+  publicFunding: number
+}
+
+export const HEALTHCARE_SYSTEM_DEFS: Record<HealthcareSystem, HealthcareSystemDef> = {
+  public: {
+    id: 'public',
+    name: 'Public Healthcare',
+    description: 'The state funds healthcare for everyone — universal coverage, even for the poor, but a heavy budget burden.',
+    publicFunding: 1,
+  },
+  mixed: {
+    id: 'mixed',
+    name: 'Mixed System',
+    description: 'The state subsidises half of healthcare; pops pay the rest. A middle path (à la Medicaid).',
+    publicFunding: 0.5,
+  },
+  private: {
+    id: 'private',
+    name: 'Private Healthcare',
+    description: 'Healthcare is left to the market — pops buy their own care, and the poor often go without. Cheap for the state.',
+    publicFunding: 0,
+  },
+}
+
+export function healthcareSystemDef(system: HealthcareSystem): HealthcareSystemDef {
+  return HEALTHCARE_SYSTEM_DEFS[system]
+}
+
+// --- Foreign bond policy (see bonds/debt in the store) ---
+// Whether the state may sell its bonds to foreign holders, and whether such
+// sales need the player's explicit approval.
+export type ForeignBondPolicy = 'open' | 'approval' | 'closed'
+export const FOREIGN_BOND_POLICIES: ForeignBondPolicy[] = ['open', 'approval', 'closed']
+
+export interface ForeignBondPolicyDef {
+  id: ForeignBondPolicy
+  name: string
+  description: string
+}
+export const FOREIGN_BOND_POLICY_DEFS: Record<ForeignBondPolicy, ForeignBondPolicyDef> = {
+  open: { id: 'open', name: 'Open Markets', description: 'Foreign governments and corporations may freely buy state bonds.' },
+  approval: { id: 'approval', name: 'Approval Required', description: 'Foreign bond purchases are allowed only with the government’s explicit approval.' },
+  closed: { id: 'closed', name: 'Closed', description: 'Only domestic pops and companies may hold state bonds.' },
+}
+export function foreignBondPolicyDef(p: ForeignBondPolicy): ForeignBondPolicyDef {
+  return FOREIGN_BOND_POLICY_DEFS[p]
+}
+
 // When a building's production method changes (owner or state), it retools:
 // utilization dips to this fraction and ramps back up — so a switch is never a
 // free instant win, and rapid flip-flopping is self-penalizing.

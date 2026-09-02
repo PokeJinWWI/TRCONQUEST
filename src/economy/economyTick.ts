@@ -1,53 +1,109 @@
 // The economy simulation — pure functions, no store access, same style as the
-// combat resolver. Restructured (design doc v2) into two layers:
-//   - tickWorld: one inhabited world's LOCAL economy (labor, market, needs,
-//     production, construction). It computes tax owed and admin cost but does
-//     NOT hold a treasury — it reports those up.
-//   - tickEconomy: runs every world, then settles each COUNTRY's national
-//     budget (welfare, tax, admin, debt interest, construction) into one
-//     treasury, and computes national GDP / inflation / debt / credit rating.
+// combat resolver. Layers (design doc v2):
+//   - tickWorld: one inhabited world's LOCAL economy (labor, market, needs +
+//     Standard of Living, production, construction). Reports tax/admin/GDP up.
+//   - tickEconomy: runs every world, settles each COUNTRY's national budget into
+//     one treasury, and pays each CORPORATION its buildings' profit.
 //
-// Milestone 2 adds the Vic3 micro loop on the production side (design doc
-// Section 3): selectable Production Methods per building, qualification-gated
-// employment (a building only fills jobs with skilled-enough pops), and
-// throughput — a smoothed operating rate so a building's output and profit ramp
-// over ticks instead of teleporting to full the moment it is built or staffed.
+// Milestone 2 added Production Methods, qualification-gated employment and
+// throughput ramping. Milestone 3 adds the Standard-of-Living loop (wealth +
+// needs → SoL → population growth, education drift, and how far up the needs
+// tiers a pop reaches) and building OWNERSHIP (state / corporation / worker),
+// which routes each building's profit to a different place.
 
 import { GOOD_IDS, GOODS, PRICE_FLOOR, priceCeiling, type GoodId } from './goods'
-import { NEED_TIERS, SPECIES_TEMPLATES } from './species'
-import { POP_CLASSES, RECIPES, getMethod, qualificationFraction, type PopClass, type ProductionMethod } from './recipes'
-import {
-  economicSystemDef,
-  STATE_OWNERSHIP_THRESHOLD,
-  RETOOL_THROUGHPUT_FACTOR,
-  OWNER_SWITCH_MARGIN,
-  type EconomicSystem,
-} from './laws'
-import type { Building, Country, CountryFiscal, CreditRating, LaborMarket, Pop, World, WorldReport, TickReports } from './economyTypes'
+import { NEED_TIERS, SPECIES_TEMPLATES, type NeedTier } from './species'
+import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
+import { economicSystemDef, healthcareSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
+import type {
+  Building,
+  Corporation,
+  Country,
+  CreditRating,
+  LaborMarket,
+  Pop,
+  World,
+  WorldReport,
+  TickReports,
+} from './economyTypes'
 
 const PRICE_ADJUST = 0.15
 const WAGE_ADJUST = 0.1
 const WAGE_FLOOR = 0.1
 const WAGE_CEILING = 40
-const MAX_GROWTH_RATE = 0 // off in M1 (see v1 note); headroom kept for later
 
 // How fast a building's throughput closes on what labor, inputs and demand
-// allow. Ramp-up is deliberately slow (a new or expanded building takes many
-// ticks to reach full output — this is what kills "profit teleporting");
-// ramp-down is quicker (losing your workforce or your market bites sooner).
+// allow. Ramp-up is deliberately slow (kills "profit teleporting"); ramp-down
+// is quicker (losing workforce or market bites sooner).
 const THROUGHPUT_RAMP_UP = 0.05
 const THROUGHPUT_RAMP_DOWN = 0.15
-// Throughput a brand-new building starts at, and the floor a just-expanded one
-// dips to for its added capacity (see construction, below).
 export const NEW_BUILDING_THROUGHPUT = 0.1
+
+// Workers per job slot. Recipe job counts are written at a "hands on the floor"
+// scale; this factor sets how many people (in millions) one slot actually
+// employs, so the whole building roster's labor demand fits the population.
+// Raising it makes labor scarcer (higher wages, more understaffing); lowering
+// it means each worker is more productive. Tuned so a world can staff its
+// buildings and they run near capacity.
+export const JOB_SCALE = 0.3
+
+// --- Standard of Living loop (Milestone 3) ---
+// SoL is a weighted blend of how well the pop meets each needs tier; it moves
+// smoothly. It drives population growth (well-off pops grow, immiserated ones
+// shrink) and education drift (wealthier pops get schooled, qualifying for
+// higher jobs — feeding back into the labor market).
+const SOL_TIER_WEIGHT: Record<NeedTier, number> = { basic: 0.4, everyday: 0.25, healthcare: 0.15, comfort: 0.12, luxury: 0.08 }
+const SOL_SMOOTHING = 0.5
+// Growth is SLOW and realistic. Ticks are monthly (12/year), so at the very top
+// of the SoL scale a population grows on the order of ~2–3%/year, and real
+// deprivation shrinks it at a similar gentle pace. The midpoint sits below 0.5
+// so a modest standard of living is roughly stable.
+const GROWTH_RATE = 0.0016
+const GROWTH_MIDPOINT = 0.35
+const EDU_DRIFT = 0.012 // education creeps toward SoL each tick (slow)
+const EDU_MAX = 0.98
 
 // Fiscal constants — scaled for a population measured in millions.
 const ADMIN_PER_BUILDING_LEVEL = 60
-const DEBT_INTEREST_RATE = 0.002
+// Baseline public spending per capita — administration, defense, infrastructure
+// and the social state beyond healthcare/welfare. Set high enough that a
+// generous default government runs a DEFICIT and must manage it (cut spending,
+// raise tax, or borrow) — real states rarely run surpluses.
+const PUBLIC_SPENDING_PER_CAPITA = 2.3
+const DEBT_INTEREST_RATE = 0.008
+// Goods depreciate / spoil / are held at a cost, so a glut can't accumulate
+// without bound: unsold stock shrinks each tick. This lets buildings run on
+// what labor and inputs allow (a deep production chain flows) while a chronic
+// oversupply is bled off through the price floor instead of throttling the
+// whole chain to a halt.
+const INVENTORY_DECAY = 0.12
 const BUILD_COST_PER_LEVEL = 6000
 const CONSTRUCTION_CAPACITY = 400
-const TICKS_PER_YEAR = 52
-const CPI_WEIGHTS: Partial<Record<GoodId, number>> = { food: 1.0, consumerGoods: 0.5, medicine: 0.2 }
+const TICKS_PER_YEAR = 12
+
+// --- Bureaucracy ---
+// Storage capacity from government buildings (plus a small base), and the
+// per-level cost of the state administering things directly. Running a building
+// DIRECTLY (state-owned) costs the most bureaucracy; running it through a
+// state-owned CORPORATION costs far less (the company's own management does the
+// work); a standing decree has an ongoing upkeep too.
+const BUREAUCRACY_BASE_CAPACITY = 3000
+const BUREAUCRACY_CAP_PER_GOV_LEVEL = 2600
+const BUREAUCRACY_PER_STATE_BUILDING_LEVEL = 24
+const BUREAUCRACY_PER_STATECORP_BUILDING_LEVEL = 7
+const BUREAUCRACY_PER_DECREE = 200
+// When the state runs out of bureaucracy, its directly-run enterprises seize up.
+const BUREAUCRACY_SHORTAGE_MALUS = 0.6
+// Consumer goods the CPI tracks (what households actually buy).
+const CPI_WEIGHTS: Partial<Record<GoodId, number>> = {
+  food: 1.0,
+  consumerGoods: 0.5,
+  electricity: 0.3,
+  healthcare: 0.2,
+  retail: 0.15,
+  education: 0.1,
+  luxuryGoods: 0.05,
+}
 
 export function constructionCost(): number {
   return BUILD_COST_PER_LEVEL
@@ -67,7 +123,9 @@ type PerGood = Record<GoodId, number>
 type PerClass = Record<PopClass, number>
 
 function zeroGoods(): PerGood {
-  return { food: 0, minerals: 0, consumerGoods: 0, medicine: 0 }
+  const g = {} as PerGood
+  for (const id of GOOD_IDS) g[id] = 0
+  return g
 }
 function zeroClasses(): PerClass {
   return { subsistence: 0, labor: 0, technical: 0, professional: 0, investor: 0, political: 0 }
@@ -79,44 +137,37 @@ function clearingStep(value: number, demand: number, supply: number, rate: numbe
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v))
 }
-// Move `current` toward `target` by at most the up/down ramp — the throughput
-// low-pass filter (design doc Section 3, "throughput ramps... over time").
 function rampToward(current: number, target: number): number {
   const delta = target - current
   const step = delta >= 0 ? Math.min(delta, THROUGHPUT_RAMP_UP) : Math.max(delta, -THROUGHPUT_RAMP_DOWN)
   return clamp(current + step, 0, 1)
 }
-// The active production method for a building, with its job slots for a class
-// scaled by building level.
 function buildingMethod(building: Building): ProductionMethod | undefined {
   return getMethod(building.recipeId, building.methodId)
 }
 function jobSlots(building: Building, cls: PopClass): number {
   const method = buildingMethod(building)
   const job = method?.jobs.find((j) => j.class === cls)
-  return job ? job.count * building.level : 0
+  return job ? job.count * building.level * JOB_SCALE : 0
 }
-// A building the state runs directly (owners no longer choose its method).
+// The state runs a building directly only if it OWNS it. Corporation- and
+// worker-owned buildings are run by their owners (autonomy applies).
 function isStateRun(building: Building): boolean {
-  return building.stateFraction >= STATE_OWNERSHIP_THRESHOLD
+  return building.owner.kind === 'state'
 }
-// The output multiplier a building runs at given the economic system: privately
-// owned buildings whose method the state has pinned suffer the interference
-// malus; everything else runs at full (law malus is 1 under a command economy).
+// Output multiplier: a NON-state building whose method the state has pinned
+// suffers the interference malus under a market economy (laws.ts).
 function interferenceMultiplier(building: Building, system: EconomicSystem): number {
   if (isStateRun(building) || !building.methodLocked) return 1
   return economicSystemDef(system).interferenceMalus
 }
-// A private owner's back-of-envelope profit for one method at current prices and
-// wages, per building at its level and full run — the basis for autonomous
-// method selection.
 function estimateMethodProfit(method: ProductionMethod, level: number, prices: PerGood, wages: PerClass): number {
   let revenue = 0
   for (const out of method.outputs) revenue += out.amount * level * prices[out.good]
   let cost = 0
   for (const input of method.inputs) cost += input.amount * level * prices[input.good]
   let wageBill = 0
-  for (const job of method.jobs) wageBill += job.count * level * wages[job.class]
+  for (const job of method.jobs) wageBill += job.count * level * JOB_SCALE * wages[job.class]
   return revenue - cost - wageBill
 }
 function cpi(priceMap: PerGood): number {
@@ -138,37 +189,51 @@ function emptyWorldReport(): WorldReport {
   return { goods, labor }
 }
 
-// What a world hands up to its country each tick, alongside the advanced world.
 interface WorldTickResult {
   world: World
   report: WorldReport
-  tax: number // government revenue collected here (tax + state profit share)
-  admin: number // admin cost of this world's buildings
-  gdp: number // output value at this tick's prices
-  cpi: number // this world's CPI (new prices)
-  prevCpi: number // this world's CPI (old prices)
+  tax: number // government revenue collected here (income + corporate tax + state-enterprise profit)
+  admin: number
+  gdp: number
+  cpi: number
+  prevCpi: number
   population: number
-  constructionSpend: number // money drawn from the country treasury for building
+  constructionSpend: number
+  // Net profit earned by corporation-owned buildings on this world, by corp id.
+  corpProfit: Map<string, number>
+  // What the government pays this tick to fund services (healthcare) for pops.
+  serviceSubsidy: number
+  // Cash a corporation spent on its own construction here this tick, by corp id.
+  corpConstructionSpend: Map<string, number>
 }
 
-// Advance one world's local economy. `taxRate`, `welfarePerUnit` and `system`
-// are the owning country's policy; `treasuryAvailable` is how much national cash
-// is currently free to fund this world's construction this tick.
+// Building materials consumed while a building is under construction — this
+// demand is what makes construction fuel the wider economy.
+const CONSTRUCTION_MATERIALS: { good: GoodId; amount: number }[] = [
+  { good: 'steel', amount: 240 },
+  { good: 'machinery', amount: 70 },
+  { good: 'consumerGoods', amount: 120 },
+]
+
+// Advance one world's local economy. `govHealthShare` is the fraction of pops'
+// healthcare the state pays for (the healthcare law).
 function tickWorld(
   world: World,
   taxRate: number,
   welfarePerUnit: number,
   system: EconomicSystem,
+  govHealthShare: number,
+  stateBureaucracyMalus: number,
   treasuryAvailable: number,
+  corpCash: Map<string, number>,
 ): WorldTickResult {
   const report = emptyWorldReport()
   const law = economicSystemDef(system)
+  const govShareOf = (good: GoodId) => (good === 'healthcare' ? govHealthShare : 0)
+  // Directly-state-run buildings seize up when the state has no bureaucracy.
+  const outputFactor = (b: Building) => interferenceMultiplier(b, system) * (b.owner.kind === 'state' ? stateBureaucracyMalus : 1)
 
   // --- Labor market (qualification-gated) ---
-  // `workers` is the headcount of each class; `qualified` is that headcount
-  // weighted by how job-ready it is (educationLevel vs the class's requirement,
-  // recipes.ts). Buildings hire from `qualified`, so an under-schooled labor
-  // pool leaves jobs unfilled (design doc Section 3).
   const workers = zeroClasses()
   const qualified = zeroClasses()
   for (const pop of world.pops) {
@@ -187,11 +252,6 @@ function tickWorld(
     const qualifiedRate = workers[cls] > 0 ? qualified[cls] / workers[cls] : 0
     report.labor[cls] = { workers: workers[cls], qualified: qualified[cls], qualifiedRate, jobs: jobDemand[cls], employmentRate, wage: wages[cls] }
   }
-  // Per building: the fraction of full staffing it can achieve (its scarcest
-  // job class), and the rate it plans to run at this tick — its current
-  // throughput plus one ramp step, capped by staffing. That plan sizes its
-  // input orders so a building climbing toward full doesn't demand inputs it
-  // won't yet use.
   const buildingLaborScale = new Map<string, number>()
   const buildingPlannedRun = new Map<string, number>()
   for (const b of world.buildings) {
@@ -207,8 +267,7 @@ function tickWorld(
   for (const b of world.buildings) for (const g of GOOD_IDS) supply[g] += b.inventory[g] ?? 0
   const prices: PerGood = { ...world.market.prices }
 
-  // --- Demand: building inputs (sized to planned run) + pop consumption (with
-  //     wage income, taxed, + welfare), as budget-constrained effective demand. ---
+  // --- Demand: building inputs + pop consumption (budget-constrained) ---
   const buildingInputDemand = zeroGoods()
   for (const b of world.buildings) {
     const method = buildingMethod(b)
@@ -216,14 +275,15 @@ function tickWorld(
     const plan = buildingPlannedRun.get(b.id) ?? 0
     for (const input of method.inputs) buildingInputDemand[input.good] += input.amount * b.level * plan
   }
+  // Active construction pulls building materials from the market (fuels demand).
+  if (world.constructionQueue.length > 0) {
+    for (const m of CONSTRUCTION_MATERIALS) buildingInputDemand[m.good] += m.amount
+  }
 
-  const popIntended: PerGood[] = []
   const popIncome: number[] = []
   const popDemand = zeroGoods()
   let incomeTaxRevenue = 0
   world.pops.forEach((pop) => {
-    // Income tracks jobs actually filled from the QUALIFIED pool (design doc
-    // Section 3): an under-qualified class fills fewer jobs and earns less.
     const filledJobs = Math.min(qualified[pop.class], jobDemand[pop.class])
     const wageIncome = workers[pop.class] > 0 ? wages[pop.class] * filledJobs * (pop.populationSize / workers[pop.class]) : 0
     const incomeTax = wageIncome * taxRate
@@ -232,22 +292,22 @@ function tickWorld(
     popIncome.push(income)
 
     let budget = pop.wealth + income
-    const intended = zeroGoods()
     const species = SPECIES_TEMPLATES[pop.speciesTemplateId]
     if (species) {
       for (const tier of NEED_TIERS) {
         for (const need of species.needs[tier]) {
           const want = need.amountPerPop * pop.populationSize
           const price = prices[need.good]
-          const affordable = price > 0 ? budget / price : want
+          // The pop only pays its share; the state covers the rest (healthcare
+          // law), so subsidised care is not throttled by a poor pop's budget.
+          const effPrice = price * (1 - govShareOf(need.good))
+          const affordable = effPrice > 0 ? budget / effPrice : want
           const buy = Math.max(0, Math.min(want, affordable))
-          intended[need.good] += buy
           popDemand[need.good] += buy
-          budget -= buy * price
+          budget -= buy * effPrice
         }
       }
     }
-    popIntended.push(intended)
   })
 
   const totalDemand = zeroGoods()
@@ -279,9 +339,12 @@ function tickWorld(
     }
   }
 
-  // --- Pops consume, update satisfaction + wealth ---
+  // --- Pops consume; update needs satisfaction, wealth, SoL ---
+  // Recomputed per tier (a good may appear in more than one tier, e.g. consumer
+  // goods in everyday AND comfort), spending the budget in tier order and only
+  // getting the market-fulfilled fraction of what's bought.
+  let serviceSubsidy = 0
   const nextPops: Pop[] = world.pops.map((pop, i) => {
-    const intended = popIntended[i]
     let budget = pop.wealth + popIncome[i]
     const species = SPECIES_TEMPLATES[pop.speciesTemplateId]
     const nextSatisfaction = { ...pop.needsSatisfaction }
@@ -297,18 +360,30 @@ function tickWorld(
         for (const need of entries) {
           const desired = need.amountPerPop * pop.populationSize
           want += desired
-          const bought = intended[need.good] * fulfill[need.good]
-          budget -= bought * prices[need.good]
+          const price = prices[need.good]
+          const gShare = govShareOf(need.good)
+          const effPrice = price * (1 - gShare)
+          const affordable = effPrice > 0 ? budget / effPrice : desired
+          const buy = Math.max(0, Math.min(desired, affordable))
+          const bought = buy * fulfill[need.good]
+          budget -= bought * effPrice
+          serviceSubsidy += gShare * price * bought // the state's share of what was delivered
           got += bought
         }
-        nextSatisfaction[tier] = want > 0 ? got / want : 1
+        nextSatisfaction[tier] = want > 0 ? Math.min(1, got / want) : 1
       }
     }
-    return { ...pop, wealth: Math.max(0, budget), needsSatisfaction: nextSatisfaction }
+    // Standard of Living: weighted needs satisfaction, smoothed.
+    let solRaw = 0
+    for (const tier of NEED_TIERS) solRaw += SOL_TIER_WEIGHT[tier] * nextSatisfaction[tier]
+    const standardOfLiving = clamp(pop.standardOfLiving * (1 - SOL_SMOOTHING) + solRaw * SOL_SMOOTHING, 0, 1)
+    return { ...pop, wealth: Math.max(0, budget), needsSatisfaction: nextSatisfaction, standardOfLiving }
   })
 
-  // --- Buildings produce (throughput-smoothed), book profit (tax reported up) ---
+  // --- Buildings produce; profit is booked to its OWNER ---
   let govRevenue = incomeTaxRevenue
+  const corpProfit = new Map<string, number>()
+  let workerDividendPool = 0
   const nextBuildings: Building[] = world.buildings.map((b) => {
     const method = buildingMethod(b)
     const inv = nextInventories.get(b.id) ?? {}
@@ -316,7 +391,6 @@ function tickWorld(
     const laborScale = buildingLaborScale.get(b.id) ?? 0
     const plan = buildingPlannedRun.get(b.id) ?? 0
 
-    // Inputs available for THIS building, sized to its planned run.
     let inputScale = 1
     let inputCost = 0
     for (const input of method.inputs) {
@@ -325,29 +399,22 @@ function tickWorld(
       inputCost += got * prices[input.good]
       inputScale = Math.min(inputScale, want > 0 ? got / want : 1)
     }
-    // Demand cap: don't produce into a glut you can't sell.
-    let demandScale = 1
-    for (const out of method.outputs) demandScale = Math.min(demandScale, sellThrough[out.good])
-
-    // What the building could run at right now, then the smoothed rate it
-    // actually runs at (ramps toward the target instead of snapping).
-    const instantScale = laborScale * inputScale * demandScale
+    // Throughput ramps toward what labor and inputs allow. Demand is NOT a
+    // throttle here (that cascades and deadlocks a long chain); instead a glut
+    // is bled off by inventory decay + the price floor below.
+    const instantScale = laborScale * inputScale
     const throughput = rampToward(b.throughput, instantScale)
     const runScale = throughput
-
-    // State interference in a market economy: a private building whose method
-    // the state pinned yields less output for the same labor and inputs (a
-    // margin squeeze), so meddling costs production and profit.
-    const outputMalus = interferenceMultiplier(b, system)
+    const outputMalus = outputFactor(b)
     for (const out of method.outputs) inv[out.good] = (inv[out.good] ?? 0) + out.amount * b.level * runScale * outputMalus
+    // Decay carried stock so oversupply doesn't accumulate forever.
+    for (const g of GOOD_IDS) if (inv[g]) inv[g] = inv[g]! * (1 - INVENTORY_DECAY)
 
-    // Payroll scales with the run rate (you staff what you run), so a ramping
-    // building's wage bill climbs with its output — profit rises smoothly.
     let wageBill = 0
     let employed = 0
     let jobsPosted = 0
     for (const job of method.jobs) {
-      const slots = job.count * b.level
+      const slots = job.count * b.level * JOB_SCALE
       jobsPosted += slots
       employed += slots * runScale
       wageBill += wages[job.class] * slots * runScale
@@ -358,49 +425,60 @@ function tickWorld(
     const tax = grossProfit > 0 ? grossProfit * taxRate : 0
     govRevenue += tax
     const netProfit = grossProfit - tax
-    govRevenue += Math.max(0, netProfit) * b.stateFraction
+    // Route net profit by ownership.
+    if (b.owner.kind === 'state') govRevenue += Math.max(0, netProfit)
+    else if (b.owner.kind === 'corporation') corpProfit.set(b.owner.corporationId, (corpProfit.get(b.owner.corporationId) ?? 0) + netProfit)
+    else if (b.owner.kind === 'worker') workerDividendPool += Math.max(0, netProfit)
+
     return { ...b, inventory: inv, throughput, lastProfit: netProfit, employed, jobsPosted }
   })
 
-  // --- Construction funded from national treasury ---
+  // --- Construction: government pool (treasury) funds state/worker orders,
+  //     the private pool (a company's own cash) funds corporation orders. ---
   let builtBuildings = nextBuildings
   let nextQueue = world.constructionQueue
-  let constructionSpend = 0
-  if (world.constructionQueue.length > 0 && treasuryAvailable > 0) {
+  let constructionSpend = 0 // drawn from the treasury (government pool)
+  const corpConstructionSpend = new Map<string, number>()
+  if (world.constructionQueue.length > 0) {
     const queue = world.constructionQueue.map((o) => ({ ...o }))
     const front = queue[0]
-    const fund = Math.min(CONSTRUCTION_CAPACITY, treasuryAvailable, front.cost - front.progress)
-    constructionSpend = fund
-    front.progress += fund
-    if (front.progress >= front.cost - 1e-9) {
-      const existing = builtBuildings.find((b) => b.recipeId === front.recipeId)
-      if (existing)
-        // Expanding an existing building: the new level joins at reduced
-        // utilization (throughput scaled by old/new level count), so total
-        // output is continuous and the added capacity ramps in.
-        builtBuildings = builtBuildings.map((b) =>
-          b.id === existing.id ? { ...b, level: b.level + 1, throughput: (b.throughput * b.level) / (b.level + 1) } : b,
-        )
-      else
-        builtBuildings = [
-          ...builtBuildings,
-          {
-            id: `${front.id}-built`,
-            recipeId: front.recipeId,
-            methodId: getMethod(front.recipeId, undefined)?.id ?? '',
-            methodLocked: false,
-            level: 1,
-            stateFraction: 0,
-            inventory: {},
-            throughput: NEW_BUILDING_THROUGHPUT,
-            lastProfit: 0,
-            employed: 0,
-            jobsPosted: 0,
-          },
-        ]
-      queue.shift()
+    const corpFunded = front.owner.kind === 'corporation'
+    const corpId = front.owner.kind === 'corporation' ? front.owner.corporationId : ''
+    const available = corpFunded ? corpCash.get(corpId) ?? 0 : treasuryAvailable
+    const fund = Math.min(CONSTRUCTION_CAPACITY, Math.max(0, available), front.cost - front.progress)
+    if (fund > 0) {
+      if (corpFunded) corpConstructionSpend.set(corpId, fund)
+      else constructionSpend = fund
+      front.progress += fund
+      if (front.progress >= front.cost - 1e-9) {
+        const sameOwner = (a: Building['owner'], o: Building['owner']) =>
+          a.kind === o.kind && (a.kind !== 'corporation' || a.corporationId === (o as { corporationId: string }).corporationId)
+        const existing = builtBuildings.find((b) => b.recipeId === front.recipeId && sameOwner(b.owner, front.owner))
+        if (existing)
+          builtBuildings = builtBuildings.map((b) =>
+            b.id === existing.id ? { ...b, level: b.level + 1, throughput: (b.throughput * b.level) / (b.level + 1) } : b,
+          )
+        else
+          builtBuildings = [
+            ...builtBuildings,
+            {
+              id: `${front.id}-built`,
+              recipeId: front.recipeId,
+              methodId: getMethod(front.recipeId, undefined)?.id ?? '',
+              methodLocked: false,
+              level: 1,
+              owner: front.owner,
+              inventory: {},
+              throughput: NEW_BUILDING_THROUGHPUT,
+              lastProfit: 0,
+              employed: 0,
+              jobsPosted: 0,
+            },
+          ]
+        queue.shift()
+      }
+      nextQueue = queue
     }
-    nextQueue = queue
   }
 
   // --- Admin + GDP ---
@@ -409,16 +487,11 @@ function tickWorld(
   for (const b of builtBuildings) {
     const method = buildingMethod(b)
     if (!method) continue
-    const malus = interferenceMultiplier(b, system)
+    const malus = outputFactor(b)
     for (const out of method.outputs) gdp += out.amount * b.level * b.throughput * malus * prices[out.good]
   }
 
-  // --- Owner autonomy: private, un-pinned buildings pick their own method ---
-  // Under a market economy (law.ownerAutonomy) an owner-run building switches to
-  // whichever production method it estimates is most profitable at current
-  // prices and wages, with hysteresis so near-equal methods don't thrash. A
-  // switch retools (throughput dips and ramps back). State-run or state-pinned
-  // buildings are left as the player set them.
+  // --- Owner autonomy: private (corp/worker) un-pinned buildings pick method ---
   const finalBuildings = law.ownerAutonomy
     ? builtBuildings.map((b) => {
         if (isStateRun(b) || b.methodLocked) return b
@@ -444,18 +517,19 @@ function tickWorld(
       })
     : builtBuildings
 
-  // --- Population growth (off in M1) ---
+  // --- Population growth + education drift (SoL loop) + worker dividends ---
   const population = nextPops.reduce((s, p) => s + p.populationSize, 0)
   const capacity = world.populationCapacity
   const headroom = capacity > 0 ? Math.max(0, 1 - population / capacity) : 0
-  const grownPops =
-    MAX_GROWTH_RATE > 0
-      ? nextPops.map((pop) => {
-          const wellFed = (pop.needsSatisfaction.basic + pop.needsSatisfaction.everyday) / 2
-          const growth = MAX_GROWTH_RATE * (wellFed - 0.5) * 2 * headroom
-          return { ...pop, populationSize: Math.max(0.001, pop.populationSize * (1 + growth)) }
-        })
-      : nextPops
+  const dividendPerPop = population > 0 ? workerDividendPool / population : 0
+  const grownPops = nextPops.map((pop) => {
+    const growth = GROWTH_RATE * (pop.standardOfLiving - GROWTH_MIDPOINT) * 2 * (pop.standardOfLiving >= GROWTH_MIDPOINT ? headroom : 1)
+    const nextSize = Math.max(0.001, pop.populationSize * (1 + growth))
+    const educationLevel = clamp(pop.educationLevel + EDU_DRIFT * (pop.standardOfLiving - pop.educationLevel), 0, EDU_MAX)
+    const wealth = pop.wealth + dividendPerPop * pop.populationSize
+    return { ...pop, populationSize: nextSize, educationLevel, wealth }
+  })
+  const grownPopulation = grownPops.reduce((s, p) => s + p.populationSize, 0)
 
   return {
     world: { ...world, pops: grownPops, buildings: finalBuildings, constructionQueue: nextQueue, market: { prices }, labor: { wages } },
@@ -465,22 +539,32 @@ function tickWorld(
     gdp,
     cpi: cpi(prices),
     prevCpi: cpi(world.market.prices),
-    population,
+    population: grownPopulation,
     constructionSpend,
+    corpProfit,
+    serviceSubsidy,
+    corpConstructionSpend,
   }
 }
 
 // Advance the whole economy one tick: every world locally, then each country's
-// national budget.
-export function tickEconomy(countries: Country[], worlds: World[]): { countries: Country[]; worlds: World[]; reports: TickReports } {
+// national budget, then pay corporations their buildings' profit.
+export function tickEconomy(
+  countries: Country[],
+  worlds: World[],
+  corporations: Corporation[] = [],
+): { countries: Country[]; worlds: World[]; corporations: Corporation[]; reports: TickReports } {
   const reports: TickReports = { worlds: {}, countries: {} }
   const nextWorlds: World[] = [...worlds]
   const nextCountries: Country[] = []
+  const corpProfitTotal = new Map<string, number>()
+  // Cash each corporation has available for its own construction this tick.
+  const corpCash = new Map<string, number>()
+  for (const c of corporations) corpCash.set(c.id, c.cash)
+  const corpConstructionTotal = new Map<string, number>()
 
   for (const country of countries) {
-    const owned = worlds
-      .map((w, idx) => ({ w, idx }))
-      .filter(({ w }) => w.ownerId === country.id)
+    const owned = worlds.map((w, idx) => ({ w, idx })).filter(({ w }) => w.ownerId === country.id)
 
     let govRevenue = 0
     let adminTotal = 0
@@ -489,42 +573,84 @@ export function tickEconomy(countries: Country[], worlds: World[]): { countries:
     let cpiNum = 0
     let prevCpiNum = 0
     let constructionSpend = 0
+    let serviceSubsidy = 0
     let runningTreasury = country.treasury
+    const govHealthShare = healthcareSystemDef(country.healthcareSystem).publicFunding
+    // If the state ran out of bureaucracy last tick, its own enterprises are
+    // hobbled this tick.
+    const stateBureaucracyMalus = country.bureaucracy > 0 ? 1 : BUREAUCRACY_SHORTAGE_MALUS
 
     for (const { w, idx } of owned) {
-      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, runningTreasury)
+      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, govHealthShare, stateBureaucracyMalus, runningTreasury, corpCash)
       runningTreasury -= res.constructionSpend
       constructionSpend += res.constructionSpend
       govRevenue += res.tax
       adminTotal += res.admin
+      serviceSubsidy += res.serviceSubsidy
       gdpTotal += res.gdp
       population += res.population
       cpiNum += res.cpi * res.population
       prevCpiNum += res.prevCpi * res.population
       nextWorlds[idx] = res.world
       reports.worlds[w.id] = res.report
+      for (const [corpId, profit] of res.corpProfit) corpProfitTotal.set(corpId, (corpProfitTotal.get(corpId) ?? 0) + profit)
+      for (const [corpId, spend] of res.corpConstructionSpend) {
+        corpConstructionTotal.set(corpId, (corpConstructionTotal.get(corpId) ?? 0) + spend)
+        corpCash.set(corpId, (corpCash.get(corpId) ?? 0) - spend) // so a corp can't double-spend across worlds this tick
+      }
     }
 
     const priceLevel = population > 0 ? cpiNum / population : 1
     const prevPriceLevel = population > 0 ? prevCpiNum / population : 1
     const inflation = prevPriceLevel > 0 ? priceLevel / prevPriceLevel - 1 : 0
 
+    // --- Bureaucracy: production (government buildings) vs consumption (state
+    //     ownership + decrees), settled into the stored stock. ---
+    let bureaucracyProduced = 0
+    let bureaucracyConsumed = 0
+    let bureaucracyCapacity = BUREAUCRACY_BASE_CAPACITY
+    for (const { idx } of owned) {
+      for (const b of nextWorlds[idx].buildings) {
+        const rec = RECIPES[b.recipeId]
+        if (rec?.category === 'government') {
+          bureaucracyProduced += (BUREAUCRACY_OUTPUT[b.recipeId] ?? 0) * b.level * b.throughput
+          bureaucracyCapacity += BUREAUCRACY_CAP_PER_GOV_LEVEL * b.level
+        }
+        if (b.owner.kind === 'state') bureaucracyConsumed += BUREAUCRACY_PER_STATE_BUILDING_LEVEL * b.level
+        else if (b.owner.kind === 'corporation') {
+          const corpId = b.owner.corporationId
+          const corp = corporations.find((c) => c.id === corpId)
+          if (corp?.kind === 'state') bureaucracyConsumed += BUREAUCRACY_PER_STATECORP_BUILDING_LEVEL * b.level
+        }
+      }
+    }
+    bureaucracyConsumed += country.decrees.length * BUREAUCRACY_PER_DECREE
+    const bureaucracy = clamp(country.bureaucracy + bureaucracyProduced - bureaucracyConsumed, 0, bureaucracyCapacity)
+
+    // Administration + defense + infrastructure baseline (scales with pop).
+    adminTotal += PUBLIC_SPENDING_PER_CAPITA * population
     const welfare = country.welfarePerCapita * population
-    const interest = Math.max(0, -country.treasury) * DEBT_INTEREST_RATE
-    const expenditure = welfare + adminTotal + interest
+    // Debt service: coupon on outstanding bonds + a penalty on any unfunded
+    // overdraft (negative treasury) to push the player to fund deficits by bonds.
+    const totalBonds = country.bonds.pops + country.bonds.corporations + country.bonds.foreign
+    const bondInterest = totalBonds * country.bondRate
+    const overdraft = Math.max(0, -country.treasury) * DEBT_INTEREST_RATE
+    const interest = bondInterest + overdraft
+    const expenditure = welfare + adminTotal + serviceSubsidy + interest
     const balance = govRevenue - expenditure
     const treasury = country.treasury + balance - constructionSpend
-    const debt = Math.max(0, -treasury)
+    const debt = totalBonds + Math.max(0, -treasury)
     const annualGdp = gdpTotal * TICKS_PER_YEAR
     const debtToGdp = debt / Math.max(1, annualGdp)
 
-    const fiscal: CountryFiscal = {
+    reports.countries[country.id] = {
       gdp: gdpTotal,
       priceLevel,
       inflation,
       revenue: govRevenue,
       welfare,
       admin: adminTotal,
+      services: serviceSubsidy,
       interest,
       construction: constructionSpend,
       expenditure: expenditure + constructionSpend,
@@ -534,17 +660,26 @@ export function tickEconomy(countries: Country[], worlds: World[]): { countries:
       debtToGdp,
       rating: creditRating(debtToGdp),
       population,
+      bureaucracy,
+      bureaucracyCapacity,
+      bureaucracyProduced,
+      bureaucracyConsumed,
     }
-    reports.countries[country.id] = fiscal
-    nextCountries.push({ ...country, treasury })
+    nextCountries.push({ ...country, treasury, bureaucracy })
   }
 
-  return { countries: nextCountries, worlds: nextWorlds, reports }
+  // Pay corporations the net profit of the buildings they own, less what they
+  // spent on their own construction this tick.
+  const nextCorporations = corporations.map((c) => {
+    const profit = corpProfitTotal.get(c.id) ?? 0
+    const built = corpConstructionTotal.get(c.id) ?? 0
+    return { ...c, cash: c.cash + profit - built, lastProfit: profit }
+  })
+
+  return { countries: nextCountries, worlds: nextWorlds, corporations: nextCorporations, reports }
 }
 
 // A rough headline GDP for one world at its current prices — display only.
-// Values output at the building's live throughput so it matches what the world
-// is actually producing.
 export function estimateWorldGdp(world: World): number {
   let gdp = 0
   for (const b of world.buildings) {
@@ -554,3 +689,40 @@ export function estimateWorldGdp(world: World): number {
   }
   return gdp
 }
+
+// The book value of a corporation: its cash plus the capital in the buildings it
+// owns (a simple per-level valuation). Drives the share price on the exchange.
+export function corporationValue(corp: Corporation, worlds: World[]): number {
+  let capital = 0
+  for (const w of worlds) {
+    for (const b of w.buildings) {
+      if (b.owner.kind === 'corporation' && b.owner.corporationId === corp.id) capital += b.level * BUILD_COST_PER_LEVEL
+    }
+  }
+  return corp.cash + capital
+}
+
+export function sharePrice(corp: Corporation, worlds: World[]): number {
+  if (corp.totalShares <= 0) return 0
+  return Math.max(0, corporationValue(corp, worlds)) / corp.totalShares
+}
+
+// Building slots used per district on a world (existing buildings by level +
+// queued construction). Compared against world.districtCapacity to see whether
+// there is room to build.
+export function districtUsage(world: World): Record<DistrictType, number> {
+  const used = { core: 0, urban: 0, industrial: 0, resource: 0 } as Record<DistrictType, number>
+  for (const b of world.buildings) used[districtOfRecipe(b.recipeId)] += b.level
+  for (const o of world.constructionQueue) used[districtOfRecipe(o.recipeId)] += 1
+  return used
+}
+
+// Whether there's room in the target district to queue another building.
+export function canBuild(world: World, recipeId: string): boolean {
+  const d = districtOfRecipe(recipeId)
+  return districtUsage(world)[d] < world.districtCapacity[d]
+}
+
+// Re-export for UI use.
+export { DISTRICT_TYPES, districtOfRecipe }
+export type { DistrictType }
