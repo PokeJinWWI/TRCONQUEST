@@ -33,8 +33,27 @@ export type GoodId =
   | 'fertilizer'
   | 'explosives'
   | 'semiconductors'
+  // Tools & machinery, by grade (chain: steel → tools → machinery → heavy).
+  // TOOLS are cheap and near-universal (mechanized extractors, farms, light
+  // factories, construction). MACHINERY is general industrial plant (steel,
+  // chemicals, mills). HEAVY MACHINERY drives deep extraction, the heaviest
+  // industry and major construction. ELECTRICAL MACHINERY (motors, generators,
+  // drives) is a separate domain feeding power and advanced manufacturing.
+  | 'tools'
   | 'machinery'
+  | 'heavyMachinery'
+  | 'electricalMachinery'
+  // Precision machinery — high-tolerance instruments and machine tools for
+  // advanced manufacturing (semiconductors, aircraft, electronics, medical).
+  | 'precisionMachinery'
   | 'electronics'
+  // Engines & vehicles. Engines drive heavy machinery and every vehicle;
+  // automobiles are a consumer good; locomotives and aircraft are capital goods
+  // that transport infrastructure (railways, spaceports) is built from.
+  | 'engines'
+  | 'automobiles'
+  | 'locomotives'
+  | 'aircraft'
   // Consumer / end goods
   | 'food'
   | 'consumerGoods'
@@ -45,6 +64,10 @@ export type GoodId =
   | 'healthcare'
   | 'education'
   | 'retail'
+  // Infrastructure — the transport/utility backbone. Consumed by buildings and
+  // pops, and it raises the world's MARKET ACCESS: more infrastructure = more
+  // freight capacity for inter-world trade (see logistics in economyTick).
+  | 'infrastructure'
 
 export const GOOD_IDS: GoodId[] = [
   'electricity',
@@ -64,14 +87,23 @@ export const GOOD_IDS: GoodId[] = [
   'fertilizer',
   'explosives',
   'semiconductors',
+  'tools',
   'machinery',
+  'heavyMachinery',
+  'electricalMachinery',
+  'precisionMachinery',
   'electronics',
+  'engines',
+  'automobiles',
+  'locomotives',
+  'aircraft',
   'food',
   'consumerGoods',
   'luxuryGoods',
   'healthcare',
   'education',
   'retail',
+  'infrastructure',
 ]
 
 export type GoodCategory = 'power' | 'raw' | 'agricultural' | 'intermediate' | 'consumer' | 'service'
@@ -102,14 +134,23 @@ export const GOODS: Record<GoodId, GoodDef> = {
   fertilizer: { id: 'fertilizer', label: 'Fertilizer', category: 'intermediate', basePrice: 6 },
   explosives: { id: 'explosives', label: 'Explosives', category: 'intermediate', basePrice: 10 },
   semiconductors: { id: 'semiconductors', label: 'Semiconductors', category: 'intermediate', basePrice: 22 },
-  machinery: { id: 'machinery', label: 'Machinery', category: 'intermediate', basePrice: 14 },
+  tools: { id: 'tools', label: 'Tools', category: 'intermediate', basePrice: 9 },
+  machinery: { id: 'machinery', label: 'Machinery', category: 'intermediate', basePrice: 15 },
+  heavyMachinery: { id: 'heavyMachinery', label: 'Heavy Machinery', category: 'intermediate', basePrice: 26 },
+  electricalMachinery: { id: 'electricalMachinery', label: 'Electrical Machinery', category: 'intermediate', basePrice: 20 },
+  precisionMachinery: { id: 'precisionMachinery', label: 'Precision Machinery', category: 'intermediate', basePrice: 34 },
   electronics: { id: 'electronics', label: 'Electronics', category: 'intermediate', basePrice: 18 },
+  engines: { id: 'engines', label: 'Engines', category: 'intermediate', basePrice: 20 },
+  automobiles: { id: 'automobiles', label: 'Automobiles', category: 'consumer', basePrice: 32 },
+  locomotives: { id: 'locomotives', label: 'Locomotives', category: 'intermediate', basePrice: 70 },
+  aircraft: { id: 'aircraft', label: 'Aircraft', category: 'consumer', basePrice: 110 },
   food: { id: 'food', label: 'Food', category: 'consumer', basePrice: 3 },
   consumerGoods: { id: 'consumerGoods', label: 'Consumer Goods', category: 'consumer', basePrice: 6 },
   luxuryGoods: { id: 'luxuryGoods', label: 'Luxury Goods', category: 'consumer', basePrice: 26 },
   healthcare: { id: 'healthcare', label: 'Healthcare', category: 'service', basePrice: 12 },
   education: { id: 'education', label: 'Education', category: 'service', basePrice: 11 },
   retail: { id: 'retail', label: 'Retail', category: 'service', basePrice: 7 },
+  infrastructure: { id: 'infrastructure', label: 'Infrastructure', category: 'service', basePrice: 8 },
 }
 
 // A price never goes to zero (a good stays worth *something* even in glut, and

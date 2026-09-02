@@ -119,6 +119,10 @@ export interface World {
   constructionQueue: ConstructionOrder[]
   market: Market
   labor: LaborMarket
+  // Goods delivered here by inter-world trade (Milestone 5), available as extra
+  // supply this tick. Refilled each tick by the logistics step from surplus
+  // worlds; lets a world import what it can't make itself.
+  importStock: Partial<Record<GoodId, number>>
 }
 
 // A country — the NATIONAL government layer. One treasury, one tax/welfare
@@ -153,13 +157,17 @@ export interface Country {
   bureaucracy: number
   // Standing decrees the state has enacted (each costs bureaucracy per tick).
   decrees: string[]
+  // Freight capacity (units of goods movable between the country's worlds per
+  // tick) — the logistics backbone of inter-world trade (Milestone 5).
+  logisticsCapacity: number
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---
 
 // A shareholder in a corporation. The state (the player, as government), a named
-// character (a magnate), or the anonymous public float traded on the exchange.
-export type ShareHolder = { kind: 'state' } | { kind: 'character'; id: string } | { kind: 'public' }
+// character (a magnate), the anonymous public float traded on the exchange, or a
+// world's financial district (an institutional investor).
+export type ShareHolder = { kind: 'state' } | { kind: 'character'; id: string } | { kind: 'public' } | { kind: 'financial'; id: string }
 
 export interface ShareHolding {
   holder: ShareHolder
@@ -175,7 +183,10 @@ export interface Corporation {
   id: string
   name: string
   countryId: string
-  kind: 'state' | 'private'
+  // 'financial' is a world's financial district — a co-op-like institutional
+  // entity (auto-formed once a world is populous enough) that owns buildings and
+  // holds shares in other companies, but is not a normal company.
+  kind: 'state' | 'private' | 'financial'
   cash: number
   totalShares: number
   shares: ShareHolding[]
@@ -260,6 +271,10 @@ export interface CountryFiscal {
   bureaucracyCapacity: number
   bureaucracyProduced: number
   bureaucracyConsumed: number
+  // Trade (Milestone 5): total goods shipped between the country's worlds this
+  // tick, and the freight capacity available.
+  tradeVolume: number
+  logisticsCapacity: number
 }
 
 export interface TickReports {

@@ -5,6 +5,14 @@ import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
 import { RECIPES } from '../economy/recipes'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
 
+// The kind a corporation should be given its state shareholding: a state
+// majority makes it state-owned, otherwise private. A financial district keeps
+// its own kind regardless.
+function derivedKind(corp: Corporation, stateShares: number): Corporation['kind'] {
+  if (corp.kind === 'financial') return 'financial'
+  return corp.totalShares > 0 && stateShares / corp.totalShares >= 0.5 ? 'state' : 'private'
+}
+
 // A corporation's HQ grows with the assets it owns.
 function hqLevel(assetCount: number): number {
   return Math.max(1, Math.round(assetCount / 3))
@@ -371,8 +379,14 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       }
       if (newState > 0) nextShares.push({ holder: { kind: 'state' }, shares: newState })
       if (newPublic > 0) nextShares.push({ holder: { kind: 'public' }, shares: newPublic })
+      // Ownership decides the kind: if the state no longer holds a majority the
+      // company is no longer state-owned (and vice-versa). This keeps the tab a
+      // corporation shows up in congruent with who actually owns it — you can't
+      // sell off all of a "state" corp yet have it still called state-owned.
       return {
-        corporations: state.corporations.map((c) => (c.id === corporationId ? { ...c, shares: nextShares } : c)),
+        corporations: state.corporations.map((c) =>
+          c.id === corporationId ? { ...c, shares: nextShares, kind: derivedKind(c, newState) } : c,
+        ),
         countries: state.countries.map((c) => (c.id === countryId ? { ...c, treasury: c.treasury - cost } : c)),
       }
     }),
