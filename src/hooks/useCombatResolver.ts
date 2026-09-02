@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipCombatState } from '../state/shipStore'
 import { useFleetStore } from '../state/fleetStore'
+import { usePlayerStore } from '../state/playerStore'
+import { useTechStore } from '../state/techStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { useCombatStore } from '../state/combatStore'
 import {
@@ -62,6 +64,12 @@ export function useCombatResolver() {
       const combat = useCombatStore.getState()
       const { ships } = useShipStore.getState()
       const { fleets } = useFleetStore.getState()
+      // Whether the PLAYER's own country has researched Free-Flight
+      // Maneuvering (see techData.ts) — the one tech check stepEngagements
+      // needs from outside, resolved here so it stays a pure function (see
+      // its own playerCanFreeFloat param comment).
+      const playerCountryId = usePlayerStore.getState().selectedCountryId ?? ''
+      const playerCanFreeFloat = useTechStore.getState().stateFor(playerCountryId).researched.has('free-flight-maneuvering')
 
       const synced = syncEngagements(ships, combat.engagements, simDays)
       const hadEngagements = combat.engagements.length > 0
@@ -148,7 +156,7 @@ export function useCombatResolver() {
         const shipsForStep = useShipStore.getState().ships.map((s) =>
           pendingDamage[s.id] ? { ...s, combat: pendingDamage[s.id] } : s,
         )
-        const result = stepEngagements(engagements, shipsForStep, cursor, undefined, fleets)
+        const result = stepEngagements(engagements, shipsForStep, cursor, undefined, fleets, playerCanFreeFloat)
         engagements = result.engagements
         Object.assign(pendingDamage, result.shipCombat)
         for (const id of result.destroyedShipIds) destroyed.add(id)

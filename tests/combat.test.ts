@@ -11,7 +11,7 @@
 // Deliberately outside `src/` — tsconfig.app.json only includes `src`, so
 // this never enters the app typecheck or the production bundle.
 import { SHIP_CLASSES, TURING_HYPERDRIVE_COOLDOWN_DAYS, type HyperDrive } from '../src/data/shipData'
-import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, CHASE_STANDOFF_UNITS, type WeaponMount } from '../src/data/combatData'
+import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, CHASE_STANDOFF_UNITS, RAM_MAX_TARGET_DAMAGE, RAM_SELF_DAMAGE_FRACTION, ramDamageAt, rangeEffectiveness, missileDamageMultiplier, torpedoAccuracy, MISSILE_FALLOFF_FLOOR, type WeaponMount } from '../src/data/combatData'
 import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { useCombatStore } from '../src/state/combatStore'
 import {
@@ -45,6 +45,8 @@ import {
   divideAssignment,
   condenseDestination,
   screenDestination,
+  rangeContactStatus,
+  rangeFavor,
 } from '../src/scene/combatResolution'
 import type { Fleet } from '../src/state/fleetStore'
 import {
@@ -67,6 +69,7 @@ import {
   pickLatticeNode,
   arenaSurfaceGravity,
   gravitationalAcceleration,
+  orbitalHoldVelocity,
   type ArenaPoint,
   type CombatObstacle,
 } from '../src/scene/combatArena'
@@ -79,6 +82,8 @@ import {
   simSecondsToDays,
 } from '../src/state/gameTimeStore'
 import { hyperdriveLossChance, warpEscapeLossChance, coreHealthFraction, planMove, systemGravityAcceleration, systemBodyContaining, bodyLivePosition, bodyOrbitalVelocity } from '../src/scene/shipPhysics'
+import { usePlayerStore } from '../src/state/playerStore'
+import { useTechStore } from '../src/state/techStore'
 import { Vector3, PerspectiveCamera } from 'three'
 
 function nodesEqualLocal(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
@@ -1790,8 +1795,10 @@ console.log('\n=== 45. Scuttle: a doomed hull converts itself into a trade ===')
   const e2Untouched = !e2After || (e2After.shieldHp === before.shieldHp && e2After.armorHp === before.armorHp && e2After.componentHp.core === before.componentHp.core)
   check('a hostile outside the blast radius is untouched', e2Untouched)
 
-  // Friendly fire is deliberately NOT a thing here — the blast only hits the
-  // other side, so scuttling never punishes a player for keeping a formation.
+  // Friendly fire IS a thing here — a reactor breach doesn't check IFF, so an
+  // ally standing right next to a scuttling hull eats the blast exactly like
+  // a hostile would. This is the whole point: it's a last resort, not a free
+  // area-denial tool that's safe to use inside your own formation.
   {
     const allies = [makeShip('cruiser', 'a1', 'player'), makeShip('cruiser', 'a2', 'player'), makeShip('cruiser', 'x1', 'hostile')]
     let e = syncEngagements(allies, [], simDays)
@@ -1807,7 +1814,9 @@ console.log('\n=== 45. Scuttle: a doomed hull converts itself into a trade ===')
     const r = stepEngagements([e[0]], allies, simDays + COMBAT_STEP_DAYS)
     const a2 = r.shipCombat['a2']
     const pristine = allies.find((s) => s.id === 'a2')!.combat
-    check('an ally standing right beside the blast takes nothing', !a2 || a2.shieldHp === pristine.shieldHp)
+    check('an ally standing right beside the blast is really hit', !!a2 && a2.shieldHp < pristine.shieldHp)
+    const x1 = r.shipCombat['x1']
+    check('...and the far-off hostile is untouched (still governed by the same falloff)', !x1 || x1.shieldHp === allies.find((s) => s.id === 'x1')!.combat.shieldHp)
   }
 }
 
@@ -2184,6 +2193,425 @@ console.log('\n=== 55. Screen — the toughest half forms a wall between the fle
   check(
     'alone in the fight, screen has no one to shield and no wall to form',
     screenDestination(loneEngagement.participants[0], lonelyScreen, loneEngagement.participants, loneShipsById, loneEngagement.obstacles) === null,
+  )
+}
+
+console.log('\n=== 56. Range favor — who can hit whom, and who\'s "favored" overall ===')
+{
+  const simDays = 100
+  const frigate = makeShip('frigate', 'p1', 'player', 'Earth') // longest range: missile battery, 11 units
+  const corvette = makeShip('corvette', 'e1', 'hostile', 'Earth') // longest range: autocannon, 3 units
+  const ships = [frigate, corvette]
+  const base = syncEngagements(ships, [], simDays)[0]
+  // Positioned well clear of Earth's own position (the arena origin) so the
+  // segment between them never clips the body itself — same fix the live
+  // browser check needed.
+  const at = (engagement: typeof base, px: number, ex: number) => ({
+    ...engagement,
+    participants: engagement.participants.map((p) => (p.shipId === 'p1' ? { ...p, position: { x: px, y: 0, z: 0 } } : { ...p, position: { x: ex, y: 0, z: 0 } })),
+  })
+
+  // Distance 7: inside the frigate's 11-unit reach, outside the corvette's 3.
+  const asym = at(base, 20, 27)
+  const p1 = asym.participants.find((p) => p.shipId === 'p1')!
+  const e1 = asym.participants.find((p) => p.shipId === 'e1')!
+  const status = rangeContactStatus(p1, frigate, e1, corvette, simDays)
+  check('at distance 7, the longer-ranged frigate can hit', status.aCanHit)
+  check('...but the shorter-ranged corvette cannot hit back', !status.bCanHit)
+  check('the frigate itself reads as favored', rangeFavor(p1, asym, ships, simDays) === 'favored')
+  check('the corvette itself reads as unfavored', rangeFavor(e1, asym, ships, simDays) === 'unfavored')
+
+  // Distance 1.5: inside both ranges.
+  const mutual = at(base, 20, 21.5)
+  const p1m = mutual.participants.find((p) => p.shipId === 'p1')!
+  const e1m = mutual.participants.find((p) => p.shipId === 'e1')!
+  const mutualStatus = rangeContactStatus(p1m, frigate, e1m, corvette, simDays)
+  check('at close range both can hit', mutualStatus.aCanHit && mutualStatus.bCanHit)
+  check('a purely mutual contact reads as even, not favored either way', rangeFavor(p1m, mutual, ships, simDays) === 'even')
+
+  // Distance 80: outside both ranges — activeEnemyContacts excludes the
+  // pair entirely, so there's nothing to be favored or unfavored about.
+  const far = at(base, 20, 100)
+  const p1f = far.participants.find((p) => p.shipId === 'p1')!
+  check('too far apart for either — no live contact at all — reads as even', rangeFavor(p1f, far, ships, simDays) === 'even')
+}
+
+console.log('\n=== 57. Ramming: a committed collision that hurts both hulls ===')
+{
+  // Falloff curve first, on its own — mirrors scuttleDamageAt's own checks.
+  check('a stationary bump does no damage', ramDamageAt(0) === 0)
+  check('a full-speed ram does the max', ramDamageAt(1) === RAM_MAX_TARGET_DAMAGE)
+  check('...and clamps rather than exceeding the max beyond a fraction of 1', ramDamageAt(1.5) === RAM_MAX_TARGET_DAMAGE)
+  check('...and clamps at zero below a fraction of 0', ramDamageAt(-1) === 0)
+  check('halfway does about half', Math.abs(ramDamageAt(0.5) - RAM_MAX_TARGET_DAMAGE / 2) < 1e-9)
+
+  // End to end through the resolver: two unarmed couriers already in
+  // contact, the rammer closing at a known fraction of its own top speed.
+  // Unarmed on BOTH sides deliberately — this isolates the ramming-impact
+  // step's own math from ordinary weapons fire, which would otherwise also
+  // land this same step (point-blank range is well inside every mount's
+  // reach) and throw off the exact-value check below. The separate
+  // unarmed-vs-armed check further down covers a real gun exchange layered
+  // on top.
+  const simDays = 100
+  const rammer = makeShip('swift-courier', 'p1', 'player')
+  const victim = makeShip('swift-courier', 'e1', 'hostile')
+  const ships = [rammer, victim]
+  const profile = shipCombatProfile(rammer)!
+  // Deliberately well under top speed (not 0.9x) — a courier's total HP pool
+  // (shields+armor+core) is thin enough that a near-max-speed ram would
+  // overkill it outright, which would cap the MEASURED loss at the ship's
+  // own HP total rather than at what the ram actually dealt, breaking the
+  // exact-value check below. A moderate closing speed keeps the hit survivable
+  // so what's measured is the ram's own damage, not a destruction cap.
+  const closingSpeed = profile.maneuverUnitsPerSecond * 0.4
+  const engagements = syncEngagements(ships, [], simDays)
+  engagements[0] = {
+    ...engagements[0],
+    participants: engagements[0].participants.map((p) => {
+      const base = { ...p, path: [], holdPosition: true }
+      // holdPosition is deliberate here — it makes the approach step a no-op
+      // (see stepEngagements' own top-of-loop check), so this test exercises
+      // the ramming-impact step in isolation rather than also depending on
+      // this step's lattice-planning outcome.
+      if (p.shipId === 'p1') {
+        return { ...base, position: { x: 0, y: 6, z: 0 }, velocity: { x: closingSpeed, y: 0, z: 0 }, ramming: true, targetShipId: 'e1' }
+      }
+      return { ...base, position: { x: 0.3, y: 6, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }
+    }),
+  }
+
+  // Predicted via the exact same integration rule integrateMotion uses for an
+  // empty path (steer toward zero, budget-limited by accel*dt) — the ram
+  // order doesn't touch movement, so the rammer decelerates by its own
+  // acceleration budget for this one step before the impact is measured.
+  const expectedNewSpeed = Math.max(0, closingSpeed - profile.accelerationUnitsPerSecondSq * COMBAT_STEP_SECONDS)
+  const expectedFraction = Math.min(1, expectedNewSpeed / profile.maneuverUnitsPerSecond)
+  const expectedTargetDamage = ramDamageAt(expectedFraction)
+  const expectedSelfDamage = expectedTargetDamage * RAM_SELF_DAMAGE_FRACTION
+
+  const beforeRammer = rammer.combat
+  const beforeVictim = victim.combat
+  const result = stepEngagements([engagements[0]], ships, simDays + COMBAT_STEP_DAYS)
+
+  const victimAfter = result.shipCombat['e1']
+  const rammerAfter = result.shipCombat['p1']
+  check('the rammed ship is really hit', !!victimAfter)
+  check('the rammer takes damage too', !!rammerAfter)
+  if (victimAfter && rammerAfter) {
+    const totalLoss = (before: typeof beforeVictim, after: typeof victimAfter) =>
+      before.shieldHp - after!.shieldHp + (before.armorHp - after!.armorHp) + (before.componentHp.core - after!.componentHp.core)
+    const victimLoss = totalLoss(beforeVictim, victimAfter)
+    const rammerLoss = totalLoss(beforeRammer, rammerAfter)
+    check(
+      'the target takes exactly the speed-scaled damage predicted',
+      Math.abs(victimLoss - expectedTargetDamage) < 1e-6,
+      `expected ${expectedTargetDamage.toFixed(2)}, got ${victimLoss.toFixed(2)}`,
+    )
+    check(
+      'the rammer takes exactly its fixed share of what it dealt',
+      Math.abs(rammerLoss - expectedSelfDamage) < 1e-6,
+      `expected ${expectedSelfDamage.toFixed(2)}, got ${rammerLoss.toFixed(2)}`,
+    )
+  }
+
+  const rammerParticipantAfter = result.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+  check(
+    'the ram order is spent the instant it connects — one hit, not continuous grinding contact',
+    !!rammerParticipantAfter && rammerParticipantAfter.ramming === false,
+  )
+
+  // A ram works even for a totally unarmed ship — chase/approachNode refuse
+  // to close for one (nothing to bring into weapon range), but ramming has no
+  // such gate, since colliding isn't gated on having a gun.
+  {
+    const unarmedRammer = makeShip('swift-courier', 'u1', 'player')
+    const unarmedVictim = makeShip('corvette', 'e2', 'hostile')
+    const unarmedShips = [unarmedRammer, unarmedVictim]
+    const unarmedProfile = shipCombatProfile(unarmedRammer)!
+    check('the courier really is unarmed', unarmedProfile.weapons.length === 0)
+    const e = syncEngagements(unarmedShips, [], simDays)
+    e[0] = {
+      ...e[0],
+      participants: e[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        if (p.shipId === 'u1') {
+          return {
+            ...base,
+            position: { x: 0, y: 6, z: 0 },
+            velocity: { x: unarmedProfile.maneuverUnitsPerSecond * 0.9, y: 0, z: 0 },
+            ramming: true,
+            targetShipId: 'e2',
+          }
+        }
+        return { ...base, position: { x: 0.3, y: 6, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }
+      }),
+    }
+    const r = stepEngagements([e[0]], unarmedShips, simDays + COMBAT_STEP_DAYS)
+    check('an unarmed ship can still ram and hurt its target', !!r.shipCombat['e2'])
+    check('...and takes damage itself doing it', !!r.shipCombat['u1'])
+  }
+}
+
+console.log('\n=== 58. Missile damage falloff and torpedo accuracy (range + target size) ===')
+{
+  check('rangeEffectiveness is full strength at and inside optimal', rangeEffectiveness(3, 5, 10, 0.6) === 1 && rangeEffectiveness(5, 5, 10, 0.6) === 1)
+  check(
+    'rangeEffectiveness tapers linearly to the floor exactly at max range',
+    Math.abs(rangeEffectiveness(10, 5, 10, 0.6) - 0.6) < 1e-9,
+  )
+  check(
+    'rangeEffectiveness is halfway between 1 and floor at the midpoint',
+    Math.abs(rangeEffectiveness(7.5, 5, 10, 0.6) - 0.8) < 1e-9,
+  )
+  check('rangeEffectiveness never extrapolates past max range', rangeEffectiveness(50, 5, 10, 0.6) === 0.6)
+
+  const missile: WeaponMount = { ...WEAPON_TYPES.missileBattery }
+  check('missile damage is full at optimal range', missileDamageMultiplier(missile.optimalRangeUnits!, missile) === 1)
+  check(
+    'missile damage falls off toward the floor at max range',
+    Math.abs(missileDamageMultiplier(missile.rangeUnits, missile) - MISSILE_FALLOFF_FLOOR) < 1e-9,
+  )
+  check('missile damage is unaffected closer than optimal', missileDamageMultiplier(1, missile) === 1)
+
+  const torpedo: WeaponMount = { ...WEAPON_TYPES.torpedoTube }
+  const accAtOptimal = torpedoAccuracy(torpedo.optimalRangeUnits!, torpedo, 'large', 0)
+  const accAtMax = torpedoAccuracy(torpedo.rangeUnits, torpedo, 'large', 0)
+  check('torpedo accuracy is higher at optimal range than at max range', accAtOptimal > accAtMax)
+  check(
+    'torpedo accuracy vs a small target is worse than vs an X-class target, same range',
+    torpedoAccuracy(torpedo.optimalRangeUnits!, torpedo, 'small', 0) < torpedoAccuracy(torpedo.optimalRangeUnits!, torpedo, 'x', 0),
+  )
+  check(
+    'evasion reduces torpedo accuracy',
+    torpedoAccuracy(torpedo.optimalRangeUnits!, torpedo, 'medium', 0.3) < torpedoAccuracy(torpedo.optimalRangeUnits!, torpedo, 'medium', 0),
+  )
+  check(
+    'torpedo accuracy never hits the hard 0%/100% edges',
+    torpedoAccuracy(torpedo.rangeUnits, torpedo, 'small', 0.9) > 0 && torpedoAccuracy(0, torpedo, 'x', 0) < 1,
+  )
+
+  // End-to-end through applyShot: a torpedo fired at max range against a
+  // small, evasive target should connect far less often than the same shot
+  // at optimal range against a stationary X-class target. Uses a Cruiser
+  // (no point defense of its own to muddy the roll) as the dummy substrate
+  // for both — only the precomputed missChance passed to applyShot differs.
+  const cruiser = SHIP_CLASSES.find((c) => c.id === 'cruiser')!.combat
+  check('cruiser is large-sized (sizeClass wiring reaches a real preset)', cruiser.sizeClass === 'large')
+  const hardMiss = 1 - torpedoAccuracy(torpedo.rangeUnits, torpedo, 'small', 0.4)
+  const easyMiss = 1 - torpedoAccuracy(torpedo.optimalRangeUnits!, torpedo, 'x', 0)
+  const rng = seededRng(1)
+  let hardHits = 0
+  let easyHits = 0
+  const trials = 300
+  for (let i = 0; i < trials; i++) {
+    if (!applyShot(torpedo, torpedo.damage, pristineCombatState(cruiser), cruiser, null, rng, hardMiss).outcome.missed) hardHits++
+    if (!applyShot(torpedo, torpedo.damage, pristineCombatState(cruiser), cruiser, null, rng, easyMiss).outcome.missed) easyHits++
+  }
+  check(
+    'statistically: a max-range torpedo vs a small, evasive target lands far less often than an optimal-range shot vs an X-class one',
+    hardHits < easyHits,
+    `${hardHits}/${trials} vs ${easyHits}/${trials}`,
+  )
+}
+
+console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, but the default seed means nothing regresses ===')
+{
+  useGameTimeStore.setState({ paused: false })
+  const countryId = 'tech-gate-test-country'
+  usePlayerStore.setState({ selectedCountryId: countryId })
+  const simDays = 100
+
+  // Corvette: warp only, no hyperdrive.
+  const corvette = makeShip('corvette', 'p1', 'player', 'Mars')
+  const farStar = { kind: 'star' as const, starId: 'alpha-centauri' }
+
+  // Default-seeded (warp-theory pre-researched) — warp is genuinely usable:
+  // for a destination this far, it must arrive strictly faster than a
+  // reaction-only trip would.
+  const withWarp = planMove(corvette, farStar, simDays)
+  check("warp-theory is pre-seeded, so a fresh country's ship can still warp today", withWarp.kind === 'order')
+  const reactionOnlyDaysNoWarp = withWarp.kind === 'order' ? withWarp.order.arrivalSimDays - simDays : Infinity
+
+  // Strip warp-theory out (simulating a country that genuinely hasn't
+  // researched it) and try the identical trip.
+  useTechStore.setState((s) => {
+    const current = s.stateFor(countryId)
+    const stripped = new Set(current.researched)
+    stripped.delete('warp-theory')
+    return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: stripped } } }
+  })
+  const withoutWarp = planMove(corvette, farStar, simDays)
+  check('without Warp Theory, the ship falls back to a plain reaction-drive order', withoutWarp.kind === 'order' && withoutWarp.order.usedWarp === false)
+  const reactionOnlyDaysGated = withoutWarp.kind === 'order' ? withoutWarp.order.arrivalSimDays - simDays : -Infinity
+  check(
+    'the gated trip takes the full reaction-only time, genuinely slower than the warp-capable one',
+    reactionOnlyDaysGated > reactionOnlyDaysNoWarp,
+    `${reactionOnlyDaysGated.toFixed(1)}d gated vs ${reactionOnlyDaysNoWarp.toFixed(1)}d with warp`,
+  )
+
+  // Restore warp-theory for the destroyer (hyperdrive-only) half of this
+  // check.
+  useTechStore.setState((s) => {
+    const current = s.stateFor(countryId)
+    return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: new Set(current.researched).add('warp-theory') } } }
+  })
+  const destroyer = makeShip('destroyer', 'p2', 'player', 'Mars')
+  const starDest = { kind: 'star' as const, starId: 'sol' }
+  const hyperdriveAttempt = planMove(destroyer, starDest, simDays)
+  check(
+    'hyperspace-theory is pre-seeded, so a fresh country can still attempt a hyperdrive jump today',
+    hyperdriveAttempt.kind !== 'order',
+    hyperdriveAttempt.kind,
+  )
+
+  useTechStore.setState((s) => {
+    const current = s.stateFor(countryId)
+    const stripped = new Set(current.researched)
+    stripped.delete('hyperspace-theory')
+    return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: stripped } } }
+  })
+  const withoutHyperdrive = planMove(destroyer, starDest, simDays)
+  check(
+    'without Hyperspace Theory, a hyperdrive-only hull falls all the way back to a plain reaction-drive order — no jump attempted at all',
+    withoutHyperdrive.kind === 'order' && withoutHyperdrive.order.usedWarp === false,
+  )
+
+  usePlayerStore.setState({ selectedCountryId: null })
+}
+
+console.log('\n=== 60. orbitalHoldVelocity: the physics of "holding position" defaults to a real orbit ===')
+{
+  const body: CombatObstacle = {
+    name: 'Test Body',
+    kind: 'planet',
+    color: '#fff',
+    position: { x: 0, y: 0, z: 0 },
+    radiusUnits: 1,
+    surfaceGravityUnitsPerSecondSq: 0.03,
+  }
+
+  const near: ArenaPoint = { x: 5, y: 0, z: 0 }
+  const far: ArenaPoint = { x: 20, y: 0, z: 0 }
+  const vNear = orbitalHoldVelocity(near, body)
+  const vFar = orbitalHoldVelocity(far, body)
+  const gNear = body.surfaceGravityUnitsPerSecondSq * (body.radiusUnits / 5) ** 2
+  const gFar = body.surfaceGravityUnitsPerSecondSq * (body.radiusUnits / 20) ** 2
+  check('orbital speed matches v = sqrt(g(d) * d) at a close distance', Math.abs(vNear.length() - Math.sqrt(gNear * 5)) < 1e-9)
+  check('orbital speed matches v = sqrt(g(d) * d) at a far distance', Math.abs(vFar.length() - Math.sqrt(gFar * 20)) < 1e-9)
+  check('a closer orbit needs a higher speed than a farther one (stronger local gravity to counter)', vNear.length() > vFar.length())
+
+  const radial = { x: near.x - body.position.x, y: near.y - body.position.y, z: near.z - body.position.z }
+  const dot = vNear.x * radial.x + vNear.y * radial.y + vNear.z * radial.z
+  check('the orbital velocity is perpendicular to the radial direction (a real tangential orbit, not drifting in/out)', Math.abs(dot) < 1e-9)
+
+  // Two ships on opposite sides of the same body should circle the SAME
+  // way (a shared rotational sense), not toward or away from each other.
+  const opposite: ArenaPoint = { x: -5, y: 0, z: 0 }
+  const vOpposite = orbitalHoldVelocity(opposite, body)
+  check(
+    'two ships on opposite sides of the same body share one consistent rotational sense',
+    Math.sign(vNear.z) !== 0 && Math.sign(vNear.z) === -Math.sign(vOpposite.z),
+    `${vNear.z.toFixed(3)} vs ${vOpposite.z.toFixed(3)}`,
+  )
+
+  check('at the body\'s own center, orbital velocity is the zero vector (nothing to orbit around)', orbitalHoldVelocity(body.position, body).length() === 0)
+}
+
+console.log('\n=== 61. integrateMotion: holding position defaults to orbiting unless Free-Flight Maneuvering is unlocked ===')
+{
+  const body: CombatObstacle = {
+    name: 'Test Body',
+    kind: 'planet',
+    color: '#fff',
+    position: { x: 0, y: 0, z: 0 },
+    radiusUnits: 1,
+    surfaceGravityUnitsPerSecondSq: 0.03,
+  }
+  const resting: CombatParticipant = {
+    shipId: 'p1',
+    side: 0,
+    position: { x: 5, y: 0, z: 0 },
+    velocity: { x: 0, y: 0, z: 0 },
+    positionSimDays: 100,
+    path: [],
+    weaponReadySimDays: [],
+    targetShipId: null,
+    targetComponent: null,
+    holdPosition: true,
+    ramming: false,
+  }
+
+  const withFreeFlight = integrateMotion(resting, 1, 0.5, 1, 101, [body], true)
+  check('with Free-Flight Maneuvering, a resting ship stays exactly at rest (today\'s unchanged behavior)', pointDistance(withFreeFlight.position, resting.position) < 1e-9 && withFreeFlight.velocity.x === 0)
+
+  const withoutFreeFlight = integrateMotion(resting, 1, 0.5, 1, 101, [body], false)
+  check(
+    'without it, the SAME resting ship starts moving instead — it defaults to orbiting rather than holding for free',
+    pointDistance(withoutFreeFlight.position, resting.position) > 1e-6 || Math.hypot(withoutFreeFlight.velocity.x, withoutFreeFlight.velocity.y, withoutFreeFlight.velocity.z) > 1e-6,
+  )
+
+  const noBody = integrateMotion(resting, 1, 0.5, 1, 101, [], false)
+  check('with nothing to orbit (deep space, no obstacles), the gate has no effect either way', pointDistance(noBody.position, resting.position) < 1e-9)
+
+  check('canFreeFloat defaults to true when omitted — every pre-existing caller/test is unaffected', pointDistance(integrateMotion(resting, 1, 0.5, 1, 200, [body]).position, resting.position) < 1e-9)
+}
+
+console.log('\n=== 62. stepEngagements: only the PLAYER is gated — hostiles keep free-floating regardless ===')
+{
+  useCombatStore.setState({ engagements: [], viewedEngagementId: null })
+  const simDays = 100
+  let ships = [makeShip('cruiser', 'p1', 'player', 'Earth'), makeShip('cruiser', 'e1', 'hostile', 'Earth')]
+  let engagements = syncEngagements(ships, [], simDays)
+  // Hold both ships exactly in place — no auto-approach, nothing queued —
+  // so any movement over the next several steps is purely the orbit-hold
+  // effect, not stance-driven maneuvering.
+  engagements = engagements.map((e) => ({
+    ...e,
+    participants: e.participants.map((p) => ({ ...p, path: [], holdPosition: true })),
+  }))
+  const startPositions = Object.fromEntries(engagements[0].participants.map((p) => [p.shipId, { ...p.position }]))
+
+  let cursor = simDays
+  for (let i = 0; i < 50; i++) {
+    cursor += COMBAT_STEP_DAYS
+    const result = stepEngagements(engagements, ships, cursor, () => 0.999, [], false) // playerCanFreeFloat = false
+    engagements = result.engagements
+    ships = ships.map((s) => (result.shipCombat[s.id] ? { ...s, combat: result.shipCombat[s.id] } : s))
+  }
+  const playerAfter = engagements[0].participants.find((p) => p.shipId === 'p1')!
+  const hostileAfter = engagements[0].participants.find((p) => p.shipId === 'e1')!
+  check(
+    "the player's ship, without Free-Flight Maneuvering, has actually moved (orbiting) after holding position for 5 real seconds",
+    pointDistance(playerAfter.position, startPositions['p1']) > 0.01,
+    `moved ${pointDistance(playerAfter.position, startPositions['p1']).toFixed(3)} units`,
+  )
+  check(
+    'the hostile ship — no country-tech link modeled for it — stayed exactly where it was, unaffected',
+    pointDistance(hostileAfter.position, startPositions['e1']) < 1e-6,
+  )
+
+  // Now the same scenario, but with Free-Flight Maneuvering "researched" —
+  // restores today's hold-still behavior for the player too.
+  useCombatStore.setState({ engagements: [], viewedEngagementId: null })
+  let ships2 = [makeShip('cruiser', 'p2', 'player', 'Earth'), makeShip('cruiser', 'e2', 'hostile', 'Earth')]
+  let engagements2 = syncEngagements(ships2, [], simDays)
+  engagements2 = engagements2.map((e) => ({
+    ...e,
+    participants: e.participants.map((p) => ({ ...p, path: [], holdPosition: true })),
+  }))
+  const start2 = Object.fromEntries(engagements2[0].participants.map((p) => [p.shipId, { ...p.position }]))
+  let cursor2 = simDays
+  for (let i = 0; i < 50; i++) {
+    cursor2 += COMBAT_STEP_DAYS
+    const result = stepEngagements(engagements2, ships2, cursor2, () => 0.999, [], true) // playerCanFreeFloat = true
+    engagements2 = result.engagements
+    ships2 = ships2.map((s) => (result.shipCombat[s.id] ? { ...s, combat: result.shipCombat[s.id] } : s))
+  }
+  const player2After = engagements2[0].participants.find((p) => p.shipId === 'p2')!
+  check(
+    "researching Free-Flight Maneuvering restores today's behavior — the player's ship holds still again",
+    pointDistance(player2After.position, start2['p2']) < 1e-6,
   )
 }
 

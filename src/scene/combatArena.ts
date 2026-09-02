@@ -265,6 +265,52 @@ export function gravitationalAcceleration(point: ArenaPoint, obstacles: CombatOb
   return total
 }
 
+// The axis a consistent "prograde" tangential direction is measured against
+// for orbitalHoldVelocity below — matches the axis every other
+// tilt/inclination calculation in this project (orbitMath.ts) already
+// treats as vertical.
+const ORBIT_UP_AXIS = new Vector3(0, 1, 0)
+
+// The velocity a ship at `position` needs to hold a circular orbit around
+// `primary` — the default "at rest" behavior in combat for a thrust-alive
+// ship that hasn't researched Free-Flight Maneuvering (see techData.ts's
+// Classical Mechanics branch and combatResolution.ts's integrateMotion;
+// ships whose utility is destroyed already fall ballistically via
+// gravitationalAcceleration above, completely unchanged by any of this).
+//
+// Not exact Kepler mechanics — recomputed fresh from the ship's CURRENT
+// position every step (same approximate, self-correcting style
+// stanceDestination/approachNode already use elsewhere in this project)
+// rather than solved once as a fixed ellipse, so a ship nudged off its
+// circle by combat maneuvering settles onto a (possibly new) circular orbit
+// at whatever radius it ends up at, instead of snapping back to an old one.
+//
+// Speed: a circular orbit needs centripetal acceleration exactly equal to
+// gravity's own pull at that radius (v^2/r = g(r)), so v = sqrt(g(r) * r) —
+// g(r) is exactly the same inverse-square falloff gravitationalAcceleration
+// already computes for this body, reused here rather than re-derived.
+//
+// Direction: up x radialDirection — a single, fixed rotational sense shared
+// by every ship near the same body (so two ships both holding position
+// circle the SAME way, like points on one spinning disk, rather than
+// crossing each other), falling back to a fixed perpendicular on the rare
+// case a ship sits exactly on the up axis, where that cross product is
+// undefined.
+export function orbitalHoldVelocity(position: ArenaPoint, primary: CombatObstacle): Vector3 {
+  const toShip = toVector3(position).sub(toVector3(primary.position))
+  const distance = toShip.length()
+  if (distance < 1e-6) return new Vector3()
+  const radial = toShip.divideScalar(distance)
+  const g = primary.surfaceGravityUnitsPerSecondSq * (primary.radiusUnits / distance) ** 2
+  const speed = Math.sqrt(g * distance)
+
+  let tangential = ORBIT_UP_AXIS.clone().cross(radial)
+  if (tangential.lengthSq() < 1e-9) tangential = new Vector3(1, 0, 0).cross(radial)
+  tangential.normalize()
+
+  return tangential.multiplyScalar(speed)
+}
+
 const SPEED_OF_LIGHT_KM_S = 299_792.458
 const SOL_RADIUS_KM = STARS.find((s) => s.id === 'sol')?.radiusKm ?? 696_000
 

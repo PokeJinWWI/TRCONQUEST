@@ -26,6 +26,13 @@ import { ALLEGIANCE_COLORS } from '../data/shipData'
 const ENTER_DISTANCE = 6
 const MAX_DISTANCE = 4200
 const EXIT_DISTANCE = 3500
+// The plain "just arrived, nothing selected" camera position — used both as
+// the far-view starting position AND, translated to sit next to whichever
+// star a continuity arrival is returning to (see continuityStarPosition
+// below), as the near-view one too. Same offset either way, just anchored at
+// a different origin, so a continuity arrival gets exactly the framing a
+// fresh one would have if that star were the graph's origin.
+const DEFAULT_CAMERA_OFFSET: [number, number, number] = [20, 30, 55]
 const FOCUS_ARRIVE_DISTANCE = 4
 // How close (to the locked-on star) manually zooming in has to get before it
 // counts as "entering" its system — mirrors system view's manual
@@ -127,6 +134,44 @@ export function InterstellarScene() {
   const STARS = useMemo(() => getStarsForNeighborhood(selectedNeighborhoodId), [selectedNeighborhoodId])
   const selectedStar = useMemo(() => STARS.find((s) => s.id === selectedId) ?? null, [STARS, selectedId])
   const focusedStar = useMemo(() => STARS.find((s) => s.id === focusedId) ?? null, [STARS, focusedId])
+
+  // If we're arriving here because the player zoomed out of a star's system
+  // view, inViewSelection is already seeded to that star (see
+  // exitSystemToInterstellar) — used once, at mount, purely to start the
+  // camera framed on it directly. Captured via a ref (not read reactively,
+  // same reasoning as SolarSystemScene's continuityBodyRef) so a later
+  // in-scene click doesn't retroactively move where the camera STARTED.
+  const continuityStarIdRef = useRef(useViewStore.getState().inViewSelection)
+  const continuityStarPosition = useMemo<[number, number, number] | null>(() => {
+    const starId = continuityStarIdRef.current
+    if (!starId) return null
+    const star = STARS.find((s) => s.id === starId)
+    return star ? starScenePosition(star) : null
+    // Computed once, at mount, from whatever the state was at that moment —
+    // deliberately not reactive to later selection changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // Without also seeding the initial camera position AND OrbitControls'
+  // target together (not just `selectedId`), SelectionTracker's per-frame
+  // easing (see its own header comment) still has to visibly sweep the
+  // target from the default (0,0,0) — which is Sol's own position — all the
+  // way out to wherever the returning star actually is, reading exactly like
+  // "changing focus from Sol to the star" even though Sol was never
+  // genuinely selected. Both are memoized with an empty dep array (mount
+  // only) — a fresh array/object literal passed to a three.js prop every
+  // render is a real, previously-hit bug in this project (see
+  // CombatViewScene's own camera-prop memoization note), not just a style
+  // preference.
+  const initialCameraPosition = useMemo<[number, number, number]>(() => {
+    if (!continuityStarPosition) return DEFAULT_CAMERA_OFFSET
+    return [
+      continuityStarPosition[0] + DEFAULT_CAMERA_OFFSET[0],
+      continuityStarPosition[1] + DEFAULT_CAMERA_OFFSET[1],
+      continuityStarPosition[2] + DEFAULT_CAMERA_OFFSET[2],
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const initialTarget = useMemo<[number, number, number]>(() => continuityStarPosition ?? [0, 0, 0], [continuityStarPosition])
 
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
@@ -251,7 +296,7 @@ export function InterstellarScene() {
 
   return (
     <div className="interstellar-wrapper">
-      <Canvas camera={{ position: [20, 30, 55], fov: 50, near: 0.05, far: 5000 }} onPointerMissed={handleUnfocus}>
+      <Canvas camera={{ position: initialCameraPosition, fov: 50, near: 0.05, far: 5000 }} onPointerMissed={handleUnfocus}>
         <color attach="background" args={['#020409']} />
         <ambientLight intensity={0.3} />
         <Stars radius={800} depth={200} count={5000} factor={3} fade speed={0.2} />
@@ -367,6 +412,7 @@ export function InterstellarScene() {
 
         <OrbitControls
           ref={controlsRef}
+          target={initialTarget}
           enabled={!focusedStar && !flyingToShip}
           enablePan
           enableDamping

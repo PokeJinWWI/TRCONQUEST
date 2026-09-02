@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { pristineCombatState, useShipStore } from '../state/shipStore'
-import type { FleetAllegiance } from '../data/shipData'
+import type { FleetAllegiance, ShipClass } from '../data/shipData'
 import { SHIP_CLASSES, ALLEGIANCE_LABELS, describeFtlDrive } from '../data/shipData'
+import { resolveShipClass } from '../state/shipClassResolver'
+import { useShipDesignStore } from '../state/shipDesignStore'
 import { getPlanetsForStar } from '../scene/planetData'
 import { STARS, getSystemStars } from '../data/starData'
 import { SOL_SYSTEM_ID, SOL_BODY_NAME, DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from '../scene/shipPhysics'
 import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/scenarios'
+import { usePlayerStore } from '../state/playerStore'
+import { useTechStore } from '../state/techStore'
+import type { TechCategory } from '../data/techData'
 
 const ALLEGIANCE_OPTIONS = Object.keys(ALLEGIANCE_LABELS) as FleetAllegiance[]
 
@@ -30,14 +35,30 @@ export function DebugConsole() {
   const [nearBody, setNearBody] = useState(SOL_BODY_NAME)
   const [allegiance, setAllegiance] = useState<FleetAllegiance>('player')
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id)
+  const [researchCategory, setResearchCategory] = useState<TechCategory>('physics')
+  const [researchAmount, setResearchAmount] = useState(100)
   const spawnCounter = useRef(0)
   const ships = useShipStore((s) => s.ships)
   const spawnShip = useShipStore((s) => s.spawnShip)
   const removeShip = useShipStore((s) => s.removeShip)
+  const designs = useShipDesignStore((s) => s.designs)
+  const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const grantResearch = useTechStore((s) => s.grantResearch)
+  const freeResearchMode = useTechStore((s) => s.freeResearchMode)
+  const setFreeResearchMode = useTechStore((s) => s.setFreeResearchMode)
 
   // Every real star in the system (component stars for a multi-star system)
   // plus its planets — all valid bodies to spawn a ship orbiting.
   const spawnNearOptions = [...getSystemStars(starId).map((c) => c.name), ...getPlanetsForStar(starId).map((p) => p.name)]
+
+  // Presets plus every custom design built in the Ship Designer's builder
+  // (see FleetManagement.tsx) — resolveShipClass is what makes a design
+  // resolvable at all once spawned, but the spawn picker itself still needs
+  // its own merged list to OFFER them in the first place.
+  const spawnableClasses: ShipClass[] = [
+    ...SHIP_CLASSES,
+    ...designs.map((d) => resolveShipClass(`design:${d.id}`)).filter((c): c is ShipClass => !!c),
+  ]
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -50,7 +71,7 @@ export function DebugConsole() {
   if (!open) return null
 
   const handleSpawn = () => {
-    const shipClass = SHIP_CLASSES.find((c) => c.id === classId)
+    const shipClass = resolveShipClass(classId)
     if (!shipClass) return
     spawnCounter.current += 1
     const phaseDeg = SPAWN_PHASE_OFFSETS_DEG[(spawnCounter.current - 1) % SPAWN_PHASE_OFFSETS_DEG.length]
@@ -91,7 +112,7 @@ export function DebugConsole() {
     if (!scenario) return
     for (const ship of ships) removeShip(ship.id)
     scenario.ships.forEach((spec, i) => {
-      const shipClass = SHIP_CLASSES.find((c) => c.id === spec.classId)
+      const shipClass = resolveShipClass(spec.classId)
       if (!shipClass) return
       spawnCounter.current += 1
       const phaseDeg = SPAWN_PHASE_OFFSETS_DEG[i % SPAWN_PHASE_OFFSETS_DEG.length]
@@ -142,7 +163,7 @@ export function DebugConsole() {
         <div className="debug-console-row">
           <label htmlFor="debug-ship-class">Ship class</label>
           <select id="debug-ship-class" value={classId} onChange={(e) => setClassId(e.target.value)}>
-            {SHIP_CLASSES.map((c) => (
+            {spawnableClasses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} — {c.ftlDrives.map(describeFtlDrive).join(', ')}
               </option>
@@ -225,6 +246,43 @@ export function DebugConsole() {
 
         <button type="button" className="debug-console-spawn-btn" onClick={handleLoadScenario}>
           Load Scenario
+        </button>
+
+        <div className="debug-console-divider" />
+
+        {/* Research points have no real income yet (see techStore.ts — the
+            same honest "no production system exists" situation as the top
+            HUD's resourceData.ts). Granting directly here is the only way to
+            test/play with the tech tree until the real economy produces it. */}
+        <label className="debug-console-checkbox-row">
+          <input type="checkbox" checked={freeResearchMode} onChange={(e) => setFreeResearchMode(e.target.checked)} />
+          Free Research (all tech costs 0)
+        </label>
+        <div className="debug-console-row">
+          <label htmlFor="debug-research-category">Grant research</label>
+          <select id="debug-research-category" value={researchCategory} onChange={(e) => setResearchCategory(e.target.value as TechCategory)}>
+            <option value="physics">Physics</option>
+            <option value="society">Society</option>
+            <option value="engineering">Engineering</option>
+          </select>
+        </div>
+        <div className="debug-console-row">
+          <label htmlFor="debug-research-amount">Amount</label>
+          <input
+            id="debug-research-amount"
+            type="number"
+            min={1}
+            value={researchAmount}
+            onChange={(e) => setResearchAmount(Math.max(1, Number(e.target.value) || 0))}
+          />
+        </div>
+        <button
+          type="button"
+          className="debug-console-spawn-btn"
+          disabled={!selectedCountryId}
+          onClick={() => selectedCountryId && grantResearch(selectedCountryId, researchCategory, researchAmount)}
+        >
+          Grant Research
         </button>
 
         <div className="debug-console-divider" />

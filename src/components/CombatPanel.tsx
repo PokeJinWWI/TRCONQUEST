@@ -1,4 +1,10 @@
-import { COMPONENT_LABELS, CHAFF_DURATION_SECONDS, SCUTTLE_BLAST_RADIUS_UNITS, type ComponentKind } from '../data/combatData'
+import {
+  COMPONENT_LABELS,
+  CHAFF_DURATION_SECONDS,
+  SCUTTLE_BLAST_RADIUS_UNITS,
+  RAM_SELF_DAMAGE_FRACTION,
+  type ComponentKind,
+} from '../data/combatData'
 import { GRID_DENSITIES, GRID_DENSITY_LABELS, GRID_DIVISIONS, isInsideWindow } from '../scene/combatArena'
 import { useEffect, useState } from 'react'
 import {
@@ -57,6 +63,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const setParticipantTargetComponent = useCombatStore((s) => s.setParticipantTargetComponent)
   const setHoldPosition = useCombatStore((s) => s.setHoldPosition)
   const setChasing = useCombatStore((s) => s.setChasing)
+  const setRamming = useCombatStore((s) => s.setRamming)
   const setInheritVelocityFrom = useCombatStore((s) => s.setInheritVelocityFrom)
   const setDensity = useCombatStore((s) => s.setDensity)
   const deployChaff = useShipStore((s) => s.deployChaff)
@@ -357,11 +364,13 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
             <span className="inspect-value">
               {selectedParticipant.holdPosition
                 ? 'Manual'
-                : selectedParticipant.chasing
-                  ? 'Chasing'
-                  : selectedParticipant.inheritVelocityFrom
-                    ? `Locked to ${selectedParticipant.inheritVelocityFrom}`
-                    : 'Auto-engage'}
+                : selectedParticipant.ramming
+                  ? 'Ramming'
+                  : selectedParticipant.chasing
+                    ? 'Chasing'
+                    : selectedParticipant.inheritVelocityFrom
+                      ? `Locked to ${selectedParticipant.inheritVelocityFrom}`
+                      : 'Auto-engage'}
               {selectedParticipant.holdPosition && (
                 <button
                   type="button"
@@ -383,6 +392,20 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   }
                 >
                   {selectedParticipant.chasing ? 'Stop Chase' : 'Chase'}
+                </button>
+              )}
+              {!selectedParticipant.holdPosition && sides[1].length > 0 && (
+                <button
+                  type="button"
+                  className={`ship-panel-unfollow-btn${selectedParticipant.ramming ? ' active' : ''}`}
+                  onClick={() => setRamming(engagement.id, selectedParticipant.shipId, !selectedParticipant.ramming)}
+                  title={
+                    selectedParticipant.ramming
+                      ? 'Call off the ram and return to this stance’s normal range-holding'
+                      : `Charge straight at the current target and collide with it — damages both hulls, scaled by your closing speed. The rammer takes ${Math.round(RAM_SELF_DAMAGE_FRACTION * 100)}% of what it deals. Works even with no weapons.`
+                  }
+                >
+                  {selectedParticipant.ramming ? 'Stop Ram' : 'Ram'}
                 </button>
               )}
             </span>
@@ -476,7 +499,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                       if (scuttleArmed) orderScuttle(engagement.id, selectedParticipant.shipId)
                       else setScuttleArmed(true)
                     }}
-                    title={`Destroy this ship, damaging hostiles within ${SCUTTLE_BLAST_RADIUS_UNITS} units. Yield scales with remaining core.`}
+                    title={`Destroy this ship, damaging everything — friend or foe — within ${SCUTTLE_BLAST_RADIUS_UNITS} units. Yield scales with remaining core.`}
                   >
                     {scuttleArmed ? 'Confirm' : 'Scuttle'}
                   </button>

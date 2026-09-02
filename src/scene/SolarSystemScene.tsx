@@ -92,7 +92,7 @@ function getBodyPosition(name: string, stars: SystemStarRender[], planets: Plane
 export function SolarSystemScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const enterSatellite = useViewStore((s) => s.enterSatellite)
-  const enterInterstellar = useViewStore((s) => s.enterInterstellar)
+  const exitSystemToInterstellar = useViewStore((s) => s.exitSystemToInterstellar)
   const selectedName = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
   const lockOnEnabled = useViewStore((s) => s.lockOnEnabled)
@@ -416,7 +416,7 @@ export function SolarSystemScene() {
           <DistanceThresholdWatcher
             mode="max"
             threshold={EXIT_DISTANCE}
-            onTrigger={enterInterstellar}
+            onTrigger={exitSystemToInterstellar}
             controlsRef={controlsRef}
           />
         )}

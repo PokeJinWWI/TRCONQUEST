@@ -23,6 +23,10 @@ import {
   CHAFF_MISS_CHANCE,
   CHAFF_DURATION_SECONDS,
   scuttleDamageAt,
+  ramDamageAt,
+  RAM_SELF_DAMAGE_FRACTION,
+  missileDamageMultiplier,
+  torpedoAccuracy,
   CHAFF_AI_FIRST_THRESHOLD,
   CHAFF_AI_SECOND_THRESHOLD,
   CHAFF_CHARGES,
@@ -32,7 +36,7 @@ import {
   type FleetStrategy,
   type WeaponMount,
 } from '../data/combatData'
-import { SHIP_CLASSES } from '../data/shipData'
+import { resolveShipClass } from '../state/shipClassResolver'
 import type { MoveDestination, ShipCombatState, ShipInstance, ShipLocation, FtlCharge } from '../state/shipStore'
 import type { Fleet } from '../state/fleetStore'
 import {
@@ -51,6 +55,7 @@ import {
   arenaPositionToNode,
   arenaSurfaceGravity,
   gravitationalAcceleration,
+  orbitalHoldVelocity,
   hasLineOfFire,
   isPointBlocked,
   latticePath,
@@ -112,7 +117,7 @@ export function combatCatchUpCursor(resolvedThroughSimDays: number, simDays: num
 export type Rng = () => number
 
 export function shipCombatProfile(ship: Pick<ShipInstance, 'classId'>): CombatProfile | null {
-  return SHIP_CLASSES.find((c) => c.id === ship.classId)?.combat ?? null
+  return resolveShipClass(ship.classId)?.combat ?? null
 }
 
 // The single blended readout shown above the individual bars — a weighted
@@ -230,6 +235,13 @@ export function integrateMotion(
   dt: number,
   simDays: number,
   obstacles: CombatObstacle[] = [],
+  // Whether this ship's owner has researched Free-Flight Maneuvering (see
+  // techData.ts's Classical Mechanics branch) — defaults to true so every
+  // existing caller (tests included) that doesn't pass this keeps today's
+  // behavior unchanged. Only matters when there's no destination queued (see
+  // the `else` branch below); a ship actively steering toward a waypoint is
+  // completely unaffected either way.
+  canFreeFloat: boolean = true,
 ): CombatParticipant {
   const position = toVector3(p.position)
   const velocity = toVector3(p.velocity)
@@ -248,6 +260,20 @@ export function integrateMotion(
       }
       desired.copy(toTarget.divideScalar(distance).multiplyScalar(speed))
     }
+  } else if (!canFreeFloat && maxSpeed > 0 && obstacles.length > 0) {
+    // Nothing queued, and this ship hasn't researched Free-Flight
+    // Maneuvering — "holding position" defaults to actually orbiting the
+    // primary body being fought near (obstaclesForLocation always puts the
+    // real star/planet at index 0), rather than sitting stationary for
+    // free. A fight with no body present (deep space) has nothing to orbit,
+    // so this has no effect there regardless of canFreeFloat — matches the
+    // `obstacles.length > 0` guard. Clamped to maxSpeed same as the
+    // path-following branch above: a hull too slow to hold the orbital
+    // speed this close in simply can't fully counter gravity and drifts
+    // inward, the same honest failure mode an underpowered real engine
+    // would have.
+    desired.copy(orbitalHoldVelocity(p.position, obstacles[0]))
+    if (desired.length() > maxSpeed) desired.setLength(maxSpeed)
   }
 
   // Steer toward it, budget-limited. With an empty path `desired` is zero,
@@ -361,11 +387,13 @@ export function applyShot(
   targetProfile: CombatProfile,
   preferredComponent: ComponentKind | null,
   rng: Rng,
-  // Chaff's miss chance for THIS shot, already resolved against the range it
-  // crosses (see combatData's chaffMissChance). Passed in rather than
-  // computed here so this function stays a dumb consumer of one number and
-  // the falloff curve can be tested on its own.
-  chaffMiss: number = 0,
+  // The combined chance THIS shot simply misses, for any reason that isn't
+  // point defense — chaff's flat miss chance, torpedo inaccuracy at range
+  // against this target's size (see combatData's torpedoAccuracy), or both
+  // stacked together. Passed in already-combined rather than computed here
+  // so this function stays a dumb consumer of one number and each source's
+  // own curve can be tested on its own.
+  missChance: number = 0,
 ): { next: ShipCombatState; outcome: ShotOutcome } {
   const profile = DAMAGE_PROFILES[weapon.damageType]
   const nothing: ShotOutcome = {
@@ -388,21 +416,25 @@ export function applyShot(
   // with the gunnery array: shoot the weapons component out (Focus Fire ->
   // Weapons) and the screen comes down with it, which is exactly the setup a
   // torpedo boat wants and previously could not create.
-  if (profile.interceptable && targetProfile.defenses.pointDefenseRating > 0) {
-    const screen =
-      targetProfile.defenses.pointDefenseRating *
-      weaponsEffectiveness(target.componentHp.weapons, targetProfile.components.weapons)
+  // Flak (see DefenseProfile.flakRating) only stacks onto the point-defense
+  // screen against torpedoes specifically — it's a wide burst that does
+  // little against a nimble missile but is disproportionately effective
+  // against something big and slow.
+  const pdRating =
+    targetProfile.defenses.pointDefenseRating + (weapon.damageType === 'torpedo' ? targetProfile.defenses.flakRating : 0)
+  if (profile.interceptable && pdRating > 0) {
+    const screen = pdRating * weaponsEffectiveness(target.componentHp.weapons, targetProfile.components.weapons)
     if (screen > 0 && rng() < screen) {
       return { next: target, outcome: { ...nothing, intercepted: true } }
     }
   }
 
-  // Chaff: the target's decoys spoil the shot outright. Rolled AFTER point
-  // defense so the two stack the way they read — a missile has to survive
-  // interception AND still find its target — and applies to every damage
-  // type, since it degrades the attacker's aim rather than physically
-  // stopping a projectile the way point defense does.
-  if (chaffMiss > 0 && rng() < chaffMiss) {
+  // Chaff and/or torpedo inaccuracy: the shot simply doesn't connect. Rolled
+  // AFTER point defense so the two stack the way they read — a shot has to
+  // survive interception AND still find its target — and applies regardless
+  // of what's degrading the attacker's aim, rather than physically stopping a
+  // projectile the way point defense does.
+  if (missChance > 0 && rng() < missChance) {
     return { next: target, outcome: { ...nothing, missed: true } }
   }
 
@@ -478,7 +510,7 @@ export function ftlChargeSeconds(kind: 'warp' | 'hyperdrive', utilityFraction: n
 // Returns null when the ship has no drive of that kind, or is too wrecked to
 // charge at all.
 export function planFtlCharge(ship: ShipInstance, destination: MoveDestination, simDays: number): FtlCharge | null {
-  const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
+  const shipClass = resolveShipClass(ship.classId)
   const profile = shipClass?.combat
   if (!shipClass || !profile) return null
   // Prefer whichever drive spools fastest — hyperdrive at 5s beats warp at
@@ -1178,6 +1210,16 @@ export function stepEngagements(
   simDays: number,
   rng: Rng = Math.random,
   fleets: Fleet[] = [],
+  // Whether the PLAYER's own country has researched Free-Flight Maneuvering
+  // (see techData.ts) — defaults to true so every existing caller/test that
+  // doesn't pass this keeps today's behavior. Only the player's ships are
+  // ever gated by this (see integrateMotion's call below): hostile/friendly/
+  // neutral ships have no country-tech link modeled at all and always keep
+  // today's free-floating behavior, matching the same scope cut the
+  // warp/hyperdrive gate already made. Deliberately a plain boolean, not a
+  // store read — stepEngagements stays a pure function; useCombatResolver.ts
+  // is what resolves the player's actual researched set into this one flag.
+  playerCanFreeFloat: boolean = true,
 ): CombatStepResult {
   const shipsById = new Map(ships.map((s) => [s.id, s]))
   // Working copy of every participant ship's combat state, mutated across the
@@ -1266,12 +1308,22 @@ export function stepEngagements(
       // running (see effectiveStrategy) — five of the eight possible values
       // are just the stances below with a different name; Divide/Condense/
       // Screen are coordinated, multi-ship behaviors resolved separately
-      // (see each function's own comment). Chase still wins over all of it,
-      // same precedence it already had over a plain stance.
+      // (see each function's own comment). Ramming, then chase, still win
+      // over all of it, same precedence chase already had over a plain
+      // stance — both are explicit per-ship orders, not fleet coordination.
       const strategy = effectiveStrategy(ship, fleets)
       let point: ArenaPoint | null
       let newTargetShipId: string | undefined
-      if (p.chasing) {
+      if (p.ramming) {
+        // Drives straight at the exact target position (no standoff at all)
+        // rather than going through approachNode — that helper bails out for
+        // an unarmed ship (nothing to close weapon range for) and picks a
+        // standoff based on weapon reach, neither of which applies here: a
+        // ram works with no weapons at all, and the whole point is closing
+        // to contact, not to firing range.
+        if (!target) return p
+        point = { x: target.position.x, y: target.position.y, z: target.position.z }
+      } else if (p.chasing) {
         if (!target) return p
         point = approachNode(p, target, profile, engagement.obstacles, CHASE_STANDOFF_UNITS)
       } else if (strategy === 'divide') {
@@ -1344,6 +1396,9 @@ export function stepEngagements(
       // stops responding (keeping its queued path, so repairs would resume
       // it rather than silently dropping the order).
       const utility = utilityEffectiveness(state.componentHp.utility, profile.components.utility)
+      // Only a player ship is ever gated by the player's own tech — see
+      // stepEngagements' own comment on playerCanFreeFloat.
+      const canFreeFloat = ship.allegiance !== 'player' || playerCanFreeFloat
       return integrateMotion(
         p,
         profile.maneuverUnitsPerSecond * utility,
@@ -1351,6 +1406,7 @@ export function stepEngagements(
         COMBAT_STEP_SECONDS,
         simDays,
         engagement.obstacles,
+        canFreeFloat,
       )
     })
 
@@ -1439,9 +1495,11 @@ export function stepEngagements(
     }
 
     // --- Scuttling: a hull the player has written off detonates, damaging
-    // every hostile inside the blast. Resolved here — after movement and
-    // separation, before firing — so the blast uses this step's real
-    // positions and a ship killed by it doesn't also get to shoot this step.
+    // everything inside the blast — friend or foe alike, since a reactor
+    // breach doesn't check IFF before it goes off. Resolved here — after
+    // movement and separation, before firing — so the blast uses this step's
+    // real positions and a ship killed by it doesn't also get to shoot this
+    // step.
     //
     // Damage lands as raw component damage rather than going through
     // applyShot, deliberately: a reactor breach isn't a weapon, so there's no
@@ -1458,7 +1516,7 @@ export function stepEngagements(
 
       const coreFraction = profile.components.core > 0 ? state.componentHp.core / profile.components.core : 0
       for (const other of separated) {
-        if (other.side === p.side || destroyed.has(other.shipId)) continue
+        if (other.shipId === p.shipId || destroyed.has(other.shipId)) continue
         const damage = scuttleDamageAt(pointDistance(p.position, other.position), coreFraction)
         if (damage <= 0) continue
         const otherState = stateOf(other.shipId)
@@ -1473,6 +1531,66 @@ export function stepEngagements(
       working[p.shipId] = { ...stateOf(p.shipId)!, componentHp: { ...state.componentHp, core: 0 } }
       touched.add(p.shipId)
       destroyed.add(p.shipId)
+    }
+
+    // --- Ramming impact: a ship ordered to ram (see CombatParticipant.
+    // ramming) collides with its target once their PRE-separation positions
+    // actually overlap. Checked against `moved`, not `separated` — the
+    // separation pass above exists specifically to push overlapping hulls
+    // apart, so checking post-separation positions would almost never see a
+    // "collision" to begin with; `moved` still holds the raw, unpushed
+    // result of this step's own physics.
+    //
+    // Target is resolved exactly like firing does (explicit targetShipId,
+    // falling back to nearest enemy) rather than stored separately — the ram
+    // order says "collide with whatever this ship is bearing down on," which
+    // is the same ship it would otherwise be shooting at.
+    //
+    // Damage scales with the RAMMER's own closing speed as a fraction of its
+    // top cruise speed — a slow bump barely scratches either hull, a
+    // full-speed charge is a real trade — and lands as raw component damage
+    // on BOTH hulls (shields/armor first, same as Scuttle just above), since
+    // a collision isn't a weapon the damage matrix or point defense has any
+    // business resolving. One-shot: `ramming` is cleared the moment it
+    // connects (mutated in place on `separated`'s own entry, same pattern the
+    // separation pass itself uses for position) so a hit is a single
+    // deliberate collision, not continuous grinding contact.
+    const movedById = new Map(moved.map((m) => [m.shipId, m]))
+    for (const p of separated) {
+      if (destroyed.has(p.shipId) || !p.ramming) continue
+      const explicitTarget = p.targetShipId ? separated.find((o) => o.shipId === p.targetShipId) : undefined
+      const ramTarget = explicitTarget && !destroyed.has(explicitTarget.shipId) ? explicitTarget : nearestEnemy(p, separated)
+      if (!ramTarget || destroyed.has(ramTarget.shipId)) continue
+
+      const rammerMoved = movedById.get(p.shipId)
+      const targetMoved = movedById.get(ramTarget.shipId)
+      if (!rammerMoved || !targetMoved) continue
+      if (pointDistance(rammerMoved.position, targetMoved.position) >= SHIP_SEPARATION_UNITS) continue
+
+      // Contact confirmed — the order is spent regardless of what happens
+      // below (a missing profile/state is a degenerate case, not a reason to
+      // leave the ship stuck lunging at something forever).
+      p.ramming = false
+
+      const ship = shipsById.get(p.shipId)
+      const profile = ship ? shipCombatProfile(ship) : null
+      const state = stateOf(p.shipId)
+      const targetState = stateOf(ramTarget.shipId)
+      if (!profile || !state || !targetState) continue
+
+      const closingFraction = profile.maneuverUnitsPerSecond > 0 ? participantSpeed(rammerMoved) / profile.maneuverUnitsPerSecond : 0
+      const targetDamage = ramDamageAt(closingFraction)
+      const selfDamage = targetDamage * RAM_SELF_DAMAGE_FRACTION
+
+      const nextTarget = applyRawBlast(targetState, targetDamage)
+      working[ramTarget.shipId] = nextTarget
+      touched.add(ramTarget.shipId)
+      if (nextTarget.componentHp.core <= 0) destroyed.add(ramTarget.shipId)
+
+      const nextSelf = applyRawBlast(state, selfDamage)
+      working[p.shipId] = nextSelf
+      touched.add(p.shipId)
+      if (nextSelf.componentHp.core <= 0) destroyed.add(p.shipId)
     }
 
     // --- AI countermeasures: a non-player ship spends a chaff charge when
@@ -1560,15 +1678,22 @@ export function stepEngagements(
         if (separation > weapon.rangeUnits) return
         if (current.componentHp.core <= 0) return
 
-        const { next, outcome } = applyShot(
-          weapon,
-          weapon.damage * effectiveness,
-          current,
-          targetProfile,
-          p.targetComponent,
-          rng,
-          isChaffActive(current, simDays) ? CHAFF_MISS_CHANCE : 0,
-        )
+        // Missiles: 100% tracking (no accuracy roll at all — see
+        // torpedoAccuracy's own comment for why this stays a torpedo-only
+        // mechanic), but damage falls off past optimal range.
+        const rawDamage =
+          weapon.damage * effectiveness * (weapon.damageType === 'missile' ? missileDamageMultiplier(separation, weapon) : 1)
+
+        // Torpedoes: fixed damage, but the hit itself is a roll — harder to
+        // land past optimal range, and against a smaller/more evasive hull.
+        const torpedoMiss =
+          weapon.damageType === 'torpedo' ? 1 - torpedoAccuracy(separation, weapon, targetProfile.sizeClass, targetProfile.defenses.evasion) : 0
+        const chaffMiss = isChaffActive(current, simDays) ? CHAFF_MISS_CHANCE : 0
+        // Combined as independent chances of failure — a shot has to clear
+        // both to connect.
+        const missChance = 1 - (1 - chaffMiss) * (1 - torpedoMiss)
+
+        const { next, outcome } = applyShot(weapon, rawDamage, current, targetProfile, p.targetComponent, rng, missChance)
         current = next
         // An intercepted shot still consumed the round.
         void outcome
@@ -1984,4 +2109,60 @@ export function isActivelyEngaged(
   simDays: number,
 ): boolean {
   return activeEnemyContacts(participant, engagement, ships, simDays).length > 0
+}
+
+// Whether each side of one specific contact can actually reach the other —
+// the same question CombatEngagementLine colors a line by (mutual/hostile-
+// only/friendly-only) and rangeFavor below aggregates across every current
+// contact. "a"/"b" here are just the two ships in whichever order the
+// caller passed them; it's the caller's job to know which one it cares
+// about.
+export function rangeContactStatus(
+  a: CombatParticipant,
+  aShip: ShipInstance,
+  b: CombatParticipant,
+  bShip: ShipInstance,
+  simDays: number,
+): { aCanHit: boolean; bCanHit: boolean } {
+  const aProfile = shipCombatProfile(aShip)
+  const bProfile = shipCombatProfile(bShip)
+  const distance = participantArenaPosition(a, simDays).distanceTo(participantArenaPosition(b, simDays))
+  return {
+    aCanHit: distance <= (aProfile ? longestWeaponRange(aProfile) : 0),
+    bCanHit: distance <= (bProfile ? longestWeaponRange(bProfile) : 0),
+  }
+}
+
+// Whether THIS ship is coming out ahead on range across every contact it
+// currently has, not just how many it has — the same per-pair question
+// CombatEngagementLine's color answers (see rangeContactStatus), rolled up
+// into one read for a ship's own panel. Works for inspecting an enemy ship
+// exactly the same as an owned one (see ShipPanel's own "Engaged Against"
+// row) — "favored" always means the inspected ship itself, not "the
+// player," since there's no other ship-agnostic way to read this that's
+// still meaningful when the selection is a hostile.
+export type RangeFavor = 'favored' | 'unfavored' | 'even'
+
+export function rangeFavor(
+  participant: CombatParticipant,
+  engagement: Engagement,
+  ships: ShipInstance[],
+  simDays: number,
+): RangeFavor {
+  const shipsById = new Map(ships.map((s) => [s.id, s]))
+  const selfShip = shipsById.get(participant.shipId)
+  if (!selfShip) return 'even'
+
+  let favorable = 0
+  let unfavorable = 0
+  for (const other of activeEnemyContacts(participant, engagement, ships, simDays)) {
+    const otherShip = shipsById.get(other.shipId)
+    if (!otherShip) continue
+    const { aCanHit: selfCanHit, bCanHit: otherCanHit } = rangeContactStatus(participant, selfShip, other, otherShip, simDays)
+    if (selfCanHit && !otherCanHit) favorable++
+    else if (otherCanHit && !selfCanHit) unfavorable++
+  }
+  if (favorable > unfavorable) return 'favored'
+  if (unfavorable > favorable) return 'unfavored'
+  return 'even'
 }

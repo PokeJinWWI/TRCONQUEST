@@ -62,6 +62,15 @@ interface ViewState {
   // and carries it into `inViewSelection` too so that body arrives
   // pre-selected (matching what was open in satellite view).
   exitSatelliteToSystem: () => void
+  // Same idea as exitSatelliteToSystem, one level up: returning to
+  // interstellar via zoom-out (as opposed to the breadcrumb, which uses plain
+  // enterInterstellar and deliberately does NOT preselect anything) carries
+  // the star whose system we were just in forward into `inViewSelection`, so
+  // InterstellarScene's SelectionTracker re-engages on it immediately instead
+  // of the camera defaulting to its fixed mount position near the origin —
+  // which reads as "snapping back to Sol" specifically because Sol sits at
+  // that origin.
+  exitSystemToInterstellar: () => void
   enterGalactic: () => void
   // Which engagement the combat view is showing. Held here rather than in
   // combatStore's `viewedEngagementId` because it's navigation state — it has
@@ -74,6 +83,23 @@ interface ViewState {
   // so there's no "one level up" to return to — system view is the sensible
   // place to land, since that's where the fight is physically happening.
   exitCombat: () => void
+  // Which NavBar category window (and its sub-tab) is currently open — was
+  // NavBar.tsx's own local useState until workspace tabs needed a single,
+  // generic "everything that makes up the current tab's open windows" rule
+  // to snapshot/restore instead of special-casing this one piece (see
+  // workspaceStore.ts). Both null means no NavBar window is open.
+  activeNavCategory: string | null
+  activeNavSubcategory: string | null
+  setNavCategory: (category: string | null, subcategory: string | null) => void
+  // Whether the Technology panel's full-screen Tree View overlay is open —
+  // lives here (not local state in TechPanel.tsx) for the same reason
+  // activeNavCategory does: it needs to survive a workspace-tab switch, which
+  // unmounts/remounts NavBar's whole category window (see workspaceStore.ts).
+  // A component-local useState was tried first and reset to false on every
+  // such remount, which is exactly the "tree disappears on tab switch back"
+  // bug this was moved here to fix.
+  techTreeOpen: boolean
+  setTechTreeOpen: (open: boolean) => void
 }
 
 export const useViewStore = create<ViewState>((set) => ({
@@ -97,10 +123,17 @@ export const useViewStore = create<ViewState>((set) => ({
     set({ level: 'system', selectedStarId: starId, selectedBodyName: null, inViewSelection: preselectBody ?? null }),
   enterSatellite: (bodyName) => set({ level: 'satellite', selectedBodyName: bodyName, inViewSelection: null }),
   exitSatelliteToSystem: () => set((s) => ({ level: 'system', inViewSelection: s.selectedBodyName })),
+  exitSystemToInterstellar: () =>
+    set((s) => ({ level: 'interstellar', selectedBodyName: null, inViewSelection: s.selectedStarId })),
   combatEngagementId: null,
   // Deliberately leaves `inViewSelection` alone: entering combat is always
   // done from a selected ship, and that selection is exactly what the combat
   // view's panel wants to keep showing.
   enterCombat: (engagementId) => set({ level: 'combat', combatEngagementId: engagementId }),
   exitCombat: () => set({ level: 'system', combatEngagementId: null, inViewSelection: null }),
+  activeNavCategory: null,
+  activeNavSubcategory: null,
+  setNavCategory: (category, subcategory) => set({ activeNavCategory: category, activeNavSubcategory: subcategory }),
+  techTreeOpen: false,
+  setTechTreeOpen: (open) => set({ techTreeOpen: open }),
 }))

@@ -3,13 +3,13 @@ import type { ShipInstance, ShipLocation, MoveDestination, MoveOrder, FtlCharge 
 import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { findEngagementFor, planFtlCharge } from './combatResolution'
 import {
-  SHIP_CLASSES,
   HYPERDRIVE_BASE_LOSS_CHANCE,
   HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE,
   type WarpDrive,
   type HyperDrive,
   type ShipClass,
 } from '../data/shipData'
+import { resolveShipClass } from '../state/shipClassResolver'
 import { ACTIVE_ENGAGEMENT_RISK_BONUS, WARP_BASE_ESCAPE_LOSS_CHANCE, coreDamageRiskBonus } from '../data/combatData'
 import { PLANETS, PLANETS_BY_STAR, getPlanetsForStar, UNITS_PER_AU, AU_IN_KM, type PlanetData } from './planetData'
 import { getPlanetPosition, getOrbitPosition, angleForYear, MOON_TIME_DILATION } from './orbitMath'
@@ -17,6 +17,8 @@ import type { MoonData } from './moonData'
 import { STARS, UNITS_PER_LY, starScenePosition, getSystemStars, findSystemStar, type StarComponent } from '../data/starData'
 import { DAYS_PER_YEAR, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
+import { usePlayerStore } from '../state/playerStore'
+import { useTechStore } from '../state/techStore'
 
 export const SOL_SYSTEM_ID = 'sol'
 export const SOL_BODY_NAME = 'Sol'
@@ -644,7 +646,7 @@ export function canFollow(ship: ShipInstance, targetShipId: string): boolean {
 // it's already static per-class data available here.
 export function warpCooldownAfterArrival(ship: ShipInstance): number | undefined {
   if (!ship.order?.usedWarp) return undefined
-  const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
+  const shipClass = resolveShipClass(ship.classId)
   const warpDrive = shipClass?.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp')
   return warpDrive ? ship.order.arrivalSimDays + warpDrive.cooldownDays : undefined
 }
@@ -793,7 +795,7 @@ export function planMove(
 ): MoveResult {
   if (ship.allegiance !== 'player') return { kind: 'not-owned' }
 
-  const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
+  const shipClass = resolveShipClass(ship.classId)
   if (!shipClass) return { kind: 'unknown-class' }
 
   // Checked before any drive logic: a ship in a firefight can't leave by
@@ -811,8 +813,19 @@ export function planMove(
     }
   }
 
-  const warpDrive = shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp')
-  const hyperDrive = shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
+  // Warp/Hyperdrive are gated behind Relativity's Warp Theory and
+  // Extradimensional's Hyperspace Theory respectively (see techData.ts) —
+  // both are seeded already-researched for a fresh country (techStore.ts),
+  // so this changes nothing until/unless that seed is ever removed. Reading
+  // the player's own tech here (rather than passing it in) is safe because
+  // planMove already refused any non-player ship above, so this is always
+  // resolving the SAME player whose tech state this is.
+  const playerCountryId = usePlayerStore.getState().selectedCountryId ?? ''
+  const playerResearched = useTechStore.getState().stateFor(playerCountryId).researched
+  const warpDrive = playerResearched.has('warp-theory') ? shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp') : undefined
+  const hyperDrive = playerResearched.has('hyperspace-theory')
+    ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
+    : undefined
 
   // Hyperdrive only makes sense for jumping to a charted star (you jump TO
   // somewhere, not into open space) — and only when there's no warp drive to
