@@ -34,6 +34,17 @@ const MIN_HEIGHT = 120
 
 type ResizeAxis = 'x' | 'y' | 'xy'
 
+// A shared stacking counter every window instance draws from — plain module
+// state (not a store) since this is purely "who's on top," nothing any
+// other component needs to read or react to. Starts above the CSS default
+// (see .draggable-window's z-index: 20) so the very first window opened
+// already sits above that base layer.
+let topZIndex = 20
+function bringToFrontZIndex(): number {
+  topZIndex += 1
+  return topZIndex
+}
+
 // A movable, resizable HUD window (title bar drag, edge/corner resize) for
 // the satellite-view inspection panel and the nav sidebar's category
 // windows — re-centers on whichever body is selected but stays wherever the
@@ -49,8 +60,23 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
   // "still whatever the CSS default (or `wide`) is," so a window that's
   // never been resized keeps behaving exactly as before.
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
+  // Starts already on top of anything opened before it — a freshly opened
+  // window shouldn't appear to open BEHIND an existing one until clicked.
+  const [zIndex, setZIndex] = useState(bringToFrontZIndex)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
-  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number; axis: ResizeAxis } | null>(null)
+  const resizeRef = useRef<{
+    startX: number
+    startY: number
+    startW: number
+    startH: number
+    // The window's own pos at the moment resizing began — resizing needs to
+    // shift pos as size grows (see handleResizePointerMove), and that shift
+    // has to accumulate from a fixed starting point for the whole gesture,
+    // not frame-to-frame, same reasoning dragRef already follows for moves.
+    origPosX: number
+    origPosY: number
+    axis: ResizeAxis
+  } | null>(null)
   const windowRef = useRef<HTMLDivElement>(null)
   // The body's own rendered height at the moment it was last collapsed —
   // needed to reverse the compensation below on the way back out, since the
@@ -59,18 +85,39 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
 
   const handleResizePointerDown = (axis: ResizeAxis) => (e: React.PointerEvent) => {
     const rect = windowRef.current?.getBoundingClientRect()
-    resizeRef.current = { startX: e.clientX, startY: e.clientY, startW: rect?.width ?? MIN_WIDTH, startH: rect?.height ?? MIN_HEIGHT, axis }
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: rect?.width ?? MIN_WIDTH,
+      startH: rect?.height ?? MIN_HEIGHT,
+      origPosX: pos.x,
+      origPosY: pos.y,
+      axis,
+    }
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   const handleResizePointerMove = (e: React.PointerEvent) => {
     if (!resizeRef.current) return
-    const { startX, startY, startW, startH, axis } = resizeRef.current
+    const { startX, startY, startW, startH, origPosX, origPosY, axis } = resizeRef.current
     const dx = e.clientX - startX
     const dy = e.clientY - startY
-    setSize({
-      width: axis === 'y' ? startW : Math.max(MIN_WIDTH, Math.min(window.innerWidth - 32, startW + dx)),
-      height: axis === 'x' ? startH : Math.max(MIN_HEIGHT, Math.min(window.innerHeight - 32, startH + dy)),
+    const width = axis === 'y' ? startW : Math.max(MIN_WIDTH, Math.min(window.innerWidth - 32, startW + dx))
+    const height = axis === 'x' ? startH : Math.max(MIN_HEIGHT, Math.min(window.innerHeight - 32, startH + dy))
+    setSize({ width, height })
+    // The window's box is centre-hung (see the transform below — `calc(-50%
+    // + Xpx)` on both axes), so growing width/height without correcting
+    // `pos` expands the box symmetrically from its own middle: the left/top
+    // edge would drift outward exactly as far as the right/bottom edge
+    // does. Shifting the centre by half of whatever each axis just grew by
+    // cancels that drift on the edge that's supposed to stay put, so only
+    // the dragged edge actually moves — a real top-left-anchored resize.
+    // Y always re-centres this way; X only does when the window isn't
+    // edge-anchored (an anchored window's X position is pinned to the
+    // screen edge via CSS instead, see the `anchor` prop and its className).
+    setPos({
+      x: anchor ? origPosX : origPosX + (width - startW) / 2,
+      y: origPosY + (height - startH) / 2,
     })
   }
 
@@ -140,6 +187,11 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
       className={`draggable-window${wide ? ' wide' : ''}${collapsed ? ' collapsed' : ''}${
         anchor ? ` anchor-${anchor}` : ''
       }`}
+      // Capture phase so a click anywhere in the window — including on a
+      // button that itself stops propagation — still brings it to front,
+      // same reasoning capture-phase handlers are already used for elsewhere
+      // in this project's event-race guards.
+      onPointerDownCapture={() => setZIndex(bringToFrontZIndex())}
       // An anchored window is positioned from its own edge (see the
       // .anchor-left/.anchor-right rules), so it must NOT also be pulled back
       // by half its own width — only the default, centre-hung placement
@@ -149,6 +201,7 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
         transform: anchor
           ? `translate(${pos.x}px, calc(-50% + ${pos.y}px))`
           : `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
+        zIndex,
         // Only overrides the CSS default (240px, or 560px for `wide`) once
         // the player has actually dragged an edge/corner — see `size`.
         ...(size && !collapsed ? { width: size.width, height: size.height } : {}),

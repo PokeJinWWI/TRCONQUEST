@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { ActionBar } from './components/ActionBar'
 import { Breadcrumb } from './components/Breadcrumb'
+import { HudCenterSwap } from './components/TabBar'
 import { ChatPlaceholder } from './components/ChatPlaceholder'
 import { DebugConsole } from './components/DebugConsole'
 import { LocationLabel } from './components/LocationLabel'
@@ -8,7 +9,6 @@ import { LockOnToggle } from './components/LockOnToggle'
 import { MainMenu } from './components/MainMenu'
 import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
-import { ResourceBar } from './components/ResourceBar'
 import { FiscalIndicators } from './components/FiscalIndicators'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { TimeControls } from './components/TimeControls'
@@ -84,7 +84,7 @@ function App() {
       <header ref={topBarRef} className="hud-bar hud-top">
         <span className="hud-title">TERRA RELICTA: CONQUEST</span>
         <FiscalIndicators />
-        <ResourceBar />
+        <HudCenterSwap />
         <div className="hud-top-right">
           <LockOnToggle />
           <Breadcrumb />

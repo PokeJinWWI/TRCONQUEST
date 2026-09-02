@@ -17,6 +17,14 @@ import { ARENA_LIGHT_SPEED_UNITS_PER_SECOND } from '../scene/combatArena'
 // the cost of being interceptable by point defense.
 export type DamageType = 'energy' | 'kinetic' | 'missile' | 'torpedo'
 
+// A hull's rough physical size, independent of its role/loadout. Drives two
+// things: the ship-builder's slot budget (see hullChassis.ts — a bigger hull
+// gets more/bigger slots) and torpedo accuracy (see torpedoAccuracy below —
+// a slow torpedo is simply easier to land on a bigger cross-section).
+// Deliberately reused as the same vocabulary as the builder's slot sizes
+// ('small'|'medium'|'large'|'x') rather than inventing a parallel scale.
+export type HullSizeClass = 'small' | 'medium' | 'large' | 'x'
+
 // The three layers incoming damage eats through, in this order. Shields and
 // armor are consumable pools that sit in front of the ship itself;
 // 'components' is what's left once both are gone — the actual healthbars.
@@ -118,6 +126,13 @@ export interface WeaponMount {
   // weapons hit harder per second but force a ship to close, which is what
   // makes lattice positioning matter.
   rangeUnits: number
+  // The distance this weapon performs at its best, in the same units as
+  // rangeUnits — always <= rangeUnits. Only consulted for missile/torpedo
+  // damage types (see missileDamageMultiplier/torpedoAccuracy below);
+  // defaults to rangeUnits itself when omitted, which makes every direct-fire
+  // weapon (autocannon, laser, mass driver, heavy beam) behave exactly as
+  // before — full effect anywhere inside range, no falloff.
+  optimalRangeUnits?: number
 }
 
 export interface DefenseProfile {
@@ -136,9 +151,26 @@ export interface DefenseProfile {
   // strictly dominant — a hull with no point defense is genuinely helpless
   // against them.
   pointDefenseRating: number
+  // Extra intercept chance added on TOP of pointDefenseRating, but only
+  // against torpedoes specifically (see applyShot) — flak is a wide burst
+  // that's disproportionately effective against a big, slow target, unlike
+  // point defense proper which treats every interceptable round the same.
+  // 0 on every hand-authored hull; only reachable via a Defense-slot Flak
+  // module in the ship builder (see shipModules.ts).
+  flakRating: number
+  // Chance (0..1) subtracted from an attacking torpedo's accuracy roll (see
+  // torpedoAccuracy) — a hull actively jinking is harder for a slow torpedo
+  // to lead, though it does nothing against a missile's 100% tracking or a
+  // direct-fire weapon's aim. 0 on every hand-authored hull; only reachable
+  // via an Upgrade-slot Afterburner module.
+  evasion: number
 }
 
 export interface CombatProfile {
+  // This hull's rough physical size — see HullSizeClass's own comment. Used
+  // by torpedoAccuracy (a bigger target is easier for a slow torpedo to hit)
+  // and by the ship builder's slot budget.
+  sizeClass: HullSizeClass
   // Max HP for each of the three healthbars.
   components: Record<ComponentKind, number>
   defenses: DefenseProfile
@@ -278,7 +310,7 @@ export const CHASE_STANDOFF_UNITS = 0.6
 // genuinely slower-paced than it was: closing from the 12-unit opening
 // separation now takes tens of seconds rather than a handful, which is the
 // intended consequence of ships no longer moving at relativistic speed.
-function hullMotion(lightDivisor: number, secondsToCruise: number) {
+export function hullMotion(lightDivisor: number, secondsToCruise: number) {
   const maneuverUnitsPerSecond = ARENA_LIGHT_SPEED_UNITS_PER_SECOND / lightDivisor
   return {
     maneuverUnitsPerSecond,
@@ -330,6 +362,12 @@ export const WEAPON_TYPES = {
     damage: 20,
     cooldownSeconds: 4,
     rangeUnits: 11,
+    // ~86% of max range, not a short-range peak — Kite already holds at 92%
+    // of a hull's longest mount (see KITE_RANGE_FRACTION), so optimal has to
+    // sit near where a kiting missile boat actually fights or the falloff
+    // below would gut the exact positioning Phase 10's proven scenarios rely
+    // on. See missileDamageMultiplier.
+    optimalRangeUnits: 9.5,
   },
   torpedoTube: {
     id: 'torpedo-tube',
@@ -338,6 +376,9 @@ export const WEAPON_TYPES = {
     damage: 55,
     cooldownSeconds: 9,
     rangeUnits: 8,
+    // Same reasoning as missileBattery's optimalRangeUnits — see
+    // torpedoAccuracy.
+    optimalRangeUnits: 7,
   },
 } as const satisfies Record<string, WeaponMount>
 
@@ -355,8 +396,9 @@ function mounts(weapon: WeaponMount, count: number): WeaponMount[] {
 // than making `combat` optional on ShipClass keeps every damage path total:
 // anything in the game can be shot at, and nothing needs a null check.
 export const CIVILIAN_COMBAT_PROFILE: CombatProfile = {
+  sizeClass: 'small',
   components: { weapons: 20, utility: 60, core: 80 },
-  defenses: { shieldHp: 40, shieldRegenPerSecond: 0.6, armorHp: 20, pointDefenseRating: 0 },
+  defenses: { shieldHp: 40, shieldRegenPerSecond: 0.6, armorHp: 20, pointDefenseRating: 0, flakRating: 0, evasion: 0 },
   weapons: [],
   ...hullMotion(5, 4),
 }
@@ -368,29 +410,33 @@ export const CIVILIAN_COMBAT_PROFILE: CombatProfile = {
 // keeps a real FTL drive per the design brief, which also means every warship
 // can attempt the charge-and-escape (see ShipCombatState.ftlCharge).
 export const CORVETTE_PROFILE: CombatProfile = {
+  sizeClass: 'small',
   components: { weapons: 40, utility: 60, core: 100 },
-  defenses: { shieldHp: 90, shieldRegenPerSecond: 1.4, armorHp: 40, pointDefenseRating: 0.1 },
+  defenses: { shieldHp: 90, shieldRegenPerSecond: 1.4, armorHp: 40, pointDefenseRating: 0.1, flakRating: 0, evasion: 0 },
   weapons: mounts(WEAPON_TYPES.autocannon, 3),
   ...hullMotion(4, 3),
 }
 
 export const FRIGATE_PROFILE: CombatProfile = {
+  sizeClass: 'medium',
   components: { weapons: 60, utility: 70, core: 140 },
-  defenses: { shieldHp: 60, shieldRegenPerSecond: 0.9, armorHp: 140, pointDefenseRating: 0 },
+  defenses: { shieldHp: 60, shieldRegenPerSecond: 0.9, armorHp: 140, pointDefenseRating: 0, flakRating: 0, evasion: 0 },
   weapons: [...mounts(WEAPON_TYPES.missileBattery, 2), ...mounts(WEAPON_TYPES.autocannon, 1)],
   ...hullMotion(6, 4),
 }
 
 export const DESTROYER_PROFILE: CombatProfile = {
+  sizeClass: 'medium',
   components: { weapons: 90, utility: 90, core: 200 },
-  defenses: { shieldHp: 140, shieldRegenPerSecond: 1.2, armorHp: 120, pointDefenseRating: 0.55 },
+  defenses: { shieldHp: 140, shieldRegenPerSecond: 1.2, armorHp: 120, pointDefenseRating: 0.55, flakRating: 0, evasion: 0 },
   weapons: [...mounts(WEAPON_TYPES.laser, 2), ...mounts(WEAPON_TYPES.massDriver, 2)],
   ...hullMotion(8, 5),
 }
 
 export const CRUISER_PROFILE: CombatProfile = {
+  sizeClass: 'large',
   components: { weapons: 140, utility: 130, core: 320 },
-  defenses: { shieldHp: 240, shieldRegenPerSecond: 1.8, armorHp: 260, pointDefenseRating: 0.3 },
+  defenses: { shieldHp: 240, shieldRegenPerSecond: 1.8, armorHp: 260, pointDefenseRating: 0.3, flakRating: 0, evasion: 0 },
   weapons: [...mounts(WEAPON_TYPES.heavyBeam, 1), ...mounts(WEAPON_TYPES.laser, 2), ...mounts(WEAPON_TYPES.massDriver, 2)],
   ...hullMotion(10, 7),
 }
@@ -410,8 +456,9 @@ export const CRUISER_PROFILE: CombatProfile = {
 // Reverted to the original values; a clean 1v1 win path against a
 // full-strength Battleship needs a different fix than trimming its stats.
 export const BATTLESHIP_PROFILE: CombatProfile = {
+  sizeClass: 'x',
   components: { weapons: 220, utility: 190, core: 560 },
-  defenses: { shieldHp: 380, shieldRegenPerSecond: 2.2, armorHp: 460, pointDefenseRating: 0.4 },
+  defenses: { shieldHp: 380, shieldRegenPerSecond: 2.2, armorHp: 460, pointDefenseRating: 0.4, flakRating: 0, evasion: 0 },
   weapons: [...mounts(WEAPON_TYPES.torpedoTube, 2), ...mounts(WEAPON_TYPES.heavyBeam, 2), ...mounts(WEAPON_TYPES.massDriver, 2)],
   ...hullMotion(13, 10),
 }
@@ -476,12 +523,75 @@ export function utilityEffectiveness(utilityHp: number, utilityMaxHp: number): n
   return Math.max(0, Math.min(1, utilityHp / utilityMaxHp))
 }
 
+// --- Missile / torpedo range-and-size effects -------------------------------
+//
+// Every direct-fire weapon (energy/kinetic) hits for full listed damage
+// anywhere inside its range, exactly as before — no change there. Missiles
+// and torpedoes are physical projectiles rather than a beam/slug, so it's
+// physically sensible for their real-world performance to depend on distance
+// too, and torpedoes specifically on how big a target they're trying to lead.
+//
+// Shared linear taper: full effectiveness (1.0) at or inside `optimal`,
+// falling straight-line to `floor` by `maxRange`. Never below `optimal` in
+// distance terms — a shot fired well inside optimal range is not further
+// PENALIZED for being close (missiles/torpedoes don't need a "too close"
+// mechanic nobody asked for), it's simply capped at full effect.
+export function rangeEffectiveness(distance: number, optimal: number, maxRange: number, floor: number): number {
+  if (distance <= optimal) return 1
+  if (maxRange <= optimal) return 1
+  const t = Math.min(1, (distance - optimal) / (maxRange - optimal))
+  return 1 - t * (1 - floor)
+}
+
+// Missiles keep their 100% tracking (see the firing loop in
+// combatResolution.ts — no accuracy roll at all for this damage type) but do
+// less DAMAGE the further past their optimal range they're fired from.
+export const MISSILE_FALLOFF_FLOOR = 0.6
+
+export function missileDamageMultiplier(distance: number, weapon: WeaponMount): number {
+  return rangeEffectiveness(distance, weapon.optimalRangeUnits ?? weapon.rangeUnits, weapon.rangeUnits, MISSILE_FALLOFF_FLOOR)
+}
+
+// Torpedoes are the opposite trade: fixed damage per hit, but the hit itself
+// is a roll — slow projectiles that a target can out-maneuver, more easily
+// the smaller and further away it is. TORPEDO_SIZE_ACCURACY keys off the
+// TARGET's own HullSizeClass (see that type's own comment) rather than the
+// firing ship's — a Corvette is a hard torpedo target regardless of what
+// fired at it, a Battleship is an easy one.
+export const TORPEDO_BASE_ACCURACY = 0.9
+export const TORPEDO_RANGE_FLOOR = 0.5
+export const TORPEDO_SIZE_ACCURACY: Record<HullSizeClass, number> = {
+  small: 0.55,
+  medium: 0.8,
+  large: 1.0,
+  x: 1.15,
+}
+// Never a certainty either way — even a dead-on shot at an X-class hull can
+// whiff, and even the worst-odds shot at a jinking Corvette occasionally
+// connects.
+const TORPEDO_ACCURACY_MIN = 0.05
+const TORPEDO_ACCURACY_MAX = 0.98
+
+export function torpedoAccuracy(
+  distance: number,
+  weapon: WeaponMount,
+  targetSizeClass: HullSizeClass,
+  targetEvasion: number,
+): number {
+  const rangeFactor = rangeEffectiveness(distance, weapon.optimalRangeUnits ?? weapon.rangeUnits, weapon.rangeUnits, TORPEDO_RANGE_FLOOR)
+  const raw = TORPEDO_BASE_ACCURACY * rangeFactor * TORPEDO_SIZE_ACCURACY[targetSizeClass] * (1 - Math.max(0, Math.min(1, targetEvasion)))
+  return Math.max(TORPEDO_ACCURACY_MIN, Math.min(TORPEDO_ACCURACY_MAX, raw))
+}
+
 // --- Scuttle (the doomed-ship trade) ---------------------------------------
 //
 // Deliberately detonate a ship that is going to die anyway, damaging
-// everything hostile nearby. The point is to convert a total loss into a
-// partial trade: a hull about to be destroyed is worth nothing, so spending
-// it to strip an enemy's armor is strictly better than letting it pop.
+// everything nearby — friend and foe alike, since a reactor breach has no IFF
+// to check. The point is to convert a total loss into a partial trade: a hull
+// about to be destroyed is worth nothing, so spending it to strip an enemy's
+// armor is strictly better than letting it pop. Blowing it in the middle of
+// your own formation is exactly as dangerous as doing it anywhere else — this
+// is a last resort, not a free area-denial tool.
 //
 // Scaled by REMAINING CORE, which is the whole design tension. A healthy ship
 // makes a far bigger bang (its reactor is intact), but a healthy ship is also
@@ -503,6 +613,38 @@ export function scuttleDamageAt(distanceUnits: number, coreFraction: number): nu
   if (distanceUnits >= SCUTTLE_BLAST_RADIUS_UNITS) return 0
   const falloff = 1 - distanceUnits / SCUTTLE_BLAST_RADIUS_UNITS
   return SCUTTLE_MAX_DAMAGE * falloff * Math.max(0, Math.min(1, coreFraction))
+}
+
+// --- Ramming (a committed, high-speed collision) ----------------------------
+//
+// Unlike Scuttle (a doomed hull's guaranteed last resort), any ship — armed
+// or not — can be ordered to ram: it charges straight at its target instead
+// of holding its stance's usual range, and colliding deals damage to BOTH
+// hulls. Lands as raw component damage (see applyRawBlast), same reasoning as
+// Scuttle: a hull impact isn't a weapon, so there's no damage type for the
+// matrix and nothing for point defense to intercept.
+//
+// Scaled by the RAMMER'S OWN CLOSING SPEED at the moment of impact, not a
+// flat number — a slow bump barely scratches either hull, while a
+// full-throttle charge is a real, costly commitment. This is what makes
+// "build up speed, then ram" a meaningful choice rather than a button that
+// always does the same thing regardless of how it was set up.
+export const RAM_MAX_TARGET_DAMAGE = 240
+// The rammer takes this fraction of whatever it just dealt the target — real,
+// but survivable more often than not, since the target's own hull absorbs
+// most of a deliberate charge. Ramming a much tougher target is still a bad
+// trade: the damage dealt (and so the rammer's own share of it) depends only
+// on closing speed, not on what's hit, so a Corvette ramming a Battleship
+// takes the same self-damage for a proportionally much smaller dent in
+// return.
+export const RAM_SELF_DAMAGE_FRACTION = 0.5
+
+// Damage dealt to the RAMMED ship, given the rammer's closing speed as a
+// fraction of its own top cruise speed (0..1 — see participantSpeed and
+// CombatProfile.maneuverUnitsPerSecond). Pure so the scaling is testable on
+// its own, same as scuttleDamageAt.
+export function ramDamageAt(closingSpeedFraction: number): number {
+  return RAM_MAX_TARGET_DAMAGE * Math.max(0, Math.min(1, closingSpeedFraction))
 }
 
 // --- FTL transit risk modifiers ---------------------------------------------

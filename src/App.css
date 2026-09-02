@@ -49,6 +49,124 @@
   border-bottom: 1px solid rgba(111, 227, 255, 0.25);
 }
 
+/* The header's centre slot swaps between ResourceBar and the tab strip
+   (see TabBar.tsx's HudCenterSwap) rather than adding a second row — this
+   is deliberate: a permanently-visible extra row would have needed the
+   header's own measured height (--hud-top-height, read by NavBar/Outliner/
+   DebugConsole/every docked panel) to grow to match, and swapping in place
+   sidesteps that entirely by never changing the header's height at all. */
+.hud-center-swap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.hud-swap-toggle {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.hud-swap-toggle:hover {
+  color: #6fe3ff;
+  border-color: rgba(111, 227, 255, 0.6);
+  background: rgba(111, 227, 255, 0.1);
+}
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tab-bar-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid rgba(111, 227, 255, 0.25);
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 6px 3px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.tab-bar-tab:hover {
+  color: #fff;
+  background: rgba(111, 227, 255, 0.08);
+}
+
+.tab-bar-tab.active {
+  color: #6fe3ff;
+  border-color: rgba(111, 227, 255, 0.6);
+  background: rgba(111, 227, 255, 0.14);
+}
+
+.tab-bar-tab-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.tab-bar-tab-close:hover {
+  opacity: 1;
+  color: #ff6b4a;
+}
+
+.tab-bar-tab-rename {
+  flex: 0 0 auto;
+  background: rgba(111, 227, 255, 0.1);
+  border: 1px solid rgba(111, 227, 255, 0.6);
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+  width: 110px;
+}
+
+.tab-bar-add {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px dashed rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  color: rgba(111, 227, 255, 0.7);
+  font: inherit;
+  font-size: 13px;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tab-bar-add:hover {
+  color: #6fe3ff;
+  border-color: rgba(111, 227, 255, 0.6);
+  background: rgba(111, 227, 255, 0.1);
+}
+
 .hud-bottom {
   bottom: 0;
   justify-content: space-between;
@@ -275,6 +393,18 @@
   align-items: center;
   gap: 4px;
   opacity: 0.85;
+  /* Was a plain <div> — now a <button> so it's clickable (see ResourceBar's
+     info popup), reset back to looking exactly like the old readout. */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.resource-item:hover {
+  opacity: 1;
 }
 
 .resource-icon {
@@ -287,6 +417,18 @@
   font-size: 12px;
   color: #cdeeff;
   min-width: 1.5em;
+}
+
+.resource-delta {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(205, 238, 255, 0.55);
+}
+
+.resource-info-description {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 /* Lock-on toggle — whether selecting something eases the camera onto it. */
@@ -503,6 +645,17 @@
 
 .ship-panel-combat {
   color: #ff6b4a;
+}
+
+/* Range-favor indicator on the "Engaged Against" row — same green/red the
+   combat engagement lines themselves use (see CombatEngagementLine.tsx),
+   so the panel and the arena read as one consistent signal. */
+.ship-panel-favor-good {
+  color: #4ade80;
+}
+
+.ship-panel-favor-bad {
+  color: #ff3b3b;
 }
 
 /* Combat view */
@@ -802,6 +955,72 @@
   margin-top: 0;
 }
 
+.fleet-group-header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fleet-group-header-row .fleet-group-header {
+  margin: 0;
+}
+
+.fleet-group-header-row input[type='checkbox'] {
+  accent-color: #6fe3ff;
+  cursor: pointer;
+}
+
+.fleet-group-toggle {
+  background: transparent;
+  border: none;
+  color: rgba(159, 232, 255, 0.8);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.fleet-group-toggle:hover {
+  color: #6fe3ff;
+}
+
+.fleet-merge-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  padding: 6px 7px;
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+}
+
+.fleet-merge-btn {
+  background: rgba(111, 227, 255, 0.16);
+  border: 1px solid rgba(111, 227, 255, 0.5);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.fleet-merge-btn:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.28);
+}
+
+.fleet-merge-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fleet-merge-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .fleet-row {
   display: block;
   width: 100%;
@@ -898,6 +1117,98 @@
   padding: 2px 5px 2px 0;
   color: rgba(255, 255, 255, 0.75);
   font-variant-numeric: tabular-nums;
+}
+
+/* Ship Builder (Ship Designer > Custom Designs) — a Presets/Custom sub-tab
+   pair reuses .fleet-tab as-is (.designer-mode-tabs only tightens spacing),
+   and the slot editor/computed-stats readout reuse .inspect-row/.combat-*
+   throughout, so this only needs to cover what's genuinely new: the module
+   picker, the design-name inputs, and the roster's delete affordance. */
+.designer-mode-tabs {
+  margin-bottom: 8px;
+}
+
+.slot-select {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(111, 227, 255, 0.05);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 6px;
+  margin-bottom: 6px;
+}
+
+.slot-select:focus {
+  outline: none;
+  border-color: rgba(111, 227, 255, 0.7);
+}
+
+.builder-name-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(111, 227, 255, 0.05);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+}
+
+.builder-name-input::placeholder {
+  color: #9fe8ff;
+  opacity: 0.5;
+}
+
+.builder-name-input:focus {
+  outline: none;
+  border-color: rgba(111, 227, 255, 0.7);
+}
+
+.builder-title-input {
+  font-size: 13px;
+  color: #6fe3ff;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.builder-title-input:hover,
+.builder-title-input:focus {
+  border-color: rgba(111, 227, 255, 0.35);
+}
+
+.builder-create-btn {
+  width: 100%;
+  background: rgba(111, 227, 255, 0.14);
+  border: 1px solid rgba(111, 227, 255, 0.5);
+  border-radius: 3px;
+  color: #6fe3ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.builder-create-btn:hover {
+  background: rgba(111, 227, 255, 0.24);
+}
+
+.builder-delete-btn {
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.builder-delete-btn:hover {
+  color: #ff6b6b;
 }
 
 /* Economy panels (Buildings dock + Economy category) — see BuildingsPanel /
@@ -1648,13 +1959,212 @@
   font-size: 10px;
   color: rgba(255, 255, 255, 0.45);
 }
+/* .econ-pos/.econ-neg themselves are defined further down (right after
+   .inspect-value) — every real usage combines one of them with
+   .inspect-value (`className="inspect-value econ-neg"` etc.), and with
+   equal specificity CSS breaks the tie by whichever rule appears LATER in
+   the stylesheet. Defining them here, before .inspect-value, silently lost
+   every such color to .inspect-value's plain white. */
 
-.econ-pos {
-  color: #4ade80;
+/* Technology panel (NationTechPanel) — reuses .econ-panel/.econ-subtitle/
+   .inspect-row/.combat-orders-title throughout; only the multi-column branch
+   grid and the small per-node Research button are genuinely new. */
+.tech-panel {
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.econ-neg {
-  color: #ff6b4a;
+.tech-branch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+
+.tech-branch {
+  margin-bottom: 10px;
+}
+
+.tech-node .inspect-label {
+  cursor: default;
+}
+
+.tech-node-done .inspect-label {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.tech-research-btn {
+  background: rgba(111, 227, 255, 0.14);
+  border: 1px solid rgba(111, 227, 255, 0.5);
+  border-radius: 3px;
+  color: #6fe3ff;
+  font: inherit;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+
+.tech-research-btn:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.26);
+}
+
+.tech-research-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tech-tree-view-btn {
+  width: 100%;
+  margin: 6px 0 2px;
+  background: rgba(111, 227, 255, 0.1);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #6fe3ff;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
+.tech-tree-view-btn:hover {
+  background: rgba(111, 227, 255, 0.2);
+}
+
+/* Tech Tree graph overlay — rendered via a portal to document.body (see
+   TechTreeGraph.tsx), so it sits above every other window regardless of
+   which DraggableWindow triggered it. Covers the full width, docked between
+   the top/bottom HUD bars only — deliberately above the side nav/outliner
+   too, per the "above everything else other than top and bottom" brief. */
+.tech-tree-overlay {
+  position: fixed;
+  top: var(--hud-top-height, 52px);
+  bottom: var(--hud-bottom-height, 58px);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  background: rgba(2, 6, 12, 0.96);
+  font-family: 'Courier New', monospace;
+  color: #9fe8ff;
+}
+
+.tech-tree-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.3);
+  flex: 0 0 auto;
+}
+
+.tech-tree-title {
+  font-size: 13px;
+  color: #6fe3ff;
+  letter-spacing: 0.06em;
+  flex: 1 1 auto;
+}
+
+.tech-tree-points {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.tech-tree-close {
+  background: transparent;
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font-size: 14px;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.tech-tree-close:hover {
+  background: rgba(111, 227, 255, 0.15);
+}
+
+.tech-tree-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 16px;
+}
+
+.tech-tree-svg {
+  font-family: 'Courier New', monospace;
+}
+
+.tech-tree-edge {
+  stroke: rgba(111, 227, 255, 0.35);
+  stroke-width: 1.5;
+}
+
+.tech-tree-edge.convergent {
+  stroke: rgba(255, 210, 63, 0.55);
+  stroke-width: 2;
+}
+
+.tech-tree-lane-label {
+  fill: rgba(111, 227, 255, 0.6);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.tech-tree-node rect {
+  fill: rgba(111, 227, 255, 0.06);
+  stroke: rgba(111, 227, 255, 0.4);
+  stroke-width: 1;
+}
+
+.tech-tree-node-name {
+  fill: #eaf8ff;
+  font-size: 10px;
+}
+
+.tech-tree-node-status {
+  fill: rgba(255, 255, 255, 0.55);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tech-tree-node.researched rect {
+  fill: rgba(74, 222, 128, 0.12);
+  stroke: rgba(74, 222, 128, 0.6);
+}
+
+.tech-tree-node.researched .tech-tree-node-status {
+  fill: #4ade80;
+}
+
+.tech-tree-node.eligible {
+  cursor: pointer;
+}
+
+.tech-tree-node.eligible rect {
+  stroke: rgba(111, 227, 255, 0.8);
+}
+
+.tech-tree-node.eligible:hover rect {
+  fill: rgba(111, 227, 255, 0.18);
+}
+
+.tech-tree-node.unaffordable rect {
+  stroke: rgba(255, 210, 63, 0.4);
+}
+
+.tech-tree-node.preview rect {
+  fill: rgba(255, 255, 255, 0.02);
+  stroke: rgba(255, 255, 255, 0.15);
+}
+
+.tech-tree-node.preview .tech-tree-node-name,
+.tech-tree-node.preview .tech-tree-node-status {
+  fill: rgba(255, 255, 255, 0.35);
 }
 
 /* Budget controls (tax / welfare +/−) */
@@ -2249,6 +2759,18 @@
   text-align: right;
 }
 
+/* Must come after .inspect-value (see that rule's own note, and the removed
+   original definition further up) — every real usage pairs one of these
+   with .inspect-value on the same element, and equal specificity means
+   source order alone decides which color actually shows. */
+.econ-pos {
+  color: #4ade80;
+}
+
+.econ-neg {
+  color: #ff6b4a;
+}
+
 .inspect-divider {
   border-top: 1px solid rgba(111, 227, 255, 0.25);
   margin: 6px 0;
@@ -2748,6 +3270,16 @@
   transform: translateX(-50%);
   z-index: 50;
   width: 260px;
+  /* The row list (ship class/system/scenario/research grant/spawned-ship
+     list) easily outgrows the viewport well before it outgrows this fixed
+     width — without a cap here the panel just ran off the bottom of the
+     screen with nothing below the fold reachable at all, since neither this
+     nor .debug-console-body scrolled. Header stays put (flex column, only
+     the body scrolls) so it's still visible/closable no matter how far
+     down the content goes. */
+  max-height: calc(100vh - var(--hud-top-height, 52px) - 24px);
+  display: flex;
+  flex-direction: column;
   background: rgba(20, 10, 0, 0.94);
   border: 1px solid rgba(255, 176, 59, 0.6);
   border-radius: 4px;
@@ -2771,6 +3303,7 @@
   font-size: 12px;
   letter-spacing: 0.08em;
   color: #ffb03b;
+  flex: 0 0 auto;
 }
 
 .debug-console-badge {
@@ -2800,6 +3333,9 @@
 
 .debug-console-body {
   padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
 }
 
 .debug-console-row {
@@ -2814,7 +3350,8 @@
   opacity: 0.7;
 }
 
-.debug-console-row select {
+.debug-console-row select,
+.debug-console-row input {
   background: rgba(255, 176, 59, 0.08);
   border: 1px solid rgba(255, 176, 59, 0.35);
   border-radius: 3px;
@@ -2822,6 +3359,20 @@
   font: inherit;
   font-size: 11px;
   padding: 5px 6px;
+}
+
+.debug-console-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.debug-console-checkbox-row input[type='checkbox'] {
+  accent-color: #ffb03b;
+  cursor: pointer;
 }
 
 .debug-console-spawn-btn {

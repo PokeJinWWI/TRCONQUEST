@@ -4,7 +4,7 @@ import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useCombatStore, areHostile } from '../state/combatStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { planMove } from '../scene/shipPhysics'
-import { SHIP_CLASSES } from '../data/shipData'
+import { resolveShipClass } from '../state/shipClassResolver'
 import { shipCombatProfile, overallHealthFraction } from '../scene/combatResolution'
 import { STARS, type StarData } from '../data/starData'
 
@@ -126,7 +126,7 @@ export function useEscapeBehavior() {
         // ship to make that happen. If neither yields a candidate, the ship
         // just stays put and keeps checking — declining a risky "escape"
         // is itself the safe choice.
-        const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
+        const shipClass = resolveShipClass(ship.classId)
         const hasWarp = shipClass?.ftlDrives.some((d) => d.kind === 'warp') ?? false
         const currentStarId = shipCurrentStarId(ship)
         const destinationStar = pickSafeStar(ship, currentStarId, ships, hasWarp ? null : currentStarId)

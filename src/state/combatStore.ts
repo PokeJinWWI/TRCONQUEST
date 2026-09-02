@@ -107,6 +107,17 @@ export interface CombatParticipant {
   // wins outright, same as it already overrides the stance system), and only
   // ever affects movement — targeting/firing are unrelated to this flag.
   chasing?: boolean
+  // The player has ordered this ship to charge its current target (explicit,
+  // or the nearest enemy if none — same resolution chasing/firing already
+  // use) and collide with it, instead of holding whatever range its stance
+  // would normally pick. Distinct from chasing: chase closes to a normal
+  // firing standoff and holds it, ramming closes all the way to contact.
+  // Cleared automatically by the resolver the instant it actually connects
+  // (see combatResolution's ramming-impact step) — a single deliberate hit,
+  // not a standing order to keep colliding every step. Works for an unarmed
+  // ship too, which chase's approach logic (gated on having a weapon range to
+  // close to) does not.
+  ramming?: boolean
   // Locks this ship's velocity to match a named obstacle's own (see
   // CombatObstacle.velocity and combatResolution's moonArenaState) instead
   // of flying under its own thrust — the building block for "stay on the
@@ -194,6 +205,8 @@ interface CombatState {
   setParticipant: (engagementId: string, participant: CombatParticipant) => void
   setHoldPosition: (engagementId: string, shipId: string, hold: boolean) => void
   setChasing: (engagementId: string, shipId: string, chasing: boolean) => void
+  // See CombatParticipant.ramming.
+  setRamming: (engagementId: string, shipId: string, ramming: boolean) => void
   // See CombatParticipant.inheritVelocityFrom. Pass an obstacle name to lock
   // onto it, or null to release back to normal flight.
   setInheritVelocityFrom: (engagementId: string, shipId: string, obstacleName: string | null) => void
@@ -330,8 +343,29 @@ export const useCombatStore = create<CombatState>((set) => ({
                     // of automatic movement, so it doesn't make sense to
                     // enable it while still latched to a stale manual order.
                     chasing
-                    ? { ...p, chasing: true, holdPosition: false, path: [], inheritVelocityFrom: null }
+                    ? { ...p, chasing: true, ramming: false, holdPosition: false, path: [], inheritVelocityFrom: null }
                     : { ...p, chasing: false }
+                  : p,
+              ),
+            }
+          : e,
+      ),
+    })),
+  setRamming: (engagementId, shipId, ramming) =>
+    set((s) => ({
+      engagements: s.engagements.map((e) =>
+        e.id === engagementId
+          ? {
+              ...e,
+              participants: e.participants.map((p) =>
+                p.shipId === shipId
+                  ? // Same "takes effect immediately" reasoning as chasing:
+                    // enabling ramming drops any manual hold and any other
+                    // movement lock, since it's itself a form of automatic
+                    // (if very deliberate) movement.
+                    ramming
+                    ? { ...p, ramming: true, chasing: false, holdPosition: false, path: [], inheritVelocityFrom: null }
+                    : { ...p, ramming: false }
                   : p,
               ),
             }
@@ -347,7 +381,7 @@ export const useCombatStore = create<CombatState>((set) => ({
               participants: e.participants.map((p) =>
                 p.shipId === shipId
                   ? obstacleName
-                    ? { ...p, inheritVelocityFrom: obstacleName, holdPosition: false, chasing: false, path: [] }
+                    ? { ...p, inheritVelocityFrom: obstacleName, holdPosition: false, chasing: false, ramming: false, path: [] }
                     : { ...p, inheritVelocityFrom: null }
                   : p,
               ),

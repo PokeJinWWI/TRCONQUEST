@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useShipStore } from '../state/shipStore'
-import { ALLEGIANCE_LABELS, SHIP_CLASSES, describeFtlDrive, type HyperDrive } from '../data/shipData'
+import { ALLEGIANCE_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
+import { resolveShipClass } from '../state/shipClassResolver'
 import {
   COMPONENT_KINDS,
   COMPONENT_LABELS,
@@ -15,7 +16,7 @@ import {
   warpEscapeLossChance,
   coreHealthFraction,
 } from './shipPhysics'
-import { activeEnemyContacts, overallHealthFraction, createSoloEngagement } from './combatResolution'
+import { activeEnemyContacts, overallHealthFraction, createSoloEngagement, rangeFavor } from './combatResolution'
 import { useCombatStore, areHostile, combatLocationKey } from '../state/combatStore'
 import { useFleetStore } from '../state/fleetStore'
 import { useViewStore } from '../state/viewStore'
@@ -122,7 +123,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
 
   if (!selectedShipId || !ship) return null
 
-  const shipClass = SHIP_CLASSES.find((c) => c.id === ship.classId)
+  const shipClass = resolveShipClass(ship.classId)
   const statusText = getShipStatusText(ship, simDays, ships)
   const owned = ship.allegiance === 'player'
   const hyperDrive = shipClass?.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
@@ -174,6 +175,12 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
   // (and shouldn't) move FTL risk — see the Jump/Warp Risk rows below.
   const activeContacts = engagement && participant ? activeEnemyContacts(participant, engagement, ships, simDays) : []
   const activelyEngaged = activeContacts.length > 0
+  // Whether THIS ship is coming out ahead on range right now, not just how
+  // many contacts it has — see combatResolution.rangeFavor, the same
+  // per-pair question CombatEngagementLine's line colors answer, rolled up
+  // into one read here. Works the same for an enemy ship you're inspecting
+  // as for your own — "favored" always means the ship this panel is showing.
+  const favor = engagement && participant ? rangeFavor(participant, engagement, ships, simDays) : 'even'
   const coreFraction = shipClass ? coreHealthFraction(ship, shipClass) : 1
   const riskElevated = activelyEngaged || coreFraction < 1
   // Two figures rather than one live number — there's no "selected
@@ -434,9 +441,20 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
           <div className="inspect-row">
             <span className="inspect-label">Engaged Against</span>
             <span className="inspect-value">
-              {activelyEngaged
-                ? `${activeContacts.length} enemy ship${activeContacts.length === 1 ? '' : 's'}`
-                : 'None in range'}
+              {activelyEngaged ? (
+                <>
+                  {activeContacts.length} enemy ship{activeContacts.length === 1 ? '' : 's'}
+                  {/* Whether THIS ship is winning the range question right
+                      now, not just how many contacts it has — see
+                      combatResolution.rangeFavor. Silent on a tie (mutual
+                      range, or no asymmetric contact at all) rather than
+                      claiming an edge that isn't there. */}
+                  {favor === 'favored' && <span className="ship-panel-favor-good"> (favored)</span>}
+                  {favor === 'unfavored' && <span className="ship-panel-favor-bad"> (unfavored)</span>}
+                </>
+              ) : (
+                'None in range'
+              )}
             </span>
           </div>
         </>
