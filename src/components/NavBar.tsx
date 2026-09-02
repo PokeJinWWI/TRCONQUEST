@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
 import { NationEconomyPanel } from './EconomyPanel'
 import { FleetManagement } from './FleetManagement'
+import { LawsPanel } from './LawsPanel'
 import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
 import { usePlayerStore } from '../state/playerStore'
@@ -12,6 +13,8 @@ const MILITARY_CATEGORY = 'Military'
 const NAVY_SUBCATEGORY = 'Navy'
 const MAP_MODES_CATEGORY = 'Map Modes'
 const ECONOMY_CATEGORY = 'Economy'
+const GOVERNMENT_CATEGORY = 'Government'
+const LAWS_SUBCATEGORY = 'Laws'
 
 interface CategoryDef {
   name: string
@@ -49,6 +52,7 @@ function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
   if (category.name === ECONOMY_CATEGORY) return <NationEconomyPanel subcategory={subcategory} />
+  if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   return <div className="nav-placeholder">Not yet available</div>
 }

@@ -3,7 +3,7 @@ import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { LineGraph } from './LineGraph'
 import { GOOD_IDS, GOODS } from '../economy/goods'
 import { NEED_TIERS } from '../economy/species'
-import { formatPop } from '../economy/format'
+import { formatPop, formatMoney, formatPrice } from '../economy/format'
 import type { Country, World } from '../economy/economyTypes'
 
 interface EconomyPanelProps {
@@ -57,7 +57,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
               return (
                 <tr key={g}>
                   <td>{GOODS[g].label}</td>
-                  <td>{world.market.prices[g].toFixed(2)}</td>
+                  <td>{formatPrice(world.market.prices[g])}</td>
                   <td>{r ? r.supply.toFixed(0) : '—'}</td>
                   <td>{r ? r.demand.toFixed(0) : '—'}</td>
                 </tr>
@@ -132,7 +132,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
       <div className="econ-panel">
         <div className="econ-fiscal-headline">
           <span>
-            GDP <b>{fiscal ? fiscal.gdp.toFixed(0) : '—'}</b>
+            GDP <b>{fiscal ? formatMoney(fiscal.gdp) : '—'}</b>
           </span>
           <span>
             Pop <b>{fiscal ? formatPop(fiscal.population) : '—'}</b>
@@ -147,16 +147,16 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             Rating <b className={`rating-${fiscal?.rating ?? 'AAA'}`}>{fiscal?.rating ?? '—'}</b>
           </span>
         </div>
-        <LineGraph title="GDP" series={[{ values: series.map((s) => s.gdp), color: GDP_COLOR, label: 'GDP' }]} format={(v) => v.toFixed(0)} />
+        <LineGraph title="GDP (USD)" series={[{ values: series.map((s) => s.gdp), color: GDP_COLOR, label: 'GDP' }]} format={formatMoney} />
         <LineGraph title="Price level (CPI, 1.00 = base)" series={[{ values: series.map((s) => s.priceLevel), color: PRICE_COLOR, label: 'CPI' }]} format={(v) => v.toFixed(2)} />
         <LineGraph
-          title="Revenue vs Expenditure / tick"
+          title="Revenue vs Expenditure / tick (USD)"
           includeZero
           series={[
             { values: series.map((s) => s.revenue), color: REVENUE_COLOR, label: 'Rev' },
             { values: series.map((s) => s.expenditure), color: EXPENDITURE_COLOR, label: 'Exp' },
           ]}
-          format={(v) => v.toFixed(0)}
+          format={formatMoney}
         />
         <LineGraph title="Debt-to-GDP" includeZero series={[{ values: series.map((s) => s.debtToGdp), color: DEBT_COLOR, label: 'Debt/GDP' }]} format={(v) => `${(v * 100).toFixed(0)}%`} />
       </div>
@@ -190,7 +190,7 @@ function FiscalRow({ label, value, tone }: { label: string; value: number | unde
   return (
     <div className="inspect-row">
       <span className="inspect-label">{label}</span>
-      <span className={`inspect-value ${cls}`}>{value === undefined ? '—' : value.toFixed(0)}</span>
+      <span className={`inspect-value ${cls}`}>{value === undefined ? '—' : formatMoney(value)}</span>
     </div>
   )
 }

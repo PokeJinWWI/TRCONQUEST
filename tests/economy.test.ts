@@ -5,12 +5,12 @@
 // Run:  npx tsx tests/economy.test.ts
 
 import { seedWorlds, seedCountries } from '../src/economy/economySeed'
-import { tickEconomy, estimateWorldGdp, creditRating } from '../src/economy/economyTick'
+import { tickEconomy, estimateWorldGdp, creditRating, NEW_BUILDING_THROUGHPUT } from '../src/economy/economyTick'
 import { GOOD_IDS, GOODS, priceCeiling, PRICE_FLOOR } from '../src/economy/goods'
-import { POP_CLASSES } from '../src/economy/recipes'
+import { POP_CLASSES, RECIPES, getMethod, qualificationFraction } from '../src/economy/recipes'
 import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
-import type { Country, World } from '../src/economy/economyTypes'
+import type { Building, Country, World } from '../src/economy/economyTypes'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -142,6 +142,168 @@ console.log('\n=== 8. Edge cases do not crash ===')
   check('a world with no buildings ticks fine', stripped.worlds.find((w) => w.id === 'Luna')!.pops.length > 0 && stripped.worlds.every(worldFinite))
   const noPops = run(30, (c, w) => [c, w.map((x) => (x.id === 'Proxima b' ? { ...x, pops: [] } : x))])
   check('a world with no pops ticks fine', noPops.worlds.every(worldFinite))
+}
+
+// ============================ Milestone 2 ============================
+// Production methods, qualification-gated employment, and throughput ramping.
+
+function freshBuilding(recipeId: string, methodId: string, stateFraction = 0): Building {
+  return {
+    id: `fresh-${recipeId}`,
+    recipeId,
+    methodId,
+    methodLocked: false,
+    level: 1,
+    stateFraction,
+    inventory: {},
+    throughput: NEW_BUILDING_THROUGHPUT,
+    lastProfit: 0,
+    employed: 0,
+    jobsPosted: 0,
+  }
+}
+
+console.log('\n=== 9. Production methods: data + resolution + seeded buildings ===')
+{
+  check('every building type offers at least two production methods', Object.values(RECIPES).every((r) => r.methods.length >= 2))
+  check('getMethod falls back to the default for an unknown id', getMethod('farm', 'nonsense')?.id === RECIPES.farm.methods[0].id)
+  const worlds = seedWorlds()
+  check('seeded buildings carry a valid method id', worlds.every((w) => w.buildings.every((b) => getMethod(b.recipeId, b.methodId)?.id === b.methodId)))
+  check('seeded (established) buildings start at full throughput', worlds.every((w) => w.buildings.every((b) => b.throughput === 1)))
+  check('a mechanized method needs inputs a manual one does not', getMethod('farm', 'mechanized')!.inputs.length > getMethod('farm', 'manual')!.inputs.length)
+}
+
+console.log('\n=== 10. Throughput ramps — new buildings do not teleport to full output ===')
+{
+  // A fresh, state-run farm (throughput 0.1) as Mars's ONLY food source: food
+  // is scarce so demand pulls it toward full, and state ownership keeps owner
+  // autonomy from switching its method — isolating the labor/throughput ramp. It
+  // should climb gradually, not snap.
+  let countries = seedCountries()
+  let worlds = seedWorlds().map((w) =>
+    w.id === 'Mars' ? { ...w, buildings: [...w.buildings.filter((b) => b.recipeId !== 'farm'), freshBuilding('farm', 'manual', 1)] } : w,
+  )
+  const after1 = tickEconomy(countries, worlds)
+  const b1 = after1.worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === 'fresh-farm')!
+  check('one tick nudges throughput up, not to full', b1.throughput > NEW_BUILDING_THROUGHPUT && b1.throughput < 0.2, b1.throughput.toFixed(3))
+  check('the step is bounded by the ramp rate', b1.throughput - NEW_BUILDING_THROUGHPUT <= 0.05 + 1e-9)
+  countries = after1.countries
+  worlds = after1.worlds
+  for (let i = 0; i < 4; i++) {
+    const r = tickEconomy(countries, worlds)
+    countries = r.countries
+    worlds = r.worlds
+  }
+  const midThroughput = worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === 'fresh-farm')!.throughput
+  for (let i = 0; i < 40; i++) {
+    const r = tickEconomy(countries, worlds)
+    countries = r.countries
+    worlds = r.worlds
+  }
+  const matured = worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === 'fresh-farm')!
+  check('after many ticks it reaches high throughput', matured.throughput > 0.8, matured.throughput.toFixed(2))
+  check('throughput climbed over time (ramp, not snap)', matured.throughput > midThroughput, `${midThroughput.toFixed(2)} -> ${matured.throughput.toFixed(2)}`)
+  check('a matured building reports real employment against its posted jobs', matured.employed > 0 && matured.jobsPosted > 0)
+}
+
+console.log('\n=== 11. Qualification gates employment ===')
+{
+  check('an educated technical pop is fully qualified; an unschooled one is not', qualificationFraction('technical', 0.5) === 1 && qualificationFraction('technical', 0) < 1)
+  // A Mars where NOBODY is educated: the skilled rungs (technical/professional)
+  // can only partly staff their jobs, so the factory throttles down.
+  let countries = seedCountries()
+  let worlds = seedWorlds().map((w) =>
+    w.id === 'Mars' ? { ...w, pops: w.pops.map((p) => ({ ...p, educationLevel: 0 })) } : w,
+  )
+  let reports = tickEconomy(countries, worlds).reports
+  for (let i = 0; i < 30; i++) {
+    const r = tickEconomy(countries, worlds)
+    countries = r.countries
+    worlds = r.worlds
+    reports = r.reports
+  }
+  const techRate = reports.worlds['Mars'].labor.technical.qualifiedRate
+  check('technical labor is under-qualified when unschooled', techRate < 0.5, techRate.toFixed(2))
+  const factory = worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.recipeId === 'factory')!
+  check('the factory throttles below full throughput for lack of skilled labor', factory.throughput < 0.95, factory.throughput.toFixed(2))
+  // Control: with the seeded (educated) pops, technical labor is fully qualified.
+  const educated = tickEconomy(seedCountries(), seedWorlds()).reports.worlds['Mars'].labor.technical.qualifiedRate
+  check('...whereas seeded educated labor is fully qualified', educated > 0.95, educated.toFixed(2))
+}
+
+console.log('\n=== 12. Switching production method changes inputs/outputs ===')
+{
+  // Same Mars, farms on manual vs mechanized: the mechanized line demands
+  // minerals (equipment) the manual one never touches.
+  const manual = seedWorlds()
+  const mechanized = seedWorlds().map((w) =>
+    w.id === 'Mars' ? { ...w, buildings: w.buildings.map((b) => (b.recipeId === 'farm' ? { ...b, methodId: 'mechanized' } : b)) } : w,
+  )
+  const manualDemand = tickEconomy(seedCountries(), manual).reports.worlds['Mars'].goods.minerals.demand
+  const mechDemand = tickEconomy(seedCountries(), mechanized).reports.worlds['Mars'].goods.minerals.demand
+  check('mechanized farming raises minerals demand vs manual', mechDemand > manualDemand, `${manualDemand.toFixed(0)} -> ${mechDemand.toFixed(0)}`)
+  check('the two methods post different worker mixes', getMethod('farm', 'manual')!.jobs.length !== getMethod('farm', 'mechanized')!.jobs.length)
+}
+
+console.log('\n=== 13. Owner autonomy: private owners pick their own method ===')
+{
+  // A world whose farm would be more profitable mechanized: give it cheap
+  // minerals and skilled labor, then let the private owner run itself. Under a
+  // market economy it should switch off the manual default on its own.
+  const build = () =>
+    seedWorlds().map((w) =>
+      w.id === 'Mars'
+        ? { ...w, buildings: w.buildings.map((b) => (b.recipeId === 'farm' ? { ...b, methodId: 'manual', methodLocked: false } : b)) }
+        : w,
+    )
+  let countries = seedCountries()
+  let worlds = build()
+  let switched = false
+  for (let i = 0; i < 60; i++) {
+    const r = tickEconomy(countries, worlds)
+    countries = r.countries
+    worlds = r.worlds
+    if (worlds.find((w) => w.id === 'Mars')!.buildings.some((b) => b.recipeId === 'farm' && b.methodId !== 'manual')) switched = true
+  }
+  check('a private farm switched method on its own under a market economy', switched)
+
+  // Under a command economy owners do NOT self-optimize: the method sticks.
+  let cmdCountries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, economicSystem: 'command' as const } : c))
+  let cmdWorlds = build()
+  for (let i = 0; i < 60; i++) {
+    const r = tickEconomy(cmdCountries, cmdWorlds)
+    cmdCountries = r.countries
+    cmdWorlds = r.worlds
+  }
+  check('under a command economy an un-directed farm keeps its method', cmdWorlds.find((w) => w.id === 'Mars')!.buildings.filter((b) => b.recipeId === 'farm').every((b) => b.methodId === 'manual'))
+}
+
+console.log('\n=== 14. Interference malus: overriding a private method costs under a market economy ===')
+{
+  // Same private factory, pinned by the state to its current method. Under
+  // laissez-faire that interference cuts its output vs an un-pinned control;
+  // under a command economy it does not.
+  const factoryOutput = (system: 'laissez-faire' | 'command', pinned: boolean) => {
+    let countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, economicSystem: system } : c))
+    let worlds = seedWorlds().map((w) =>
+      w.id === 'Mars'
+        ? { ...w, buildings: w.buildings.map((b) => (b.recipeId === 'factory' ? { ...b, methodLocked: pinned } : b)) }
+        : w,
+    )
+    let supply = 0
+    for (let i = 0; i < 20; i++) {
+      const r = tickEconomy(countries, worlds)
+      countries = r.countries
+      worlds = r.worlds
+      supply = r.reports.worlds['Mars'].goods.consumerGoods.supply
+    }
+    return supply
+  }
+  const free = factoryOutput('laissez-faire', false)
+  const pinnedMarket = factoryOutput('laissez-faire', true)
+  const pinnedCommand = factoryOutput('command', true)
+  check('pinning a private method under laissez-faire cuts output', pinnedMarket < free * 0.98, `${pinnedMarket.toFixed(0)} < ${free.toFixed(0)}`)
+  check('the same pin under a command economy carries no such malus', pinnedCommand >= free * 0.98, `${pinnedCommand.toFixed(0)} vs ${free.toFixed(0)}`)
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

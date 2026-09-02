@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { seedWorlds, seedCountries } from '../economy/economySeed'
 import { tickEconomy, constructionCost } from '../economy/economyTick'
+import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
 import type { Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
 
 // One sampled point of a country's headline fiscal metrics, appended each tick
@@ -31,6 +32,12 @@ interface EconomyStore {
   setWelfare: (countryId: string, perCapita: number) => void
   queueConstruction: (worldId: string, recipeId: string) => void
   cancelConstruction: (worldId: string, orderId: string) => void
+  // State override: pin a building to a method. On a private building under a
+  // market economy this is interference (see economyTick's malus).
+  setProductionMethod: (worldId: string, buildingId: string, methodId: string) => void
+  // Hand a private building's method back to its owner (stop interfering).
+  releaseProductionMethod: (worldId: string, buildingId: string) => void
+  setEconomicSystem: (countryId: string, system: EconomicSystem) => void
 }
 
 let constructionCounter = 0
@@ -100,6 +107,35 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       worlds: state.worlds.map((w) =>
         w.id === worldId ? { ...w, constructionQueue: w.constructionQueue.filter((o) => o.id !== orderId) } : w,
       ),
+    })),
+  setProductionMethod: (worldId, buildingId, methodId) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) =>
+        w.id === worldId
+          ? {
+              ...w,
+              buildings: w.buildings.map((b) =>
+                b.id === buildingId && b.methodId !== methodId
+                  ? { ...b, methodId, methodLocked: true, throughput: b.throughput * RETOOL_THROUGHPUT_FACTOR }
+                  : b.id === buildingId
+                    ? { ...b, methodLocked: true }
+                    : b,
+              ),
+            }
+          : w,
+      ),
+    })),
+  releaseProductionMethod: (worldId, buildingId) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) =>
+        w.id === worldId
+          ? { ...w, buildings: w.buildings.map((b) => (b.id === buildingId ? { ...b, methodLocked: false } : b)) }
+          : w,
+      ),
+    })),
+  setEconomicSystem: (countryId, system) =>
+    set((state) => ({
+      countries: state.countries.map((c) => (c.id === countryId ? { ...c, economicSystem: system } : c)),
     })),
 }))
 

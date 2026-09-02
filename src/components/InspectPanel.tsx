@@ -4,6 +4,7 @@ import { estimateHabitability, estimateSize, PLANET_CLASS_LABELS } from '../scen
 import { DraggableWindow } from './DraggableWindow'
 import { BuildingsPanel } from './BuildingsPanel'
 import { EconomyPanel } from './EconomyPanel'
+import { PopsPanel } from './PopsPanel'
 import { PoliticsPanel } from './PoliticsPanel'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { getCountry } from '../data/countryData'
@@ -31,9 +32,10 @@ const KIND_LABEL: Record<InspectableBody['kind'], string> = {
 // one place" view: its stats, its buildings, its market, and (reserved) the
 // politics/decisions that will hang off it. Stars and moons keep the plain
 // single-pane readout.
-type InspectTab = 'overview' | 'buildings' | 'economy' | 'politics'
+type InspectTab = 'overview' | 'pops' | 'buildings' | 'economy' | 'politics'
 const PLANET_TABS: { id: InspectTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'pops', label: 'Pops' },
   { id: 'buildings', label: 'Buildings' },
   { id: 'economy', label: 'Economy' },
   { id: 'politics', label: 'Politics' },
@@ -159,6 +161,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
         ))}
       </div>
       {tab === 'overview' && <OverviewRows body={body} action={action} />}
+      {tab === 'pops' && <PopsPanel worldName={body.name} world={world} />}
       {tab === 'buildings' && <BuildingsPanel subtab={null} worldName={body.name} world={world} country={country} />}
       {tab === 'economy' && <EconomyPanel subcategory="Market" worldName={body.name} world={world} country={country} />}
       {tab === 'politics' && <PoliticsPanel worldName={body.name} world={world} />}

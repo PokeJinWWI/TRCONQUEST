@@ -1,6 +1,7 @@
 import type { GoodId } from './goods'
 import type { NeedTier } from './species'
 import type { PopClass } from './recipes'
+import type { EconomicSystem } from './laws'
 
 // A pop cohort — one aggregated agent standing in for a slice of a world's
 // population sharing all four social axes: species + culture + religion +
@@ -30,10 +31,30 @@ export interface ConstructionOrder {
 export interface Building {
   id: string
   recipeId: string
+  // The production method currently in use (see recipes.ts). Player-switchable
+  // on owned worlds; changes inputs, outputs, and the worker mix.
+  methodId: string
+  // Whether the STATE has pinned this building's method. On a private building
+  // that pin is interference: under a market economy it drags output (the
+  // economic-system malus, laws.ts). On a state-run building it is just
+  // direction, no penalty. When false, a private owner picks the method itself.
+  methodLocked: boolean
   level: number
+  // State's ownership share, 0 (fully private) .. 1 (fully state-run). At or
+  // above STATE_OWNERSHIP_THRESHOLD the state directs the building.
   stateFraction: number
   inventory: Partial<Record<GoodId, number>>
+  // Operating rate in [0,1] — how much of full capacity the building is
+  // actually running at. It ramps toward what labor, inputs and demand allow
+  // rather than snapping there, so profit rises smoothly instead of teleporting
+  // (design doc Section 3, "throughput"). Freshly built or newly expanded
+  // buildings start low and climb.
+  throughput: number
   lastProfit: number
+  // Diagnostics for the tick just run (display only): how many people this
+  // building actually employs, and how many job slots it posted.
+  employed: number
+  jobsPosted: number
 }
 
 export interface Market {
@@ -72,6 +93,9 @@ export interface Country {
   welfarePerCapita: number
   // National cash; negative = national debt.
   treasury: number
+  // Economic-system law (laws.ts) — governs owner autonomy and the penalty for
+  // the state overriding a private building's production method.
+  economicSystem: EconomicSystem
 }
 
 export interface EconomyState {
@@ -83,7 +107,11 @@ export interface EconomyState {
 // Per-world market/labor diagnostics for a tick.
 export interface WorldReport {
   goods: Record<GoodId, { supply: number; demand: number; transacted: number; price: number }>
-  labor: Record<PopClass, { workers: number; jobs: number; employmentRate: number; wage: number }>
+  // Per class: headcount of pops, qualification-weighted labor actually
+  // available (qualified), job slots posted, the resulting employment rate, and
+  // the cleared wage. `qualifiedRate` is qualified/workers — how job-ready the
+  // class's labor pool is.
+  labor: Record<PopClass, { workers: number; qualified: number; qualifiedRate: number; jobs: number; employmentRate: number; wage: number }>
 }
 
 export type CreditRating = 'AAA' | 'AA' | 'A' | 'BBB' | 'BB' | 'B' | 'CCC'

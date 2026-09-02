@@ -1,7 +1,20 @@
 import { GOODS, GOOD_IDS } from './goods'
-import { POP_CLASSES, RECIPES, type PopClass } from './recipes'
+import { POP_CLASSES, getMethod, type PopClass } from './recipes'
 import type { ReligionMix } from './demographics'
 import type { Building, Country, LaborMarket, Market, Pop, World } from './economyTypes'
+
+// Starting education by class — higher classes arrive more schooled, so the
+// technical/professional job rungs (which demand qualification, recipes.ts)
+// start staffed. There is no schooling loop yet to move these (that comes with
+// the Standard-of-Living milestone); for now they anchor the qualification gate.
+const CLASS_EDUCATION: Record<PopClass, number> = {
+  subsistence: 0.05,
+  labor: 0.2,
+  technical: 0.5,
+  professional: 0.85,
+  investor: 0.9,
+  political: 0.7,
+}
 
 // Seed for the merged economy (design doc v2): 4 countries and 6 inhabited
 // worlds. Population is in MILLIONS of people. Pops are generated across the
@@ -21,18 +34,33 @@ function makePop(worldId: string, cls: PopClass, species: string, culture: strin
     // Starting wealth scales with population (money is in the same ×100 scale
     // as the recipes and prices).
     wealth: size * 4,
-    educationLevel: 0,
+    educationLevel: CLASS_EDUCATION[cls],
     needsSatisfaction: { basic: 1, everyday: 1, healthcare: 1, comfort: 1, luxury: 1 },
   }
 }
 
 let buildingCounter = 0
-function makeBuilding(worldId: string, recipeId: string, level: number, stateFraction: number): Building {
+function makeBuilding(worldId: string, recipeId: string, level: number, stateFraction: number, methodId?: string): Building {
   buildingCounter += 1
-  const recipe = RECIPES[recipeId]
+  const method = getMethod(recipeId, methodId)
   const inventory: Building['inventory'] = {}
-  if (recipe) for (const out of recipe.outputs) inventory[out.good] = out.amount * level
-  return { id: `bld-${worldId}-${recipeId}-${buildingCounter}`, recipeId, level, stateFraction, inventory, lastProfit: 0 }
+  // Seeded buildings are established: they start at full throughput and with a
+  // tick of finished output on hand, so the starting economy is productive from
+  // tick one (only player-built buildings ramp up from scratch).
+  if (method) for (const out of method.outputs) inventory[out.good] = out.amount * level
+  return {
+    id: `bld-${worldId}-${recipeId}-${buildingCounter}`,
+    recipeId,
+    methodId: method?.id ?? '',
+    methodLocked: false,
+    level,
+    stateFraction,
+    inventory,
+    throughput: 1,
+    lastProfit: 0,
+    employed: 0,
+    jobsPosted: 0,
+  }
 }
 
 function seedMarket(): Market {
@@ -212,10 +240,12 @@ const WORLDS: World[] = [
 ]
 
 const COUNTRIES: Country[] = [
-  { id: 'imperial-state-of-mars', taxRate: 0.1, welfarePerCapita: 0.08, treasury: 100000 },
-  { id: 'republic-of-venus', taxRate: 0.12, welfarePerCapita: 0.08, treasury: 50000 },
-  { id: 'orion-republic', taxRate: 0.09, welfarePerCapita: 0.07, treasury: 30000 },
-  { id: 'kingdom-of-lalande', taxRate: 0.1, welfarePerCapita: 0.07, treasury: 45000 },
+  // Economic systems chosen for flavor: the Imperial State steers a mixed
+  // economy, the two republics run on the market, the alien Kingdom commands it.
+  { id: 'imperial-state-of-mars', taxRate: 0.1, welfarePerCapita: 0.08, treasury: 100000, economicSystem: 'interventionism' },
+  { id: 'republic-of-venus', taxRate: 0.12, welfarePerCapita: 0.08, treasury: 50000, economicSystem: 'laissez-faire' },
+  { id: 'orion-republic', taxRate: 0.09, welfarePerCapita: 0.07, treasury: 30000, economicSystem: 'laissez-faire' },
+  { id: 'kingdom-of-lalande', taxRate: 0.1, welfarePerCapita: 0.07, treasury: 45000, economicSystem: 'command' },
 ]
 
 export function seedWorlds(): World[] {

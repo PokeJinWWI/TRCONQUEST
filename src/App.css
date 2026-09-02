@@ -947,6 +947,149 @@
   font-variant-numeric: tabular-nums;
 }
 
+.econ-method-select {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 3px;
+  color: #cdeeff;
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 2px;
+  max-width: 108px;
+  cursor: pointer;
+}
+.econ-method-select:hover {
+  background: rgba(111, 227, 255, 0.18);
+  color: #fff;
+}
+
+/* Building ownership / production-method control */
+.econ-method-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.econ-owner-tag {
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.econ-owner-owner {
+  color: #7ee0b0;
+  background: rgba(74, 222, 128, 0.12);
+}
+.econ-owner-state {
+  color: #9fd0ff;
+  background: rgba(111, 175, 255, 0.14);
+}
+.econ-owner-pinned {
+  color: #ffcf8f;
+  background: rgba(255, 180, 80, 0.14);
+}
+.econ-release-btn {
+  background: none;
+  border: 1px solid rgba(255, 207, 143, 0.4);
+  color: #ffcf8f;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 3px;
+}
+.econ-release-btn:hover {
+  background: rgba(255, 207, 143, 0.18);
+  color: #fff;
+}
+.econ-econsystem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.econ-econsystem-name {
+  color: #9fd0ff;
+}
+.econ-econsystem-hint {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* Pops panel — faith colour dot */
+.pops-faith-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* Laws panel — enactable law options */
+.laws-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.laws-option {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.laws-option.active {
+  border-color: rgba(111, 227, 255, 0.5);
+  background: rgba(111, 227, 255, 0.06);
+}
+.laws-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+.laws-option-name {
+  color: #cdeeff;
+  font-weight: 700;
+  font-size: 11px;
+}
+.laws-option-current {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6fe3ff;
+}
+.laws-enact-btn {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.laws-enact-btn:hover {
+  background: rgba(111, 227, 255, 0.2);
+  color: #fff;
+}
+.laws-option-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 4px;
+}
+.laws-option-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .econ-pos {
   color: #4ade80;
 }
