@@ -1646,6 +1646,21 @@
   display: flex;
   flex-direction: column;
   line-height: 1.15;
+  /* Was a plain <div> — now a <button> so it opens its own info window on
+     click (see FiscalIndicators.tsx), reset back to looking exactly like
+     the old readout. */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.fiscal-ind:hover {
+  opacity: 1;
 }
 .fiscal-ind-label {
   font-size: 8px;
@@ -1657,11 +1672,6 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: #fff;
-}
-.fiscal-ind-sub {
-  font-size: 9px;
-  color: rgba(255, 255, 255, 0.4);
-  margin-left: 2px;
 }
 
 /* Debt panel */
@@ -2664,7 +2674,8 @@
 }
 
 .draggable-window-close,
-.draggable-window-collapse {
+.draggable-window-collapse,
+.draggable-window-maximize {
   background: none;
   border: none;
   color: #9fe8ff;
@@ -2674,12 +2685,14 @@
   padding: 0 2px;
 }
 
-.draggable-window-collapse {
+.draggable-window-collapse,
+.draggable-window-maximize {
   font-size: 11px;
 }
 
 .draggable-window-close:hover,
-.draggable-window-collapse:hover {
+.draggable-window-collapse:hover,
+.draggable-window-maximize:hover {
   color: #fff;
 }
 
@@ -3415,6 +3428,47 @@
    on a narrow display. */
 .draggable-window.wide {
   width: 560px;
+}
+
+/* Windows-style maximize (see DraggableWindow's maximize/restore button) —
+   the fill-the-screen size/position itself is computed in JS as an ordinary
+   `pos`/`size` value (see handleToggleMaximize), same mechanism dragging and
+   resizing already use, specifically so .animating below can transition it
+   smoothly — a CSS-only override here would mean snapping between two
+   unrelated positioning schemes with nothing to interpolate between. Same
+   footprint as .tech-tree-overlay otherwise: full width edge-to-edge,
+   covering the nav sidebar and Outliner rather than leaving them beside it.
+   Only cosmetic tweaks left to do here. */
+.draggable-window.maximized {
+  /* The base rule's max-width/max-height (100vw/100vh minus a 32px margin)
+     exist to keep an ordinary floating window from overflowing the screen —
+     exactly what would otherwise clip the maximized size computed in JS back
+     down by that same 32px, leaving a visible gap instead of true edge-to-
+     edge like .tech-tree-overlay. */
+  max-width: none;
+  max-height: none;
+  /* Edge-to-edge like .tech-tree-overlay — a rounded corner or side border
+     reads as a mistake once the box is flush against the viewport's own
+     edges rather than floating with room around it. */
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+}
+
+.draggable-window.maximized .draggable-window-titlebar {
+  border-radius: 0;
+}
+
+/* Present only for the brief window right after toggling maximize/restore
+   (see DraggableWindow's `animating` state) — NOT a permanent rule on
+   .draggable-window itself, or every ordinary drag/resize pointermove would
+   also queue this transition and visibly lag behind the cursor instead of
+   tracking it. */
+.draggable-window.animating {
+  transition:
+    transform 240ms ease,
+    width 240ms ease,
+    height 240ms ease;
 }
 
 .strategizer-intro {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
+import { RESOURCE_TYPES, HUD_RESOURCE_IDS, type ResourceId } from '../data/resourceData'
 import { useResourceStore } from '../state/resourceStore'
 import { ResourceIcon } from './ResourceIcons'
 import { DraggableWindow } from './DraggableWindow'
@@ -26,10 +26,11 @@ export function ResourceBar() {
   const monthlyDelta = useResourceStore((s) => s.monthlyDelta)
   const [openId, setOpenId] = useState<ResourceId | null>(null)
   const openResource = RESOURCE_TYPES.find((r) => r.id === openId) ?? null
+  const visibleResources = HUD_RESOURCE_IDS.map((id) => RESOURCE_TYPES.find((r) => r.id === id)!)
 
   return (
     <div className="resource-bar">
-      {RESOURCE_TYPES.map((resource) => {
+      {visibleResources.map((resource) => {
         const delta = monthlyDelta[resource.id]
         return (
           <button
@@ -49,7 +50,7 @@ export function ResourceBar() {
       })}
 
       {openResource && (
-        <DraggableWindow title={openResource.name} onClose={() => setOpenId(null)}>
+        <DraggableWindow title={openResource.name} onClose={() => setOpenId(null)} maximizable={false}>
           <div className="inspect-row">
             <span className="inspect-label">Stockpile</span>
             <span className="inspect-value">{amounts[openResource.id].toLocaleString()}</span>

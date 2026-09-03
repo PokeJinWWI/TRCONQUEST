@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 interface DraggableWindowProps {
@@ -23,6 +23,13 @@ interface DraggableWindowProps {
    * CombatViewScene. `initialOffset` is still applied on top, and the player
    * can still drag it anywhere from there. */
   anchor?: 'left' | 'right'
+  /** Set false to omit the maximize button — for a small popup hanging off
+   * the top HUD bar itself (a resource's info window, Treasury/Balance —
+   * see ResourceBar.tsx/FiscalIndicators.tsx), where "fill the screen"
+   * doesn't fit the window's own small, glance-and-close purpose. Defaults
+   * true; already unavailable for an anchored window regardless (see
+   * `anchor`). */
+  maximizable?: boolean
   children: ReactNode
 }
 
@@ -49,7 +56,7 @@ function bringToFrontZIndex(): number {
 // the satellite-view inspection panel and the nav sidebar's category
 // windows — re-centers on whichever body is selected but stays wherever the
 // player last dragged/resized it until they select something else.
-export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, children }: DraggableWindowProps) {
+export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, maximizable = true, children }: DraggableWindowProps) {
   const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   // Collapsed to just its title bar — independent of `onClose`: a window
   // with no close button (the combat order panel, which *is* the view it
@@ -63,6 +70,24 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
   // Starts already on top of anything opened before it — a freshly opened
   // window shouldn't appear to open BEHIND an existing one until clicked.
   const [zIndex, setZIndex] = useState(bringToFrontZIndex)
+  // Windows-style maximize/restore — computed as an ordinary `pos`/`size`
+  // change (see handleToggleMaximize), not a separate CSS positioning
+  // scheme, specifically so it animates through the exact same
+  // transform/width/height the drag/resize handlers already drive (see
+  // `animating` below) rather than snapping between two different layout
+  // mechanisms with nothing in common to interpolate.
+  const [maximized, setMaximized] = useState(false)
+  // Briefly true right after toggling maximize/restore — the only time a
+  // CSS transition is actually wanted (see .animating). Ordinary dragging
+  // and resizing must stay instantaneous, or every pointermove would lag
+  // behind a queued transition instead of tracking the cursor.
+  const [animating, setAnimating] = useState(false)
+  const animationTimeoutRef = useRef<number | undefined>(undefined)
+  const applyMaximizeTimeoutRef = useRef<number | undefined>(undefined)
+  // What to restore `pos`/`size` to on the way back out — captured the
+  // instant maximize is turned on, from whatever they actually were then
+  // (a manually-resized window restores to that size, not the CSS default).
+  const preMaximizeRef = useRef<{ pos: { x: number; y: number }; size: { width: number; height: number } | null } | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
   const resizeRef = useRef<{
     startX: number
@@ -126,6 +151,11 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
   }
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // A maximized window doesn't drag — same as any OS's maximized windows,
+    // and it sidesteps the question of what dragging even means once `pos`
+    // has been repurposed to describe "fill the screen" (see
+    // handleToggleMaximize) rather than a normal offset.
+    if (maximized) return
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }
@@ -160,6 +190,42 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
     dragRef.current = null
   }
 
+  // Every window opens centre-hung at the same default spot (see `pos`'s
+  // initializer) regardless of how tall its content turns out to be — fine
+  // for the usual short inspector panel, but a genuinely tall one (a long
+  // description, several rows) can end up with its title bar computed ABOVE
+  // y=0 in a short viewport, taking the close button with it off-screen and
+  // leaving no way to dismiss it. The drag handler above already clamps the
+  // box to the viewport on every move; this runs the same clamp once, right
+  // after the real (content-dependent) size is known, so a window can never
+  // open already off-screen in the first place. A no-op whenever the window
+  // already fits, so every existing window's default position is unchanged.
+  useLayoutEffect(() => {
+    const rect = windowRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const overflowLeft = Math.max(0, -rect.left)
+    const overflowRight = Math.max(0, rect.left + rect.width - window.innerWidth)
+    const overflowTop = Math.max(0, -rect.top)
+    const overflowBottom = Math.max(0, rect.top + rect.height - window.innerHeight)
+    if (overflowLeft || overflowRight || overflowTop || overflowBottom) {
+      setPos((p) => ({ x: p.x + overflowLeft - overflowRight, y: p.y + overflowTop - overflowBottom }))
+    }
+    // Intentionally mount-only: this corrects the INITIAL open position, not
+    // an ongoing constraint — the drag handler already keeps it on-screen
+    // for every move after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Clears the maximize/restore transition timeouts if the window closes
+  // mid-animation, so neither can fire a state update after unmount.
+  useEffect(
+    () => () => {
+      window.clearTimeout(animationTimeoutRef.current)
+      window.clearTimeout(applyMaximizeTimeoutRef.current)
+    },
+    [],
+  )
+
   // The window is centred vertically on `pos.y` (see the transform below —
   // `calc(-50% + Ypx)` on BOTH axes), which is deliberate for how a fresh
   // window opens, but means collapsing (the body leaving the DOM shrinks the
@@ -181,12 +247,76 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
     setCollapsed((c) => !c)
   }
 
+  // Reads a HUD-bar height CSS var (set live by useHudBarLayout) as a number
+  // of pixels, falling back the same way the CSS itself does when the var
+  // isn't set yet (e.g. the very first render).
+  const cssVarPx = (name: string, fallback: number): number => {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name)
+    const n = parseFloat(raw)
+    return Number.isFinite(n) ? n : fallback
+  }
+
+  // Maximize/restore is just a `pos`/`size` change to a computed target,
+  // same mechanism the drag/resize handlers already use — see this window's
+  // own header comment on `maximized` for why that's deliberate (it's what
+  // lets .animating interpolate the transition instead of snapping between
+  // two unrelated positioning schemes). Not offered for an anchored window
+  // (see the button's own guard below) — anchor's X offset means something
+  // different (a straight pin-to-edge distance, not a centred translate), so
+  // the fill-the-screen math below doesn't apply to it, and pinned combat
+  // panels have no real reason to want fullscreen anyway — nor for one with
+  // `maximizable={false}` (see that prop's own comment).
+  const handleToggleMaximize = () => {
+    if (anchor || !maximizable) return
+    window.clearTimeout(animationTimeoutRef.current)
+    window.clearTimeout(applyMaximizeTimeoutRef.current)
+    // Arms the transition (see .animating) WITHOUT touching pos/size/
+    // maximized yet — changing those in this same tick would let React
+    // batch the class and the value change into one render, which the
+    // browser can't animate (it never gets to paint the "before" state with
+    // a transition actually active to transition FROM). A deferred
+    // macrotask (not requestAnimationFrame — rAF callbacks can be
+    // indefinitely suspended for a backgrounded/inactive tab, which is
+    // exactly the state this needs to keep working correctly through)
+    // guarantees a real paint happens in between, which is what makes the
+    // following change land as an actual transition instead of an instant
+    // jump.
+    setAnimating(true)
+    animationTimeoutRef.current = window.setTimeout(() => setAnimating(false), 260)
+
+    applyMaximizeTimeoutRef.current = window.setTimeout(() => {
+      if (!maximized) {
+        preMaximizeRef.current = { pos, size }
+        const hudTop = cssVarPx('--hud-top-height', 52)
+        const hudBottom = cssVarPx('--hud-bottom-height', 58)
+        const availableHeight = window.innerHeight - hudTop - hudBottom
+        // The box centres itself at `left: 32%, top: 55%` (see the base
+        // CSS rule) plus this translate offset — solving for the offset
+        // that lands the centre at the fill-the-screen box's own centre
+        // instead (full width, `hudTop` to `hudTop + availableHeight`).
+        setPos({
+          x: window.innerWidth * (0.5 - 0.32),
+          y: hudTop + availableHeight / 2 - window.innerHeight * 0.55,
+        })
+        setSize({ width: window.innerWidth, height: availableHeight })
+        setMaximized(true)
+      } else {
+        setMaximized(false)
+        const prev = preMaximizeRef.current
+        if (prev) {
+          setPos(prev.pos)
+          setSize(prev.size)
+        }
+      }
+    }, 0)
+  }
+
   return (
     <div
       ref={windowRef}
       className={`draggable-window${wide ? ' wide' : ''}${collapsed ? ' collapsed' : ''}${
         anchor ? ` anchor-${anchor}` : ''
-      }`}
+      }${maximized ? ' maximized' : ''}${animating ? ' animating' : ''}`}
       // Capture phase so a click anywhere in the window — including on a
       // button that itself stops propagation — still brings it to front,
       // same reasoning capture-phase handlers are already used for elsewhere
@@ -203,7 +333,8 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
           : `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
         zIndex,
         // Only overrides the CSS default (240px, or 560px for `wide`) once
-        // the player has actually dragged an edge/corner — see `size`.
+        // the player has actually dragged an edge/corner, or maximized —
+        // see `size`.
         ...(size && !collapsed ? { width: size.width, height: size.height } : {}),
       }}
     >
@@ -224,6 +355,19 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
           >
             {collapsed ? '▸' : '▾'}
           </button>
+          {/* Not offered for an anchored window, or one with
+              maximizable={false} — see handleToggleMaximize's own comment. */}
+          {!anchor && maximizable && (
+            <button
+              type="button"
+              className="draggable-window-maximize"
+              onClick={handleToggleMaximize}
+              aria-label={maximized ? 'Restore' : 'Maximize'}
+              title={maximized ? 'Restore' : 'Maximize'}
+            >
+              {maximized ? '❐' : '□'}
+            </button>
+          )}
           {onClose && (
             <button type="button" className="draggable-window-close" onClick={onClose} aria-label="Close">
               ×
@@ -233,10 +377,11 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, c
       </div>
       {!collapsed && <div className="draggable-window-body">{children}</div>}
       {/* Resize handles — hidden while collapsed, since there's no body to
-          resize into (only the title bar is showing). Corner comes last so
-          it layers above the edge strips near the corner, where they'd
-          otherwise both be hit-testable at once. */}
-      {!collapsed && (
+          resize into (only the title bar is showing), and while maximized,
+          since a maximized window doesn't resize (see handleToggleMaximize).
+          Corner comes last so it layers above the edge strips near the
+          corner, where they'd otherwise both be hit-testable at once. */}
+      {!collapsed && !maximized && (
         <>
           <div
             className="draggable-window-resize-right"

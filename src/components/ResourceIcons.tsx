@@ -20,7 +20,7 @@ const ICON_PATHS: Record<ResourceId, ReactElement> = {
     </>
   ),
   hyperium: <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7L8 1zM8 5l2.5 1.5v3L8 11l-2.5-1.5v-3L8 5z" fill="none" />,
-  other: <path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2" fill="none" />,
+  special: <path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2" fill="none" />,
 }
 
 export function ResourceIcon({ id, className }: { id: ResourceId; className?: string }) {

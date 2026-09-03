@@ -2,7 +2,7 @@
 // exists yet (see resourceStore) — this is the data layer for the readout
 // itself, the same "reserve the spot with real empty state, not fake
 // numbers" pattern Outliner already uses for Colonies/Starbases.
-export type ResourceId = 'energy' | 'minerals' | 'food' | 'consumerGoods' | 'alloys' | 'exoticMatter' | 'hyperium' | 'other'
+export type ResourceId = 'energy' | 'minerals' | 'food' | 'consumerGoods' | 'alloys' | 'exoticMatter' | 'hyperium' | 'special'
 
 export interface ResourceType {
   id: ResourceId
@@ -62,9 +62,19 @@ export const RESOURCE_TYPES: ResourceType[] = [
     description: "Extremely rare, yields effectively infinite energy, and can't be subdivided — fuels hyperdrives, making every hyperdrive-equipped hull valuable in its own right.",
   },
   {
-    id: 'other',
-    name: 'Other',
-    short: 'MISC',
-    description: 'Miscellaneous stockpile not yet broken into its own category.',
+    id: 'special',
+    name: 'Special',
+    short: 'SPEC',
+    description: 'Rare, one-off materials that do not yet warrant their own dedicated category.',
   },
 ]
+
+// Which resources actually render in the top HUD bar (see ResourceBar.tsx) —
+// a deliberately small subset of the full catalog above. The rest
+// (energy/minerals/food/consumerGoods/alloys) still exist as real
+// `ResourceId`s with real store slots (see resourceStore), just not shown in
+// the header — narrowed at the user's own request to keep the bar to the
+// resources that actually matter moment-to-moment (the two FTL fuels plus
+// whatever doesn't fit elsewhere), not a deletion of the underlying data
+// model.
+export const HUD_RESOURCE_IDS: ResourceId[] = ['exoticMatter', 'hyperium', 'special']
