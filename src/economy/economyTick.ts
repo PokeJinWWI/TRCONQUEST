@@ -87,7 +87,7 @@ const INVENTORY_DECAY = 0.08
 // capped by (and draw down) `World.resourceDeposits` each tick. Farm crops
 // regrow and power/manufactured goods aren't a deposit, so they're excluded.
 export const DEPLETABLE_GOODS: GoodId[] = ['ironOre', 'coal', 'oil', 'rareMetals', 'sulfur', 'hardwood', 'timber', 'phosphate']
-const BUILD_COST_PER_LEVEL = 6000
+export const BUILD_COST_PER_LEVEL = 6000
 const CONSTRUCTION_CAPACITY = 400
 const TICKS_PER_YEAR = 12
 
@@ -695,6 +695,37 @@ export function tickEconomy(
       }
     }
 
+    // --- Subsidies: a per-tick cash transfer FROM the treasury. A corporation
+    //     subsidy credits that company's cash directly. A building subsidy does
+    //     the same when the building is corporation-owned (credited to its
+    //     owning corp, exactly like a corp subsidy); a state- or worker-owned
+    //     building has no separate cash account to credit, so its subsidy is
+    //     simply spent — real treasury outlay that funds the building's upkeep
+    //     without a further transfer (there's nowhere else for state money paid
+    //     to a state asset to go). Either way it is a REAL cost, folded into
+    //     this country's expenditure below — never free money.
+    let subsidiesSpent = 0
+    for (const [corpId, amt] of Object.entries(country.subsidies.corporations)) {
+      if (amt <= 0) continue
+      subsidiesSpent += amt
+      corpProfitTotal.set(corpId, (corpProfitTotal.get(corpId) ?? 0) + amt)
+    }
+    for (const [key, amt] of Object.entries(country.subsidies.buildings)) {
+      if (amt <= 0) continue
+      const sep = key.indexOf(':')
+      if (sep < 0) continue
+      const worldId = key.slice(0, sep)
+      const buildingId = key.slice(sep + 1)
+      const ownedIdx = owned.find(({ w }) => w.id === worldId)?.idx
+      if (ownedIdx === undefined) continue
+      const building = nextWorlds[ownedIdx].buildings.find((b) => b.id === buildingId)
+      if (!building) continue
+      subsidiesSpent += amt
+      if (building.owner.kind === 'corporation') {
+        corpProfitTotal.set(building.owner.corporationId, (corpProfitTotal.get(building.owner.corporationId) ?? 0) + amt)
+      }
+    }
+
     const priceLevel = population > 0 ? cpiNum / population : 1
     const prevPriceLevel = population > 0 ? prevCpiNum / population : 1
     const inflation = prevPriceLevel > 0 ? priceLevel / prevPriceLevel - 1 : 0
@@ -731,7 +762,7 @@ export function tickEconomy(
     const bondInterest = totalBonds * country.bondRate
     const overdraft = Math.max(0, -country.treasury) * DEBT_INTEREST_RATE
     const interest = bondInterest + overdraft
-    const expenditure = welfare + adminTotal + serviceSubsidy + interest
+    const expenditure = welfare + adminTotal + serviceSubsidy + interest + subsidiesSpent
     const balance = govRevenue - expenditure
     const treasury = country.treasury + balance - constructionSpend
     const debt = totalBonds + Math.max(0, -treasury)
@@ -761,6 +792,7 @@ export function tickEconomy(
       bureaucracyConsumed,
       tradeVolume,
       logisticsCapacity: effectiveLogistics,
+      subsidiesSpent,
     }
     nextCountries.push({ ...country, treasury, bureaucracy })
   }

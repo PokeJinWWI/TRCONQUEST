@@ -1,11 +1,12 @@
 import { Fragment, useMemo, useState } from 'react'
 import { RECIPES, getMethod, BUREAUCRACY_OUTPUT } from '../economy/recipes'
 import { GOODS } from '../economy/goods'
-import { estimateWorldGdp, constructionCost, JOB_SCALE, canBuild } from '../economy/economyTick'
+import { estimateWorldGdp, constructionCost, JOB_SCALE, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { DISTRICT_LABELS, districtOfRecipe } from '../economy/recipes'
 import { economicSystemDef, type EconomicSystem } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
+import { useConfirmStore } from '../state/confirmStore'
 import { getCountry } from '../data/countryData'
 import { formatPop, formatMoney } from '../economy/format'
 import type { Building, Corporation, Country, World } from '../economy/economyTypes'
@@ -20,15 +21,37 @@ const CLASS_LABEL: Record<string, string> = {
 }
 
 // The full detail of one building — its inputs, outputs, employment by class,
-// owner and finances — shown when a building row is clicked.
-function BuildingDetail({ b, corporations }: { b: Building; corporations: Corporation[] }) {
+// owner and finances — shown when a building row is clicked. When the viewer
+// governs this world, it also carries a per-building subsidy control and a
+// Nationalize action (transfers a single building to the state regardless of
+// its owning corporation's overall status).
+function BuildingDetail({
+  b,
+  world,
+  country,
+  owned,
+  corporations,
+}: {
+  b: Building
+  world: World
+  country?: Country
+  owned: boolean
+  corporations: Corporation[]
+}) {
   const recipe = RECIPES[b.recipeId]
   const method = getMethod(b.recipeId, b.methodId)
+  const setSubsidyForBuilding = useEconomyStore((s) => s.setSubsidyForBuilding)
+  const nationaliseBuilding = useEconomyStore((s) => s.nationaliseBuilding)
+  const requestConfirm = useConfirmStore((s) => s.requestConfirm)
   if (!recipe || !method) return null
   const t = b.throughput
   const perTick = (amount: number) => amount * b.level * t
   const owner = ownerLabel(b, corporations)
   const bureaucracy = BUREAUCRACY_OUTPUT[b.recipeId]
+  const subsidyKey = `${world.id}:${b.id}`
+  const subsidy = country?.subsidies.buildings[subsidyKey] ?? 0
+  const value = b.level * BUILD_COST_PER_LEVEL
+  const compensation = b.owner.kind === 'corporation' ? value * 0.6 : value * 0.15
 
   return (
     <div className="bld-detail">
@@ -82,6 +105,50 @@ function BuildingDetail({ b, corporations }: { b: Building; corporations: Corpor
         Throughput {Math.round(t * 100)}% · Employs {formatPop(b.employed)} of {formatPop(b.jobsPosted)} jobs · Profit{' '}
         <span className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</span>/tick
       </div>
+      {owned && country && (
+        <>
+          <div
+            className="econ-control-row"
+            title="A standing per-tick treasury payment funding this building's production — a real, ongoing budget cost."
+          >
+            <span className="inspect-label">Subsidize/tick</span>
+            <span className="econ-control">
+              <button type="button" onClick={() => setSubsidyForBuilding(country.id, world.id, b.id, subsidy - 20)}>
+                −
+              </button>
+              <span className="econ-control-value">{formatMoney(subsidy)}</span>
+              <button type="button" onClick={() => setSubsidyForBuilding(country.id, world.id, b.id, subsidy + 20)}>
+                +
+              </button>
+            </span>
+          </div>
+          {b.owner.kind !== 'state' && (
+            <div className="bld-detail-actions">
+              <button
+                type="button"
+                className="corp-btn corp-btn-danger"
+                onClick={() =>
+                  requestConfirm({
+                    title: `Nationalize ${recipe!.label}?`,
+                    body: `This will transfer ownership of this building to the state. The owning ${
+                      b.owner.kind === 'corporation' ? 'corporation' : 'worker co-op'
+                    } loses this asset and receives only partial compensation for a single building (unlike full corporate nationalization, which buys out the whole company).`,
+                    effects: [
+                      `Pay ${formatMoney(compensation)} in compensation from the treasury`,
+                      `Lose ~${50 + b.level * 30} bureaucracy (administrative takeover)`,
+                      'The building becomes state-run and its method is unpinned',
+                    ],
+                    confirmLabel: 'Nationalize',
+                    onConfirm: () => nationaliseBuilding(world.id, b.id),
+                  })
+                }
+              >
+                Nationalize
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -266,7 +333,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                 {open && (
                   <tr className="market-detail-row">
                     <td colSpan={8}>
-                      <BuildingDetail b={b} corporations={corporations} />
+                      <BuildingDetail b={b} world={world} country={country} owned={owned} corporations={corporations} />
                     </td>
                   </tr>
                 )}

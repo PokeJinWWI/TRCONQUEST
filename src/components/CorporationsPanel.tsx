@@ -14,10 +14,13 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
   const corporations = useEconomyStore((s) => s.corporations)
   const characters = useEconomyStore((s) => s.characters)
   const worlds = useEconomyStore((s) => s.worlds)
+  const countries = useEconomyStore((s) => s.countries)
   const createCorporation = useEconomyStore((s) => s.createCorporation)
   const nationaliseCorporation = useEconomyStore((s) => s.nationaliseCorporation)
   const privatiseCorporation = useEconomyStore((s) => s.privatiseCorporation)
+  const setSubsidyForCorporation = useEconomyStore((s) => s.setSubsidyForCorporation)
   const requestConfirm = useConfirmStore((s) => s.requestConfirm)
+  const country = countries.find((c) => c.id === countryId)
   const [name, setName] = useState('')
   const [sector, setSector] = useState('Industry')
 
@@ -78,6 +81,26 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                 Leader: <b>{leader?.name ?? '—'}</b>
                 {leader && <span className="corp-card-traits"> · {leader.traits.join(', ')}</span>}
               </div>
+              {kind !== 'financial' && country && (
+                <div className="econ-control-row" title="A standing per-tick treasury payment to this company's cash — a real, ongoing budget cost, not free money.">
+                  <span className="inspect-label">Subsidize/tick</span>
+                  <span className="econ-control">
+                    <button
+                      type="button"
+                      onClick={() => setSubsidyForCorporation(countryId, c.id, (country.subsidies.corporations[c.id] ?? 0) - 50)}
+                    >
+                      −
+                    </button>
+                    <span className="econ-control-value">{formatMoney(country.subsidies.corporations[c.id] ?? 0)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSubsidyForCorporation(countryId, c.id, (country.subsidies.corporations[c.id] ?? 0) + 50)}
+                    >
+                      +
+                    </button>
+                  </span>
+                </div>
+              )}
               <div className="corp-card-actions">
                 {kind === 'financial' ? null : kind === 'private' ? (
                   <button

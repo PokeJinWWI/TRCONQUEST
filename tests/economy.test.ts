@@ -12,6 +12,7 @@ import { GOOD_IDS, GOODS, priceCeiling, PRICE_FLOOR } from '../src/economy/goods
 import { POP_CLASSES, RECIPES, getMethod, qualificationFraction } from '../src/economy/recipes'
 import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
+import { useEconomyStore } from '../src/state/economyStore'
 import type { Building, Corporation, Country, World } from '../src/economy/economyTypes'
 
 let failures = 0
@@ -436,6 +437,79 @@ console.log('\n=== 20. Resource deposits: extraction is capped by a finite reser
   const remaining = scarceMars.resourceDeposits?.ironOre ?? -1
   check('the deposit is drawn down toward zero and never negative', remaining >= 0 && remaining <= lowDeposit, `${remaining}`)
   check('a near-exhausted deposit is fully drawn down by one tick of uncapped-scale demand', remaining < 1e-6, `${remaining}`)
+}
+
+console.log('\n=== 21. Government subsidies: a real treasury cost that credits the recipient ===')
+{
+  const mars = seedWorlds().find((w) => w.id === 'Mars')!
+  const corpBuilding = mars.buildings.find((b) => b.owner.kind === 'corporation')!
+  const corpId = (corpBuilding.owner as { kind: 'corporation'; corporationId: string }).corporationId
+
+  const baseCountries = seedCountries()
+  const baseCorporations = seedCorporations()
+  const subsidizedCountries = baseCountries.map((c) =>
+    c.id === 'imperial-state-of-mars'
+      ? { ...c, subsidies: { corporations: { [corpId]: 400 }, buildings: { [`Mars:${corpBuilding.id}`]: 150 } } }
+      : c,
+  )
+
+  const baseline = tickEconomy(baseCountries, seedWorlds(), baseCorporations)
+  const subsidized = tickEconomy(subsidizedCountries, seedWorlds(), baseCorporations)
+
+  const baseTreasury = baseline.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+  const subTreasury = subsidized.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+  check('subsidies are a REAL cost: the treasury ends lower by exactly the outlay (400 + 150)', Math.abs(baseTreasury - subTreasury - 550) < 1e-6, `Δtreasury=${(baseTreasury - subTreasury).toFixed(2)}`)
+
+  const baseCorpCash = baseline.corporations.find((c) => c.id === corpId)!.cash
+  const subCorpCash = subsidized.corporations.find((c) => c.id === corpId)!.cash
+  check('the subsidized corporation is credited the full amount (corp subsidy + the building subsidy it owns)', Math.abs(subCorpCash - baseCorpCash - 550) < 1e-6, `Δcash=${(subCorpCash - baseCorpCash).toFixed(2)}`)
+
+  const subReport = subsidized.reports.countries['imperial-state-of-mars']
+  const baseReport = baseline.reports.countries['imperial-state-of-mars']
+  check('the fiscal report exposes subsidiesSpent', subReport.subsidiesSpent === 550, `${subReport.subsidiesSpent}`)
+  check('subsidiesSpent is folded into expenditure (no free lunch)', Math.abs(subReport.expenditure - baseReport.expenditure - 550) < 1e-6, `Δexpenditure=${(subReport.expenditure - baseReport.expenditure).toFixed(2)}`)
+  check('the deficit widens by exactly the subsidy outlay', Math.abs(baseReport.balance - subReport.balance - 550) < 1e-6, `Δbalance=${(baseReport.balance - subReport.balance).toFixed(2)}`)
+
+  // A subsidy aimed at a STATE-owned building is still a real treasury outlay
+  // (funds its upkeep) even though there's no separate corp cash account to
+  // credit — it must not leak into free money.
+  const stateBuilding = mars.buildings.find((b) => b.owner.kind === 'state')!
+  const stateCountries = baseCountries.map((c) =>
+    c.id === 'imperial-state-of-mars' ? { ...c, subsidies: { corporations: {}, buildings: { [`Mars:${stateBuilding.id}`]: 300 } } } : c,
+  )
+  const stateSubsidized = tickEconomy(stateCountries, seedWorlds(), baseCorporations)
+  const stateReport = stateSubsidized.reports.countries['imperial-state-of-mars']
+  check('a subsidy to a STATE-owned building is still spent (subsidiesSpent > 0)', stateReport.subsidiesSpent === 300, `${stateReport.subsidiesSpent}`)
+  const stateTreasury = stateSubsidized.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+  check('and it still costs the treasury the full amount', Math.abs(baseTreasury - stateTreasury - 300) < 1e-6, `Δtreasury=${(baseTreasury - stateTreasury).toFixed(2)}`)
+}
+
+console.log('\n=== 22. Per-building nationalization (store action) ===')
+{
+  // The store action (economyStore.nationaliseBuilding) is exercised directly
+  // via zustand's getState(), same as any other store action would be called
+  // from a component — no React/DOM needed.
+  const store = useEconomyStore.getState()
+  const mars = store.worlds.find((w) => w.id === 'Mars')!
+  const corpBuilding = mars.buildings.find((b) => b.owner.kind === 'corporation')!
+  const corpId = (corpBuilding.owner as { kind: 'corporation'; corporationId: string }).corporationId
+  const country = store.countries.find((c) => c.id === 'imperial-state-of-mars')!
+  const treasuryBefore = country.treasury
+
+  store.nationaliseBuilding('Mars', corpBuilding.id)
+
+  const after = useEconomyStore.getState()
+  const nationalized = after.worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === corpBuilding.id)!
+  check('the building\'s owner changes to state', nationalized.owner.kind === 'state', JSON.stringify(nationalized.owner))
+  check('its method is unpinned on takeover', nationalized.methodLocked === false)
+
+  const countryAfter = after.countries.find((c) => c.id === 'imperial-state-of-mars')!
+  const compensation = corpBuilding.level * 6000 * 0.6 // BUILD_COST_PER_LEVEL * 0.6, mirroring nationaliseCorporation's ratio
+  check('the treasury pays compensation for the seized asset (not free)', countryAfter.treasury < treasuryBefore, `${countryAfter.treasury.toFixed(1)} < ${treasuryBefore.toFixed(1)}`)
+  check('the compensation is proportional to the building\'s value at the corp-nationalisation ratio (60%)', Math.abs(treasuryBefore - countryAfter.treasury - compensation) < 1e-6, `paid=${(treasuryBefore - countryAfter.treasury).toFixed(2)} expected=${compensation.toFixed(2)}`)
+
+  const stillOwnsElsewhere = after.worlds.some((w) => w.buildings.some((b) => b.owner.kind === 'corporation' && b.owner.corporationId === corpId && b.id !== corpBuilding.id))
+  check('the owning corporation loses just this one asset (still exists / may own others)', after.corporations.some((c) => c.id === corpId), `corp still exists=${after.corporations.some((c) => c.id === corpId)}, owns other assets=${stillOwnsElsewhere}`)
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

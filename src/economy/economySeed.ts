@@ -431,6 +431,7 @@ const COUNTRIES: Country[] = [
     bureaucracy: 3500,
     decrees: [],
     logisticsCapacity: 6000,
+    subsidies: { corporations: {}, buildings: {} },
   },
   {
     id: 'republic-of-venus',
@@ -447,6 +448,7 @@ const COUNTRIES: Country[] = [
     bureaucracy: 3500,
     decrees: [],
     logisticsCapacity: 6000,
+    subsidies: { corporations: {}, buildings: {} },
   },
   {
     id: 'orion-republic',
@@ -463,6 +465,7 @@ const COUNTRIES: Country[] = [
     bureaucracy: 3500,
     decrees: [],
     logisticsCapacity: 6000,
+    subsidies: { corporations: {}, buildings: {} },
   },
   {
     id: 'kingdom-of-lalande',
@@ -479,6 +482,7 @@ const COUNTRIES: Country[] = [
     bureaucracy: 3500,
     decrees: [],
     logisticsCapacity: 6000,
+    subsidies: { corporations: {}, buildings: {} },
   },
 ]
 

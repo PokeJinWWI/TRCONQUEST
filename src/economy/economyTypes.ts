@@ -19,6 +19,20 @@ export interface ForeignBondOffer {
   investor: string
 }
 
+// Government subsidies — a per-tick cash transfer FROM the treasury TO either a
+// whole corporation (boosts its cash directly) or one specific building (helps
+// fund that building's production even at a loss, regardless of the wider
+// company's health). `corporations` is keyed by corporationId; `buildings` is
+// keyed by `${worldId}:${buildingId}`. A subsidy is a REAL fiscal cost — it is
+// deducted from the treasury every tick like any other spending (see
+// tickEconomy's `subsidiesSpent`) — not free money. Setting an amount to 0
+// removes the entry (see economyStore's setSubsidyForCorporation/
+// setSubsidyForBuilding).
+export interface SubsidyBook {
+  corporations: Record<string, number>
+  buildings: Record<string, number>
+}
+
 // A pop cohort — one aggregated agent standing in for a slice of a world's
 // population sharing all four social axes: species + culture + religion +
 // class (design doc v2, Section 2). Population is in MILLIONS of people (so
@@ -168,6 +182,8 @@ export interface Country {
   // Freight capacity (units of goods movable between the country's worlds per
   // tick) — the logistics backbone of inter-world trade (Milestone 5).
   logisticsCapacity: number
+  // Standing per-tick subsidies to corporations and individual buildings.
+  subsidies: SubsidyBook
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---
@@ -283,6 +299,9 @@ export interface CountryFiscal {
   // tick, and the freight capacity available.
   tradeVolume: number
   logisticsCapacity: number
+  // Government subsidies paid out to corporations + individual buildings this
+  // tick — a real expenditure line, folded into `expenditure`/`balance`.
+  subsidiesSpent: number
 }
 
 export interface TickReports {
