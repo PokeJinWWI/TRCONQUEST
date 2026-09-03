@@ -8,7 +8,18 @@
 
 import { hullMotion, type ComponentKind, type CombatProfile, type HullSizeClass, type WeaponMount } from './combatData'
 import { HYPERDRIVE_BASE_COOLDOWN_DAYS, WARP_BASE_COOLDOWN_DAYS, type FtlDrive, type ShipClass } from './shipData'
-import { ARMOR_MODULES, DEFENSE_MODULES, SHIELD_MODULES, UPGRADE_MODULES, WEAPON_MODULES, type SlotCategory, type SlotSize } from './shipModules'
+import {
+  ARMOR_MODULES,
+  DEFENSE_MODULES,
+  POWER_TIER_BUDGET,
+  SHIELD_MODULES,
+  SLOT_CATEGORIES,
+  UPGRADE_MODULES,
+  WEAPON_MODULES,
+  findModule,
+  type SlotCategory,
+  type SlotSize,
+} from './shipModules'
 
 export interface HullChassis {
   id: string
@@ -146,6 +157,12 @@ export interface ShipDesign {
   name: string
   chassisId: string
   equipped: Record<SlotCategory, (string | null)[]>
+  // Every ship's power grid defaults to Tier 1 (see shipDesignStore.
+  // createDesign) — how much of it a design can actually equip is capped by
+  // POWER_TIER_BUDGET, checked against designPowerUsed below. Raising this
+  // is gated by research (see shipModules.POWER_TIER_TECH_ID), same as any
+  // other tech-gated choice in the builder.
+  powerTier: number
 }
 
 // A fresh design on `chassis` starts with every slot empty.
@@ -157,6 +174,33 @@ export function emptyLoadout(chassis: HullChassis): Record<SlotCategory, (string
     defense: chassis.slots.defense.map(() => null),
     upgrade: chassis.slots.upgrade.map(() => null),
   }
+}
+
+// Total power every currently-equipped module draws, across every slot in
+// every category — see shipModules.ts's "Power Distribution" section for
+// why this exists. `exclude` leaves one specific slot out of the sum: the
+// builder UI calls this while deciding what to OFFER for a slot it's about
+// to fill, and that slot's own current occupant (about to be replaced
+// anyway) shouldn't count against itself.
+export function designPowerUsed(design: ShipDesign, exclude?: { category: SlotCategory; index: number }): number {
+  let total = 0
+  for (const category of SLOT_CATEGORIES) {
+    design.equipped[category].forEach((moduleId, index) => {
+      if (exclude && exclude.category === category && exclude.index === index) return
+      if (!moduleId) return
+      const mod = findModule(category, moduleId)
+      if (mod) total += mod.powerCost
+    })
+  }
+  return total
+}
+
+// This design's total power budget, from its own powerTier — see
+// POWER_TIER_BUDGET. Falls back to Tier 1's budget for a tier the table
+// doesn't recognize (shouldn't happen in practice, but keeps this total
+// rather than throwing on stale/out-of-range data).
+export function designPowerBudget(design: ShipDesign): number {
+  return POWER_TIER_BUDGET[design.powerTier] ?? POWER_TIER_BUDGET[1]
 }
 
 // Caps on what stacking modules can add up to — matches the spirit of the

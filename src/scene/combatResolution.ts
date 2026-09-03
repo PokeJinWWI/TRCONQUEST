@@ -30,10 +30,38 @@ import {
   CHAFF_AI_FIRST_THRESHOLD,
   CHAFF_AI_SECOND_THRESHOLD,
   CHAFF_CHARGES,
+  projectileSpeedUnitsPerSecond,
+  PROJECTILE_IMPACT_RADIUS_UNITS,
+  THRUSTER_BOOST_SPEED_BONUS_FRACTION,
+  THRUSTER_BOOST_EVASION_BONUS,
+  THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER,
+  THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER,
+  SHIELD_BOOST_REGEN_MULTIPLIER,
+  SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER,
+  SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER,
+  SHIELD_BOOST_EVASION_PENALTY,
+  SHIELD_BOOST_SPEED_PENALTY_FRACTION,
+  SHIELD_BOOST_AI_HEALTH_ENGAGE_THRESHOLD,
+  SHIELD_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD,
+  WEAPONS_BOOST_DAMAGE_MULTIPLIER,
+  WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER,
+  WEAPONS_BOOST_SPEED_PENALTY_FRACTION,
+  WEAPONS_BOOST_AI_HEALTH_ENGAGE_THRESHOLD,
+  WEAPONS_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD,
+  SPIN_THRUST_EVASION_BONUS,
+  SPIN_THRUST_REDIRECT_CHANCE,
+  SPIN_THRUST_SIZE_EFFECTIVENESS,
+  SPIN_THRUST_AI_HEALTH_ENGAGE_THRESHOLD,
+  SPIN_THRUST_AI_HEALTH_DISENGAGE_THRESHOLD,
+  SPIN_THRUST_TURN_RADIANS_PER_STEP,
+  SPIN_THRUST_COLLISION_LOOKAHEAD_SECONDS,
+  SPIN_THRUST_COLLISION_CLEARANCE_UNITS,
   type CombatProfile,
   type CombatStance,
   type ComponentKind,
+  type DamageType,
   type FleetStrategy,
+  type HullSizeClass,
   type WeaponMount,
 } from '../data/combatData'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -46,6 +74,7 @@ import {
   sideFor,
   type CombatParticipant,
   type Engagement,
+  type InFlightProjectile,
 } from '../state/combatStore'
 import {
   ARENA_ORIGIN,
@@ -208,6 +237,58 @@ export function participantSpeed(p: CombatParticipant): number {
   return Math.hypot(p.velocity.x, p.velocity.y, p.velocity.z)
 }
 
+// Tactics (see combatData's Tactics section) that modify a ship's own
+// maneuverUnitsPerSecond/accelerationUnitsPerSecondSq. Written as independent
+// multiplicative checks (not an if/else-if chain) even though at most one of
+// the three BOOST_TACTIC_IDS is ever actually true at once (see
+// combatStore's setThrusterBoost/setShieldBoost/setWeaponsBoost) — this stays
+// correct on its own even if that invariant were ever violated, rather than
+// silently depending on it.
+export function tacticSpeedMultiplier(p: CombatParticipant): number {
+  let mult = 1
+  if (p.thrusterBoostActive) mult *= 1 + THRUSTER_BOOST_SPEED_BONUS_FRACTION
+  if (p.shieldBoostActive) mult *= 1 - SHIELD_BOOST_SPEED_PENALTY_FRACTION
+  if (p.weaponsBoostActive) mult *= 1 - WEAPONS_BOOST_SPEED_PENALTY_FRACTION
+  return mult
+}
+
+// Additive evasion bonus/penalty from active Tactics — consulted wherever
+// DefenseProfile.evasion itself is (currently only torpedoAccuracy; see that
+// function's own comment on why missiles are unaffected). Not clamped here —
+// torpedoAccuracy already clamps the combined value into [0, 1]. Weapons
+// Boost doesn't touch evasion at all — its trade is shields and speed only.
+// `sizeClass` only matters for Spin Thrust — see SPIN_THRUST_SIZE_
+// EFFECTIVENESS's own comment for why a bigger hull gets less out of it.
+export function tacticEvasionBonus(p: CombatParticipant, sizeClass: HullSizeClass): number {
+  let bonus = 0
+  if (p.thrusterBoostActive) bonus += THRUSTER_BOOST_EVASION_BONUS
+  if (p.shieldBoostActive) bonus -= SHIELD_BOOST_EVASION_PENALTY
+  if (p.spinThrustActive) bonus += SPIN_THRUST_EVASION_BONUS * SPIN_THRUST_SIZE_EFFECTIVENESS[sizeClass]
+  return bonus
+}
+
+// Per-weapon-family multiplier on this SHOOTER's own output from the three
+// boost tactics. Thruster Boost / Shield Boost both divert power AWAY from
+// the guns, at different rates for energy vs. kinetic mounts (see each
+// constant's own comment for why) — and leave missile/torpedo damage
+// completely alone, since those are physical rounds, not power-hungry
+// beam/rail systems. Weapons Boost is the mirror case: power flows TOWARD
+// the guns, and — unlike the other two — the bonus applies uniformly to
+// EVERY damage type, missiles/torpedoes included (see combatData's own
+// comment on WEAPONS_BOOST_DAMAGE_MULTIPLIER for why).
+export function tacticWeaponDamageMultiplier(p: CombatParticipant, damageType: DamageType): number {
+  let mult = 1
+  if (damageType === 'energy') {
+    if (p.thrusterBoostActive) mult *= THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER
+    if (p.shieldBoostActive) mult *= SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER
+  } else if (damageType === 'kinetic') {
+    if (p.thrusterBoostActive) mult *= THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER
+    if (p.shieldBoostActive) mult *= SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER
+  }
+  if (p.weaponsBoostActive) mult *= WEAPONS_BOOST_DAMAGE_MULTIPLIER
+  return mult
+}
+
 // A waypoint counts as reached inside this radius (or inside one step's
 // travel, whichever is larger — otherwise a fast ship can step straight over
 // a waypoint and circle back for it).
@@ -336,6 +417,58 @@ export function integrateMotion(
   }
 }
 
+function randomUnitVector(rng: Rng): Vector3 {
+  const theta = rng() * Math.PI * 2
+  const phi = Math.acos(2 * rng() - 1)
+  return new Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi))
+}
+
+// Spin Thrust's own integration: velocity is a bounded random walk instead
+// of steering toward any path/stance/order — see CombatParticipant.
+// spinThrustActive's own comment for why this is deliberately a separate
+// function from integrateMotion rather than a variant of it. Rotates the
+// CURRENT heading by a small random angle each step (bounded by
+// SPIN_THRUST_TURN_RADIANS_PER_STEP) rather than picking a fresh random
+// direction outright, so the result reads as a corkscrewing tumble rather
+// than the ship's heading teleporting every 0.1s. Always drives at full
+// maxSpeed once spinning — "cut loose," not "gently drifting" — same
+// budget-limited steering integrateMotion uses, just toward a random
+// desired velocity instead of one derived from a path.
+export function integrateSpinThrustDrift(p: CombatParticipant, maxSpeed: number, accel: number, dt: number, simDays: number, rng: Rng): CombatParticipant {
+  const position = toVector3(p.position)
+  const velocity = toVector3(p.velocity)
+  const currentSpeed = velocity.length()
+  const heading = currentSpeed > 1e-6 ? velocity.clone().divideScalar(currentSpeed) : randomUnitVector(rng)
+
+  // Perturb the heading by a bounded random rotation around an axis
+  // perpendicular to it (a rotation AROUND the heading itself would do
+  // nothing to it) — built from a random reference vector rather than a
+  // fixed axis so the tumble doesn't settle into a flat circle.
+  const reference = randomUnitVector(rng)
+  const rotationAxis = heading.clone().cross(reference)
+  const desired =
+    rotationAxis.lengthSq() > 1e-9
+      ? heading.clone().applyAxisAngle(rotationAxis.normalize(), (rng() * 2 - 1) * SPIN_THRUST_TURN_RADIANS_PER_STEP)
+      : heading.clone()
+  desired.multiplyScalar(maxSpeed)
+
+  const budget = accel * dt
+  const delta = desired.clone().sub(velocity)
+  if (budget > 0) {
+    if (delta.length() > budget) delta.setLength(budget)
+    velocity.add(delta)
+    if (velocity.length() > maxSpeed) velocity.setLength(maxSpeed)
+  }
+  position.add(velocity.clone().multiplyScalar(dt))
+
+  return {
+    ...p,
+    position: { x: position.x, y: position.y, z: position.z },
+    velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
+    positionSimDays: simDays,
+  }
+}
+
 // Which of the three healthbars a shot lands on. An explicitly chosen
 // component always wins while it still has HP left; otherwise damage falls on
 // a random surviving component weighted by its size, so a ship's big core
@@ -361,6 +494,26 @@ export function pickComponent(
   return alive[alive.length - 1]
 }
 
+// Spin Thrust's damage redirection (see combatData's SPIN_THRUST_REDIRECT_
+// CHANCE): the defender is jinking hard enough that some called shots land on
+// a DIFFERENT component instead of the one the attacker actually picked.
+// Deliberately excludes that component from the pool rather than just
+// re-rolling pickComponent with no preference (which could still coincidentally
+// land back on it) — "diverted to other portions" means somewhere else, not
+// "maybe somewhere else." Falls back to null (spread as normal) if nothing
+// OTHER than the excluded component is still alive to redirect to.
+function pickComponentExcluding(exclude: ComponentKind, state: ShipCombatState, profile: CombatProfile, rng: Rng): ComponentKind | null {
+  const alive = COMPONENT_KINDS.filter((k) => k !== exclude && state.componentHp[k] > 0)
+  if (alive.length === 0) return null
+  const totalWeight = alive.reduce((sum, k) => sum + profile.components[k], 0)
+  let roll = rng() * totalWeight
+  for (const kind of alive) {
+    roll -= profile.components[kind]
+    if (roll <= 0) return kind
+  }
+  return alive[alive.length - 1]
+}
+
 export interface ShotOutcome {
   intercepted: boolean
   // Defeated by the target's active chaff (see combatData's CHAFF_MISS_CHANCE).
@@ -373,13 +526,82 @@ export interface ShotOutcome {
   component: ComponentKind | null
 }
 
-// Applies one shot, eating through shields then armor then a component.
+// The shields -> armor -> component allocation itself, shared by applyShot
+// (a direct-fire shot, or a missile/torpedo at the instant it launches) and
+// resolveProjectileImpact (a missile/torpedo's damage, applied later — see
+// combatData's "Missile / torpedo travel time" — against whatever the
+// target's layers look like AT ARRIVAL rather than at launch). Interception
+// and miss/accuracy are both resolved once, at launch, by whichever of those
+// two callers reaches this point first for a given shot; this function only
+// ever runs for a round that's already confirmed to connect.
 //
 // Overflow between layers is carried in *raw* (pre-multiplier) damage rather
 // than post-multiplier damage — otherwise a kinetic round that overkills a
 // shield would carry its 1.5x shield bonus through into armor, where it's
 // supposed to be at 0.5x. Converting back to raw at each boundary is what
 // makes the counter-matrix behave correctly on partial layers.
+function applyDamageLayers(
+  damageType: DamageType,
+  rawDamage: number,
+  target: ShipCombatState,
+  targetProfile: CombatProfile,
+  preferredComponent: ComponentKind | null,
+  rng: Rng,
+): { next: ShipCombatState; outcome: Pick<ShotOutcome, 'shieldDamage' | 'armorDamage' | 'componentDamage' | 'component'> } {
+  const profile = DAMAGE_PROFILES[damageType]
+  let raw = rawDamage
+  let shieldHp = target.shieldHp
+  let armorHp = target.armorHp
+  const componentHp = { ...target.componentHp }
+  let shieldDamage = 0
+  let armorDamage = 0
+
+  if (!profile.bypassesShields && shieldHp > 0 && profile.shields > 0) {
+    const applied = Math.min(shieldHp, raw * profile.shields)
+    shieldHp -= applied
+    shieldDamage = applied
+    raw -= applied / profile.shields
+  }
+
+  if (raw > 0 && armorHp > 0 && profile.armor > 0) {
+    const applied = Math.min(armorHp, raw * profile.armor)
+    armorHp -= applied
+    armorDamage = applied
+    raw -= applied / profile.armor
+  }
+
+  let componentDamage = 0
+  let component: ComponentKind | null = null
+  if (raw > 0 && profile.components > 0) {
+    component = pickComponent(preferredComponent, target, targetProfile, rng)
+    componentDamage = raw * profile.components
+    componentHp[component] = Math.max(0, componentHp[component] - componentDamage)
+  }
+
+  return {
+    next: { ...target, shieldHp, armorHp, componentHp },
+    outcome: { shieldDamage, armorDamage, componentDamage, component },
+  }
+}
+
+// Resolves a missile/torpedo's damage against the target's CURRENT state at
+// the moment it arrives (see combatData's "Missile / torpedo travel time")
+// — deliberately re-running the layer allocation against whatever shields/
+// armor look like NOW rather than replaying the exact deltas computed at
+// launch, so shield regen (or any other hit the target took mid-flight)
+// between launch and arrival is accounted for correctly. Interception and
+// hit/miss were already decided at launch (see the firing loop's
+// `willHit`) — a round that reaches this function is confirmed to connect.
+export function resolveProjectileImpact(
+  projectile: Pick<InFlightProjectile, 'damageType' | 'rawDamage' | 'preferredComponent'>,
+  target: ShipCombatState,
+  targetProfile: CombatProfile,
+  rng: Rng,
+): ShipCombatState {
+  return applyDamageLayers(projectile.damageType, projectile.rawDamage, target, targetProfile, projectile.preferredComponent, rng).next
+}
+
+// Applies one shot, eating through shields then armor then a component.
 export function applyShot(
   weapon: WeaponMount,
   rawDamage: number,
@@ -438,39 +660,8 @@ export function applyShot(
     return { next: target, outcome: { ...nothing, missed: true } }
   }
 
-  let raw = rawDamage
-  let shieldHp = target.shieldHp
-  let armorHp = target.armorHp
-  const componentHp = { ...target.componentHp }
-  let shieldDamage = 0
-  let armorDamage = 0
-
-  if (!profile.bypassesShields && shieldHp > 0 && profile.shields > 0) {
-    const applied = Math.min(shieldHp, raw * profile.shields)
-    shieldHp -= applied
-    shieldDamage = applied
-    raw -= applied / profile.shields
-  }
-
-  if (raw > 0 && armorHp > 0 && profile.armor > 0) {
-    const applied = Math.min(armorHp, raw * profile.armor)
-    armorHp -= applied
-    armorDamage = applied
-    raw -= applied / profile.armor
-  }
-
-  let componentDamage = 0
-  let component: ComponentKind | null = null
-  if (raw > 0 && profile.components > 0) {
-    component = pickComponent(preferredComponent, target, targetProfile, rng)
-    componentDamage = raw * profile.components
-    componentHp[component] = Math.max(0, componentHp[component] - componentDamage)
-  }
-
-  return {
-    next: { ...target, shieldHp, armorHp, componentHp },
-    outcome: { intercepted: false, missed: false, shieldDamage, armorDamage, componentDamage, component },
-  }
+  const { next, outcome } = applyDamageLayers(weapon.damageType, rawDamage, target, targetProfile, preferredComponent, rng)
+  return { next, outcome: { intercepted: false, missed: false, ...outcome } }
 }
 
 // Applies undirected blast damage (a scuttle — see scuttleDamageAt) through
@@ -1292,6 +1483,12 @@ export function stepEngagements(
     // the existing route already ends, so a target holding still doesn't
     // cost a fresh plan every 0.1s step. ---
     const withApproach: CombatParticipant[] = participants.map((p) => {
+      // Genuinely uncontrollable while Spin Thrust is active (see
+      // CombatParticipant.spinThrustActive's own comment) — no destination
+      // planning of any kind, not even a manual hold. The movement step
+      // below is what actually turns this into a random walk; this just
+      // makes sure nothing re-populates `path` underneath it.
+      if (p.spinThrustActive) return p
       // The player has taken manual control of this ship's positioning — never
       // second-guess it by walking the ship back toward the enemy.
       if (p.holdPosition) return p
@@ -1362,8 +1559,33 @@ export function stepEngagements(
       return { ...ordered, lastPlanAttempt: point, ...retargeted }
     })
 
+    // --- Spin Thrust collision safety: an uncontrolled ship on a random
+    // walk (see CombatParticipant.spinThrustActive) gets the tactic switched
+    // back OFF for it the instant continuing on its current heading would
+    // carry it into a body within SPIN_THRUST_COLLISION_LOOKAHEAD_SECONDS —
+    // a real, persisted state change (control reverts to normal navigation
+    // for good), not a one-step dodge, so the same close call doesn't just
+    // recur next step. Runs BEFORE movement integrates this step's motion,
+    // so the ship that triggers it never actually drifts into the body in
+    // the first place — it steers away under normal navigation starting
+    // this very step instead. Uses the CURRENT heading as the lookahead
+    // direction (not a random future one, which is unknowable) — a
+    // reasonable proxy given the drift's own per-step turn is bounded (see
+    // SPIN_THRUST_TURN_RADIANS_PER_STEP), so it can't suddenly swing away
+    // from danger in a single step either. ---
+    const withSpinSafety: CombatParticipant[] = withApproach.map((p) => {
+      if (!p.spinThrustActive) return p
+      if (engagement.obstacles.length === 0) return p
+      const lookahead = toVector3(p.position).add(toVector3(p.velocity).multiplyScalar(SPIN_THRUST_COLLISION_LOOKAHEAD_SECONDS))
+      const imminent = engagement.obstacles.some(
+        (o) => pointDistance({ x: lookahead.x, y: lookahead.y, z: lookahead.z }, o.position) <= o.radiusUnits + SPIN_THRUST_COLLISION_CLEARANCE_UNITS,
+      )
+      if (!imminent) return p
+      return { ...p, spinThrustActive: false, path: [] }
+    })
+
     // --- Movement: integrate one step of real accelerated motion. ---
-    const moved: CombatParticipant[] = withApproach.map((p) => {
+    const moved: CombatParticipant[] = withSpinSafety.map((p) => {
       // Locked onto a body's own velocity (see CombatParticipant.
       // inheritVelocityFrom) — bypasses thrust/gravity/obstacle-avoidance
       // integration entirely in favor of just matching however that body is
@@ -1399,15 +1621,23 @@ export function stepEngagements(
       // Only a player ship is ever gated by the player's own tech — see
       // stepEngagements' own comment on playerCanFreeFloat.
       const canFreeFloat = ship.allegiance !== 'player' || playerCanFreeFloat
-      return integrateMotion(
-        p,
-        profile.maneuverUnitsPerSecond * utility,
-        profile.accelerationUnitsPerSecondSq * utility,
-        COMBAT_STEP_SECONDS,
-        simDays,
-        engagement.obstacles,
-        canFreeFloat,
-      )
+      // Thruster Boost / Shield Boost both scale this ship's own speed —
+      // see combatData's Tactics section and tacticSpeedMultiplier above.
+      const tacticMult = tacticSpeedMultiplier(p)
+      const maxSpeed = profile.maneuverUnitsPerSecond * utility * tacticMult
+      const accel = profile.accelerationUnitsPerSecondSq * utility * tacticMult
+
+      // Spin Thrust REPLACES normal steering entirely rather than layering
+      // on top of it — see CombatParticipant.spinThrustActive's own comment
+      // on why this tactic is genuinely uncontrollable. (The collision
+      // safety check that can turn this back off runs earlier in the step —
+      // see the auto-tactics pass below — so by the time movement runs here,
+      // spinThrustActive is already false again for any ship it just saved.)
+      if (p.spinThrustActive) {
+        return integrateSpinThrustDrift(p, maxSpeed, accel, COMBAT_STEP_SECONDS, simDays, rng)
+      }
+
+      return integrateMotion(p, maxSpeed, accel, COMBAT_STEP_SECONDS, simDays, engagement.obstacles, canFreeFloat)
     })
 
     // --- Separation: no two hulls may occupy the same point. Ships are
@@ -1484,11 +1714,17 @@ export function stepEngagements(
       const state = stateOf(p.shipId)
       if (!profile || !state) continue
       if (state.shieldHp >= profile.defenses.shieldHp) continue
+      // Shield Boost diverts power INTO the regen rate; Weapons Boost
+      // diverts it AWAY (see combatData's SHIELD_BOOST_REGEN_MULTIPLIER and
+      // WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER) — mutually exclusive in
+      // practice (see BOOST_TACTIC_IDS), so only one branch ever actually
+      // fires, but written as independent checks rather than assuming that.
+      const regenMult = p.shieldBoostActive ? SHIELD_BOOST_REGEN_MULTIPLIER : p.weaponsBoostActive ? WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER : 1
       working[p.shipId] = {
         ...state,
         shieldHp: Math.min(
           profile.defenses.shieldHp,
-          state.shieldHp + profile.defenses.shieldRegenPerSecond * COMBAT_STEP_SECONDS,
+          state.shieldHp + profile.defenses.shieldRegenPerSecond * regenMult * COMBAT_STEP_SECONDS,
         ),
       }
       touched.add(p.shipId)
@@ -1634,8 +1870,148 @@ export function stepEngagements(
       touched.add(p.shipId)
     }
 
+    // --- Auto-tactics: a ship whose owner has left a Tactic (see
+    // combatData's Tactics section) on "auto" manages it for itself — same
+    // "auto with a manual override" relationship (see each ShipInstance.
+    // *Auto flag's own comment). Independent flags, not one shared switch,
+    // since a player might want one tactic automated and another under hand
+    // control. Each tactic's own gate reflects what it's actually FOR, not a
+    // single shared "under threat" trigger — see each constant's own comment
+    // in combatData.ts for why Thruster Boost, Shield Boost, Weapons Boost,
+    // and Spin Thrust each need a different signal.
+    const withTactics: CombatParticipant[] = separated.map((p) => {
+      if (destroyed.has(p.shipId)) return p
+      const ship = shipsById.get(p.shipId)
+      const profile = ship ? shipCombatProfile(ship) : null
+      const state = stateOf(p.shipId)
+      if (!ship || !profile || !state) return p
+      const underThreat = activeEnemyContacts(p, { ...engagement, participants: separated }, ships, simDays).length > 0
+      const healthFraction = overallHealthFraction(state, profile)
+      const fleeing = ship.stance === 'flee' || !!ship.combat.ftlCharge
+
+      let next = p
+
+      // Shield Boost, Weapons Boost, and Thruster Boost draw from the same
+      // power grid (see combatData.BOOST_TACTIC_IDS) — evaluated in that
+      // priority order, each one only considered if a higher-priority boost
+      // didn't already claim the grid THIS step, so the auto logic never
+      // tries to turn on two at once. Shield Boost wins outright over the
+      // other two when it wants the grid at all: it's a last resort (see its
+      // own comment), a survival call that should never be preempted by an
+      // offensive or mobility pick.
+      if (ship.shieldBoostAuto ?? true) {
+        if (!next.shieldBoostActive && (fleeing || healthFraction < SHIELD_BOOST_AI_HEALTH_ENGAGE_THRESHOLD)) {
+          next = { ...next, shieldBoostActive: true, thrusterBoostActive: false, weaponsBoostActive: false }
+        } else if (next.shieldBoostActive && !fleeing && healthFraction > SHIELD_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD) {
+          next = { ...next, shieldBoostActive: false }
+        }
+      }
+
+      // Weapons Boost: a confident push while healthy and actively trading
+      // fire — the inverse gate from Shield Boost's, and only considered if
+      // Shield Boost didn't just claim the grid above.
+      if ((ship.weaponsBoostAuto ?? true) && !next.shieldBoostActive) {
+        if (!next.weaponsBoostActive && underThreat && healthFraction > WEAPONS_BOOST_AI_HEALTH_ENGAGE_THRESHOLD) {
+          next = { ...next, weaponsBoostActive: true, thrusterBoostActive: false }
+        } else if (next.weaponsBoostActive && (!underThreat || healthFraction < WEAPONS_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD)) {
+          next = { ...next, weaponsBoostActive: false }
+        }
+      }
+
+      // Thruster Boost: free mobility whenever there's nothing to shoot at
+      // (or nothing shooting back) — the weapon penalty costs nothing in
+      // that moment — dropped the instant that stops being true, and only
+      // considered if neither of the other two boosts is holding the grid,
+      // nor Spin Thrust already has the ship (see setThrusterBoost's own
+      // comment on why the two never coexist).
+      if (
+        (ship.thrusterBoostAuto ?? true) &&
+        !next.shieldBoostActive &&
+        !next.weaponsBoostActive &&
+        !next.spinThrustActive &&
+        next.thrusterBoostActive !== !underThreat
+      ) {
+        next = { ...next, thrusterBoostActive: !underThreat }
+      }
+
+      // Spin Thrust: giving up steering is a real cost to the ship's own
+      // effectiveness (it can no longer hold range, chase, or disengage on
+      // purpose), so — like Shield Boost — this is gated to genuine trouble,
+      // not "any live fire." UNLIKE Shield Boost, fleeing does NOT trigger
+      // it: going uncontrollable actively works against a ship trying to run
+      // in a chosen direction. Also drops the instant nothing is shooting at
+      // this ship any more, regardless of health — no reason to stay
+      // uncontrollable once safe.
+      if (ship.spinThrustAuto ?? true) {
+        if (!next.spinThrustActive && underThreat && healthFraction < SPIN_THRUST_AI_HEALTH_ENGAGE_THRESHOLD) {
+          // Takes steering away from Thruster Boost the same instant it
+          // engages — see setThrusterBoost's own comment on why the two
+          // never coexist.
+          next = { ...next, spinThrustActive: true, thrusterBoostActive: false }
+        } else if (next.spinThrustActive && (!underThreat || healthFraction > SPIN_THRUST_AI_HEALTH_DISENGAGE_THRESHOLD)) {
+          next = { ...next, spinThrustActive: false }
+        }
+      }
+
+      return next
+    })
+
+    // --- Projectile flight: missiles/torpedoes launched on an earlier step
+    // (see combatData's "Missile / torpedo travel time") advance toward
+    // whichever position their target is at THIS step and resolve on
+    // arrival. Runs before this step's own firing so a round that arrives
+    // this exact step is settled before any new one launches. ---
+    const carriedProjectiles: InFlightProjectile[] = []
+    for (const proj of engagement.projectiles ?? []) {
+      const targetParticipant = withTactics.find((p) => p.shipId === proj.targetShipId)
+      // The target died, fled, or disengaged since this round launched —
+      // nothing left to hit. It simply doesn't arrive; no damage anywhere.
+      if (destroyed.has(proj.targetShipId) || !targetParticipant) continue
+
+      const targetPos = participantArenaPosition(targetParticipant, simDays)
+      const current = new Vector3(proj.position.x, proj.position.y, proj.position.z)
+      const toTarget = targetPos.clone().sub(current)
+      const distance = toTarget.length()
+      const travel = proj.speedUnitsPerSecond * COMBAT_STEP_SECONDS
+
+      if (distance <= Math.max(travel, PROJECTILE_IMPACT_RADIUS_UNITS)) {
+        // Arrived. Hit/miss/interception were already decided at launch (see
+        // the firing loop below) — a round that reaches here either applies
+        // its damage or, if it was always going to miss, simply doesn't.
+        if (proj.willHit) {
+          const targetShip = shipsById.get(proj.targetShipId)
+          const targetProfile = targetShip ? shipCombatProfile(targetShip) : null
+          const state = stateOf(proj.targetShipId)
+          if (targetShip && targetProfile && state && state.componentHp.core > 0) {
+            const next = resolveProjectileImpact(proj, state, targetProfile, rng)
+            working[proj.targetShipId] = next
+            touched.add(proj.targetShipId)
+            if (next.componentHp.core <= 0) destroyed.add(proj.targetShipId)
+          }
+        }
+        continue
+      }
+
+      // Still closing — home on wherever the target actually is this step,
+      // exactly like a missile's real 100% tracking (torpedoes home too:
+      // the harder-to-land part of their design is the accuracy roll
+      // already resolved at launch, not the guidance in flight).
+      const direction = toTarget.divideScalar(distance).multiplyScalar(travel)
+      // Purely a display value (see InFlightProjectile.progress's own
+      // comment) — clamped since a homing target that's moved CLOSER than
+      // its launch distance would otherwise push this above 1 before arrival
+      // actually triggers.
+      const progress = proj.initialDistanceUnits > 0 ? Math.min(1, Math.max(0, 1 - distance / proj.initialDistanceUnits)) : 1
+      carriedProjectiles.push({
+        ...proj,
+        position: { x: current.x + direction.x, y: current.y + direction.y, z: current.z + direction.z },
+        progress,
+      })
+    }
+
     // --- Firing. ---
-    const nextParticipants: CombatParticipant[] = separated.map((p) => {
+    const newProjectiles: InFlightProjectile[] = []
+    const nextParticipants: CombatParticipant[] = withTactics.map((p) => {
       const ship = shipsById.get(p.shipId)!
       const profile = shipCombatProfile(ship)
       const state = stateOf(p.shipId)
@@ -1648,10 +2024,10 @@ export function stepEngagements(
       const effectiveness = weaponsEffectiveness(state.componentHp.weapons, profile.components.weapons)
       if (effectiveness <= 0) return p
 
-      const explicit = p.targetShipId ? separated.find((o) => o.shipId === p.targetShipId) : undefined
+      const explicit = p.targetShipId ? withTactics.find((o) => o.shipId === p.targetShipId) : undefined
       // An explicitly chosen target that has died or fled falls back to
       // auto-targeting rather than leaving the ship idle.
-      const target = explicit && !destroyed.has(explicit.shipId) ? explicit : nearestEnemy(p, separated)
+      const target = explicit && !destroyed.has(explicit.shipId) ? explicit : nearestEnemy(p, withTactics)
       if (!target) return p
 
       const targetState = stateOf(target.shipId)
@@ -1670,6 +2046,9 @@ export function stepEngagements(
 
       const weaponReady = [...p.weaponReadySimDays]
       let current = targetState
+      // Evasion Tactics (Thruster Boost/Shield Boost/Spin Thrust) only ever
+      // matter to torpedoAccuracy — see tacticEvasionBonus's own comment.
+      const effectiveEvasion = targetProfile.defenses.evasion + tacticEvasionBonus(target, targetProfile.sizeClass)
 
       profile.weapons.forEach((weapon, index) => {
         if ((weaponReady[index] ?? 0) > simDays) return
@@ -1681,22 +2060,65 @@ export function stepEngagements(
         // Missiles: 100% tracking (no accuracy roll at all — see
         // torpedoAccuracy's own comment for why this stays a torpedo-only
         // mechanic), but damage falls off past optimal range.
-        const rawDamage =
+        let rawDamage =
           weapon.damage * effectiveness * (weapon.damageType === 'missile' ? missileDamageMultiplier(separation, weapon) : 1)
+        // Thruster Boost / Shield Boost both starve the SHOOTER's OWN guns to
+        // feed the drive/shield array respectively — see
+        // tacticWeaponDamageMultiplier's own comment. Missiles/torpedoes are
+        // untouched by either (physical rounds, not power-hungry systems).
+        rawDamage *= tacticWeaponDamageMultiplier(p, weapon.damageType)
 
         // Torpedoes: fixed damage, but the hit itself is a roll — harder to
         // land past optimal range, and against a smaller/more evasive hull.
         const torpedoMiss =
-          weapon.damageType === 'torpedo' ? 1 - torpedoAccuracy(separation, weapon, targetProfile.sizeClass, targetProfile.defenses.evasion) : 0
+          weapon.damageType === 'torpedo' ? 1 - torpedoAccuracy(separation, weapon, targetProfile.sizeClass, effectiveEvasion) : 0
         const chaffMiss = isChaffActive(current, simDays) ? CHAFF_MISS_CHANCE : 0
         // Combined as independent chances of failure — a shot has to clear
         // both to connect.
         const missChance = 1 - (1 - chaffMiss) * (1 - torpedoMiss)
 
-        const { next, outcome } = applyShot(weapon, rawDamage, current, targetProfile, p.targetComponent, rng, missChance)
-        current = next
-        // An intercepted shot still consumed the round.
-        void outcome
+        // Spin Thrust: some of what should have landed on the defender's
+        // explicitly targeted component goes elsewhere instead — see
+        // combatData's SPIN_THRUST_REDIRECT_CHANCE and
+        // pickComponentExcluding's own comment. Scaled down for a bigger
+        // hull, same as the evasion bonus (see SPIN_THRUST_SIZE_
+        // EFFECTIVENESS) — a Battleship simply can't throw off a called shot
+        // by jinking the way a Corvette can.
+        const preferredComponent =
+          p.targetComponent &&
+          target.spinThrustActive &&
+          rng() < SPIN_THRUST_REDIRECT_CHANCE * SPIN_THRUST_SIZE_EFFECTIVENESS[targetProfile.sizeClass]
+            ? pickComponentExcluding(p.targetComponent, current, targetProfile, rng)
+            : p.targetComponent
+
+        if (weapon.damageType === 'missile' || weapon.damageType === 'torpedo') {
+          // Travel time (see combatData's "Missile / torpedo travel time"):
+          // interception and hit/miss are resolved right now, at launch —
+          // reusing applyShot for exactly that roll and discarding its
+          // (otherwise-unused) damage numbers — but the damage itself is
+          // deferred to a projectile that has to physically cross the
+          // distance first (see the projectile-flight step above).
+          const { outcome } = applyShot(weapon, rawDamage, current, targetProfile, preferredComponent, rng, missChance)
+          if (!outcome.intercepted) {
+            newProjectiles.push({
+              id: `proj-${p.shipId}-${index}-${simDays.toFixed(6)}`,
+              sourceShipId: p.shipId,
+              targetShipId: target.shipId,
+              damageType: weapon.damageType,
+              rawDamage,
+              preferredComponent,
+              willHit: !outcome.missed,
+              position: { x: selfPos.x, y: selfPos.y, z: selfPos.z },
+              speedUnitsPerSecond: projectileSpeedUnitsPerSecond(weapon.damageType),
+              initialDistanceUnits: separation,
+              progress: 0,
+            })
+          }
+        } else {
+          const { next, outcome } = applyShot(weapon, rawDamage, current, targetProfile, preferredComponent, rng, missChance)
+          current = next
+          void outcome
+        }
         weaponReady[index] = simDays + simSecondsToDays(weapon.cooldownSeconds)
       })
 
@@ -1756,6 +2178,7 @@ export function stepEngagements(
     nextEngagements.push({
       ...engagement,
       participants: surviving,
+      projectiles: [...carriedProjectiles, ...newProjectiles],
       resolvedThroughSimDays: simDays,
     })
   }

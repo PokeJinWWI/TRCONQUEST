@@ -6,6 +6,7 @@ import { CombatGrid } from './CombatGrid'
 import { CombatShipMarker } from './CombatShipMarker'
 import { CombatPathLine } from './CombatPathLine'
 import { CombatEngagementLine } from './CombatEngagementLine'
+import { CombatProjectileMarker } from './CombatProjectileMarker'
 import { ShipPanel } from './ShipPanel'
 import { CombatPanel, combatPanelVerticalOffset } from '../components/CombatPanel'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
@@ -178,6 +179,10 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
 
         {/* Who is actually shooting at whom, right now. */}
         <CombatEngagementLine engagementId={engagement.id} />
+
+        {/* Missiles/torpedoes actually crossing the distance to their
+            target — see combatData's "Missile / torpedo travel time". */}
+        <CombatProjectileMarker engagementId={engagement.id} />
 
         {engagement.participants.map((p) => (
           <CombatShipMarker

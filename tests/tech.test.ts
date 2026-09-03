@@ -31,11 +31,13 @@ console.log('\n=== 1. Physics tree shape ===')
 {
   check('Physics has real content', PHYSICS_TECHS.length > 20, `${PHYSICS_TECHS.length} nodes`)
   check('Society is structurally real but empty', Array.isArray(SOCIETY_TECHS) && SOCIETY_TECHS.length === 0)
-  check('Engineering is structurally real but empty', Array.isArray(ENGINEERING_TECHS) && ENGINEERING_TECHS.length === 0)
+  // Engineering's first real content: the Power Systems chain gating the
+  // ship builder's Power Distribution tiers (see shipModules.ts).
+  check('Engineering has real content', ENGINEERING_TECHS.length > 0, `${ENGINEERING_TECHS.length} nodes`)
   const ids = PHYSICS_TECHS.map((n) => n.id)
   check('every node id is unique', new Set(ids).size === ids.length)
   const roots = PHYSICS_TECHS.filter((n) => n.prerequisites.length === 0)
-  check('exactly 8 roots (7 open + Anomalous)', roots.length === 8, `${roots.length}`)
+  check('exactly 9 roots (8 open + Anomalous)', roots.length === 9, `${roots.length}`)
   check('Anomalous is the only locked node', PHYSICS_TECHS.filter((n) => n.locked).length === 1 && PHYSICS_TECHS.find((n) => n.locked)?.id === 'anomalous-phenomena')
   // Every non-root prerequisite id actually resolves to a real node — a typo
   // in a prerequisite string would silently orphan a branch.
@@ -180,6 +182,24 @@ console.log('\n=== 8. freeResearchMode: the dev console\'s "zero all tech costs"
   useTechStore.getState().setFreeResearchMode(false)
   const failsOnceOff = useTechStore.getState().researchNode(countryId, 'orbital-mechanics')
   check('turning the mode back off restores the real cost gate immediately', !failsOnceOff)
+}
+
+console.log('\n=== 9. Biology: the new branch ===')
+{
+  const biology = findTech('biology')!
+  check('Biology is a real root (no prerequisites)', biology.prerequisites.length === 0)
+  check('Biology is visible from the start, same as every other root', visibleNodeIds(PHYSICS_TECHS, new Set()).has('biology'))
+  check('Genetic Engineering is not researchable before Biology', !canResearch(findTech('genetic-engineering')!, new Set(), 1000))
+  check('Xenobiology is not researchable before Biology', !canResearch(findTech('xenobiology')!, new Set(), 1000))
+  check(
+    'both children become researchable once Biology is researched',
+    canResearch(findTech('genetic-engineering')!, new Set(['biology']), 90) && canResearch(findTech('xenobiology')!, new Set(['biology']), 90),
+  )
+  check(
+    'both children are visible (not just Biology itself) once Biology is researched, per the 2-hop rule',
+    visibleNodeIds(PHYSICS_TECHS, new Set(['biology'])).has('genetic-engineering') &&
+      visibleNodeIds(PHYSICS_TECHS, new Set(['biology'])).has('xenobiology'),
+  )
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

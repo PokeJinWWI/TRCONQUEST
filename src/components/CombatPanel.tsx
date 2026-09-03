@@ -3,6 +3,9 @@ import {
   CHAFF_DURATION_SECONDS,
   SCUTTLE_BLAST_RADIUS_UNITS,
   RAM_SELF_DAMAGE_FRACTION,
+  TACTIC_LABELS,
+  TACTIC_DESCRIPTIONS,
+  tacticBadge,
   type ComponentKind,
 } from '../data/combatData'
 import { GRID_DENSITIES, GRID_DENSITY_LABELS, GRID_DIVISIONS, isInsideWindow } from '../scene/combatArena'
@@ -15,7 +18,7 @@ import {
   shipCombatProfile,
   totalHitPoints,
 } from '../scene/combatResolution'
-import { useCombatStore, type Engagement } from '../state/combatStore'
+import { activeTacticIds, useCombatStore, type Engagement } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { DraggableWindow } from './DraggableWindow'
@@ -68,6 +71,14 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const setDensity = useCombatStore((s) => s.setDensity)
   const deployChaff = useShipStore((s) => s.deployChaff)
   const setChaffAutoDeploy = useShipStore((s) => s.setChaffAutoDeploy)
+  const setThrusterBoost = useCombatStore((s) => s.setThrusterBoost)
+  const setShieldBoost = useCombatStore((s) => s.setShieldBoost)
+  const setWeaponsBoost = useCombatStore((s) => s.setWeaponsBoost)
+  const setSpinThrust = useCombatStore((s) => s.setSpinThrust)
+  const setThrusterBoostAuto = useShipStore((s) => s.setThrusterBoostAuto)
+  const setShieldBoostAuto = useShipStore((s) => s.setShieldBoostAuto)
+  const setWeaponsBoostAuto = useShipStore((s) => s.setWeaponsBoostAuto)
+  const setSpinThrustAuto = useShipStore((s) => s.setSpinThrustAuto)
   const [scuttleArmed, setScuttleArmed] = useState(false)
   const setFleetTarget = useCombatStore((s) => s.setFleetTarget)
   const orderScuttle = useCombatStore((s) => s.orderScuttle)
@@ -184,6 +195,17 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
               {ship.name}
               {ship.combat.ftlCharge && <span className="combat-roster-tag">FTL</span>}
               {isChaffActive(ship.combat, simDays) && <span className="combat-roster-tag chaff">CHAFF</span>}
+              {/* Same badge set as the arena marker (see CombatShipMarker.tsx)
+                  — the roster is the other place a player scans for "who's
+                  doing what" without hunting across the arena for a marker. */}
+              {activeTacticIds(p).map((id) => {
+                const badge = tacticBadge(id)
+                return (
+                  <span key={id} className="combat-roster-tag tactic" title={badge.title}>
+                    {badge.label}
+                  </span>
+                )
+              })}
               {isTargetOfSelected && <span className="combat-roster-tag target">TGT</span>}
               {/* Local odds. Absent (rather than "0") when nothing can shoot
                   this hull — a clear ship should read as quiet, not as a
@@ -394,7 +416,151 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   {selectedParticipant.chasing ? 'Stop Chase' : 'Chase'}
                 </button>
               )}
-              {!selectedParticipant.holdPosition && sides[1].length > 0 && (
+            </span>
+          </div>
+
+          {/* Tactics (see combatData's Tactics section) — short-term
+              maneuvers layered on top of whatever movement order is already
+              active above, rather than replacing it. Ramming is grouped in
+              here too (moved out of the Movement row above) since it's the
+              fourth of the four, even though it's still resolved as a
+              movement order under the hood. Each can be left on Auto (the
+              game manages it — same relationship chaff's own Auto-deploy
+              checkbox already has) or worked by hand once Auto is
+              unchecked. */}
+          <div className="inspect-row">
+            <span className="inspect-label">Tactics</span>
+          </div>
+
+          {/* Thruster Boost / Shield Boost / Spin Thrust — all three are
+              toggles until cancelled, so Auto and the manual button ARE
+              mutually exclusive: with Auto on, the resolver is actively
+              deciding this every step, and a manual click would just get
+              overridden on the next one. Turn Auto off to take the wheel. */}
+          <div className="inspect-row">
+            <span className="inspect-label tactic-label">{TACTIC_LABELS['thruster-boost']}</span>
+            <span className="inspect-value">
+              <span className={selectedParticipant.thrusterBoostActive ? 'ship-panel-combat' : undefined}>
+                {selectedParticipant.thrusterBoostActive ? 'Active' : 'Standby'}
+              </span>
+              {!(selectedShip?.thrusterBoostAuto ?? true) && (
+                <button
+                  type="button"
+                  className={`ship-panel-unfollow-btn${selectedParticipant.thrusterBoostActive ? ' active' : ''}`}
+                  disabled={!selectedParticipant.thrusterBoostActive && selectedParticipant.spinThrustActive}
+                  onClick={() => setThrusterBoost(engagement.id, selectedParticipant.shipId, !selectedParticipant.thrusterBoostActive)}
+                  title={
+                    !selectedParticipant.thrusterBoostActive && selectedParticipant.spinThrustActive
+                      ? 'Unavailable while Spin Thrust has the ship — cancel Spin Thrust first'
+                      : TACTIC_DESCRIPTIONS['thruster-boost']
+                  }
+                >
+                  {selectedParticipant.thrusterBoostActive ? 'Cancel' : 'Activate'}
+                </button>
+              )}
+            </span>
+          </div>
+          <label className="ship-panel-checkbox-row tactic-auto-row">
+            <input
+              type="checkbox"
+              checked={selectedShip?.thrusterBoostAuto ?? true}
+              onChange={(e) => setThrusterBoostAuto(selectedParticipant.shipId, e.target.checked)}
+            />
+            Auto {TACTIC_LABELS['thruster-boost']}
+          </label>
+
+          <div className="inspect-row">
+            <span className="inspect-label tactic-label">{TACTIC_LABELS['shield-boost']}</span>
+            <span className="inspect-value">
+              <span className={selectedParticipant.shieldBoostActive ? 'ship-panel-combat' : undefined}>
+                {selectedParticipant.shieldBoostActive ? 'Active' : 'Standby'}
+              </span>
+              {!(selectedShip?.shieldBoostAuto ?? true) && (
+                <button
+                  type="button"
+                  className={`ship-panel-unfollow-btn${selectedParticipant.shieldBoostActive ? ' active' : ''}`}
+                  onClick={() => setShieldBoost(engagement.id, selectedParticipant.shipId, !selectedParticipant.shieldBoostActive)}
+                  title={TACTIC_DESCRIPTIONS['shield-boost']}
+                >
+                  {selectedParticipant.shieldBoostActive ? 'Cancel' : 'Activate'}
+                </button>
+              )}
+            </span>
+          </div>
+          <label className="ship-panel-checkbox-row tactic-auto-row">
+            <input
+              type="checkbox"
+              checked={selectedShip?.shieldBoostAuto ?? true}
+              onChange={(e) => setShieldBoostAuto(selectedParticipant.shipId, e.target.checked)}
+            />
+            Auto {TACTIC_LABELS['shield-boost']}
+          </label>
+
+          <div className="inspect-row">
+            <span className="inspect-label tactic-label">{TACTIC_LABELS['weapons-boost']}</span>
+            <span className="inspect-value">
+              <span className={selectedParticipant.weaponsBoostActive ? 'ship-panel-combat' : undefined}>
+                {selectedParticipant.weaponsBoostActive ? 'Active' : 'Standby'}
+              </span>
+              {!(selectedShip?.weaponsBoostAuto ?? true) && (
+                <button
+                  type="button"
+                  className={`ship-panel-unfollow-btn${selectedParticipant.weaponsBoostActive ? ' active' : ''}`}
+                  onClick={() => setWeaponsBoost(engagement.id, selectedParticipant.shipId, !selectedParticipant.weaponsBoostActive)}
+                  title={TACTIC_DESCRIPTIONS['weapons-boost']}
+                >
+                  {selectedParticipant.weaponsBoostActive ? 'Cancel' : 'Activate'}
+                </button>
+              )}
+            </span>
+          </div>
+          <label className="ship-panel-checkbox-row tactic-auto-row">
+            <input
+              type="checkbox"
+              checked={selectedShip?.weaponsBoostAuto ?? true}
+              onChange={(e) => setWeaponsBoostAuto(selectedParticipant.shipId, e.target.checked)}
+            />
+            Auto {TACTIC_LABELS['weapons-boost']}
+          </label>
+
+          <div className="inspect-row">
+            <span className="inspect-label tactic-label">{TACTIC_LABELS['spin-thrust']}</span>
+            <span className="inspect-value">
+              <span className={selectedParticipant.spinThrustActive ? 'ship-panel-combat' : undefined}>
+                {selectedParticipant.spinThrustActive ? 'Active' : 'Standby'}
+              </span>
+              {!(selectedShip?.spinThrustAuto ?? true) && (
+                <button
+                  type="button"
+                  className={`ship-panel-unfollow-btn${selectedParticipant.spinThrustActive ? ' active' : ''}`}
+                  onClick={() => setSpinThrust(engagement.id, selectedParticipant.shipId, !selectedParticipant.spinThrustActive)}
+                  title={TACTIC_DESCRIPTIONS['spin-thrust']}
+                >
+                  {selectedParticipant.spinThrustActive ? 'Cancel' : 'Activate'}
+                </button>
+              )}
+            </span>
+          </div>
+          <label className="ship-panel-checkbox-row tactic-auto-row">
+            <input
+              type="checkbox"
+              checked={selectedShip?.spinThrustAuto ?? true}
+              onChange={(e) => setSpinThrustAuto(selectedParticipant.shipId, e.target.checked)}
+            />
+            Auto {TACTIC_LABELS['spin-thrust']}
+          </label>
+
+          {/* Ramming — mechanically still a movement order (see the Movement
+              row above), grouped here as the fourth tactic per its own
+              design. Manual only; no auto heuristic (a self-destructive
+              charge is not something to trigger without being asked). */}
+          {!selectedParticipant.holdPosition && sides[1].length > 0 && (
+            <div className="inspect-row">
+              <span className="inspect-label tactic-label">{TACTIC_LABELS.ramming}</span>
+              <span className="inspect-value">
+                <span className={selectedParticipant.ramming ? 'ship-panel-combat' : undefined}>
+                  {selectedParticipant.ramming ? 'Ramming' : 'Standby'}
+                </span>
                 <button
                   type="button"
                   className={`ship-panel-unfollow-btn${selectedParticipant.ramming ? ' active' : ''}`}
@@ -407,9 +573,9 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 >
                   {selectedParticipant.ramming ? 'Stop Ram' : 'Ram'}
                 </button>
-              )}
-            </span>
-          </div>
+              </span>
+            </div>
+          )}
 
           {/* Match a body's own velocity instead of flying under thrust — the
               building block for staying on the far side of something that

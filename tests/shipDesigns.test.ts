@@ -13,6 +13,8 @@
 import {
   HULL_CHASSES,
   buildCombatProfile,
+  designPowerBudget,
+  designPowerUsed,
   designToShipClass,
   emptyLoadout,
   type ShipDesign,
@@ -21,11 +23,13 @@ import {
   ARMOR_MODULES,
   DEFENSE_MODULES,
   MODULE_CATALOG,
+  POWER_TIER_BUDGET,
   SHIELD_MODULES,
   UPGRADE_MODULES,
   WEAPON_MODULES,
   moduleFitsSlot,
   modulesForSlot,
+  powerTiersAvailable,
 } from '../src/data/shipModules'
 import { useShipDesignStore } from '../src/state/shipDesignStore'
 import { resolveShipClass } from '../src/state/shipClassResolver'
@@ -274,6 +278,84 @@ console.log('\n=== 9. Tech-gated modules: Laser/Shield/Point-Defense require the
   check('omitting researchedIds entirely does not filter anything (back-compat for callers that ignore tech)', modulesForSlot('weapon', 'medium').some((m) => m.id === 'laser'))
   check('no shield modules are offered without Shielding researched', modulesForSlot('shield', 'x', noTech).length === 0)
   check('shield modules appear once Shielding is researched', modulesForSlot('shield', 'x', new Set(['shielding'])).length > 0)
+}
+
+console.log('\n=== 10. Power Distribution: every module draws power, budgets scale by tier ===')
+{
+  check('every catalog entry has a real (non-negative) power cost', [...WEAPON_MODULES, ...ARMOR_MODULES, ...SHIELD_MODULES, ...DEFENSE_MODULES, ...UPGRADE_MODULES].every((m) => m.powerCost >= 0))
+  const laser = WEAPON_MODULES.find((m) => m.id === 'laser')!
+  const massDriver = WEAPON_MODULES.find((m) => m.id === 'mass-driver')!
+  check('an energy weapon costs more power than a same-slot-size non-energy one — the actual "spam lasers" cost', laser.slotSize === massDriver.slotSize && laser.powerCost > massDriver.powerCost)
+  check('budgets strictly increase tier over tier', POWER_TIER_BUDGET[1] < POWER_TIER_BUDGET[2] && POWER_TIER_BUDGET[2] < POWER_TIER_BUDGET[3] && POWER_TIER_BUDGET[3] < POWER_TIER_BUDGET[4])
+
+  check('with nothing researched, only Tier 1 is available', powerTiersAvailable(new Set()).length === 1 && powerTiersAvailable(new Set())[0] === 1)
+  check('...and omitting researchedIds entirely behaves the same as nothing researched', powerTiersAvailable().length === 1)
+  check('researching just the first link unlocks exactly Tier 1 + 2, nothing further', powerTiersAvailable(new Set(['power-distribution-2'])).length === 2)
+  check(
+    'researching the first two links (the only way the real prerequisite chain in techData.ts can be reached) unlocks Tier 1-3',
+    powerTiersAvailable(new Set(['power-distribution-2', 'power-distribution-3'])).length === 3,
+  )
+  check(
+    'the full chain researched unlocks every tier',
+    powerTiersAvailable(new Set(['power-distribution-2', 'power-distribution-3', 'power-distribution-4'])).length === 4,
+  )
+
+  // modulesForSlot's power-budget filtering, on its own — mirrors section
+  // 9's tech-gating checks exactly, just against a numeric budget instead
+  // of a research set.
+  const allTech = new Set(['directed-energy-weapons'])
+  check(
+    'a tight remaining budget excludes an expensive weapon but keeps a cheap one that still fits',
+    !modulesForSlot('weapon', 'large', allTech, massDriver.powerCost).some((m) => m.id === 'heavy-beam') &&
+      modulesForSlot('weapon', 'medium', allTech, massDriver.powerCost).some((m) => m.id === 'mass-driver'),
+  )
+  check('omitting powerBudgetRemaining entirely does not filter anything (back-compat)', modulesForSlot('weapon', 'large', allTech).some((m) => m.id === 'heavy-beam'))
+
+  // End to end, through the real store: a fresh design starts at Tier 1 (per
+  // the task's own "all ships by default have 1"), and — the actual point
+  // of the feature — a Cruiser's two Large weapon slots can't BOTH mount a
+  // Heavy Beam at Tier 1 (2 * 53 power = 106, over Tier 1's 100 budget),
+  // even though either ONE of them fits comfortably alone. Raising the tier
+  // (once researched) is what actually lifts that ceiling.
+  useShipDesignStore.setState({ designs: [] })
+  const cruiser = HULL_CHASSES.find((c) => c.id === 'cruiser-hull')!
+  const designId = useShipDesignStore.getState().createDesign('cruiser-hull', 'Power Test Cruiser')
+  const fresh = useShipDesignStore.getState().designs.find((d) => d.id === designId)!
+  check('a freshly created design defaults to Power Tier 1', fresh.powerTier === 1)
+  check('a fresh, empty design uses no power at all', designPowerUsed(fresh) === 0)
+  check("a fresh design's budget matches Tier 1's", designPowerBudget(fresh) === POWER_TIER_BUDGET[1])
+
+  const largeWeaponSlotIndices = cruiser.slots.weapon.reduce<number[]>((acc, size, i) => (size === 'large' ? [...acc, i] : acc), [])
+  check('the cruiser hull really does have two Large weapon slots to test with', largeWeaponSlotIndices.length === 2)
+
+  useShipDesignStore.getState().equipModule(designId, 'weapon', largeWeaponSlotIndices[0], 'heavy-beam')
+  const afterFirst = useShipDesignStore.getState().designs.find((d) => d.id === designId)!
+  check('the first Heavy Beam equips fine — well within Tier 1 budget on its own', afterFirst.equipped.weapon[largeWeaponSlotIndices[0]] === 'heavy-beam')
+
+  const remainingBudget = designPowerBudget(afterFirst) - designPowerUsed(afterFirst, { category: 'weapon', index: largeWeaponSlotIndices[1] })
+  const secondSlotOptions = modulesForSlot('weapon', 'large', allTech, remainingBudget)
+  check(
+    "...but the SECOND large slot's picker no longer offers a Heavy Beam at Tier 1 — exactly the \"can't spam highest-tier lasers\" case",
+    !secondSlotOptions.some((m) => m.id === 'heavy-beam'),
+  )
+
+  useShipDesignStore.getState().setPowerTier(designId, 2)
+  const afterTierUp = useShipDesignStore.getState().designs.find((d) => d.id === designId)!
+  const remainingBudgetTier2 = designPowerBudget(afterTierUp) - designPowerUsed(afterTierUp, { category: 'weapon', index: largeWeaponSlotIndices[1] })
+  check(
+    '...but it DOES appear once the design is upgraded to Tier 2 — the actual unlock the feature is for',
+    modulesForSlot('weapon', 'large', allTech, remainingBudgetTier2).some((m) => m.id === 'heavy-beam'),
+  )
+  useShipDesignStore.getState().equipModule(designId, 'weapon', largeWeaponSlotIndices[1], 'heavy-beam')
+  const bothEquipped = useShipDesignStore.getState().designs.find((d) => d.id === designId)!
+  check(
+    'both Heavy Beams are equipped, and total power used is exactly 2x one — no double-counting or omission',
+    bothEquipped.equipped.weapon[largeWeaponSlotIndices[0]] === 'heavy-beam' &&
+      bothEquipped.equipped.weapon[largeWeaponSlotIndices[1]] === 'heavy-beam' &&
+      designPowerUsed(bothEquipped) === WEAPON_MODULES.find((m) => m.id === 'heavy-beam')!.powerCost * 2,
+  )
+  check('...which now exceeds Tier 1 budget but fits within Tier 2', designPowerUsed(bothEquipped) > POWER_TIER_BUDGET[1] && designPowerUsed(bothEquipped) <= designPowerBudget(bothEquipped))
+  useShipDesignStore.setState({ designs: [] })
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

@@ -17,7 +17,7 @@ import {
   coreHealthFraction,
 } from './shipPhysics'
 import { activeEnemyContacts, overallHealthFraction, createSoloEngagement, rangeFavor } from './combatResolution'
-import { useCombatStore, areHostile, combatLocationKey } from '../state/combatStore'
+import { useCombatStore, areHostile, combatLocationKey, engagementIsContested } from '../state/combatStore'
 import { useFleetStore } from '../state/fleetStore'
 import { useViewStore } from '../state/viewStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
@@ -137,6 +137,13 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
 
   const combatProfile = shipClass?.combat
   const engagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
+  // Whether that engagement is an actual FIGHT right now, not just an open
+  // arena — see engagementIsContested's own comment. An engagement can
+  // persist hostile-free (a solo lookaround, or the winning side lingering
+  // after a fight resolved) or even have its whole roster silently swapped
+  // for a new one at the same location — "there's an Engagement" alone is
+  // not "In combat".
+  const engagementContested = !!engagement && engagementIsContested(engagement, (id) => ships.find((s) => s.id === id)?.allegiance)
   // The "no fight" Arena button and the real Engagement row are mutually
   // exclusive, but the resolver's own tick (which turns a hostile encounter
   // into an actual Engagement) can lag a frame behind a ship just having
@@ -418,8 +425,8 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
         <>
           <div className="inspect-row">
             <span className="inspect-label">Engagement</span>
-            <span className="inspect-value ship-panel-combat">
-              In combat at {engagement.locationLabel}
+            <span className={`inspect-value${engagementContested ? ' ship-panel-combat' : ''}`}>
+              {engagementContested ? 'In combat at' : 'In the arena at'} {engagement.locationLabel}
               {/* The way into the arena. Offered rather than forced — the
                   clock already switches itself to tactical when a fight
                   starts, and yanking the player's camera somewhere else on
@@ -428,7 +435,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
                   no-op. */}
               {level !== 'combat' && (
                 <button type="button" className="ship-panel-unfollow-btn" onClick={() => enterCombat(engagement.id)}>
-                  Enter Combat
+                  {engagementContested ? 'Enter Combat' : 'Enter Arena'}
                 </button>
               )}
             </span>

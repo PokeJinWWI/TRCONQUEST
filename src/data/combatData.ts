@@ -583,6 +583,36 @@ export function torpedoAccuracy(
   return Math.max(TORPEDO_ACCURACY_MIN, Math.min(TORPEDO_ACCURACY_MAX, raw))
 }
 
+// --- Missile / torpedo travel time ------------------------------------------
+//
+// Energy and kinetic weapons stay pure hit-scan — a beam or a slug that's in
+// range and has line of fire connects (or doesn't) the instant it fires.
+// Missiles and torpedoes are physical rounds crossing real arena space, so
+// they now do too: a shot fired at range takes real seconds to arrive rather
+// than resolving in the same 0.1s step it launched in (see combatResolution's
+// projectile-flight step). Everything ELSE about them is unchanged and still
+// resolved at the moment of firing — point-defense interception, torpedo
+// accuracy, chaff — only the DAMAGE is deferred until the round actually
+// covers the distance, homing on wherever the target currently is each step.
+// A target that dies, flees, or moves out of the fight before the round
+// arrives simply isn't there to hit; nothing carries over.
+//
+// Torpedoes are the heavier, slower round — that's their whole design
+// tension (see ramDamageAt's neighbor, torpedoAccuracy: brutal damage, hard
+// to land, and now also slow to arrive once it IS launched) — missiles trade
+// raw power for speed and perfect tracking.
+export const MISSILE_SPEED_UNITS_PER_SECOND = 2.2
+export const TORPEDO_SPEED_UNITS_PER_SECOND = 1.1
+
+export function projectileSpeedUnitsPerSecond(damageType: 'missile' | 'torpedo'): number {
+  return damageType === 'missile' ? MISSILE_SPEED_UNITS_PER_SECOND : TORPEDO_SPEED_UNITS_PER_SECOND
+}
+
+// A round counts as "arrived" once it's within this of its target's real
+// position — small enough that it reads as a real impact, big enough that a
+// homing round doesn't need to land on an exact float coordinate.
+export const PROJECTILE_IMPACT_RADIUS_UNITS = 0.15
+
 // --- Scuttle (the doomed-ship trade) ---------------------------------------
 //
 // Deliberately detonate a ship that is going to die anyway, damaging
@@ -646,6 +676,226 @@ export const RAM_SELF_DAMAGE_FRACTION = 0.5
 export function ramDamageAt(closingSpeedFraction: number): number {
   return RAM_MAX_TARGET_DAMAGE * Math.max(0, Math.min(1, closingSpeedFraction))
 }
+
+// --- Tactics (short-term maneuvers, distinct from a standing CombatStance) --
+//
+// A CombatStance (see above) is standing doctrine — where a ship wants to be
+// relative to the enemy, set before a fight and unchanged for its duration.
+// A Tactic is the opposite axis: a short-term maneuver layered on top of
+// whatever stance/order the ship is already running, activated (or left to
+// run automatically) mid-fight for a specific moment. Every one of them can
+// be set to run automatically (see ShipInstance's *Auto flags) or worked by
+// hand from CombatPanel — same "auto with a manual override" relationship
+// chaff countermeasures already have.
+export type TacticId = 'thruster-boost' | 'shield-boost' | 'weapons-boost' | 'spin-thrust' | 'ramming'
+
+export const TACTIC_IDS: TacticId[] = ['thruster-boost', 'shield-boost', 'weapons-boost', 'spin-thrust', 'ramming']
+
+// Thruster Boost, Shield Boost, and Weapons Boost are the same underlying
+// move — divert the grid's power toward one system at the expense of the
+// others — just aimed at three different destinations (drive/shields/guns).
+// Only one can ever be running at a time (see combatStore.BOOST_TACTIC_IDS
+// and its own comment) for exactly that reason: there's one grid, and it can
+// only be diverted one way at once. Spin Thrust and Ramming aren't part of
+// this group — neither is a power-diversion trade, so both can run alongside
+// whichever boost (if any) is also active.
+export const BOOST_TACTIC_IDS: TacticId[] = ['thruster-boost', 'shield-boost', 'weapons-boost']
+
+export const TACTIC_LABELS: Record<TacticId, string> = {
+  'thruster-boost': 'Thruster Boost',
+  'shield-boost': 'Shield Boost',
+  'weapons-boost': 'Weapons Boost',
+  'spin-thrust': 'Spin Thrust',
+  ramming: 'Ramming',
+}
+
+// Short, fixed-width tags for the arena marker and roster row badges (see
+// CombatShipMarker.tsx and CombatPanel.tsx's roster rows) — the same visual
+// slot chaff's own "CHAFF" badge already occupies. Deliberately a SEPARATE
+// map from TACTIC_LABELS (which is prose-length, for the builder/panel
+// dropdowns) rather than truncating that on the fly. Exhaustive over every
+// tactic id that exists TODAY — but both this and TACTIC_DESCRIPTIONS are
+// looked up defensively (a plain `[id] ?? '???'`, never a direct index) by
+// whatever renders a badge (see combatStore.activeTacticIds, which derives
+// ids straight off whatever boolean fields a participant actually has): a
+// future tactic added there before its entry lands here should show an
+// honest "unknown" badge with no tooltip, not crash or print "undefined".
+export const TACTIC_BADGE_LABELS: Record<TacticId, string> = {
+  'thruster-boost': 'THRUST',
+  'shield-boost': 'SHIELD',
+  'weapons-boost': 'WEAPONS',
+  'spin-thrust': 'SPIN',
+  ramming: 'RAM',
+}
+
+export const TACTIC_DESCRIPTIONS: Record<TacticId, string> = {
+  'thruster-boost':
+    'Diverts power to the drive — real speed and evasion, at the cost of laser output (severely) and cannon/gun output (moderately). Stays on until cancelled.',
+  'shield-boost':
+    'Diverts power to the shield array — faster regeneration, at the cost of weapon output, evasion, and speed. A defensive last resort, not a free upgrade: stays on until cancelled.',
+  'weapons-boost':
+    'Diverts power to the weapon systems — real bonus damage across every mount, missiles and torpedoes included, at the cost of shield regeneration and speed. An offensive commitment, not a free upgrade: stays on until cancelled.',
+  'spin-thrust':
+    "Cuts the ship loose to tumble and jink unpredictably — harder to hit, harder to land a called shot on, but genuinely uncontrollable while it's active: no order, stance, or manual move steers it. Automatically cancels itself if it's about to drift into a body. Stays on until cancelled.",
+  ramming: 'Charges straight at the target and collides with it, damaging both hulls. See CombatParticipant.ramming — unchanged, just grouped here as a tactic.',
+}
+
+// Resolves one active tactic id (see combatStore.activeTacticIds — a plain
+// `string`, not the narrower TacticId, since it comes off whatever a
+// participant's own boolean fields say is active) into what a badge should
+// actually show — see CombatShipMarker.tsx's arena marker and CombatPanel.
+// tsx's roster rows, the only two callers. A recognized id gets its real
+// short tag plus a hover tooltip built from TACTIC_LABELS/TACTIC_
+// DESCRIPTIONS; anything else — a future tactic added to a participant
+// before this file catches up — gets an honest "???" with no tooltip rather
+// than crashing or printing "undefined".
+export function tacticBadge(id: string): { label: string; title?: string } {
+  const known = (TACTIC_LABELS as Record<string, string | undefined>)[id]
+  if (!known) return { label: '???' }
+  return { label: TACTIC_BADGE_LABELS[id as TacticId], title: `${known}: ${TACTIC_DESCRIPTIONS[id as TacticId]}` }
+}
+
+// --- Thruster Boost: a toggle, until cancelled ------------------------------
+//
+// The inverse trade of Shield Boost: power leaves the guns for the drive
+// instead of the shield array. Real, sustained speed/evasion, but a laser
+// array (power-hungry, precision-focused) suffers far more than a mass
+// driver or autocannon (mechanically simple, barely needs the grid at all).
+export const THRUSTER_BOOST_SPEED_BONUS_FRACTION = 0.5
+// Additive bonus to evasion (see DefenseProfile.evasion) while active — like
+// every other evasion source, this only ever matters against a torpedo's
+// accuracy roll; missiles track perfectly regardless (see torpedoAccuracy's
+// own comment).
+export const THRUSTER_BOOST_EVASION_BONUS = 0.2
+// "Greatly" — energy weapons (lasers, heavy beams) are gutted.
+export const THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER = 0.35
+// "Moderately" — kinetic weapons (mass drivers, autocannons) barely need the
+// power grid to begin with, so they're docked, not gutted.
+export const THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER = 0.75
+// Auto Thruster Boost (see combatResolution's auto-tactics pass) engages
+// whenever this ship ISN'T actively trading fire (see activeEnemyContacts) —
+// closing distance, repositioning, or simply nothing in range yet, all
+// moments where the weapon penalty costs nothing because there's no shot to
+// take anyway — and disengages the instant it re-enters an active exchange,
+// where the lost damage output would actually be missed. No threshold
+// constant needed for this one: the gate is binary (engaged or not).
+
+// --- Shield Boost: a toggle, until cancelled --------------------------------
+//
+// The trade is explicit in the name: everything that isn't the shield array
+// gets starved to feed it — including, now, weapon output across the board
+// (energy far more than kinetic, but never zero) rather than just energy
+// weapons alone. That broader cut is deliberate and load-bearing: this
+// engine's kinetic weapons never roll to-hit at all (see applyShot), so two
+// otherwise-identical kinetic-only hulls (autocannon corvettes, say) would
+// never feel an energy-only penalty — the extra regen would be a strictly
+// free win for whichever one had Shield Boost on. A permanently-boosted
+// hull is supposed to LOSE a straight fight against an identical
+// unboosted one (verified — see combat.test.ts's "Shield Boost is a
+// defensive trade, not a free upgrade" section): it's a tool for stalling,
+// holding out while critically damaged, or covering a retreat, never a
+// standing damage-race upgrade.
+export const SHIELD_BOOST_REGEN_MULTIPLIER = 2.5
+export const SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER = 0.5
+export const SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER = 0.75
+export const SHIELD_BOOST_EVASION_PENALTY = 0.2
+export const SHIELD_BOOST_SPEED_PENALTY_FRACTION = 0.4
+// Auto Shield Boost (see combatResolution's auto-tactics pass) is deliberately
+// NOT "shields took a scratch" — per this tactic's own design (a last resort,
+// not a routine buff), the AI only reaches for it in genuine trouble: this
+// ship's own overall health has fallen critically low (stalling/holding out),
+// or it's actively trying to leave the fight (fleeing — a standing Flee
+// stance, or an FTL escape charge already spooling). Health-based engagement
+// holds until recovering past the higher threshold; the fleeing trigger drops
+// the instant the ship is no longer fleeing AND health is back above the
+// disengage line, so a Shield-Boosted retreat doesn't snap off mid-charge.
+export const SHIELD_BOOST_AI_HEALTH_ENGAGE_THRESHOLD = 0.35
+export const SHIELD_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD = 0.65
+
+// --- Weapons Boost: a toggle, until cancelled -------------------------------
+//
+// The third destination for the same power grid Thruster Boost and Shield
+// Boost divert (see BOOST_TACTIC_IDS — only one of the three can ever be
+// running at once): everything goes to the guns instead. Unlike the other
+// two, the bonus applies to EVERY weapon family uniformly, missiles and
+// torpedoes included — those don't dodge Thruster/Shield Boost's own
+// penalties because they're not power-hungry systems, but "more power to the
+// guns" plausibly covers better targeting solves and faster reloads on a
+// missile rack too, not just beam/rail output. The trade is real offense —
+// this is meant to be a genuine damage-race upgrade for a ship that's
+// winning and wants to close it out faster, unlike Shield Boost's "must
+// still lose a straight fight" defensive-only design.
+export const WEAPONS_BOOST_DAMAGE_MULTIPLIER = 1.4
+// Multiplies shieldRegenPerSecond exactly like SHIELD_BOOST_REGEN_MULTIPLIER
+// does, just in the other direction (a fraction below 1, not a multiple
+// above it) — shields still regenerate while Weapons Boost is up, just
+// slowly.
+export const WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER = 0.4
+export const WEAPONS_BOOST_SPEED_PENALTY_FRACTION = 0.3
+// Auto Weapons Boost (see combatResolution's auto-tactics pass) is the
+// inverse gate from Shield Boost's: it engages when this ship is HEALTHY and
+// actively trading fire — a confident push to close out a fight faster —
+// and backs off the instant health drops into real danger, handing the
+// grid back for Shield Boost's own auto-logic to reach for instead (the
+// mutual exclusion in setShieldBoost/setWeaponsBoost is what actually
+// enforces only one of them winning that handoff).
+export const WEAPONS_BOOST_AI_HEALTH_ENGAGE_THRESHOLD = 0.6
+export const WEAPONS_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD = 0.3
+
+// --- Spin Thrust: a toggle, until cancelled ---------------------------------
+//
+// Genuinely uncontrollable while active — see combatResolution's movement
+// step: a spin-thrusting ship's velocity is a random walk, full stop,
+// overriding its stance destination, any Chase/Ram order, and even a
+// player's manual holdPosition. That's the whole trade: real, unpredictable
+// evasion, in exchange for giving up steering entirely. The one safety valve
+// is collision — see SPIN_THRUST_COLLISION_LOOKAHEAD_SECONDS below — an
+// uncontrolled ship that's about to tumble into a planet or moon has this
+// switched off FOR it rather than being allowed to drift in and die, which
+// wouldn't be a meaningful tactical cost, just a bug players would hate.
+export const SPIN_THRUST_EVASION_BONUS = 0.3
+// Chance that a shot which would have landed on the defender's explicitly
+// targeted component (see CombatParticipant.targetComponent) gets diverted to
+// a DIFFERENT alive component instead — "some of the damage lands elsewhere,"
+// not all of it, so called shots are blunted rather than made pointless.
+export const SPIN_THRUST_REDIRECT_CHANCE = 0.5
+// A ship's own bulk works against how effectively it can actually "spin" —
+// a Battleship corkscrewing is a much smaller, slower wobble relative to its
+// own mass and turning radius than a Corvette snap-rolling, so both the
+// evasion this buys (SPIN_THRUST_EVASION_BONUS) and how often a called shot
+// actually gets thrown off (SPIN_THRUST_REDIRECT_CHANCE) scale down for a
+// bigger hull. Reuses the same small/medium/large/x scale every slot
+// size/hull size class already shares — see tacticEvasionBonus and the
+// firing loop's own redirect roll for where this is actually applied.
+export const SPIN_THRUST_SIZE_EFFECTIVENESS: Record<HullSizeClass, number> = {
+  small: 1,
+  medium: 0.75,
+  large: 0.5,
+  x: 0.3,
+}
+// Auto Spin Thrust (see combatResolution's auto-tactics pass) is gated just
+// as tightly as Shield Boost's, and for the same reason: giving up steering
+// is a real cost to an AI ship's own effectiveness (it can't hold range,
+// chase, or disengage on purpose while spinning), so this is a desperate,
+// cornered-and-taking-fire response — not a routine evasion habit. Deliberately
+// NOT triggered by fleeing the way Shield Boost's is: going uncontrollable is
+// actively counterproductive to a ship trying to run in a chosen direction.
+export const SPIN_THRUST_AI_HEALTH_ENGAGE_THRESHOLD = 0.35
+export const SPIN_THRUST_AI_HEALTH_DISENGAGE_THRESHOLD = 0.65
+// How sharply the random walk can turn per combat step, in radians — bounds
+// the tumble to a believable corkscrew rather than the velocity vector
+// teleporting to a fresh random direction every 0.1s.
+export const SPIN_THRUST_TURN_RADIANS_PER_STEP = 0.35
+// How far ahead (in real seconds, at the ship's current velocity) the
+// collision safety check looks before deciding a body is in the way. Short
+// enough that it only trips when a collision is genuinely imminent, long
+// enough that the resolver has more than one 0.1s step to actually react
+// once Spin Thrust switches itself off and normal steering resumes.
+export const SPIN_THRUST_COLLISION_LOOKAHEAD_SECONDS = 2
+// Extra clearance added on top of a body's own collision radius for that
+// same check — trips a little BEFORE the hull would actually be touching the
+// body, not at the exact instant of contact.
+export const SPIN_THRUST_COLLISION_CLEARANCE_UNITS = 0.5
 
 // --- FTL transit risk modifiers ---------------------------------------------
 //

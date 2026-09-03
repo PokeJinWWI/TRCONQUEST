@@ -38,7 +38,7 @@ export interface TechNode {
 
 // --- Physics -----------------------------------------------------------
 //
-// Seven open root branches plus one locked one, per the user's own design
+// Eight open root branches plus one locked one, per the user's own design
 // brief. Real-world physics fields, not invented ones — the user gave
 // explicit creative discretion here, so branch/node choices below are this
 // session's judgment call within that brief, not something they dictated
@@ -175,6 +175,37 @@ export const PHYSICS_TECHS: TechNode[] = [
     prerequisites: [['directed-energy-weapons', 'shielding']],
   },
 
+  // --- Biology ------------------------------------------------------
+  // Placed here deliberately — before Relativity/Quantum/Atomic/
+  // Extradimensional — per the user's own explicit framing: biology is a
+  // foundational science, same tier as Classical Mechanics/Thermodynamics/
+  // Electromagnetism above, not one of the advanced/theoretical branches
+  // that follow it.
+  {
+    id: 'biology',
+    name: 'Biology',
+    category: 'physics',
+    description: 'The study of living systems — anatomy, genetics, and the chemistry that drives them.',
+    cost: 50,
+    prerequisites: [],
+  },
+  {
+    id: 'genetic-engineering',
+    name: 'Genetic Engineering',
+    category: 'physics',
+    description: 'Directly editing genetic code — hardier colonists and crops engineered for conditions Earth life never evolved for.',
+    cost: 90,
+    prerequisites: [['biology']],
+  },
+  {
+    id: 'xenobiology',
+    name: 'Xenobiology',
+    category: 'physics',
+    description: "The biology of non-terrestrial life — how organisms that evolved elsewhere differ from Earth's own, and what that means for habitability and first contact.",
+    cost: 90,
+    prerequisites: [['biology']],
+  },
+
   // --- Relativity ------------------------------------------------------
   {
     id: 'relativity',
@@ -304,9 +335,44 @@ export const PHYSICS_TECHS: TechNode[] = [
 
 // Structurally real — every helper below works on these exactly like
 // PHYSICS_TECHS — just content-empty. Society is the collaborator's
-// economy/politics track; Engineering is nobody's yet.
+// economy/politics track.
+
 export const SOCIETY_TECHS: TechNode[] = []
-export const ENGINEERING_TECHS: TechNode[] = []
+
+// --- Engineering ---------------------------------------------------------
+//
+// Engineering's first real content: a small, linear Power Systems chain
+// gating the ship builder's Power Distribution tiers (see shipModules.ts's
+// own "Power Distribution" section and POWER_TIER_TECH_ID) — every ship
+// defaults to Tier 1 for free, so the chain starts at Tier 2. A flat
+// prerequisite line (each tier needs the one before) rather than branching,
+// since there's no meaningful choice here, just an investment ladder.
+export const ENGINEERING_TECHS: TechNode[] = [
+  {
+    id: 'power-distribution-2',
+    name: 'Power Distribution II',
+    category: 'engineering',
+    description: 'A second independent power bus and load-balancing grid — lets a hull run meaningfully more equipment at once without browning out.',
+    cost: 90,
+    prerequisites: [],
+  },
+  {
+    id: 'power-distribution-3',
+    name: 'Power Distribution III',
+    category: 'engineering',
+    description: 'Redundant capacitor banks and finer-grained load balancing across the grid — real headroom for a heavier, more power-hungry loadout.',
+    cost: 180,
+    prerequisites: [['power-distribution-2']],
+  },
+  {
+    id: 'power-distribution-4',
+    name: 'Power Distribution IV',
+    category: 'engineering',
+    description: "A hull-spanning smart grid, the practical ceiling of what a single reactor core can feed — even so, the biggest weapons in service still don't come cheap.",
+    cost: 320,
+    prerequisites: [['power-distribution-3']],
+  },
+]
 
 export const TECHS_BY_CATEGORY: Record<TechCategory, TechNode[]> = {
   physics: PHYSICS_TECHS,

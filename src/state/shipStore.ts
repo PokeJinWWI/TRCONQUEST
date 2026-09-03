@@ -176,6 +176,19 @@ export interface ShipInstance {
   // common case is "spend it before I forget I have it," same as the AI
   // already did for non-player hulls.
   chaffAutoDeploy: boolean
+  // Whether this hull's Tactics (see combatData's Tactics section) run
+  // themselves automatically while in a fight, same "auto with a manual
+  // override" relationship chaffAutoDeploy already has with chaff. Each is
+  // its own independent flag (a player might want auto Thruster Boost but
+  // manual Shield Boost) rather than one shared "tactics auto" switch.
+  // Optional and defaults to true when read (see combatResolution's
+  // auto-tactics pass) — same "absent means the default" reasoning as
+  // CombatParticipant's own new optional fields, so no existing ShipInstance
+  // literal anywhere (spawn sites, tests) needs updating for these to exist.
+  thrusterBoostAuto?: boolean
+  shieldBoostAuto?: boolean
+  weaponsBoostAuto?: boolean
+  spinThrustAuto?: boolean
   // Set when the player orders a hyperdrive jump to this star while the
   // drive is still on cooldown — instead of the order being refused
   // outright, it queues here and fires automatically once
@@ -257,6 +270,10 @@ interface ShipState {
   setWarpEnabled: (id: string, enabled: boolean) => void
   setWarpWhenReady: (id: string, whenReady: boolean) => void
   setChaffAutoDeploy: (id: string, auto: boolean) => void
+  setThrusterBoostAuto: (id: string, auto: boolean) => void
+  setShieldBoostAuto: (id: string, auto: boolean) => void
+  setWeaponsBoostAuto: (id: string, auto: boolean) => void
+  setSpinThrustAuto: (id: string, auto: boolean) => void
   setShipLocation: (
     id: string,
     location: ShipLocation,
@@ -403,6 +420,22 @@ export const useShipStore = create<ShipState>((set) => ({
   setChaffAutoDeploy: (id, auto) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, chaffAutoDeploy: auto } : ship)),
+    })),
+  setThrusterBoostAuto: (id, auto) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, thrusterBoostAuto: auto } : ship)),
+    })),
+  setShieldBoostAuto: (id, auto) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, shieldBoostAuto: auto } : ship)),
+    })),
+  setWeaponsBoostAuto: (id, auto) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, weaponsBoostAuto: auto } : ship)),
+    })),
+  setSpinThrustAuto: (id, auto) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, spinThrustAuto: auto } : ship)),
     })),
   setShipLocation: (id, location, cooldowns, keepFollowing) =>
     set((s) => {

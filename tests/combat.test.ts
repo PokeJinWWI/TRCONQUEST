@@ -11,9 +11,9 @@
 // Deliberately outside `src/` — tsconfig.app.json only includes `src`, so
 // this never enters the app typecheck or the production bundle.
 import { SHIP_CLASSES, TURING_HYPERDRIVE_COOLDOWN_DAYS, type HyperDrive } from '../src/data/shipData'
-import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, CHASE_STANDOFF_UNITS, RAM_MAX_TARGET_DAMAGE, RAM_SELF_DAMAGE_FRACTION, ramDamageAt, rangeEffectiveness, missileDamageMultiplier, torpedoAccuracy, MISSILE_FALLOFF_FLOOR, type WeaponMount } from '../src/data/combatData'
+import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, CHASE_STANDOFF_UNITS, RAM_MAX_TARGET_DAMAGE, RAM_SELF_DAMAGE_FRACTION, ramDamageAt, rangeEffectiveness, missileDamageMultiplier, torpedoAccuracy, MISSILE_FALLOFF_FLOOR, MISSILE_SPEED_UNITS_PER_SECOND, TORPEDO_SPEED_UNITS_PER_SECOND, THRUSTER_BOOST_SPEED_BONUS_FRACTION, THRUSTER_BOOST_EVASION_BONUS, THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER, THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER, SHIELD_BOOST_REGEN_MULTIPLIER, SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER, SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER, SHIELD_BOOST_EVASION_PENALTY, SHIELD_BOOST_SPEED_PENALTY_FRACTION, WEAPONS_BOOST_DAMAGE_MULTIPLIER, WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER, WEAPONS_BOOST_SPEED_PENALTY_FRACTION, WEAPONS_BOOST_AI_HEALTH_ENGAGE_THRESHOLD, WEAPONS_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD, BOOST_TACTIC_IDS, SPIN_THRUST_EVASION_BONUS, TACTIC_IDS, tacticBadge, type WeaponMount } from '../src/data/combatData'
 import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
-import { useCombatStore } from '../src/state/combatStore'
+import { activeTacticIds, engagementIsContested, useCombatStore } from '../src/state/combatStore'
 import {
   applyShot,
   ftlChargeSeconds,
@@ -47,6 +47,10 @@ import {
   screenDestination,
   rangeContactStatus,
   rangeFavor,
+  tacticSpeedMultiplier,
+  tacticEvasionBonus,
+  tacticWeaponDamageMultiplier,
+  resolveProjectileImpact,
 } from '../src/scene/combatResolution'
 import type { Fleet } from '../src/state/fleetStore'
 import {
@@ -2612,6 +2616,839 @@ console.log('\n=== 62. stepEngagements: only the PLAYER is gated — hostiles ke
   check(
     "researching Free-Flight Maneuvering restores today's behavior — the player's ship holds still again",
     pointDistance(player2After.position, start2['p2']) < 1e-6,
+  )
+}
+
+console.log('\n=== 63. Missile/torpedo travel time: damage arrives late, not instantly ===')
+{
+  check('torpedoes are the slower round', TORPEDO_SPEED_UNITS_PER_SECOND < MISSILE_SPEED_UNITS_PER_SECOND)
+
+  // Both fired at the same real separation, against an unarmed, zero-point-
+  // defense target (swift-courier — see CIVILIAN_COMBAT_PROFILE) so neither
+  // shot can be intercepted or answered, isolating travel time itself from
+  // accuracy/interception noise.
+  const separation = 6
+  const simDays = 400
+
+  function fireAndCountStepsToResolve(
+    shooterClass: string,
+    weapon: WeaponMount,
+  ): { projectileQueuedImmediately: boolean; stepsToResolve: number; targetEverDamaged: boolean; progressSamples: number[] } {
+    const shooter = makeShip(shooterClass, 'p1', 'player')
+    const target = makeShip('swift-courier', 'e1', 'hostile')
+    let ships = [shooter, target]
+    let engagements = syncEngagements(ships, [], simDays)
+    engagements[0] = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        if (p.shipId === 'p1') return { ...base, position: { x: 0, y: 6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, targetShipId: 'e1' }
+        return { ...base, position: { x: separation, y: 6, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }
+      }),
+    }
+    const rng = seededRng(7)
+    let cursor = simDays
+    cursor += COMBAT_STEP_DAYS
+    const fired = stepEngagements(engagements, ships, cursor, rng)
+    engagements = fired.engagements
+    ships = ships.map((s) => (fired.shipCombat[s.id] ? { ...s, combat: fired.shipCombat[s.id] } : s))
+    // Checked right after firing rather than "no damage this step" — a
+    // multi-mount hull (the battleship, for the torpedo case) also carries
+    // OTHER weapons whose ranges overlap the torpedo tube's own and which
+    // legitimately DO hit instantly (heavy beam, mass driver — direct-fire,
+    // no travel time), so "the target took no damage at all this step"
+    // isn't a claim specific to travel time on that hull. "A round of THIS
+    // damage type is now physically in flight" is the same claim, without
+    // that confound.
+    const launchedProjectile = fired.engagements[0]?.projectiles?.find((pr) => pr.damageType === weapon.damageType)
+    const projectileQueuedImmediately = !!launchedProjectile
+    const progressSamples: number[] = launchedProjectile ? [launchedProjectile.progress] : []
+    let stepsToResolve = 1
+    let targetEverDamaged = false
+    for (let i = 0; i < 200; i++) {
+      const inFlight = engagements[0]?.projectiles?.find((pr) => pr.damageType === weapon.damageType)
+      if (!inFlight) break
+      cursor += COMBAT_STEP_DAYS
+      const step = stepEngagements(engagements, ships, cursor, rng)
+      engagements = step.engagements
+      ships = ships.map((s) => (step.shipCombat[s.id] ? { ...s, combat: step.shipCombat[s.id] } : s))
+      if (step.shipCombat['e1']) targetEverDamaged = true
+      const stillInFlight = engagements[0]?.projectiles?.find((pr) => pr.damageType === weapon.damageType)
+      if (stillInFlight) progressSamples.push(stillInFlight.progress)
+      stepsToResolve++
+    }
+    return { projectileQueuedImmediately, stepsToResolve, targetEverDamaged, progressSamples }
+  }
+
+  const missile = fireAndCountStepsToResolve('frigate', WEAPON_TYPES.missileBattery)
+  check('firing a missile queues a real in-flight round rather than resolving instantly', missile.projectileQueuedImmediately)
+  check('...and it eventually resolves', missile.stepsToResolve > 1 && missile.stepsToResolve < 200)
+  check(
+    "...landing REAL damage once it arrives (missiles never miss an unarmed, zero-point-defense target)",
+    missile.targetEverDamaged,
+  )
+  check('progress starts at (or very near) 0 right at launch', missile.progressSamples[0] < 0.1, `${missile.progressSamples[0]}`)
+  check(
+    'progress climbs monotonically — never goes backwards while a round is closing on a stationary target',
+    missile.progressSamples.every((v, i) => i === 0 || v >= missile.progressSamples[i - 1] - 1e-9),
+  )
+  check(
+    'progress reaches (or very nearly reaches) 1 by the time it resolves',
+    missile.progressSamples[missile.progressSamples.length - 1] > 0.9,
+    `${missile.progressSamples[missile.progressSamples.length - 1]}`,
+  )
+
+  const torpedo = fireAndCountStepsToResolve('battleship', WEAPON_TYPES.torpedoTube)
+  check('firing a torpedo queues a real in-flight round rather than resolving instantly', torpedo.projectileQueuedImmediately)
+  check('...and it also eventually resolves', torpedo.stepsToResolve > 1 && torpedo.stepsToResolve < 200)
+
+  check(
+    'at the SAME distance, the torpedo (slower) takes more steps to resolve than the missile',
+    torpedo.stepsToResolve > missile.stepsToResolve,
+    `missile ${missile.stepsToResolve} steps, torpedo ${torpedo.stepsToResolve} steps`,
+  )
+
+  // Rough sanity: the missile's own resolve time should be in the right
+  // ballpark of distance/speed (plus the one step it was launched on) — not
+  // an exact match, since COMBAT_STEP_SECONDS granularity and the target's
+  // own (here zero) motion both nudge it, but should be well within a
+  // handful of steps either way.
+  const expectedMissileSteps = Math.ceil(separation / MISSILE_SPEED_UNITS_PER_SECOND / COMBAT_STEP_SECONDS) + 1
+  check(
+    "the missile's actual resolve time is close to distance/speed",
+    Math.abs(missile.stepsToResolve - expectedMissileSteps) <= 3,
+    `expected ~${expectedMissileSteps} steps, got ${missile.stepsToResolve}`,
+  )
+}
+
+console.log('\n=== 64. Thruster Boost: a speed/evasion toggle that trades away weapon output ===')
+{
+  const baseParticipant = {
+    shipId: 'p1', side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false, thrusterBoostActive: true,
+  }
+  check(
+    'tacticSpeedMultiplier includes the bonus while active',
+    Math.abs(tacticSpeedMultiplier(baseParticipant) - (1 + THRUSTER_BOOST_SPEED_BONUS_FRACTION)) < 1e-9,
+  )
+  check('tacticSpeedMultiplier is 1x when inactive', tacticSpeedMultiplier({ ...baseParticipant, thrusterBoostActive: false }) === 1)
+  check(
+    'tacticEvasionBonus includes the bonus while active',
+    Math.abs(tacticEvasionBonus(baseParticipant, 'medium') - THRUSTER_BOOST_EVASION_BONUS) < 1e-9,
+  )
+  check(
+    'laser (energy) output is cut GREATLY',
+    tacticWeaponDamageMultiplier(baseParticipant, 'energy') === THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER,
+  )
+  check(
+    'cannon (kinetic) output is cut only MODERATELY — a smaller cut than energy',
+    tacticWeaponDamageMultiplier(baseParticipant, 'kinetic') === THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER &&
+      THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER > THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER,
+  )
+  check(
+    'missile/torpedo output is untouched — physical rounds, not power-hungry systems',
+    tacticWeaponDamageMultiplier(baseParticipant, 'missile') === 1 && tacticWeaponDamageMultiplier(baseParticipant, 'torpedo') === 1,
+  )
+
+  // End-to-end: a boosted ship covers more real distance in one combat step
+  // than an identical ship without it.
+  const simDays = 500
+  const shooter = makeShip('frigate', 'p1', 'player')
+  const other = makeShip('frigate', 'e1', 'hostile')
+  const profile = shipCombatProfile(shooter)!
+  const engs = syncEngagements([shooter, other], [], simDays)
+  const withBoost = engs[0].participants.map((p) =>
+    p.shipId === 'p1' ? { ...p, path: [{ x: 1000, y: 0, z: 0 }], holdPosition: true, thrusterBoostActive: true } : { ...p, path: [], holdPosition: true },
+  )
+  const withoutBoost = engs[0].participants.map((p) => (p.shipId === 'p1' ? { ...p, path: [{ x: 1000, y: 0, z: 0 }], holdPosition: true } : { ...p, path: [], holdPosition: true }))
+  const boostedP1 = withBoost.find((p) => p.shipId === 'p1')!
+  const plainP1 = withoutBoost.find((p) => p.shipId === 'p1')!
+  const boosted = integrateMotion(
+    boostedP1,
+    profile.maneuverUnitsPerSecond * tacticSpeedMultiplier(boostedP1),
+    profile.accelerationUnitsPerSecondSq * tacticSpeedMultiplier(boostedP1),
+    COMBAT_STEP_SECONDS,
+    simDays,
+    [],
+  )
+  const plain = integrateMotion(plainP1, profile.maneuverUnitsPerSecond, profile.accelerationUnitsPerSecondSq, COMBAT_STEP_SECONDS, simDays, [])
+  check(
+    'a boosted ship actually moves farther in one step than an identical one without it',
+    pointDistance(boosted.position, boostedP1.position) > pointDistance(plain.position, plainP1.position),
+  )
+
+  // Auto-criteria: engages the instant nothing is actively trading fire,
+  // drops the instant it is.
+  const farShooter = makeShip('frigate', 'p1', 'player')
+  const farTarget = makeShip('frigate', 'e1', 'hostile')
+  let farShips = [farShooter, farTarget]
+  let farEngs = syncEngagements(farShips, [], simDays)
+  farEngs[0] = { ...farEngs[0], participants: farEngs[0].participants.map((p) => ({ ...p, path: [], holdPosition: true })) }
+  const farStep = stepEngagements(farEngs, farShips, simDays + COMBAT_STEP_DAYS)
+  const farP1 = farStep.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+  check('auto-engages the instant nothing is actively trading fire (spawn separation is out of every weapon range)', !!farP1?.thrusterBoostActive)
+
+  const nearShooter = makeShip('frigate', 'p1', 'player')
+  const nearTarget = makeShip('frigate', 'e1', 'hostile')
+  let nearShips = [nearShooter, nearTarget]
+  let nearEngs = syncEngagements(nearShips, [], simDays)
+  nearEngs[0] = {
+    ...nearEngs[0],
+    participants: nearEngs[0].participants.map((p) => {
+      const base = { ...p, path: [], holdPosition: true }
+      return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 3, y: 6, z: 0 } }
+    }),
+  }
+  const nearStep = stepEngagements(nearEngs, nearShips, simDays + COMBAT_STEP_DAYS)
+  const nearP1 = nearStep.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+  check('...but drops once actively trading fire (well within weapon range of a live target)', nearP1?.thrusterBoostActive === false)
+}
+
+console.log('\n=== 65. Shield Boost: a last resort, not a free upgrade ===')
+{
+  const baseParticipant = {
+    shipId: 'p1', side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false, shieldBoostActive: true,
+  }
+  check(
+    'tacticSpeedMultiplier is reduced while Shield Boost is active',
+    Math.abs(tacticSpeedMultiplier(baseParticipant) - (1 - SHIELD_BOOST_SPEED_PENALTY_FRACTION)) < 1e-9,
+  )
+  check(
+    'tacticEvasionBonus is reduced (a penalty) while Shield Boost is active',
+    Math.abs(tacticEvasionBonus(baseParticipant, 'medium') - -SHIELD_BOOST_EVASION_PENALTY) < 1e-9,
+  )
+  check(
+    'BOTH energy and kinetic output are cut — not energy-only (see why: a kinetic weapon never rolls to-hit, so an energy-only cut would leave a kinetic loadout with zero cost for the extra regen)',
+    tacticWeaponDamageMultiplier(baseParticipant, 'energy') === SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER &&
+      tacticWeaponDamageMultiplier(baseParticipant, 'kinetic') === SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER &&
+      SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER < SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER,
+  )
+
+  // Shield regen: boosted vs. unboosted, same starting damage, one step.
+  const simDays = 600
+  const cruiser = makeShip('cruiser', 'p1', 'player')
+  const profile = shipCombatProfile(cruiser)!
+  const damaged = { ...pristineCombatState(profile), shieldHp: profile.defenses.shieldHp * 0.5 }
+  const boostedShip = { ...cruiser, id: 'boosted', combat: damaged }
+  const plainShip = { ...cruiser, id: 'plain', combat: damaged }
+  const withBoost = [boostedShip]
+  const withoutBoost = [plainShip]
+  const engBoost = [createSoloEngagement(boostedShip, withBoost, simDays)!]
+  engBoost[0] = { ...engBoost[0], participants: engBoost[0].participants.map((p) => ({ ...p, path: [], holdPosition: true, shieldBoostActive: true })) }
+  const engPlain = [createSoloEngagement(plainShip, withoutBoost, simDays)!]
+  engPlain[0] = { ...engPlain[0], participants: engPlain[0].participants.map((p) => ({ ...p, path: [], holdPosition: true })) }
+  const boostResult = stepEngagements(engBoost, withBoost, simDays + COMBAT_STEP_DAYS)
+  const plainResult = stepEngagements(engPlain, withoutBoost, simDays + COMBAT_STEP_DAYS)
+  const boostGain = (boostResult.shipCombat['boosted']?.shieldHp ?? damaged.shieldHp) - damaged.shieldHp
+  const plainGain = (plainResult.shipCombat['plain']?.shieldHp ?? damaged.shieldHp) - damaged.shieldHp
+  check(
+    'a Shield-Boosted hull regenerates shields roughly SHIELD_BOOST_REGEN_MULTIPLIER times faster',
+    Math.abs(boostGain / plainGain - SHIELD_BOOST_REGEN_MULTIPLIER) < 0.01,
+    `boosted +${boostGain.toFixed(3)}, plain +${plainGain.toFixed(3)}, ratio ${(boostGain / plainGain).toFixed(2)}`,
+  )
+
+  // Auto-criteria: a routine scratch is NOT enough to engage it any more —
+  // only genuine trouble (critically low health) or fleeing is.
+  {
+    const scratchedShip = makeShip('cruiser', 'p1', 'player')
+    const scratchedProfile = shipCombatProfile(scratchedShip)!
+    // Healthy overall (core/armor untouched), shields merely dipped — the
+    // OLD "shields below 60%" trigger would have engaged here; the new
+    // health-based one should not.
+    scratchedShip.combat = { ...pristineCombatState(scratchedProfile), shieldHp: scratchedProfile.defenses.shieldHp * 0.5 }
+    const hostile = makeShip('cruiser', 'e1', 'hostile')
+    let ships = [scratchedShip, hostile]
+    let engs = syncEngagements(ships, [], simDays)
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 2, y: 6, z: 0 } }
+      }),
+    }
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check(
+      'a merely-scratched, otherwise-healthy, under-fire ship does NOT auto-engage Shield Boost (the old routine trigger is gone)',
+      p1After?.shieldBoostActive !== true,
+    )
+  }
+  {
+    const dyingShip = makeShip('cruiser', 'p1', 'player')
+    const dyingProfile = shipCombatProfile(dyingShip)!
+    dyingShip.combat = {
+      ...pristineCombatState(dyingProfile),
+      shieldHp: 0,
+      armorHp: 0,
+      componentHp: { weapons: dyingProfile.components.weapons * 0.2, utility: dyingProfile.components.utility * 0.2, core: dyingProfile.components.core * 0.2 },
+    }
+    const hostile = makeShip('cruiser', 'e1', 'hostile')
+    let ships = [dyingShip, hostile]
+    let engs = syncEngagements(ships, [], simDays)
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 2, y: 6, z: 0 } }
+      }),
+    }
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check('...but a critically damaged, under-fire ship DOES (stalling/holding out)', p1After?.shieldBoostActive === true)
+  }
+  {
+    const fleeingShip = { ...makeShip('cruiser', 'p1', 'player'), stance: 'flee' as const }
+    const hostile = makeShip('cruiser', 'e1', 'hostile')
+    let ships = [fleeingShip, hostile]
+    let engs = syncEngagements(ships, [], simDays)
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 } } : { ...base, position: { x: 2, y: 6, z: 0 } }
+      }),
+    }
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check('...and a full-health ship that is actively FLEEING also engages it, regardless of health', p1After?.shieldBoostActive === true)
+  }
+
+  // THE balance requirement: two otherwise-identical ships, one running
+  // Shield Boost the ENTIRE fight (auto disabled, forced on by hand — the
+  // worst case a player could actually set up), should reliably LOSE to the
+  // plain one. Checked against BOTH a kinetic-only loadout (corvette —
+  // kinetic weapons never roll to-hit at all, so evasion/speed penalties
+  // alone can't be what makes this lose; the kinetic damage cut has to be
+  // doing real work) and an energy-heavy one (destroyer), so the balance
+  // holds regardless of what the boosted ship is actually armed with.
+  function simulateShieldBoostMirror(classId: string, seed: number, maxSteps = 3000): 'boosted' | 'plain' | 'draw' | 'timeout' {
+    const boosted = { ...makeShip(classId, 'boosted', 'player'), shieldBoostAuto: false }
+    const plain = makeShip(classId, 'plain', 'hostile')
+    let ships = [boosted, plain]
+    let engagements = syncEngagements(ships, [], 0)
+    engagements[0] = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p) => (p.shipId === 'boosted' ? { ...p, shieldBoostActive: true } : p)),
+    }
+    const rng = seededRng(seed)
+    const alive = new Map(ships.map((s) => [s.id, s]))
+    for (let i = 0; i < maxSteps; i++) {
+      if (engagements.length === 0) break
+      const simDays = (i + 1) * COMBAT_STEP_DAYS
+      const result = stepEngagements(engagements, [...alive.values()], simDays, rng)
+      for (const id of result.destroyedShipIds) alive.delete(id)
+      for (const id of result.disengagedShipIds) alive.delete(id)
+      for (const [id, combat] of Object.entries(result.shipCombat)) {
+        const ship = alive.get(id)
+        if (ship) alive.set(id, { ...ship, combat })
+      }
+      engagements = result.engagements
+      const boostedLeft = alive.has('boosted')
+      const plainLeft = alive.has('plain')
+      if (!boostedLeft && !plainLeft) return 'draw'
+      if (!plainLeft) return 'boosted'
+      if (!boostedLeft) return 'plain'
+    }
+    return 'timeout'
+  }
+
+  const SHIELD_BOOST_TRIAL_SEEDS = Array.from({ length: 12 }, (_, i) => i + 1)
+  for (const classId of ['corvette', 'destroyer']) {
+    const boostedWins = SHIELD_BOOST_TRIAL_SEEDS.filter((seed) => simulateShieldBoostMirror(classId, seed) === 'boosted').length
+    const rate = boostedWins / SHIELD_BOOST_TRIAL_SEEDS.length
+    check(
+      `${classId} mirror: a permanently Shield-Boosted hull does NOT reliably win against an identical unboosted one (<=15%)`,
+      rate <= 0.15,
+      `${(rate * 100).toFixed(0)}% (${boostedWins}/${SHIELD_BOOST_TRIAL_SEEDS.length})`,
+    )
+  }
+}
+
+console.log('\n=== 66. Spin Thrust: genuinely uncontrollable, with a collision safety valve ===')
+{
+  const baseParticipant = {
+    shipId: 'e1', side: 1 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false, spinThrustActive: true,
+  }
+  check(
+    'tacticEvasionBonus includes the FULL Spin Thrust bonus for a small hull',
+    Math.abs(tacticEvasionBonus(baseParticipant, 'small') - SPIN_THRUST_EVASION_BONUS) < 1e-9,
+  )
+  check(
+    'a bigger hull gets progressively LESS out of it — the whole point of SPIN_THRUST_SIZE_EFFECTIVENESS',
+    tacticEvasionBonus(baseParticipant, 'small') > tacticEvasionBonus(baseParticipant, 'medium') &&
+      tacticEvasionBonus(baseParticipant, 'medium') > tacticEvasionBonus(baseParticipant, 'large') &&
+      tacticEvasionBonus(baseParticipant, 'large') > tacticEvasionBonus(baseParticipant, 'x') &&
+      tacticEvasionBonus(baseParticipant, 'x') > 0, // never negative — it's a diminished benefit, not a penalty
+  )
+
+  // Uncontrollable: a spin-thrusting ship with an explicit manual hold AND a
+  // queued path still ends up moving, not sitting still — proving the
+  // random walk overrides holdPosition/path rather than respecting them.
+  {
+    const simDays = 650
+    const ship = makeShip('frigate', 'p1', 'player')
+    const other = makeShip('frigate', 'e1', 'hostile')
+    let ships = [ship, other]
+    let engs = syncEngagements(ships, [], simDays)
+    const startPos = engs[0].participants.find((p) => p.shipId === 'p1')!.position
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) =>
+        p.shipId === 'p1'
+          ? { ...p, spinThrustActive: true, holdPosition: true, path: [{ x: startPos.x, y: startPos.y, z: startPos.z }] }
+          : { ...p, path: [], holdPosition: true },
+      ),
+    }
+    const rng = seededRng(3)
+    let cursor = simDays
+    let moved = false
+    for (let i = 0; i < 10; i++) {
+      cursor += COMBAT_STEP_DAYS
+      const step = stepEngagements(engs, ships, cursor, rng)
+      engs = step.engagements
+      ships = ships.map((s) => (step.shipCombat[s.id] ? { ...s, combat: step.shipCombat[s.id] } : s))
+      const p1 = engs[0]?.participants.find((p) => p.shipId === 'p1')
+      if (p1 && pointDistance(p1.position, startPos) > 1e-6) moved = true
+      if (!p1 || !p1.spinThrustActive) break
+    }
+    check('a spin-thrusting ship drifts away from its held position despite holdPosition + a queued path', moved)
+  }
+
+  // Collision safety: a ship spinning on a heading straight at a nearby body
+  // gets Spin Thrust switched OFF for it before movement integrates into
+  // the body, rather than being allowed to drift in.
+  {
+    const body = { name: 'TestBody', kind: 'planet' as const, color: '#fff', position: { x: 10, y: 0, z: 0 }, radiusUnits: 1, surfaceGravityUnitsPerSecondSq: 0 }
+    const participant = {
+      shipId: 'p1', side: 0 as const,
+      position: { x: 5, y: 0, z: 0 },
+      // Heading straight at the body, fast enough to close the remaining
+      // distance well within the lookahead window.
+      velocity: { x: 5, y: 0, z: 0 },
+      positionSimDays: 0, path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null,
+      holdPosition: false, spinThrustActive: true,
+    }
+    const ship = makeShip('frigate', 'p1', 'player')
+    const engagement = {
+      id: 'safety-test', locationKey: 'k', locationLabel: 'l', startedSimDays: 0, density: 'standard' as const,
+      center: { x: 0, y: 0, z: 0 }, obstacles: [body], participants: [participant], resolvedThroughSimDays: 0,
+    }
+    const result = stepEngagements([engagement], [ship], COMBAT_STEP_DAYS)
+    const p1After = result.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check('Spin Thrust auto-cancels when a collision is imminent, before the ship actually reaches the body', p1After?.spinThrustActive === false)
+    check('...and the ship has NOT ended up inside/past the body this same step', !!p1After && p1After.position.x < body.position.x - body.radiusUnits)
+  }
+
+  // Damage redirection, end to end through the real firing loop: a destroyer
+  // (mass drivers — kinetic, never intercepted, never misses, and hard-
+  // hitting enough to blow through the target's own shield regen between
+  // shots) called-shots a cruiser's weapons component. The target's
+  // shields/armor are zeroed out up front so damage reaches the component
+  // layer quickly rather than this test's whole window going to stripping
+  // them back down. Both ships hold position (spin-thrust drift is real now
+  // — see above — so the target CAN wander; the shooter tracks it via
+  // targetShipId regardless of where it drifts to, same as any other
+  // target). EVERY auto-tactics flag is forced off on both ships — not just
+  // spinThrustAuto — so the auto-tactics pass can't manage ANY tactic for
+  // itself here: an auto-engaged Weapons Boost on the shooter, for instance,
+  // would raise its per-shot damage enough to burn through the target's
+  // weapons pool faster than this test's step count was calibrated for,
+  // tripping pickComponent's OWN "preferred component already dead, spread
+  // elsewhere" fallback — a second source of off-target damage this test
+  // isn't trying to measure, confounding the one (Spin Thrust's redirect)
+  // that it is.
+  function runRedirectTrial(spinThrustActive: boolean, targetClassId: string = 'cruiser'): { weaponsFraction: number } {
+    const simDays = 700
+    const noAuto = { thrusterBoostAuto: false, shieldBoostAuto: false, weaponsBoostAuto: false, spinThrustAuto: false }
+    const shooter = { ...makeShip('destroyer', 'p1', 'player'), ...noAuto }
+    const target = { ...makeShip(targetClassId, 'e1', 'hostile'), ...noAuto }
+    target.combat = { ...target.combat, shieldHp: 0, armorHp: 0 }
+    let ships = [shooter, target]
+    let engagements = syncEngagements(ships, [], simDays)
+    engagements[0] = {
+      ...engagements[0],
+      participants: engagements[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        if (p.shipId === 'p1') return { ...base, position: { x: 0, y: 6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, targetShipId: 'e1', targetComponent: 'weapons' as const }
+        return { ...base, position: { x: 2, y: 6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, spinThrustActive }
+      }),
+    }
+    const before = target.combat.componentHp
+    const rng = seededRng(11)
+    let cursor = simDays
+    let cumulative = target.combat
+    for (let i = 0; i < 100; i++) {
+      cursor += COMBAT_STEP_DAYS
+      const step = stepEngagements(engagements, ships, cursor, rng)
+      engagements = step.engagements
+      ships = ships.map((s) => (step.shipCombat[s.id] ? { ...s, combat: step.shipCombat[s.id] } : s))
+      if (step.shipCombat['e1']) cumulative = step.shipCombat['e1']
+    }
+    const weaponsLoss = before.weapons - cumulative.componentHp.weapons
+    const utilityLoss = before.utility - cumulative.componentHp.utility
+    const coreLoss = before.core - cumulative.componentHp.core
+    const totalLoss = weaponsLoss + utilityLoss + coreLoss
+    return { weaponsFraction: totalLoss > 0 ? weaponsLoss / totalLoss : 1 }
+  }
+
+  const control = runRedirectTrial(false)
+  check('control (no Spin Thrust): a called shot lands on the targeted component almost every time', control.weaponsFraction > 0.9, `${(control.weaponsFraction * 100).toFixed(0)}%`)
+
+  // The target here is a Cruiser (large — SPIN_THRUST_SIZE_EFFECTIVENESS.
+  // large = 0.5), so the EFFECTIVE redirect chance is SPIN_THRUST_REDIRECT_
+  // CHANCE * 0.5 (~25%), not the raw 50% — roughly a quarter diverted, not a
+  // half. The dedicated size-scaling comparison right below is what proves
+  // the scaling itself; this just confirms it's really landing somewhere,
+  // not zero and not the full un-scaled rate.
+  const jinking = runRedirectTrial(true)
+  check(
+    'with Spin Thrust active, a meaningfully smaller share lands on the targeted component',
+    jinking.weaponsFraction < control.weaponsFraction - 0.1,
+    `control ${(control.weaponsFraction * 100).toFixed(0)}%, jinking ${(jinking.weaponsFraction * 100).toFixed(0)}%`,
+  )
+  check(
+    "...roughly a quarter for this LARGE target, not zero and not the full un-scaled ~half",
+    jinking.weaponsFraction > 0.55 && jinking.weaponsFraction < 0.95,
+    `${(jinking.weaponsFraction * 100).toFixed(0)}%`,
+  )
+
+  // The actual size-scaling claim, end to end: the SAME shooter, SAME
+  // Spin-Thrust-active setup, against a SMALL target (Corvette) instead of a
+  // Large one — SPIN_THRUST_SIZE_EFFECTIVENESS.small (1.0) means the small
+  // target should get noticeably MORE redirection (a lower weaponsFraction)
+  // than the large one just measured, proving "the bigger the ship, the
+  // less effective Spin Thrust" rather than just asserting the constant
+  // table exists.
+  const jinkingSmall = runRedirectTrial(true, 'corvette')
+  check(
+    'a SMALL target gets meaningfully MORE redirection than the LARGE one — bigger ships get less out of Spin Thrust',
+    jinkingSmall.weaponsFraction < jinking.weaponsFraction - 0.1,
+    `small ${(jinkingSmall.weaponsFraction * 100).toFixed(0)}%, large ${(jinking.weaponsFraction * 100).toFixed(0)}%`,
+  )
+}
+
+console.log('\n=== 67. Ramming, categorized as a Tactic (no behavior change — see section 57) ===')
+{
+  check('all five tactics are registered', TACTIC_IDS.length === 5 && TACTIC_IDS.includes('ramming'))
+  check(
+    'the other four are the maneuvers',
+    TACTIC_IDS.includes('thruster-boost') &&
+      TACTIC_IDS.includes('shield-boost') &&
+      TACTIC_IDS.includes('weapons-boost') &&
+      TACTIC_IDS.includes('spin-thrust'),
+  )
+  // resolveProjectileImpact is exercised indirectly by section 63 (through
+  // the resolver); a direct unit check that it agrees with applyShot's own
+  // damage-layer math on a simple case, since both now share one
+  // implementation (see applyDamageLayers).
+  const cruiser = SHIP_CLASSES.find((c) => c.id === 'cruiser')!
+  const profile = cruiser.combat
+  const target = pristineCombatState(profile)
+  const never = () => 1
+  const viaApplyShot = applyShot(WEAPON_TYPES.missileBattery, 50, target, profile, null, never)
+  const viaProjectile = resolveProjectileImpact({ damageType: 'missile', rawDamage: 50, preferredComponent: null }, target, profile, never)
+  check(
+    'a projectile impact and an equivalent direct applyShot agree exactly (shared damage-layer code)',
+    Math.abs(viaApplyShot.next.shieldHp - viaProjectile.shieldHp) < 1e-9 &&
+      Math.abs(viaApplyShot.next.armorHp - viaProjectile.armorHp) < 1e-9,
+  )
+}
+
+console.log('\n=== 68. Weapons Boost: real bonus damage, at the cost of shields and speed ===')
+{
+  const baseParticipant = {
+    shipId: 'p1', side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false, weaponsBoostActive: true,
+  }
+  check(
+    'tacticSpeedMultiplier is reduced while Weapons Boost is active',
+    Math.abs(tacticSpeedMultiplier(baseParticipant) - (1 - WEAPONS_BOOST_SPEED_PENALTY_FRACTION)) < 1e-9,
+  )
+  check('tacticEvasionBonus is untouched by Weapons Boost — its trade is shields and speed only, not evasion', tacticEvasionBonus(baseParticipant, 'medium') === 0)
+  check(
+    'EVERY damage type gets the bonus — including missile/torpedo, unlike Thruster/Shield Boost which leave physical rounds alone',
+    tacticWeaponDamageMultiplier(baseParticipant, 'energy') === WEAPONS_BOOST_DAMAGE_MULTIPLIER &&
+      tacticWeaponDamageMultiplier(baseParticipant, 'kinetic') === WEAPONS_BOOST_DAMAGE_MULTIPLIER &&
+      tacticWeaponDamageMultiplier(baseParticipant, 'missile') === WEAPONS_BOOST_DAMAGE_MULTIPLIER &&
+      tacticWeaponDamageMultiplier(baseParticipant, 'torpedo') === WEAPONS_BOOST_DAMAGE_MULTIPLIER,
+  )
+  check('the bonus is a real increase, not a penalty dressed up as one', WEAPONS_BOOST_DAMAGE_MULTIPLIER > 1)
+
+  // Shield regen: reduced, not stopped — mirrors Shield Boost's own regen
+  // test (section 65) but in the other direction.
+  const simDays = 800
+  const cruiser = makeShip('cruiser', 'p1', 'player')
+  const profile = shipCombatProfile(cruiser)!
+  const damaged = { ...pristineCombatState(profile), shieldHp: profile.defenses.shieldHp * 0.5 }
+  const boostedShip = { ...cruiser, id: 'wboosted', combat: damaged }
+  const plainShip = { ...cruiser, id: 'wplain', combat: damaged }
+  const engBoost = [createSoloEngagement(boostedShip, [boostedShip], simDays)!]
+  engBoost[0] = { ...engBoost[0], participants: engBoost[0].participants.map((p) => ({ ...p, path: [], holdPosition: true, weaponsBoostActive: true })) }
+  const engPlain = [createSoloEngagement(plainShip, [plainShip], simDays)!]
+  engPlain[0] = { ...engPlain[0], participants: engPlain[0].participants.map((p) => ({ ...p, path: [], holdPosition: true })) }
+  const boostResult = stepEngagements(engBoost, [boostedShip], simDays + COMBAT_STEP_DAYS)
+  const plainResult = stepEngagements(engPlain, [plainShip], simDays + COMBAT_STEP_DAYS)
+  const boostGain = (boostResult.shipCombat['wboosted']?.shieldHp ?? damaged.shieldHp) - damaged.shieldHp
+  const plainGain = (plainResult.shipCombat['wplain']?.shieldHp ?? damaged.shieldHp) - damaged.shieldHp
+  check(
+    'a Weapons-Boosted hull regenerates shields SLOWER, by roughly WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER',
+    Math.abs(boostGain / plainGain - WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER) < 0.01,
+    `boosted +${boostGain.toFixed(3)}, plain +${plainGain.toFixed(3)}, ratio ${(boostGain / plainGain).toFixed(2)}`,
+  )
+
+  // Damage output, end to end through applyShot.
+  const laser: WeaponMount = { ...WEAPON_TYPES.laser, damage: 100 }
+  const target = pristineCombatState(profile)
+  const never = () => 1
+  const normalShot = applyShot(laser, 100, target, profile, null, never)
+  const boostedShot = applyShot(laser, 100 * WEAPONS_BOOST_DAMAGE_MULTIPLIER, target, profile, null, never)
+  check(
+    'boosting the raw damage before applyShot scales the shield damage dealt by the same factor',
+    Math.abs(boostedShot.outcome.shieldDamage / normalShot.outcome.shieldDamage - WEAPONS_BOOST_DAMAGE_MULTIPLIER) < 1e-9,
+  )
+
+  // Auto-criteria: the inverse gate from Shield Boost's — engages while
+  // HEALTHY and actively trading fire, not while in danger.
+  {
+    const healthyShip = makeShip('cruiser', 'p1', 'player')
+    const hostile = makeShip('cruiser', 'e1', 'hostile')
+    let ships = [healthyShip, hostile]
+    let engs = syncEngagements(ships, [], simDays)
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 2, y: 6, z: 0 } }
+      }),
+    }
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check('a healthy ship actively trading fire auto-engages Weapons Boost', p1After?.weaponsBoostActive === true)
+  }
+  {
+    const dyingShip = makeShip('cruiser', 'p1', 'player')
+    const dyingProfile = shipCombatProfile(dyingShip)!
+    dyingShip.combat = {
+      ...pristineCombatState(dyingProfile),
+      shieldHp: 0,
+      armorHp: 0,
+      componentHp: { weapons: dyingProfile.components.weapons * 0.2, utility: dyingProfile.components.utility * 0.2, core: dyingProfile.components.core * 0.2 },
+    }
+    const hostile = makeShip('cruiser', 'e1', 'hostile')
+    let ships = [dyingShip, hostile]
+    let engs = syncEngagements(ships, [], simDays)
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 2, y: 6, z: 0 } }
+      }),
+    }
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check(
+      "...but a critically damaged ship does NOT — Shield Boost's own auto-logic claims the grid instead (see the priority test below)",
+      p1After?.weaponsBoostActive !== true,
+    )
+  }
+}
+
+console.log('\n=== 69. The three Boost tactics share one power grid: mutual exclusion + priority ===')
+{
+  check('exactly three tactics are grouped as boosts', BOOST_TACTIC_IDS.length === 3)
+  check(
+    'the boost group is exactly Thruster/Shield/Weapons — not Spin Thrust or Ramming',
+    BOOST_TACTIC_IDS.includes('thruster-boost') && BOOST_TACTIC_IDS.includes('shield-boost') && BOOST_TACTIC_IDS.includes('weapons-boost'),
+  )
+
+  // Manual toggles (the store actions) clear the other two.
+  {
+    const engagementId = 'mutex-test'
+    const shipId = 'p1'
+    const participant = {
+      shipId, side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+      path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+    }
+    useCombatStore.setState({
+      engagements: [
+        {
+          id: engagementId, locationKey: 'k', locationLabel: 'l', startedSimDays: 0, density: 'standard' as const,
+          center: { x: 0, y: 0, z: 0 }, obstacles: [], participants: [participant], resolvedThroughSimDays: 0,
+        },
+      ],
+    })
+    const store = useCombatStore.getState()
+    store.setShieldBoost(engagementId, shipId, true)
+    let p = useCombatStore.getState().engagements[0].participants[0]
+    check('Shield Boost switches on', p.shieldBoostActive === true)
+
+    store.setThrusterBoost(engagementId, shipId, true)
+    p = useCombatStore.getState().engagements[0].participants[0]
+    check('...and switching Thruster Boost on turns Shield Boost back off', p.thrusterBoostActive === true && p.shieldBoostActive === false)
+
+    store.setWeaponsBoost(engagementId, shipId, true)
+    p = useCombatStore.getState().engagements[0].participants[0]
+    check(
+      '...and switching Weapons Boost on turns Thruster Boost back off too — never more than one at once',
+      p.weaponsBoostActive === true && p.thrusterBoostActive === false && p.shieldBoostActive === false,
+    )
+    useCombatStore.setState({ engagements: [] })
+  }
+
+  // Auto-tactics priority: a ship that's simultaneously "critically damaged"
+  // (Shield Boost's own trigger) AND "actively trading fire" is exactly the
+  // overlap case both Shield Boost's and Weapons Boost's auto-criteria could
+  // independently want to claim — Shield Boost, the survival call, has to
+  // win. (Covered from the Weapons Boost side already in section 68; this
+  // checks it holds from Shield Boost's side too, and that nothing ends up
+  // with two boosts on at once.)
+  {
+    const simDays = 900
+    const dyingShip = makeShip('cruiser', 'p1', 'player')
+    const dyingProfile = shipCombatProfile(dyingShip)!
+    dyingShip.combat = {
+      ...pristineCombatState(dyingProfile),
+      shieldHp: 0,
+      armorHp: 0,
+      componentHp: { weapons: dyingProfile.components.weapons * 0.2, utility: dyingProfile.components.utility * 0.2, core: dyingProfile.components.core * 0.2 },
+    }
+    const hostile = makeShip('cruiser', 'e1', 'hostile')
+    let ships = [dyingShip, hostile]
+    let engs = syncEngagements(ships, [], simDays)
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 2, y: 6, z: 0 } }
+      }),
+    }
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check('Shield Boost wins the grid for a critically damaged, under-fire ship', p1After?.shieldBoostActive === true)
+    check(
+      '...and NEITHER other boost is also active — the auto-tactics pass never double-claims the grid',
+      p1After?.thrusterBoostActive !== true && p1After?.weaponsBoostActive !== true,
+    )
+  }
+
+  // Thruster Boost additionally can never coexist with Spin Thrust — a
+  // directed speed/evasion push makes no sense on a ship that has already
+  // given up steering to a random walk (see CombatParticipant.
+  // thrusterBoostActive's own comment).
+  {
+    const engagementId = 'mutex-spin-test'
+    const shipId = 'p1'
+    const participant = {
+      shipId, side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+      path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+    }
+    useCombatStore.setState({
+      engagements: [
+        {
+          id: engagementId, locationKey: 'k', locationLabel: 'l', startedSimDays: 0, density: 'standard' as const,
+          center: { x: 0, y: 0, z: 0 }, obstacles: [], participants: [participant], resolvedThroughSimDays: 0,
+        },
+      ],
+    })
+    const store = useCombatStore.getState()
+
+    store.setThrusterBoost(engagementId, shipId, true)
+    let p = useCombatStore.getState().engagements[0].participants[0]
+    check('Thruster Boost switches on with nothing else active', p.thrusterBoostActive === true)
+
+    store.setSpinThrust(engagementId, shipId, true)
+    p = useCombatStore.getState().engagements[0].participants[0]
+    check('...and switching Spin Thrust on cancels Thruster Boost', p.spinThrustActive === true && p.thrusterBoostActive === false)
+
+    store.setThrusterBoost(engagementId, shipId, true)
+    p = useCombatStore.getState().engagements[0].participants[0]
+    check(
+      '...and trying to activate Thruster Boost while Spin Thrust still has the ship is refused',
+      p.thrusterBoostActive === false && p.spinThrustActive === true,
+    )
+
+    store.setSpinThrust(engagementId, shipId, false)
+    store.setThrusterBoost(engagementId, shipId, true)
+    p = useCombatStore.getState().engagements[0].participants[0]
+    check('...but it activates normally once Spin Thrust is cancelled', p.thrusterBoostActive === true && p.spinThrustActive === false)
+    useCombatStore.setState({ engagements: [] })
+  }
+
+  // Same rule holds for the AI's own auto-tactics pass, not just the manual
+  // store setters.
+  {
+    const simDays = 900
+    const scaredShip = makeShip('cruiser', 'p1', 'player')
+    const scaredProfile = shipCombatProfile(scaredShip)!
+    scaredShip.combat = { ...pristineCombatState(scaredProfile), shieldHp: scaredProfile.defenses.shieldHp * 0.1 }
+    const hostile = makeShip('cruiser', 'e1', 'hostile')
+    let ships = [scaredShip, hostile]
+    let engs = syncEngagements(ships, [], simDays)
+    engs[0] = {
+      ...engs[0],
+      participants: engs[0].participants.map((p) => {
+        const base = { ...p, path: [], holdPosition: true }
+        return p.shipId === 'p1'
+          ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1', spinThrustActive: true }
+          : { ...base, position: { x: 2, y: 6, z: 0 } }
+      }),
+    }
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
+    check(
+      'the auto-tactics pass never turns Thruster Boost on for a ship Spin Thrust already has, even with nothing else shooting',
+      p1After?.thrusterBoostActive !== true,
+    )
+  }
+}
+
+console.log('\n=== 70. Tactic badges: activeTacticIds + tacticBadge, with a "???" fallback for the unknown ===')
+{
+  const none = {
+    shipId: 'p1', side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+  }
+  check('a participant running nothing has no active tactic ids', activeTacticIds(none).length === 0)
+
+  const busy = { ...none, shieldBoostActive: true, spinThrustActive: true, ramming: true }
+  const ids = activeTacticIds(busy)
+  check('every active flag shows up as an id', ids.includes('shield-boost') && ids.includes('spin-thrust') && ids.includes('ramming'))
+  check('an inactive flag does not', !ids.includes('thruster-boost') && !ids.includes('weapons-boost'))
+
+  for (const id of TACTIC_IDS) {
+    const badge = tacticBadge(id)
+    check(`tacticBadge recognizes '${id}'`, badge.label !== '???' && badge.label.length > 0 && !!badge.title)
+  }
+
+  const unknown = tacticBadge('some-tactic-not-added-yet')
+  check('an id with no registered label/description falls back to "???"', unknown.label === '???')
+  check('...with no tooltip, rather than printing "undefined"', unknown.title === undefined)
+}
+
+console.log('\n=== 71. engagementIsContested: "an Engagement exists" is not "a fight is happening" ===')
+{
+  // Mirrors the two real bugs this exists to fix (see its own comment):
+  // ShipPanel showing "In combat" for a hostile-free persisted arena, and
+  // the clock not re-engaging tactical time when a fresh scenario silently
+  // reuses an existing engagement id at the same location.
+  const p1 = {
+    shipId: 'p1', side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
+  }
+  const e1 = { ...p1, shipId: 'e1', side: 1 as const }
+  const p2 = { ...p1, shipId: 'p2' }
+  const allegiances: Record<string, 'player' | 'hostile'> = { p1: 'player', e1: 'hostile', p2: 'player' }
+  const allegianceOf = (id: string) => allegiances[id]
+
+  check('a two-sided hostile roster IS contested', engagementIsContested({ participants: [p1, e1] }, allegianceOf))
+  check('an all-player roster (the winning side lingering, or a solo lookaround) is NOT contested', !engagementIsContested({ participants: [p1, p2] }, allegianceOf))
+  check('a single-ship roster is NOT contested (nothing to be hostile to)', !engagementIsContested({ participants: [p1] }, allegianceOf))
+  check('an empty roster is NOT contested', !engagementIsContested({ participants: [] }, allegianceOf))
+  check(
+    "a participant whose ship no longer exists (allegianceOf returns undefined) doesn't count toward contesting — matches a stale engagement whose old roster was already removed",
+    !engagementIsContested({ participants: [p1, e1] }, (id) => (id === 'e1' ? undefined : allegiances[id])),
   )
 }
 

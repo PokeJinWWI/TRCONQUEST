@@ -11,6 +11,10 @@ interface ShipDesignStore {
   deleteDesign: (designId: string) => void
   // moduleId of null clears the slot.
   equipModule: (designId: string, category: SlotCategory, slotIndex: number, moduleId: string | null) => void
+  // See ShipDesign.powerTier. Gating which tiers are actually OFFERED is the
+  // UI's job (see shipModules.powerTiersAvailable), same as every other
+  // tech-gated choice in the builder — this just sets it.
+  setPowerTier: (designId: string, tier: number) => void
 }
 
 // Same id-generation pattern shipStore.ts already uses for fleet ids —
@@ -27,7 +31,7 @@ export const useShipDesignStore = create<ShipDesignStore>((set) => ({
     const chassis = HULL_CHASSES.find((c) => c.id === chassisId)
     if (!chassis) return ''
     const id = newDesignId()
-    const design: ShipDesign = { id, name, chassisId, equipped: emptyLoadout(chassis) }
+    const design: ShipDesign = { id, name, chassisId, equipped: emptyLoadout(chassis), powerTier: 1 }
     set((state) => ({ designs: [...state.designs, design] }))
     return id
   },
@@ -48,5 +52,10 @@ export const useShipDesignStore = create<ShipDesignStore>((set) => ({
         nextCategorySlots[slotIndex] = moduleId
         return { ...d, equipped: { ...d.equipped, [category]: nextCategorySlots } }
       }),
+    })),
+
+  setPowerTier: (designId, tier) =>
+    set((state) => ({
+      designs: state.designs.map((d) => (d.id === designId ? { ...d, powerTier: tier } : d)),
     })),
 }))

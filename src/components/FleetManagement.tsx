@@ -21,8 +21,8 @@ import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { useFleetStore, type Fleet } from '../state/fleetStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
-import { HULL_CHASSES, designToShipClass, type HullChassis, type ShipDesign } from '../data/hullChassis'
-import { SLOT_SIZE_LABELS, modulesForSlot, type SlotCategory } from '../data/shipModules'
+import { HULL_CHASSES, designPowerBudget, designPowerUsed, designToShipClass, type HullChassis, type ShipDesign } from '../data/hullChassis'
+import { POWER_TIER_BUDGET, POWER_TIER_LABELS, SLOT_SIZE_LABELS, modulesForSlot, powerTiersAvailable, type SlotCategory } from '../data/shipModules'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerTech } from '../hooks/usePlayerTech'
 
@@ -368,19 +368,54 @@ const SLOT_CATEGORY_LABELS: Record<SlotCategory, string> = {
 
 // One row per physical slot on the chassis — a size-filtered <select> is the
 // "picker" the plan called for: it can only ever offer modules that actually
-// fit (see modulesForSlot), so there's no way to pick something illegal.
+// fit AND that the design can actually still power (see modulesForSlot), so
+// there's no way to pick something illegal or unaffordable.
 function SlotEditor({ design, chassis }: { design: ShipDesign; chassis: HullChassis }) {
   const equipModule = useShipDesignStore((s) => s.equipModule)
+  const setPowerTier = useShipDesignStore((s) => s.setPowerTier)
   const researched = usePlayerTech().researched
   const categories = Object.keys(chassis.slots) as SlotCategory[]
+  const powerUsed = designPowerUsed(design)
+  const powerBudget = designPowerBudget(design)
+  const availableTiers = powerTiersAvailable(researched)
 
   return (
     <>
+      {/* Power Distribution — a hull-wide budget every equipped module draws
+          from (see shipModules.ts's own section), separate from any one
+          slot. Tier 1 is always available for free; higher tiers need
+          research (see techData.ts's Power Systems branch under
+          Engineering) — the tier picker only ever offers tiers already
+          unlocked, same "filter before render" gating every other choice in
+          this builder already uses. */}
+      <div className="combat-orders-title">Power Distribution</div>
+      <div className="inspect-row">
+        <span className="inspect-label">Grid Tier</span>
+        <select
+          className="slot-select"
+          value={design.powerTier}
+          onChange={(e) => setPowerTier(design.id, Number(e.target.value))}
+        >
+          {availableTiers.map((tier) => (
+            <option key={tier} value={tier}>
+              {POWER_TIER_LABELS[tier]} ({POWER_TIER_BUDGET[tier]})
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="inspect-row">
+        <span className="inspect-label">Power Used</span>
+        <span className={`inspect-value${powerUsed > powerBudget ? ' econ-neg' : ''}`}>
+          {powerUsed} / {powerBudget}
+        </span>
+      </div>
+
       {categories.map((category) => (
         <div key={category}>
           <div className="combat-orders-title">{SLOT_CATEGORY_LABELS[category]}</div>
           {chassis.slots[category].map((slotSize, i) => {
-            const options = modulesForSlot(category, slotSize, researched)
+            const powerBudgetRemaining = powerBudget - designPowerUsed(design, { category, index: i })
+            const options = modulesForSlot(category, slotSize, researched, powerBudgetRemaining)
             const equippedId = design.equipped[category][i] ?? ''
             return (
               <div className="inspect-row" key={`${category}-${i}`}>
@@ -395,7 +430,7 @@ function SlotEditor({ design, chassis }: { design: ShipDesign; chassis: HullChas
                   <option value="">— Empty —</option>
                   {options.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name}
+                      {m.name} ({m.powerCost} power)
                     </option>
                   ))}
                 </select>

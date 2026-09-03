@@ -3,8 +3,9 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import type { Group } from 'three'
 import { ALLEGIANCE_COLORS } from '../data/shipData'
+import { tacticBadge } from '../data/combatData'
 import { useShipStore } from '../state/shipStore'
-import { useCombatStore } from '../state/combatStore'
+import { activeTacticIds, useCombatStore } from '../state/combatStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { isChaffActive, overallHealthFraction, participantArenaPosition, shipCombatProfile } from './combatResolution'
 import { toVector3 } from './combatArena'
@@ -44,6 +45,16 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
     const profile = found ? shipCombatProfile(found) : null
     return found && profile ? Math.round(overallHealthFraction(found.combat, profile) * 100) : 0
   })
+  // A joined string, not an array — zustand's default equality check is a
+  // reference compare, so an array/object built fresh on every store update
+  // would re-render this marker every step even when nothing tactic-related
+  // actually changed. Strings compare by value, so this is cheap and correct
+  // without needing a shallow-equal selector.
+  const activeTacticIdsKey = useCombatStore((s) => {
+    const participant = s.engagements.find((e) => e.id === engagementId)?.participants.find((p) => p.shipId === shipId)
+    return participant ? activeTacticIds(participant).join(',') : ''
+  })
+  const activeTactics = activeTacticIdsKey ? activeTacticIdsKey.split(',') : []
 
   useFrame(() => {
     const engagement = useCombatStore.getState().engagements.find((e) => e.id === engagementId)
@@ -92,6 +103,19 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
               close the distance (see combatData's chaffMissChance), and you
               can't decide to do that without being told it's up. */}
           {chaffed && <span className="combat-marker-chaff">CHAFF</span>}
+          {/* Same visual slot as chaff, one badge per active Tactic (see
+              combatData's Tactics section) — visible on every hull, not just
+              your own, same "this is counterplay, not a secret" reasoning as
+              chaff's own badge. Hovering shows the effect (see tacticBadge's
+              own comment on the "???" fallback for an unrecognized id). */}
+          {activeTactics.map((id) => {
+            const badge = tacticBadge(id)
+            return (
+              <span key={id} className="combat-marker-tactic" title={badge.title}>
+                {badge.label}
+              </span>
+            )
+          })}
         </div>
       </Html>
     </group>

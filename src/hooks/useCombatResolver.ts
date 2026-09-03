@@ -17,7 +17,7 @@ import {
 import { bodyLivePosition, bodyOrbitalVelocity, getShipRenderPosition, planMove, shipSystemId, SOL_SYSTEM_ID } from '../scene/shipPhysics'
 import { shipCombatProfile } from '../scene/combatResolution'
 import { utilityEffectiveness } from '../data/combatData'
-import { combatLocationLabel } from '../state/combatStore'
+import { combatLocationLabel, engagementIsContested } from '../state/combatStore'
 
 // How far out into system space a disengaging ship is placed, in system
 // units. Small — this is a nudge clear of whatever it was orbiting so it
@@ -73,6 +73,16 @@ export function useCombatResolver() {
 
       const synced = syncEngagements(ships, combat.engagements, simDays)
       const hadEngagements = combat.engagements.length > 0
+      // "An engagement object exists" is NOT the same question as "a fight
+      // is actually happening" — see engagementIsContested's own comment for
+      // why (a persisted hostile-free arena, or a scenario reload that
+      // silently swaps an entirely new roster into an id that already
+      // existed, both look like "hadEngagements" without being a live
+      // fight). The tactical-time trigger below needs the real signal, not
+      // the proxy.
+      const allegianceById = new Map(ships.map((s) => [s.id, s.allegiance]))
+      const allegianceOf = (shipId: string) => allegianceById.get(shipId)
+      const wasContested = combat.engagements.some((e) => engagementIsContested(e, allegianceOf))
 
       // Combat is unobservable at strategic pace (a real second is ~518,400
       // sim-seconds), so the clock follows whether any fight is live: pulled
@@ -101,7 +111,8 @@ export function useCombatResolver() {
         return
       }
 
-      if (!hadEngagements) followCombatWithClock(true)
+      const nowContested = synced.some((e) => engagementIsContested(e, allegianceOf))
+      if (!wasContested && nowContested) followCombatWithClock(true)
 
       // Snapshot, right now, which ships have a live enemy within range and
       // line of fire — the only situation an FTL escape's risk should be
