@@ -4,6 +4,7 @@ import { tickEconomy, constructionCost, sharePrice, corporationValue, canBuild, 
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
 import { RECIPES } from '../economy/recipes'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
+import type { GoodId } from '../economy/goods'
 
 // The kind a corporation should be given its state shareholding: a state
 // majority makes it state-owned, otherwise private. A financial district keeps
@@ -130,6 +131,10 @@ interface EconomyStore {
   // building — credited to its owning corporation's cash if corporation-owned,
   // otherwise simply spent (funds a state/worker building's upkeep).
   setSubsidyForBuilding: (countryId: string, worldId: string, buildingId: string, amountPerTick: number) => void
+  // --- Stockpiles (batch 3): the player's target reserve level for a good on
+  // one world. 0 (or below) clears the target — tickWorld then neither fills
+  // nor releases against it, though any already-held reserve is left in place.
+  setStockpileTarget: (worldId: string, good: GoodId, targetAmount: number) => void
   // The state buys `shares` of a corporation on the exchange (costs treasury);
   // negative sells. Moves shares between the public float and the state.
   tradeShares: (countryId: string, corporationId: string, shares: number) => void
@@ -415,6 +420,18 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         if (amt <= 0) delete buildings[key]
         else buildings[key] = amt
         return { ...c, subsidies: { ...c.subsidies, buildings } }
+      }),
+    })),
+
+  setStockpileTarget: (worldId, good, targetAmount) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => {
+        if (w.id !== worldId) return w
+        const amt = Math.max(0, targetAmount)
+        const stockpileTargets = { ...w.stockpileTargets }
+        if (amt <= 0) delete stockpileTargets[good]
+        else stockpileTargets[good] = amt
+        return { ...w, stockpileTargets }
       }),
     })),
 

@@ -21,6 +21,7 @@ import type {
   Country,
   CreditRating,
   LaborMarket,
+  NeedDetailEntry,
   Pop,
   World,
   WorldReport,
@@ -90,6 +91,19 @@ export const DEPLETABLE_GOODS: GoodId[] = ['ironOre', 'coal', 'oil', 'rareMetals
 export const BUILD_COST_PER_LEVEL = 6000
 const CONSTRUCTION_CAPACITY = 400
 const TICKS_PER_YEAR = 12
+
+// --- Strategic stockpiles (batch 3) — a simple buffer/reserve, not a full
+// commodities model. Each tick closes a CAPPED fraction of the gap between
+// current holdings and the player's target: filling from genuine market
+// surplus (funded from the treasury, like construction) when below target,
+// releasing into that tick's supply to cushion a genuine shortage when
+// demand outruns supply. Both directions are additionally capped as a
+// fraction of the surplus/shortage itself so the reserve never dominates the
+// market it's supposed to be smoothing.
+const STOCKPILE_FILL_RATE = 0.1 // fraction of (target - current) bought per tick
+const STOCKPILE_RELEASE_RATE = 0.1 // fraction of current holdings released per tick
+const STOCKPILE_MAX_SURPLUS_FRACTION = 0.5 // never buy more than half this tick's surplus
+const STOCKPILE_MAX_RELEASE_FRACTION = 0.5 // never release more than half this tick's shortage
 
 // --- Bureaucracy ---
 // Storage capacity from government buildings (plus a small base), and the
@@ -215,6 +229,8 @@ interface WorldTickResult {
   serviceSubsidy: number
   // Cash a corporation spent on its own construction here this tick, by corp id.
   corpConstructionSpend: Map<string, number>
+  // Treasury spent this tick buying goods into this world's stockpiles.
+  stockpileSpend: number
 }
 
 // Building materials consumed while a building is under construction — this
@@ -346,6 +362,25 @@ function tickWorld(
   const totalDemand = zeroGoods()
   for (const g of GOOD_IDS) totalDemand[g] = buildingInputDemand[g] + popDemand[g]
 
+  // --- Stockpile release: cushion a genuine shortage (demand > supply) before
+  // the market clears, so the relief actually reaches this tick's buyers
+  // instead of only showing up as a number for next tick. Filling the reserve
+  // (the opposite direction) happens further below, once we know how much
+  // supply is genuinely left over after demand is satisfied. ---
+  const stockpiles: Partial<Record<GoodId, number>> = { ...world.stockpiles }
+  const stockpileTargets = world.stockpileTargets ?? {}
+  for (const g of GOOD_IDS) {
+    if (stockpileTargets[g] === undefined) continue
+    const current = stockpiles[g] ?? 0
+    if (current <= 0) continue
+    const shortage = Math.max(0, totalDemand[g] - supply[g])
+    if (shortage <= 0) continue
+    const release = Math.min(STOCKPILE_RELEASE_RATE * current, shortage * STOCKPILE_MAX_RELEASE_FRACTION, current)
+    if (release <= 0) continue
+    supply[g] += release
+    stockpiles[g] = current - release
+  }
+
   // --- Clear market ---
   const fulfill = zeroGoods()
   const sellThrough = zeroGoods()
@@ -359,17 +394,44 @@ function tickWorld(
   const revenueByBuilding = new Map<string, number>()
   const nextInventories = new Map<string, Partial<Record<GoodId, number>>>()
   for (const b of world.buildings) nextInventories.set(b.id, { ...b.inventory })
+  let stockpileSpend = 0
   for (const g of GOOD_IDS) {
     const sold = Math.min(supply[g], totalDemand[g])
-    if (sold <= 0 || supply[g] <= 0) continue
+    if (sold > 0 && supply[g] > 0) {
+      for (const b of world.buildings) {
+        const have = b.inventory[g] ?? 0
+        if (have <= 0) continue
+        const soldShare = sold * (have / supply[g])
+        const inv = nextInventories.get(b.id)!
+        inv[g] = (inv[g] ?? 0) - soldShare
+        revenueByBuilding.set(b.id, (revenueByBuilding.get(b.id) ?? 0) + soldShare * prices[g])
+      }
+    }
+
+    // --- Stockpile fill: divert a capped fraction of whatever's genuinely
+    // left over (unsold, would otherwise just decay) into the reserve, paid
+    // for out of the treasury at the market price like any other purchase —
+    // it is a real transaction, not free goods, so it is drawn from building
+    // inventories and credited to their owners exactly like a normal sale.
+    const target = stockpileTargets[g]
+    if (target === undefined) continue
+    const current = stockpiles[g] ?? 0
+    const leftover = Math.max(0, supply[g] - sold)
+    if (target <= current || leftover <= 0) continue
+    const price = prices[g]
+    let buy = Math.min(STOCKPILE_FILL_RATE * (target - current), leftover * STOCKPILE_MAX_SURPLUS_FRACTION)
+    if (price > 0) buy = Math.min(buy, Math.max(0, treasuryAvailable - stockpileSpend) / price)
+    if (buy <= 0) continue
     for (const b of world.buildings) {
       const have = b.inventory[g] ?? 0
       if (have <= 0) continue
-      const soldShare = sold * (have / supply[g])
+      const share = buy * (have / supply[g])
       const inv = nextInventories.get(b.id)!
-      inv[g] = (inv[g] ?? 0) - soldShare
-      revenueByBuilding.set(b.id, (revenueByBuilding.get(b.id) ?? 0) + soldShare * prices[g])
+      inv[g] = (inv[g] ?? 0) - share
+      revenueByBuilding.set(b.id, (revenueByBuilding.get(b.id) ?? 0) + share * price)
     }
+    stockpiles[g] = current + buy
+    stockpileSpend += buy * price
   }
 
   // --- Pops consume; update needs satisfaction, wealth, SoL ---
@@ -381,6 +443,11 @@ function tickWorld(
     let budget = pop.wealth + popIncome[i]
     const species = SPECIES_TEMPLATES[pop.speciesTemplateId]
     const nextSatisfaction = { ...pop.needsSatisfaction }
+    // Per-good breakdown behind nextSatisfaction (needs/SoL presentation
+    // rework) — same want/got numbers the satisfaction ratio below is
+    // computed from, just kept per-good instead of only summed into a tier
+    // total, so the UI can show real consumption per good.
+    const nextDetail: Record<NeedTier, NeedDetailEntry[]> = { basic: [], everyday: [], healthcare: [], comfort: [], luxury: [] }
     if (species) {
       for (const tier of NEED_TIERS) {
         const entries = species.needs[tier]
@@ -402,6 +469,7 @@ function tickWorld(
           budget -= bought * effPrice
           serviceSubsidy += gShare * price * bought // the state's share of what was delivered
           got += bought
+          nextDetail[tier].push({ good: need.good, wanted: desired, consumed: bought })
         }
         nextSatisfaction[tier] = want > 0 ? Math.min(1, got / want) : 1
       }
@@ -410,7 +478,7 @@ function tickWorld(
     let solRaw = 0
     for (const tier of NEED_TIERS) solRaw += SOL_TIER_WEIGHT[tier] * nextSatisfaction[tier]
     const standardOfLiving = clamp(pop.standardOfLiving * (1 - SOL_SMOOTHING) + solRaw * SOL_SMOOTHING, 0, 1)
-    return { ...pop, wealth: Math.max(0, budget), needsSatisfaction: nextSatisfaction, standardOfLiving }
+    return { ...pop, wealth: Math.max(0, budget), needsSatisfaction: nextSatisfaction, needsDetail: nextDetail, standardOfLiving }
   })
 
   // --- Buildings produce; profit is booked to its OWNER ---
@@ -589,6 +657,7 @@ function tickWorld(
       labor: { wages },
       importStock: {},
       resourceDeposits: deposits,
+      stockpiles,
     },
     report,
     tax: govRevenue,
@@ -601,6 +670,7 @@ function tickWorld(
     corpProfit,
     serviceSubsidy,
     corpConstructionSpend,
+    stockpileSpend,
   }
 }
 
@@ -630,6 +700,7 @@ export function tickEconomy(
     let cpiNum = 0
     let prevCpiNum = 0
     let constructionSpend = 0
+    let stockpileSpend = 0
     let serviceSubsidy = 0
     let runningTreasury = country.treasury
     const govHealthShare = healthcareSystemDef(country.healthcareSystem).publicFunding
@@ -639,8 +710,9 @@ export function tickEconomy(
 
     for (const { w, idx } of owned) {
       const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, govHealthShare, stateBureaucracyMalus, runningTreasury, corpCash)
-      runningTreasury -= res.constructionSpend
+      runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
+      stockpileSpend += res.stockpileSpend
       govRevenue += res.tax
       adminTotal += res.admin
       serviceSubsidy += res.serviceSubsidy
@@ -764,7 +836,7 @@ export function tickEconomy(
     const interest = bondInterest + overdraft
     const expenditure = welfare + adminTotal + serviceSubsidy + interest + subsidiesSpent
     const balance = govRevenue - expenditure
-    const treasury = country.treasury + balance - constructionSpend
+    const treasury = country.treasury + balance - constructionSpend - stockpileSpend
     const debt = totalBonds + Math.max(0, -treasury)
     const annualGdp = gdpTotal * TICKS_PER_YEAR
     const debtToGdp = debt / Math.max(1, annualGdp)
@@ -779,7 +851,7 @@ export function tickEconomy(
       services: serviceSubsidy,
       interest,
       construction: constructionSpend,
-      expenditure: expenditure + constructionSpend,
+      expenditure: expenditure + constructionSpend + stockpileSpend,
       balance,
       treasury,
       debt,
@@ -793,6 +865,7 @@ export function tickEconomy(
       tradeVolume,
       logisticsCapacity: effectiveLogistics,
       subsidiesSpent,
+      stockpileSpend,
     }
     nextCountries.push({ ...country, treasury, bureaucracy })
   }
