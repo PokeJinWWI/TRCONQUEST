@@ -13,7 +13,7 @@
 
 import { GOOD_IDS, GOODS, PRICE_FLOOR, priceCeiling, type GoodId } from './goods'
 import { NEED_TIERS, SPECIES_TEMPLATES, type NeedTier } from './species'
-import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
+import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
 import { economicSystemDef, healthcareSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
 import type {
   Building,
@@ -29,8 +29,13 @@ import type {
 
 const PRICE_ADJUST = 0.15
 const WAGE_ADJUST = 0.1
-const WAGE_FLOOR = 0.1
+const WAGE_FLOOR = 1.0
 const WAGE_CEILING = 40
+// Baseline informal/subsistence income every pop earns regardless of formal
+// employment (self-provision, barter, the grey economy). Keeps under-employed
+// worlds — where there aren't enough building jobs for everyone — from
+// collapsing into destitution, without needing a job for every last pop.
+const SUBSISTENCE_INCOME = 3.5
 
 // How fast a building's throughput closes on what labor, inputs and demand
 // allow. Ramp-up is deliberately slow (kills "profit teleporting"); ramp-down
@@ -45,7 +50,7 @@ export const NEW_BUILDING_THROUGHPUT = 0.1
 // Raising it makes labor scarcer (higher wages, more understaffing); lowering
 // it means each worker is more productive. Tuned so a world can staff its
 // buildings and they run near capacity.
-export const JOB_SCALE = 0.3
+export const JOB_SCALE = 0.15
 
 // --- Standard of Living loop (Milestone 3) ---
 // SoL is a weighted blend of how well the pop meets each needs tier; it moves
@@ -69,14 +74,14 @@ const ADMIN_PER_BUILDING_LEVEL = 60
 // and the social state beyond healthcare/welfare. Set high enough that a
 // generous default government runs a DEFICIT and must manage it (cut spending,
 // raise tax, or borrow) — real states rarely run surpluses.
-const PUBLIC_SPENDING_PER_CAPITA = 2.3
+const PUBLIC_SPENDING_PER_CAPITA = 4.5
 const DEBT_INTEREST_RATE = 0.008
 // Goods depreciate / spoil / are held at a cost, so a glut can't accumulate
 // without bound: unsold stock shrinks each tick. This lets buildings run on
 // what labor and inputs allow (a deep production chain flows) while a chronic
 // oversupply is bled off through the price floor instead of throttling the
 // whole chain to a halt.
-const INVENTORY_DECAY = 0.12
+const INVENTORY_DECAY = 0.08
 const BUILD_COST_PER_LEVEL = 6000
 const CONSTRUCTION_CAPACITY = 400
 const TICKS_PER_YEAR = 12
@@ -210,10 +215,32 @@ interface WorldTickResult {
 // Building materials consumed while a building is under construction — this
 // demand is what makes construction fuel the wider economy.
 const CONSTRUCTION_MATERIALS: { good: GoodId; amount: number }[] = [
-  { good: 'steel', amount: 240 },
-  { good: 'machinery', amount: 70 },
-  { good: 'consumerGoods', amount: 120 },
+  { good: 'steel', amount: 220 },
+  { good: 'tools', amount: 60 },
+  { good: 'machinery', amount: 50 },
+  { good: 'heavyMachinery', amount: 30 },
+  { good: 'consumerGoods', amount: 80 },
 ]
+
+// Fraction of a shipment lost in transit (the transport cost of inter-world
+// trade). What arrives is (1 − loss) of what was shipped.
+const TRANSPORT_LOSS = 0.12
+
+// Remove `amount` of a good from a world's building inventories (proportionally)
+// — used when the world EXPORTS its surplus.
+function exportFromWorld(world: World, good: GoodId, amount: number): World {
+  const total = world.buildings.reduce((s, b) => s + (b.inventory[good] ?? 0), 0)
+  if (total <= 0 || amount <= 0) return world
+  const frac = Math.min(1, amount / total)
+  return {
+    ...world,
+    buildings: world.buildings.map((b) => {
+      const have = b.inventory[good] ?? 0
+      if (have <= 0) return b
+      return { ...b, inventory: { ...b.inventory, [good]: have * (1 - frac) } }
+    }),
+  }
+}
 
 // Advance one world's local economy. `govHealthShare` is the fraction of pops'
 // healthcare the state pays for (the healthcare law).
@@ -262,9 +289,10 @@ function tickWorld(
     buildingPlannedRun.set(b.id, Math.min(scale, b.throughput + THROUGHPUT_RAMP_UP))
   }
 
-  // --- Supply (existing inventories) ---
+  // --- Supply (existing inventories + goods imported by trade) ---
   const supply = zeroGoods()
   for (const b of world.buildings) for (const g of GOOD_IDS) supply[g] += b.inventory[g] ?? 0
+  for (const g of GOOD_IDS) supply[g] += world.importStock[g] ?? 0
   const prices: PerGood = { ...world.market.prices }
 
   // --- Demand: building inputs + pop consumption (budget-constrained) ---
@@ -288,7 +316,7 @@ function tickWorld(
     const wageIncome = workers[pop.class] > 0 ? wages[pop.class] * filledJobs * (pop.populationSize / workers[pop.class]) : 0
     const incomeTax = wageIncome * taxRate
     incomeTaxRevenue += incomeTax
-    const income = wageIncome - incomeTax + welfarePerUnit * pop.populationSize
+    const income = wageIncome - incomeTax + (welfarePerUnit + SUBSISTENCE_INCOME) * pop.populationSize
     popIncome.push(income)
 
     let budget = pop.wealth + income
@@ -532,7 +560,8 @@ function tickWorld(
   const grownPopulation = grownPops.reduce((s, p) => s + p.populationSize, 0)
 
   return {
-    world: { ...world, pops: grownPops, buildings: finalBuildings, constructionQueue: nextQueue, market: { prices }, labor: { wages } },
+    // importStock is consumed this tick; the logistics step refills it after.
+    world: { ...world, pops: grownPops, buildings: finalBuildings, constructionQueue: nextQueue, market: { prices }, labor: { wages }, importStock: {} },
     report,
     tax: govRevenue,
     admin,
@@ -600,6 +629,44 @@ export function tickEconomy(
       }
     }
 
+    // --- Milestone 5: inter-world trade & logistics ---
+    // Ship each good's surplus (unsold production) to the country's worlds that
+    // fell short, within the freight capacity, losing a fraction in transit. The
+    // delivered goods become import stock those worlds draw on NEXT tick — so a
+    // world can specialise and import what it doesn't make.
+    // Market access: freight capacity is the country's base plus what its
+    // infrastructure buildings (roads, railways, spaceports) provide.
+    let infraLogistics = 0
+    for (const { idx } of owned) for (const b of nextWorlds[idx].buildings) infraLogistics += (LOGISTICS_OUTPUT[b.recipeId] ?? 0) * b.level * b.throughput
+    const effectiveLogistics = country.logisticsCapacity + infraLogistics
+    let tradeVolume = 0
+    {
+      let capacity = effectiveLogistics
+      const idxs = owned.map((o) => o.idx)
+      for (const g of GOOD_IDS) {
+        if (capacity <= 1e-6) break
+        const surplus = idxs.map((i) => nextWorlds[i].buildings.reduce((s, b) => s + (b.inventory[g] ?? 0), 0))
+        const deficit = idxs.map((i) => {
+          const r = reports.worlds[nextWorlds[i].id]?.goods[g]
+          return r ? Math.max(0, r.demand - r.transacted) : 0
+        })
+        const totalSurplus = surplus.reduce((a, b) => a + b, 0)
+        const totalDeficit = deficit.reduce((a, b) => a + b, 0)
+        const ship = Math.min(totalSurplus, totalDeficit, capacity)
+        if (ship <= 1e-6) continue
+        capacity -= ship
+        tradeVolume += ship
+        idxs.forEach((i, k) => {
+          if (surplus[k] > 0) nextWorlds[i] = exportFromWorld(nextWorlds[i], g, ship * (surplus[k] / totalSurplus))
+          if (deficit[k] > 0) {
+            const arrived = ship * (deficit[k] / totalDeficit) * (1 - TRANSPORT_LOSS)
+            const w = nextWorlds[i]
+            nextWorlds[i] = { ...w, importStock: { ...w.importStock, [g]: (w.importStock[g] ?? 0) + arrived } }
+          }
+        })
+      }
+    }
+
     const priceLevel = population > 0 ? cpiNum / population : 1
     const prevPriceLevel = population > 0 ? prevCpiNum / population : 1
     const inflation = prevPriceLevel > 0 ? priceLevel / prevPriceLevel - 1 : 0
@@ -664,6 +731,8 @@ export function tickEconomy(
       bureaucracyCapacity,
       bureaucracyProduced,
       bureaucracyConsumed,
+      tradeVolume,
+      logisticsCapacity: effectiveLogistics,
     }
     nextCountries.push({ ...country, treasury, bureaucracy })
   }

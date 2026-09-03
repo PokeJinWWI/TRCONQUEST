@@ -42,13 +42,18 @@ export const BASELINE_ORGANIC: SpeciesTemplate = {
       { good: 'consumerGoods', amountPerPop: 0.3 },
       { good: 'electricity', amountPerPop: 0.15 },
       { good: 'retail', amountPerPop: 0.12 },
+      { good: 'infrastructure', amountPerPop: 0.06 },
     ],
     healthcare: [{ good: 'healthcare', amountPerPop: 0.15 }],
     comfort: [
       { good: 'electronics', amountPerPop: 0.03 },
       { good: 'education', amountPerPop: 0.08 },
+      { good: 'automobiles', amountPerPop: 0.012 },
     ],
-    luxury: [{ good: 'luxuryGoods', amountPerPop: 0.02 }],
+    luxury: [
+      { good: 'luxuryGoods', amountPerPop: 0.02 },
+      { good: 'aircraft', amountPerPop: 0.0025 },
+    ],
   },
 }
 
@@ -68,9 +73,13 @@ export const TIDALIAN: SpeciesTemplate = {
       { good: 'consumerGoods', amountPerPop: 0.25 },
       { good: 'electricity', amountPerPop: 0.12 },
       { good: 'retail', amountPerPop: 0.1 },
+      { good: 'infrastructure', amountPerPop: 0.05 },
     ],
     healthcare: [{ good: 'healthcare', amountPerPop: 0.13 }],
-    comfort: [{ good: 'education', amountPerPop: 0.06 }],
+    comfort: [
+      { good: 'education', amountPerPop: 0.06 },
+      { good: 'automobiles', amountPerPop: 0.01 },
+    ],
     luxury: [{ good: 'luxuryGoods', amountPerPop: 0.02 }],
   },
 }

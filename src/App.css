@@ -1868,6 +1868,37 @@
   background: rgba(255, 255, 255, 0.14);
 }
 
+/* Trade panel */
+.trade-world {
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.trade-world-name {
+  font-size: 11px;
+  color: #cdeeff;
+  margin-bottom: 2px;
+}
+.trade-world-pop {
+  color: rgba(255, 255, 255, 0.45);
+}
+.trade-world-none {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.trade-world-imports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.trade-import-chip {
+  font-size: 10px;
+  color: #9be36f;
+  background: rgba(74, 222, 128, 0.1);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Pops panel — faith colour dot */
 .pops-faith-dot {
   display: inline-block;

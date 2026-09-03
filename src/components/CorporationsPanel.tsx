@@ -21,7 +21,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
   const [name, setName] = useState('')
   const [sector, setSector] = useState('Industry')
 
-  const kind: Corporation['kind'] = subcategory === 'Private' ? 'private' : 'state'
+  const kind: Corporation['kind'] = subcategory === 'Private' ? 'private' : subcategory === 'Financial Districts' ? 'financial' : 'state'
   if (!countryId) return <div className="nav-placeholder">No nation selected.</div>
   const mine = corporations.filter((c) => c.countryId === countryId && c.kind === kind)
 
@@ -33,16 +33,22 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
 
   const submit = () => {
     const trimmed = name.trim()
-    if (!trimmed) return
+    if (!trimmed || kind === 'financial') return
     createCorporation(countryId, trimmed, kind, sector)
     setName('')
   }
 
   return (
     <div className="econ-panel">
-      <div className="econ-subtitle">{kind === 'state' ? 'State-Owned Corporations' : 'Private Corporations'}</div>
+      <div className="econ-subtitle">{kind === 'state' ? 'State-Owned Corporations' : kind === 'financial' ? 'Financial Districts' : 'Private Corporations'}</div>
+      {kind === 'financial' && (
+        <div className="ship-panel-hint" style={{ marginBottom: 6 }}>
+          Financial districts auto-form on a populous world. They own a Financial Center and hold stakes in local
+          companies — a co-op-like institutional investor, not a normal company.
+        </div>
+      )}
       {mine.length === 0 ? (
-        <div className="nav-placeholder">No {kind === 'state' ? 'state-owned' : 'private'} corporations yet.</div>
+        <div className="nav-placeholder">No {kind === 'state' ? 'state-owned' : kind === 'financial' ? 'financial districts' : 'private'} corporations yet.</div>
       ) : (
         mine.map((c) => {
           const leader = characters.find((ch) => ch.id === c.leaderId)
@@ -73,7 +79,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                 {leader && <span className="corp-card-traits"> · {leader.traits.join(', ')}</span>}
               </div>
               <div className="corp-card-actions">
-                {kind === 'private' ? (
+                {kind === 'financial' ? null : kind === 'private' ? (
                   <button
                     type="button"
                     className="corp-btn corp-btn-danger"
@@ -121,26 +127,30 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
         })
       )}
 
-      <div className="econ-subtitle" style={{ marginTop: 10 }}>
-        Found a {kind === 'state' ? 'state' : 'private'} corporation
-      </div>
-      <div className="corp-create">
-        <input className="corp-input" placeholder="Corporation name" value={name} onChange={(e) => setName(e.target.value)} />
-        <select className="econ-method-select" value={sector} onChange={(e) => setSector(e.target.value)}>
-          {['Agriculture', 'Mining', 'Energy', 'Industry', 'Technology', 'Finance'].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <button type="button" className="corp-btn" onClick={submit} disabled={!name.trim()}>
-          Found
-        </button>
-      </div>
-      <div className="ship-panel-hint">
-        Founding capital is drawn from the treasury. A new corporation starts without buildings — nationalise an existing
-        one, or (coming soon) build under its charter.
-      </div>
+      {kind !== 'financial' && (
+        <>
+          <div className="econ-subtitle" style={{ marginTop: 10 }}>
+            Found a {kind === 'state' ? 'state' : 'private'} corporation
+          </div>
+          <div className="corp-create">
+            <input className="corp-input" placeholder="Corporation name" value={name} onChange={(e) => setName(e.target.value)} />
+            <select className="econ-method-select" value={sector} onChange={(e) => setSector(e.target.value)}>
+              {['Agriculture', 'Mining', 'Energy', 'Industry', 'Technology', 'Finance'].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="corp-btn" onClick={submit} disabled={!name.trim()}>
+              Found
+            </button>
+          </div>
+          <div className="ship-panel-hint">
+            Founding capital is drawn from the treasury. Assign it buildings via Economy → Construction (fund with the
+            company), or nationalise an existing one.
+          </div>
+        </>
+      )}
     </div>
   )
 }

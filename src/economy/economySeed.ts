@@ -139,9 +139,9 @@ function buildWorld(spec: WorldSpec): World {
     populationCapacity: spec.capacity,
     // District slots scale with population, sized to hold the seed with headroom.
     districtCapacity: {
-      core: Math.max(8, Math.round(spec.population / 500)),
+      core: Math.max(12, Math.round(spec.population / 400)),
       urban: Math.max(10, Math.round(spec.population / 250)),
-      industrial: Math.max(12, Math.round(spec.population / 130)),
+      industrial: Math.max(14, Math.round(spec.population / 100)),
       resource: Math.max(12, Math.round(spec.population / 130)),
     },
     pops,
@@ -149,6 +149,7 @@ function buildWorld(spec: WorldSpec): World {
     constructionQueue: [],
     market: seedMarket(),
     labor: seedLabor(),
+    importStock: {},
   }
 }
 
@@ -182,20 +183,33 @@ const WORLDS: World[] = [
       { recipe: 'riceFarm', level: 2, owner: MRA },
       { recipe: 'livestockRanch', level: 2, owner: MRA },
       // Industry (state unless noted).
-      { recipe: 'steelMill', level: 3 },
+      { recipe: 'steelMill', level: 4 },
       { recipe: 'sawmill', level: 1, owner: 'worker' },
       { recipe: 'chemicalPlant', level: 1 },
       { recipe: 'fertilizerPlant', level: 1 },
-      { recipe: 'machineryFactory', level: 1 },
+      { recipe: 'toolWorkshop', level: 4 },
+      { recipe: 'machineryFactory', level: 3 },
+      { recipe: 'heavyMachineryPlant', level: 1 },
+      { recipe: 'electricalMachineryPlant', level: 1 },
+      { recipe: 'precisionMachineryPlant', level: 1 },
       { recipe: 'foodProcessor', level: 3, owner: MRA },
       { recipe: 'consumerGoodsFactory', level: 3, owner: 'worker' },
       { recipe: 'semiconductorFab', level: 1 },
       { recipe: 'electronicsFactory', level: 1 },
       { recipe: 'luxuryFactory', level: 1 },
-      // Services.
+      { recipe: 'oilRefinery', level: 1 },
+      // Engines & vehicles.
+      { recipe: 'engineFactory', level: 1 },
+      { recipe: 'automobilePlant', level: 1 },
+      { recipe: 'locomotiveWorks', level: 1 },
+      { recipe: 'aircraftFactory', level: 1 },
+      // Services + infrastructure.
       { recipe: 'clinic', level: 3 },
       { recipe: 'school', level: 2 },
       { recipe: 'retailShop', level: 2 },
+      { recipe: 'roadNetwork', level: 2 },
+      { recipe: 'railway', level: 1 },
+      { recipe: 'spaceport', level: 1 },
       // Government — produces the bureaucracy the state runs on.
       { recipe: 'ministry', level: 2 },
       { recipe: 'governmentOffice', level: 2 },
@@ -223,8 +237,11 @@ const WORLDS: World[] = [
       { recipe: 'wheatFarm', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
       { recipe: 'steelMill', level: 1 },
+      { recipe: 'toolWorkshop', level: 1 },
+      { recipe: 'machineryFactory', level: 1 },
       { recipe: 'consumerGoodsFactory', level: 1 },
       { recipe: 'clinic', level: 1 },
+      { recipe: 'roadNetwork', level: 1 },
     ],
   }),
   // Republic of Venus.
@@ -249,10 +266,13 @@ const WORLDS: World[] = [
       { recipe: 'oilWell', level: 1 },
       { recipe: 'wheatFarm', level: 3 },
       { recipe: 'foodProcessor', level: 2 },
-      { recipe: 'steelMill', level: 2 },
+      { recipe: 'steelMill', level: 3 },
+      { recipe: 'toolWorkshop', level: 2 },
+      { recipe: 'machineryFactory', level: 2 },
       { recipe: 'chemicalPlant', level: 1 },
       { recipe: 'consumerGoodsFactory', level: 2 },
       { recipe: 'clinic', level: 2 },
+      { recipe: 'roadNetwork', level: 1 },
       { recipe: 'school', level: 1 },
       { recipe: 'retailShop', level: 2 },
       { recipe: 'governmentOffice', level: 2 },
@@ -280,9 +300,12 @@ const WORLDS: World[] = [
       { recipe: 'wheatFarm', level: 2 },
       { recipe: 'foodProcessor', level: 1 },
       { recipe: 'sawmill', level: 1, owner: 'worker' },
-      { recipe: 'steelMill', level: 1 },
+      { recipe: 'steelMill', level: 2 },
+      { recipe: 'toolWorkshop', level: 1 },
+      { recipe: 'machineryFactory', level: 1 },
       { recipe: 'consumerGoodsFactory', level: 1 },
       { recipe: 'clinic', level: 1 },
+      { recipe: 'roadNetwork', level: 1 },
       { recipe: 'retailShop', level: 1 },
       { recipe: 'governmentOffice', level: 1 },
     ],
@@ -306,8 +329,11 @@ const WORLDS: World[] = [
       { recipe: 'wheatFarm', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
       { recipe: 'steelMill', level: 1 },
+      { recipe: 'toolWorkshop', level: 1 },
+      { recipe: 'machineryFactory', level: 1 },
       { recipe: 'consumerGoodsFactory', level: 1 },
       { recipe: 'clinic', level: 1 },
+      { recipe: 'roadNetwork', level: 1 },
     ],
   }),
   // Kingdom of Lalande — the Tidalians.
@@ -331,10 +357,13 @@ const WORLDS: World[] = [
       { recipe: 'wheatFarm', level: 3 },
       { recipe: 'riceFarm', level: 1 },
       { recipe: 'foodProcessor', level: 2 },
-      { recipe: 'steelMill', level: 2 },
+      { recipe: 'steelMill', level: 3 },
+      { recipe: 'toolWorkshop', level: 2 },
+      { recipe: 'machineryFactory', level: 2 },
       { recipe: 'fertilizerPlant', level: 1 },
       { recipe: 'consumerGoodsFactory', level: 2 },
       { recipe: 'clinic', level: 2 },
+      { recipe: 'roadNetwork', level: 1 },
       { recipe: 'school', level: 1 },
       { recipe: 'retailShop', level: 2 },
       { recipe: 'governmentOffice', level: 2 },
@@ -359,6 +388,7 @@ const COUNTRIES: Country[] = [
     pendingForeign: [],
     bureaucracy: 3500,
     decrees: [],
+    logisticsCapacity: 6000,
   },
   {
     id: 'republic-of-venus',
@@ -374,6 +404,7 @@ const COUNTRIES: Country[] = [
     pendingForeign: [],
     bureaucracy: 3500,
     decrees: [],
+    logisticsCapacity: 6000,
   },
   {
     id: 'orion-republic',
@@ -389,6 +420,7 @@ const COUNTRIES: Country[] = [
     pendingForeign: [],
     bureaucracy: 3500,
     decrees: [],
+    logisticsCapacity: 6000,
   },
   {
     id: 'kingdom-of-lalande',
@@ -404,6 +436,7 @@ const COUNTRIES: Country[] = [
     pendingForeign: [],
     bureaucracy: 3500,
     decrees: [],
+    logisticsCapacity: 6000,
   },
 ]
 
@@ -520,17 +553,94 @@ const CORPORATIONS: Corporation[] = [
   },
 ]
 
+// --- Financial districts (auto-form on any world with ≥100M pop) ---
+// Each is a co-op-like institutional entity (kind 'financial') that owns a
+// Financial Center building on its world and holds a stake in its country's
+// private corporations. Generated from the world roster so it stays in sync.
+const FD_MIN_POP = 100 // 100M people
+const FD_LEADERS = ['Halvard Renn', 'Ives Marlowe', 'Sora Quist', 'Dane Voss', 'Priya Ander', 'Lorne Sable']
+const FD_STAKE = 0.15 // share of a private corp the financial district holds
+
+interface FinancialDistrictSeed {
+  districts: Corporation[]
+  characters: Character[]
+  buildingByWorld: Map<string, Building>
+  capitalFdByCountry: Map<string, string>
+}
+function makeFinancialDistricts(): FinancialDistrictSeed {
+  const districts: Corporation[] = []
+  const characters: Character[] = []
+  const buildingByWorld = new Map<string, Building>()
+  const capitalFdByCountry = new Map<string, string>()
+  let n = 0
+  for (const w of WORLDS) {
+    const pop = w.pops.reduce((s, p) => s + p.populationSize, 0)
+    if (pop < FD_MIN_POP) continue
+    n += 1
+    const fdId = `fd-${w.id.replace(/\s+/g, '-').toLowerCase()}`
+    const leaderId = `char-fd-${n}`
+    characters.push({
+      id: leaderId,
+      name: FD_LEADERS[(n - 1) % FD_LEADERS.length],
+      age: 44 + n,
+      role: 'corp-leader',
+      corporationId: fdId,
+      cultureId: w.cultureId,
+      religionId: 'non-affiliated',
+      speciesTemplateId: w.pops[0]?.speciesTemplateId ?? 'baseline-organic',
+      traits: ['Shrewd', 'Cautious'],
+      wealth: 500,
+      skills: { administration: 5, finance: 8, diplomacy: 5 },
+      log: [`Chairs the ${w.id} Financial District.`],
+    })
+    districts.push({
+      id: fdId,
+      name: `${w.id} Financial District`,
+      countryId: w.ownerId,
+      kind: 'financial',
+      cash: Math.round(pop * 6),
+      totalShares: 1000,
+      // Publicly/collectively held — the district is a co-op, not a company.
+      shares: [{ holder: { kind: 'public' }, shares: 1000 }],
+      leaderId,
+      lastProfit: 0,
+      sector: 'Finance',
+    })
+    buildingByWorld.set(w.id, makeBuilding(w.id, 'financialCenter', Math.max(1, Math.round(pop / 2500)), fdId))
+    if (!capitalFdByCountry.has(w.ownerId)) capitalFdByCountry.set(w.ownerId, fdId)
+  }
+  return { districts, characters, buildingByWorld, capitalFdByCountry }
+}
+const FD = makeFinancialDistricts()
+
 export function seedWorlds(): World[] {
-  return WORLDS.map((w) => ({ ...w, pops: [...w.pops], buildings: [...w.buildings] }))
+  return WORLDS.map((w) => {
+    const fdBuilding = FD.buildingByWorld.get(w.id)
+    const buildings = fdBuilding ? [...w.buildings, fdBuilding] : [...w.buildings]
+    return { ...w, pops: [...w.pops], buildings, importStock: {} }
+  })
 }
 export function seedCountries(): Country[] {
   return COUNTRIES.map((c) => ({ ...c }))
 }
 export function seedCorporations(): Corporation[] {
-  return CORPORATIONS.map((c) => ({ ...c, shares: c.shares.map((s) => ({ ...s })) }))
+  // Base corporations, with private ones giving their country's capital
+  // financial district a minority stake taken from the public float.
+  const base = CORPORATIONS.map((c) => {
+    if (c.kind !== 'private') return { ...c, shares: c.shares.map((s) => ({ ...s })) }
+    const fdId = FD.capitalFdByCountry.get(c.countryId)
+    if (!fdId) return { ...c, shares: c.shares.map((s) => ({ ...s })) }
+    const stake = Math.round(c.totalShares * FD_STAKE)
+    const shares = c.shares
+      .map((s) => (s.holder.kind === 'public' ? { ...s, shares: Math.max(0, s.shares - stake) } : { ...s }))
+      .concat([{ holder: { kind: 'financial', id: fdId }, shares: stake }])
+    return { ...c, shares }
+  })
+  const fds = FD.districts.map((d) => ({ ...d, shares: d.shares.map((s) => ({ ...s })) }))
+  return [...base, ...fds]
 }
 export function seedCharacters(): Character[] {
-  return CHARACTERS.map((c) => ({ ...c, traits: [...c.traits], log: [...c.log], skills: { ...c.skills } }))
+  return [...CHARACTERS, ...FD.characters].map((c) => ({ ...c, traits: [...c.traits], log: [...c.log], skills: { ...c.skills } }))
 }
 export function seedFamilies(): Family[] {
   return FAMILIES.map((f) => ({ ...f, memberIds: [...f.memberIds] }))

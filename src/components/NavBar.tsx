@@ -10,6 +10,7 @@ import { DemographicsPanel } from './DemographicsPanel'
 import { CharactersPanel } from './CharactersPanel'
 import { DebtPanel } from './DebtPanel'
 import { ConstructionPanel } from './ConstructionPanel'
+import { TradePanel } from './TradePanel'
 import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
 import { usePlayerStore } from '../state/playerStore'
@@ -40,8 +41,8 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
-  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Debt', 'Construction', 'Welfare'] },
-  { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private'] },
+  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Debt', 'Construction', 'Trade', 'Welfare'] },
+  { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private', 'Financial Districts'] },
   { name: STOCK_EXCHANGE_CATEGORY },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
   { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
@@ -69,6 +70,7 @@ function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Debt') return <DebtPanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />
+  if (category.name === ECONOMY_CATEGORY && subcategory === 'Trade') return <TradePanel />
   if (category.name === ECONOMY_CATEGORY) return <NationEconomyPanel subcategory={subcategory} />
   if (category.name === TECHNOLOGY_CATEGORY) return <NationTechPanel subcategory={subcategory} />
   if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />
