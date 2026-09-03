@@ -123,6 +123,14 @@ export interface World {
   // supply this tick. Refilled each tick by the logistics step from surplus
   // worlds; lets a world import what it can't make itself.
   importStock: Partial<Record<GoodId, number>>
+  // Remaining extractable reserve, in the same units as one tick's output, for
+  // genuinely finite raw resources (ore/coal/oil/rare metals/sulfur/hardwood/
+  // timber/phosphate — not crops, which regrow, nor manufactured/power goods).
+  // Optional: a good with no entry here is treated as unlimited. Extraction
+  // buildings producing a tracked good are capped by what's left and draw the
+  // deposit down each tick (economyTick); hitting 0 idles that building's
+  // output for that good, a slow long-game depletion pressure.
+  resourceDeposits?: Partial<Record<GoodId, number>>
 }
 
 // A country — the NATIONAL government layer. One treasury, one tax/welfare

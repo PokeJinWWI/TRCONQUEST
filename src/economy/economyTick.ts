@@ -82,6 +82,11 @@ const DEBT_INTEREST_RATE = 0.008
 // oversupply is bled off through the price floor instead of throttling the
 // whole chain to a halt.
 const INVENTORY_DECAY = 0.08
+
+// Genuinely finite raw resources — extraction buildings producing these are
+// capped by (and draw down) `World.resourceDeposits` each tick. Farm crops
+// regrow and power/manufactured goods aren't a deposit, so they're excluded.
+export const DEPLETABLE_GOODS: GoodId[] = ['ironOre', 'coal', 'oil', 'rareMetals', 'sulfur', 'hardwood', 'timber', 'phosphate']
 const BUILD_COST_PER_LEVEL = 6000
 const CONSTRUCTION_CAPACITY = 400
 const TICKS_PER_YEAR = 12
@@ -412,6 +417,9 @@ function tickWorld(
   let govRevenue = incomeTaxRevenue
   const corpProfit = new Map<string, number>()
   let workerDividendPool = 0
+  // Remaining resource deposits, drawn down as extraction buildings produce
+  // below (shared across every building extracting the same good this world).
+  const deposits: Partial<Record<GoodId, number>> = { ...world.resourceDeposits }
   const nextBuildings: Building[] = world.buildings.map((b) => {
     const method = buildingMethod(b)
     const inv = nextInventories.get(b.id) ?? {}
@@ -434,7 +442,18 @@ function tickWorld(
     const throughput = rampToward(b.throughput, instantScale)
     const runScale = throughput
     const outputMalus = outputFactor(b)
-    for (const out of method.outputs) inv[out.good] = (inv[out.good] ?? 0) + out.amount * b.level * runScale * outputMalus
+    const isExtraction = RECIPES[b.recipeId]?.category === 'extraction'
+    for (const out of method.outputs) {
+      let produced = out.amount * b.level * runScale * outputMalus
+      if (isExtraction && DEPLETABLE_GOODS.includes(out.good)) {
+        const remaining = deposits[out.good]
+        if (remaining !== undefined) {
+          produced = Math.min(produced, Math.max(0, remaining))
+          deposits[out.good] = Math.max(0, remaining - produced)
+        }
+      }
+      inv[out.good] = (inv[out.good] ?? 0) + produced
+    }
     // Decay carried stock so oversupply doesn't accumulate forever.
     for (const g of GOOD_IDS) if (inv[g]) inv[g] = inv[g]! * (1 - INVENTORY_DECAY)
 
@@ -561,7 +580,16 @@ function tickWorld(
 
   return {
     // importStock is consumed this tick; the logistics step refills it after.
-    world: { ...world, pops: grownPops, buildings: finalBuildings, constructionQueue: nextQueue, market: { prices }, labor: { wages }, importStock: {} },
+    world: {
+      ...world,
+      pops: grownPops,
+      buildings: finalBuildings,
+      constructionQueue: nextQueue,
+      market: { prices },
+      labor: { wages },
+      importStock: {},
+      resourceDeposits: deposits,
+    },
     report,
     tax: govRevenue,
     admin,

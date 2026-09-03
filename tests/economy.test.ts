@@ -392,5 +392,51 @@ console.log('\n=== 19. Financial districts ===')
   check('a financial district is publicly/co-op held, not state or private kind', marsFd!.shares.every((s) => s.holder.kind === 'public'))
 }
 
+console.log('\n=== 20. Resource deposits: extraction is capped by a finite reserve ===')
+{
+  const seededMars = seedWorlds().find((w) => w.id === 'Mars')!
+  check('the seed gives Mars a finite iron ore deposit', (seededMars.resourceDeposits?.ironOre ?? 0) > 0, `${seededMars.resourceDeposits?.ironOre}`)
+
+  // Isolate a single, established (full-throughput) iron mine as Mars's only
+  // building, so its output for the tick is entirely predictable: manual iron
+  // mining has no inputs, and the world's huge labor pool means labor is never
+  // the constraint. amount(500) * level(1) = 500/tick uncapped.
+  const soleMine: Building = {
+    id: 'sole-ironMine',
+    recipeId: 'ironMine',
+    methodId: 'manual',
+    methodLocked: false,
+    level: 1,
+    owner: { kind: 'state' },
+    inventory: {},
+    throughput: 1,
+    lastProfit: 0,
+    employed: 0,
+    jobsPosted: 0,
+  }
+  const countries = seedCountries()
+  const corporations = seedCorporations()
+
+  // Control: an abundant deposit — the mine should produce close to its full
+  // uncapped 500/tick.
+  const abundantWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: [soleMine], resourceDeposits: { ironOre: 1_000_000 } } : w))
+  const abundantResult = tickEconomy(countries, abundantWorlds, corporations)
+  const abundantMine = abundantResult.worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === 'sole-ironMine')!
+  check('with an abundant deposit the mine produces close to its uncapped output', (abundantMine.inventory.ironOre ?? 0) > 400, (abundantMine.inventory.ironOre ?? 0).toFixed(1))
+
+  // Test: the same mine, but with only a sliver of ore left in the ground —
+  // far less than the 500/tick it would otherwise produce.
+  const lowDeposit = 50
+  const scarceWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: [soleMine], resourceDeposits: { ironOre: lowDeposit } } : w))
+  const scarceResult = tickEconomy(countries, scarceWorlds, corporations)
+  const scarceMars = scarceResult.worlds.find((w) => w.id === 'Mars')!
+  const scarceMine = scarceMars.buildings.find((b) => b.id === 'sole-ironMine')!
+  const mined = scarceMine.inventory.ironOre ?? 0
+  check('output is capped by the remaining deposit, not the mine\'s full uncapped capacity', mined <= lowDeposit + 1e-6, mined.toFixed(2))
+  const remaining = scarceMars.resourceDeposits?.ironOre ?? -1
+  check('the deposit is drawn down toward zero and never negative', remaining >= 0 && remaining <= lowDeposit, `${remaining}`)
+  check('a near-exhausted deposit is fully drawn down by one tick of uncapped-scale demand', remaining < 1e-6, `${remaining}`)
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)
 process.exit(failures === 0 ? 0 : 1)

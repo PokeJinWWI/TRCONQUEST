@@ -1,5 +1,6 @@
-import { GOODS, GOOD_IDS } from './goods'
-import { POP_CLASSES, getMethod, type PopClass } from './recipes'
+import { GOODS, GOOD_IDS, type GoodId } from './goods'
+import { POP_CLASSES, RECIPES, getMethod, type PopClass } from './recipes'
+import { DEPLETABLE_GOODS } from './economyTick'
 import type { ReligionMix } from './demographics'
 import type {
   Building,
@@ -120,6 +121,31 @@ interface WorldSpec {
   buildings: BuildingSpec[]
 }
 
+// Seeded deposits are a large-but-finite multiple of current per-tick output —
+// slow long-game depletion pressure, not a near-term crisis. At ~800 ticks
+// (~66 years of monthly ticks) worth of output, a normal play session (dozens
+// to low hundreds of ticks) won't come close to exhausting one.
+const DEPOSIT_TICK_MULTIPLE = 800
+
+// Sum each depletable good's current per-tick output across a world's
+// extraction buildings (at their SEEDED method/level) and seed a deposit that
+// many ticks deep.
+function seedDeposits(buildings: Building[]): Partial<Record<GoodId, number>> {
+  const perTick: Partial<Record<GoodId, number>> = {}
+  for (const b of buildings) {
+    if (RECIPES[b.recipeId]?.category !== 'extraction') continue
+    const method = getMethod(b.recipeId, b.methodId)
+    if (!method) continue
+    for (const out of method.outputs) {
+      if (!DEPLETABLE_GOODS.includes(out.good)) continue
+      perTick[out.good] = (perTick[out.good] ?? 0) + out.amount * b.level
+    }
+  }
+  const deposits: Partial<Record<GoodId, number>> = {}
+  for (const [good, amount] of Object.entries(perTick)) deposits[good as GoodId] = amount * DEPOSIT_TICK_MULTIPLE
+  return deposits
+}
+
 function buildWorld(spec: WorldSpec): World {
   const pops: Pop[] = []
   for (const cls of POP_CLASSES) {
@@ -131,6 +157,7 @@ function buildWorld(spec: WorldSpec): World {
       pops.push(makePop(spec.id, cls, spec.species, spec.culture, r.religion, size))
     }
   }
+  const buildings = spec.buildings.map((b) => makeBuilding(spec.id, b.recipe, b.level, b.owner, b.method))
   return {
     id: spec.id,
     name: spec.id,
@@ -141,15 +168,16 @@ function buildWorld(spec: WorldSpec): World {
     districtCapacity: {
       core: Math.max(12, Math.round(spec.population / 400)),
       urban: Math.max(10, Math.round(spec.population / 250)),
-      industrial: Math.max(14, Math.round(spec.population / 100)),
+      industrial: Math.max(14, Math.round(spec.population / 85)),
       resource: Math.max(12, Math.round(spec.population / 130)),
     },
     pops,
-    buildings: spec.buildings.map((b) => makeBuilding(spec.id, b.recipe, b.level, b.owner, b.method)),
+    buildings,
     constructionQueue: [],
     market: seedMarket(),
     labor: seedLabor(),
     importStock: {},
+    resourceDeposits: seedDeposits(buildings),
   }
 }
 
@@ -178,6 +206,8 @@ const WORLDS: World[] = [
       { recipe: 'phosphateMine', level: 2, owner: REDMINES },
       { recipe: 'rareMetalsMine', level: 1, owner: REDMINES },
       { recipe: 'loggingCamp', level: 2, owner: 'worker' },
+      { recipe: 'sulfurMine', level: 1, owner: REDMINES },
+      { recipe: 'hardwoodLogging', level: 1, owner: 'worker' },
       // Agriculture — the Martian Restoration Administration (state corp).
       { recipe: 'wheatFarm', level: 4, owner: MRA },
       { recipe: 'riceFarm', level: 2, owner: MRA },
@@ -193,11 +223,18 @@ const WORLDS: World[] = [
       { recipe: 'electricalMachineryPlant', level: 1 },
       { recipe: 'precisionMachineryPlant', level: 1 },
       { recipe: 'foodProcessor', level: 3, owner: MRA },
+      { recipe: 'meatPacking', level: 1, owner: MRA },
       { recipe: 'consumerGoodsFactory', level: 3, owner: 'worker' },
       { recipe: 'semiconductorFab', level: 1 },
       { recipe: 'electronicsFactory', level: 1 },
       { recipe: 'luxuryFactory', level: 1 },
       { recipe: 'oilRefinery', level: 1 },
+      { recipe: 'dyeWorks', level: 1 },
+      { recipe: 'glassworks', level: 1 },
+      { recipe: 'paperMill', level: 1 },
+      { recipe: 'shipyard', level: 1 },
+      { recipe: 'spaceyard', level: 1 },
+      { recipe: 'rocketFactory', level: 1 },
       // Engines & vehicles.
       { recipe: 'engineFactory', level: 1 },
       { recipe: 'automobilePlant', level: 1 },
@@ -275,6 +312,8 @@ const WORLDS: World[] = [
       { recipe: 'roadNetwork', level: 1 },
       { recipe: 'school', level: 1 },
       { recipe: 'retailShop', level: 2 },
+      { recipe: 'artStudio', level: 1 },
+      { recipe: 'dataCenter', level: 1 },
       { recipe: 'governmentOffice', level: 2 },
     ],
   }),
@@ -298,6 +337,9 @@ const WORLDS: World[] = [
       { recipe: 'ironMine', level: 1, owner: 'worker' },
       { recipe: 'loggingCamp', level: 1, owner: 'worker' },
       { recipe: 'wheatFarm', level: 2 },
+      { recipe: 'sugarPlantation', level: 1 },
+      { recipe: 'coffeePlantation', level: 1 },
+      { recipe: 'teaPlantation', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
       { recipe: 'sawmill', level: 1, owner: 'worker' },
       { recipe: 'steelMill', level: 2 },
@@ -617,7 +659,7 @@ export function seedWorlds(): World[] {
   return WORLDS.map((w) => {
     const fdBuilding = FD.buildingByWorld.get(w.id)
     const buildings = fdBuilding ? [...w.buildings, fdBuilding] : [...w.buildings]
-    return { ...w, pops: [...w.pops], buildings, importStock: {} }
+    return { ...w, pops: [...w.pops], buildings, importStock: {}, resourceDeposits: { ...w.resourceDeposits } }
   })
 }
 export function seedCountries(): Country[] {
