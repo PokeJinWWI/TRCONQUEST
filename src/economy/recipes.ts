@@ -349,8 +349,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mechanized',
         label: 'Longwall Mining',
-        description: 'Cutting machines lift output sharply on grid power.',
-        inputs: [{ good: 'electricity', amount: 100 }],
+        description: 'Cutting machines lift output sharply on grid power and mining machinery.',
+        inputs: [
+          { good: 'machinery', amount: 15 },
+          { good: 'electricity', amount: 100 },
+        ],
         outputs: [{ good: 'coal', amount: 1150 }],
         jobs: [
           { class: 'labor', count: 150 },
@@ -468,8 +471,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mechanized',
         label: 'Strip Mining',
-        description: 'Powered strip mining doubles output.',
-        inputs: [{ good: 'electricity', amount: 110 }],
+        description: 'Powered strip mining doubles output, on excavating tools and grid power.',
+        inputs: [
+          { good: 'tools', amount: 25 },
+          { good: 'electricity', amount: 110 },
+        ],
         outputs: [{ good: 'phosphate', amount: 1050 }],
         jobs: [
           { class: 'labor', count: 140 },
@@ -767,9 +773,10 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'electricArc',
         label: 'Electric Arc',
-        description: 'Coal-free arc smelting — more power, more output, more skill.',
+        description: 'Coal-free arc smelting — trades the blast furnace\'s mechanical plant for heavy electrical equipment (transformers, electrodes), on much more power.',
         inputs: [
           { good: 'ironOre', amount: 320 },
+          { good: 'electricalMachinery', amount: 20 },
           { good: 'electricity', amount: 500 },
         ],
         outputs: [{ good: 'steel', amount: 1250 }],
@@ -1071,11 +1078,12 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mixed',
         label: 'Full Processing',
-        description: 'A varied diet from wheat, rice and livestock — more food per plant.',
+        description: 'A varied diet from wheat, rice and livestock — more food per plant, on a bigger processing line.',
         inputs: [
           { good: 'wheat', amount: 400 },
           { good: 'rice', amount: 300 },
           { good: 'livestock', amount: 150 },
+          { good: 'tools', amount: 35 },
           { good: 'electricity', amount: 120 },
         ],
         outputs: [{ good: 'food', amount: 2700 }],
@@ -1109,10 +1117,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'refined',
         label: 'Refined Line',
-        description: 'Steel and lumber for finer goods.',
+        description: 'Steel and lumber for finer goods, on heavier tooling than the basic line.',
         inputs: [
           { good: 'steel', amount: 200 },
           { good: 'lumber', amount: 200 },
+          { good: 'tools', amount: 45 },
           { good: 'electricity', amount: 250 },
         ],
         outputs: [{ good: 'consumerGoods', amount: 1300 }],
@@ -1124,10 +1133,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'automated',
         label: 'Automated Line',
-        description: 'Automation raises throughput and skill demand, on more power.',
+        description: 'Robotic assembly lines raise throughput and skill demand, on heavy machinery and much more power.',
         inputs: [
           { good: 'steel', amount: 260 },
           { good: 'lumber', amount: 180 },
+          { good: 'machinery', amount: 70 },
           { good: 'electricity', amount: 400 },
         ],
         outputs: [{ good: 'consumerGoods', amount: 1650 }],

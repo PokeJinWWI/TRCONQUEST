@@ -333,6 +333,10 @@ console.log('\n=== 17. Districts + private (corporation-funded) construction ===
   // A corporation funds its own NEW building (a school — MRA owns none) from its
   // cash; it completes owned by the corp. Compared against a control run with no
   // such order to isolate the construction spend from the corp's profits.
+  // Record the MRA's cash trajectory tick by tick so the with-order and control
+  // runs can be compared at the SAME tick — the tick construction completes,
+  // before a long operating window lets the new building's profits swamp the
+  // one-off build spend we're actually trying to observe.
   const runMra = (withOrder: boolean) => {
     let countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, treasury: 500000 } : c))
     let w2 = seedWorlds().map((x) =>
@@ -341,22 +345,27 @@ console.log('\n=== 17. Districts + private (corporation-funded) construction ===
         : x,
     )
     let corps = seedCorporations().map((c) => (c.id === 'mra' ? { ...c, cash: 200000 } : c))
-    let done = false
+    const cashByTick: number[] = []
+    let completionTick = -1
     for (let i = 0; i < 40; i++) {
       const r = tickEconomy(countries, w2, corps)
       countries = r.countries
       w2 = r.worlds
       corps = r.corporations
-      if (!withOrder || w2.find((x) => x.id === 'Mars')!.constructionQueue.length === 0) done = true
+      cashByTick.push(corps.find((c) => c.id === 'mra')!.cash)
+      if (withOrder && completionTick < 0 && w2.find((x) => x.id === 'Mars')!.constructionQueue.length === 0) completionTick = i
     }
-    return { worlds: w2, corps, done }
+    return { worlds: w2, corps, cashByTick, completionTick }
   }
   const withOrder = runMra(true)
   const control = runMra(false)
-  check('a corporation-funded building completes', withOrder.done)
+  check('a corporation-funded building completes', withOrder.completionTick >= 0)
   const newSchool = withOrder.worlds.find((x) => x.id === 'Mars')!.buildings.find((b) => b.id === 'co-built')
   check('...owned by the funding corporation', !!newSchool && newSchool.owner.kind === 'corporation' && (newSchool.owner as { corporationId: string }).corporationId === 'mra')
-  check('...paid from the corporation\'s own cash (lower cash than the no-build control)', withOrder.corps.find((c) => c.id === 'mra')!.cash < control.corps.find((c) => c.id === 'mra')!.cash)
+  // At the completion tick, the only difference between the runs is the ~6000
+  // build spend drawn from the corp's cash — so the builder must be poorer.
+  const t = Math.max(0, withOrder.completionTick)
+  check('...paid from the corporation\'s own cash (lower cash than the no-build control at completion)', withOrder.cashByTick[t] < control.cashByTick[t], `${withOrder.cashByTick[t].toFixed(0)} < ${control.cashByTick[t].toFixed(0)}`)
 }
 
 console.log('\n=== 18. Milestone 5: inter-world trade & logistics ===')
