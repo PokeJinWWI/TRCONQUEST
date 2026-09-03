@@ -12,6 +12,7 @@ import { GOOD_IDS, GOODS, priceCeiling, PRICE_FLOOR } from '../src/economy/goods
 import { POP_CLASSES, RECIPES, getMethod, qualificationFraction } from '../src/economy/recipes'
 import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
+import { useEconomyStore } from '../src/state/economyStore'
 import type { Building, Corporation, Country, World } from '../src/economy/economyTypes'
 
 let failures = 0
@@ -332,6 +333,10 @@ console.log('\n=== 17. Districts + private (corporation-funded) construction ===
   // A corporation funds its own NEW building (a school — MRA owns none) from its
   // cash; it completes owned by the corp. Compared against a control run with no
   // such order to isolate the construction spend from the corp's profits.
+  // Record the MRA's cash trajectory tick by tick so the with-order and control
+  // runs can be compared at the SAME tick — the tick construction completes,
+  // before a long operating window lets the new building's profits swamp the
+  // one-off build spend we're actually trying to observe.
   const runMra = (withOrder: boolean) => {
     let countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, treasury: 500000 } : c))
     let w2 = seedWorlds().map((x) =>
@@ -340,22 +345,27 @@ console.log('\n=== 17. Districts + private (corporation-funded) construction ===
         : x,
     )
     let corps = seedCorporations().map((c) => (c.id === 'mra' ? { ...c, cash: 200000 } : c))
-    let done = false
+    const cashByTick: number[] = []
+    let completionTick = -1
     for (let i = 0; i < 40; i++) {
       const r = tickEconomy(countries, w2, corps)
       countries = r.countries
       w2 = r.worlds
       corps = r.corporations
-      if (!withOrder || w2.find((x) => x.id === 'Mars')!.constructionQueue.length === 0) done = true
+      cashByTick.push(corps.find((c) => c.id === 'mra')!.cash)
+      if (withOrder && completionTick < 0 && w2.find((x) => x.id === 'Mars')!.constructionQueue.length === 0) completionTick = i
     }
-    return { worlds: w2, corps, done }
+    return { worlds: w2, corps, cashByTick, completionTick }
   }
   const withOrder = runMra(true)
   const control = runMra(false)
-  check('a corporation-funded building completes', withOrder.done)
+  check('a corporation-funded building completes', withOrder.completionTick >= 0)
   const newSchool = withOrder.worlds.find((x) => x.id === 'Mars')!.buildings.find((b) => b.id === 'co-built')
   check('...owned by the funding corporation', !!newSchool && newSchool.owner.kind === 'corporation' && (newSchool.owner as { corporationId: string }).corporationId === 'mra')
-  check('...paid from the corporation\'s own cash (lower cash than the no-build control)', withOrder.corps.find((c) => c.id === 'mra')!.cash < control.corps.find((c) => c.id === 'mra')!.cash)
+  // At the completion tick, the only difference between the runs is the ~6000
+  // build spend drawn from the corp's cash — so the builder must be poorer.
+  const t = Math.max(0, withOrder.completionTick)
+  check('...paid from the corporation\'s own cash (lower cash than the no-build control at completion)', withOrder.cashByTick[t] < control.cashByTick[t], `${withOrder.cashByTick[t].toFixed(0)} < ${control.cashByTick[t].toFixed(0)}`)
 }
 
 console.log('\n=== 18. Milestone 5: inter-world trade & logistics ===')
@@ -390,6 +400,237 @@ console.log('\n=== 19. Financial districts ===')
   const redmines = corps.find((c) => c.id === 'redmines')!
   check('...and holding a stake in a private corporation', redmines.shares.some((s) => s.holder.kind === 'financial'))
   check('a financial district is publicly/co-op held, not state or private kind', marsFd!.shares.every((s) => s.holder.kind === 'public'))
+}
+
+console.log('\n=== 20. Resource deposits: extraction is capped by a finite reserve ===')
+{
+  const seededMars = seedWorlds().find((w) => w.id === 'Mars')!
+  check('the seed gives Mars a finite iron ore deposit', (seededMars.resourceDeposits?.ironOre ?? 0) > 0, `${seededMars.resourceDeposits?.ironOre}`)
+
+  // Isolate a single, established (full-throughput) iron mine as Mars's only
+  // building, so its output for the tick is entirely predictable: manual iron
+  // mining has no inputs, and the world's huge labor pool means labor is never
+  // the constraint. amount(500) * level(1) = 500/tick uncapped.
+  const soleMine: Building = {
+    id: 'sole-ironMine',
+    recipeId: 'ironMine',
+    methodId: 'manual',
+    methodLocked: false,
+    level: 1,
+    owner: { kind: 'state' },
+    inventory: {},
+    throughput: 1,
+    lastProfit: 0,
+    employed: 0,
+    jobsPosted: 0,
+  }
+  const countries = seedCountries()
+  const corporations = seedCorporations()
+
+  // Control: an abundant deposit — the mine should produce close to its full
+  // uncapped 500/tick.
+  const abundantWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: [soleMine], resourceDeposits: { ironOre: 1_000_000 } } : w))
+  const abundantResult = tickEconomy(countries, abundantWorlds, corporations)
+  const abundantMine = abundantResult.worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === 'sole-ironMine')!
+  check('with an abundant deposit the mine produces close to its uncapped output', (abundantMine.inventory.ironOre ?? 0) > 400, (abundantMine.inventory.ironOre ?? 0).toFixed(1))
+
+  // Test: the same mine, but with only a sliver of ore left in the ground —
+  // far less than the 500/tick it would otherwise produce.
+  const lowDeposit = 50
+  const scarceWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: [soleMine], resourceDeposits: { ironOre: lowDeposit } } : w))
+  const scarceResult = tickEconomy(countries, scarceWorlds, corporations)
+  const scarceMars = scarceResult.worlds.find((w) => w.id === 'Mars')!
+  const scarceMine = scarceMars.buildings.find((b) => b.id === 'sole-ironMine')!
+  const mined = scarceMine.inventory.ironOre ?? 0
+  check('output is capped by the remaining deposit, not the mine\'s full uncapped capacity', mined <= lowDeposit + 1e-6, mined.toFixed(2))
+  const remaining = scarceMars.resourceDeposits?.ironOre ?? -1
+  check('the deposit is drawn down toward zero and never negative', remaining >= 0 && remaining <= lowDeposit, `${remaining}`)
+  check('a near-exhausted deposit is fully drawn down by one tick of uncapped-scale demand', remaining < 1e-6, `${remaining}`)
+}
+
+console.log('\n=== 21. Government subsidies: a real treasury cost that credits the recipient ===')
+{
+  const mars = seedWorlds().find((w) => w.id === 'Mars')!
+  const corpBuilding = mars.buildings.find((b) => b.owner.kind === 'corporation')!
+  const corpId = (corpBuilding.owner as { kind: 'corporation'; corporationId: string }).corporationId
+
+  const baseCountries = seedCountries()
+  const baseCorporations = seedCorporations()
+  const subsidizedCountries = baseCountries.map((c) =>
+    c.id === 'imperial-state-of-mars'
+      ? { ...c, subsidies: { corporations: { [corpId]: 400 }, buildings: { [`Mars:${corpBuilding.id}`]: 150 } } }
+      : c,
+  )
+
+  const baseline = tickEconomy(baseCountries, seedWorlds(), baseCorporations)
+  const subsidized = tickEconomy(subsidizedCountries, seedWorlds(), baseCorporations)
+
+  const baseTreasury = baseline.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+  const subTreasury = subsidized.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+  check('subsidies are a REAL cost: the treasury ends lower by exactly the outlay (400 + 150)', Math.abs(baseTreasury - subTreasury - 550) < 1e-6, `Δtreasury=${(baseTreasury - subTreasury).toFixed(2)}`)
+
+  const baseCorpCash = baseline.corporations.find((c) => c.id === corpId)!.cash
+  const subCorpCash = subsidized.corporations.find((c) => c.id === corpId)!.cash
+  check('the subsidized corporation is credited the full amount (corp subsidy + the building subsidy it owns)', Math.abs(subCorpCash - baseCorpCash - 550) < 1e-6, `Δcash=${(subCorpCash - baseCorpCash).toFixed(2)}`)
+
+  const subReport = subsidized.reports.countries['imperial-state-of-mars']
+  const baseReport = baseline.reports.countries['imperial-state-of-mars']
+  check('the fiscal report exposes subsidiesSpent', subReport.subsidiesSpent === 550, `${subReport.subsidiesSpent}`)
+  check('subsidiesSpent is folded into expenditure (no free lunch)', Math.abs(subReport.expenditure - baseReport.expenditure - 550) < 1e-6, `Δexpenditure=${(subReport.expenditure - baseReport.expenditure).toFixed(2)}`)
+  check('the deficit widens by exactly the subsidy outlay', Math.abs(baseReport.balance - subReport.balance - 550) < 1e-6, `Δbalance=${(baseReport.balance - subReport.balance).toFixed(2)}`)
+
+  // A subsidy aimed at a STATE-owned building is still a real treasury outlay
+  // (funds its upkeep) even though there's no separate corp cash account to
+  // credit — it must not leak into free money.
+  const stateBuilding = mars.buildings.find((b) => b.owner.kind === 'state')!
+  const stateCountries = baseCountries.map((c) =>
+    c.id === 'imperial-state-of-mars' ? { ...c, subsidies: { corporations: {}, buildings: { [`Mars:${stateBuilding.id}`]: 300 } } } : c,
+  )
+  const stateSubsidized = tickEconomy(stateCountries, seedWorlds(), baseCorporations)
+  const stateReport = stateSubsidized.reports.countries['imperial-state-of-mars']
+  check('a subsidy to a STATE-owned building is still spent (subsidiesSpent > 0)', stateReport.subsidiesSpent === 300, `${stateReport.subsidiesSpent}`)
+  const stateTreasury = stateSubsidized.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+  check('and it still costs the treasury the full amount', Math.abs(baseTreasury - stateTreasury - 300) < 1e-6, `Δtreasury=${(baseTreasury - stateTreasury).toFixed(2)}`)
+}
+
+console.log('\n=== 22. Per-building nationalization (store action) ===')
+{
+  // The store action (economyStore.nationaliseBuilding) is exercised directly
+  // via zustand's getState(), same as any other store action would be called
+  // from a component — no React/DOM needed.
+  const store = useEconomyStore.getState()
+  const mars = store.worlds.find((w) => w.id === 'Mars')!
+  const corpBuilding = mars.buildings.find((b) => b.owner.kind === 'corporation')!
+  const corpId = (corpBuilding.owner as { kind: 'corporation'; corporationId: string }).corporationId
+  const country = store.countries.find((c) => c.id === 'imperial-state-of-mars')!
+  const treasuryBefore = country.treasury
+
+  store.nationaliseBuilding('Mars', corpBuilding.id)
+
+  const after = useEconomyStore.getState()
+  const nationalized = after.worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === corpBuilding.id)!
+  check('the building\'s owner changes to state', nationalized.owner.kind === 'state', JSON.stringify(nationalized.owner))
+  check('its method is unpinned on takeover', nationalized.methodLocked === false)
+
+  const countryAfter = after.countries.find((c) => c.id === 'imperial-state-of-mars')!
+  const compensation = corpBuilding.level * 6000 * 0.6 // BUILD_COST_PER_LEVEL * 0.6, mirroring nationaliseCorporation's ratio
+  check('the treasury pays compensation for the seized asset (not free)', countryAfter.treasury < treasuryBefore, `${countryAfter.treasury.toFixed(1)} < ${treasuryBefore.toFixed(1)}`)
+  check('the compensation is proportional to the building\'s value at the corp-nationalisation ratio (60%)', Math.abs(treasuryBefore - countryAfter.treasury - compensation) < 1e-6, `paid=${(treasuryBefore - countryAfter.treasury).toFixed(2)} expected=${compensation.toFixed(2)}`)
+
+  const stillOwnsElsewhere = after.worlds.some((w) => w.buildings.some((b) => b.owner.kind === 'corporation' && b.owner.corporationId === corpId && b.id !== corpBuilding.id))
+  check('the owning corporation loses just this one asset (still exists / may own others)', after.corporations.some((c) => c.id === corpId), `corp still exists=${after.corporations.some((c) => c.id === corpId)}, owns other assets=${stillOwnsElsewhere}`)
+}
+
+console.log('\n=== 23. Needs-detail per-good reporting (needs/SoL presentation rework) ===')
+{
+  const { worlds } = run(1)
+  const mars = worlds.find((w) => w.id === 'Mars')!
+  const pop = mars.pops[0]
+  check('a ticked pop carries needsDetail', pop.needsDetail !== undefined)
+  const basic = pop.needsDetail?.basic ?? []
+  check('basic tier detail lists the food good', basic.some((e) => e.good === 'food'), JSON.stringify(basic))
+  const food = basic.find((e) => e.good === 'food')!
+  // Compared against a fresh post-growth populationSize (the tick that
+  // produced this detail also grew the pop slightly), so use a loose relative
+  // tolerance rather than exact equality.
+  const expectedWanted = 0.8 * pop.populationSize
+  check(
+    'food wanted is a sane positive number (~ amountPerPop * populationSize)',
+    food.wanted > 0 && Math.abs(food.wanted - expectedWanted) / expectedWanted < 0.01,
+    `${food.wanted} vs ~${expectedWanted}`,
+  )
+  check('food consumed is between 0 and wanted', food.consumed >= 0 && food.consumed <= food.wanted + 1e-6, `${food.consumed} <= ${food.wanted}`)
+  // Healthcare must be a visible consumed GOOD in the detail, not siloed away
+  // from the rest of the needs basket (the user's original complaint).
+  const healthcare = pop.needsDetail?.healthcare ?? []
+  check('healthcare tier detail lists the healthcare good', healthcare.some((e) => e.good === 'healthcare'), JSON.stringify(healthcare))
+  const tierWant = basic.reduce((s, e) => s + e.wanted, 0)
+  const tierGot = basic.reduce((s, e) => s + e.consumed, 0)
+  const derivedSat = tierWant > 0 ? Math.min(1, tierGot / tierWant) : 1
+  check(
+    'the blended needsSatisfaction is consistent with the per-good detail it is derived from',
+    Math.abs(derivedSat - pop.needsSatisfaction.basic) < 1e-6,
+    `${derivedSat} vs ${pop.needsSatisfaction.basic}`,
+  )
+}
+
+console.log('\n=== 24. Stockpiling: fills toward target on surplus, releases on shortage ===')
+{
+  const soleMine: Building = {
+    id: 'sole-ironMine',
+    recipeId: 'ironMine',
+    methodId: 'manual',
+    methodLocked: false,
+    level: 1,
+    owner: { kind: 'state' },
+    inventory: {},
+    throughput: 1,
+    lastProfit: 0,
+    employed: 0,
+    jobsPosted: 0,
+  }
+  // Flush deficit-driven welfare/admin spending as a confound — the fill
+  // costs a few hundred a tick at most, so a huge treasury cushion isolates
+  // "does the reserve fill" from "did the state go broke on welfare".
+  const richCountries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, treasury: 500_000 } : c))
+  const corporations = seedCorporations()
+
+  // --- Fill: an isolated building produces ore nobody else demands (no
+  // construction queue, no pop need for ore) — a genuine, uncontested market
+  // surplus. A building's own tick-N output only becomes market SUPPLY on
+  // tick N+1 (it sits in inventory meanwhile — same lag every sale goes
+  // through), so run a few ticks for the reserve to visibly climb toward its
+  // target instead of just decaying away in building inventory.
+  let fillCountries = richCountries
+  let fillWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: [soleMine], stockpileTargets: { ironOre: 1000 } } : w))
+  let fillCorporations = corporations
+  let totalStockpileSpend = 0
+  for (let i = 0; i < 4; i++) {
+    const r = tickEconomy(fillCountries, fillWorlds, fillCorporations)
+    fillCountries = r.countries
+    fillWorlds = r.worlds
+    fillCorporations = r.corporations
+    totalStockpileSpend += r.reports.countries['imperial-state-of-mars'].stockpileSpend
+  }
+  const filledMars = fillWorlds.find((w) => w.id === 'Mars')!
+  const filled = filledMars.stockpiles?.ironOre ?? 0
+  check('a genuine, sustained surplus fills the reserve toward its target', filled > 0 && filled <= 1000, filled.toFixed(2))
+  check('filling the reserve is a real treasury cost (the fiscal report exposes it)', totalStockpileSpend > 0, totalStockpileSpend.toFixed(2))
+
+  const marsCountryAfter = fillCountries.find((c) => c.id === 'imperial-state-of-mars')!
+  check(
+    'the treasury paid at least the reported stockpile spend (on top of its normal deficit)',
+    500_000 - marsCountryAfter.treasury >= totalStockpileSpend - 1e-6,
+    `Δtreasury=${(500_000 - marsCountryAfter.treasury).toFixed(2)}, stockpileSpend=${totalStockpileSpend.toFixed(2)}`,
+  )
+
+  // --- Release: strip Mars of every building that outputs food (crop farms
+  // feed a separate processing plant that's the one actually producing the
+  // `food` good — removing only 'agriculture'-category buildings would leave
+  // that processor running and mask the shortage) so food genuinely runs
+  // short, then compare a world holding a food reserve against an otherwise-
+  // identical one with none — the reserve should measurably cushion it.
+  const producesFood = (recipeId: string) => (RECIPES[recipeId]?.methods ?? []).some((m) => m.outputs.some((o) => o.good === 'food'))
+  const starvedMars = seedWorlds().find((w) => w.id === 'Mars')!
+  const noFood = starvedMars.buildings.filter((b) => !producesFood(b.recipeId))
+
+  const withReserveWorlds = seedWorlds().map((w) =>
+    w.id === 'Mars' ? { ...starvedMars, buildings: noFood, stockpiles: { food: 500 }, stockpileTargets: { food: 500 } } : w,
+  )
+  const withReserveResult = tickEconomy(richCountries, withReserveWorlds, corporations)
+  const withReserveMars = withReserveResult.worlds.find((w) => w.id === 'Mars')!
+  const released = 500 - (withReserveMars.stockpiles?.food ?? 0)
+  check('a genuine shortage releases some of the reserve', released > 0, released.toFixed(2))
+
+  const noReserveWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...starvedMars, buildings: noFood } : w))
+  const noReserveResult = tickEconomy(richCountries, noReserveWorlds, corporations)
+  const noReserveMars = noReserveResult.worlds.find((w) => w.id === 'Mars')!
+  const satisfactionOf = (w: World) => w.pops.reduce((s, p) => s + p.needsSatisfaction.basic * p.populationSize, 0) / w.pops.reduce((s, p) => s + p.populationSize, 0)
+  check(
+    'the released reserve measurably cushions need satisfaction vs. holding no reserve at all',
+    satisfactionOf(withReserveMars) > satisfactionOf(noReserveMars),
+    `${satisfactionOf(withReserveMars).toFixed(4)} > ${satisfactionOf(noReserveMars).toFixed(4)}`,
+  )
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

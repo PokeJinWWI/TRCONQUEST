@@ -107,6 +107,125 @@ export function districtOfRecipe(recipeId: string): DistrictType {
   return cat ? CATEGORY_DISTRICT[cat] : 'urban'
 }
 
+// UI-only sub-categorization, finer-grained than BuildingCategory. `industry`
+// alone now spans steel mills through spaceyards to consumer-goods factories —
+// too wide a bucket to browse as one flat list once the roster passed ~45
+// entries. This is purely presentational (which header a building sits under
+// in the build menus): it carries no economic weight and the tick loop never
+// reads it. Kept as a lookup table here (data) rather than scattered
+// conditionals in the UI components.
+export type BuildingGroup =
+  | 'power'
+  | 'extraction'
+  | 'agriculture'
+  | 'heavyIndustry'
+  | 'chemicals'
+  | 'consumerGoods'
+  | 'vehicles'
+  | 'infrastructure'
+  | 'services'
+  | 'civic'
+
+export const BUILDING_GROUP_LABELS: Record<BuildingGroup, string> = {
+  power: 'Power',
+  extraction: 'Extraction',
+  agriculture: 'Agriculture',
+  heavyIndustry: 'Heavy Industry',
+  chemicals: 'Chemicals & Materials',
+  consumerGoods: 'Consumer Manufacturing',
+  vehicles: 'Vehicles & Craft',
+  infrastructure: 'Infrastructure',
+  services: 'Public Services',
+  civic: 'Corporate & Government',
+}
+
+// Display order for groups wherever they're listed together.
+export const BUILDING_GROUP_ORDER: BuildingGroup[] = [
+  'power',
+  'extraction',
+  'agriculture',
+  'heavyIndustry',
+  'chemicals',
+  'consumerGoods',
+  'vehicles',
+  'infrastructure',
+  'services',
+  'civic',
+]
+
+const RECIPE_GROUP: Record<string, BuildingGroup> = {
+  // Power
+  solarPlant: 'power',
+  coalPowerPlant: 'power',
+  fusionReactor: 'power',
+  // Extraction
+  ironMine: 'extraction',
+  coalMine: 'extraction',
+  oilWell: 'extraction',
+  rareMetalsMine: 'extraction',
+  loggingCamp: 'extraction',
+  phosphateMine: 'extraction',
+  sulfurMine: 'extraction',
+  hardwoodLogging: 'extraction',
+  // Agriculture
+  wheatFarm: 'agriculture',
+  riceFarm: 'agriculture',
+  livestockRanch: 'agriculture',
+  sugarPlantation: 'agriculture',
+  coffeePlantation: 'agriculture',
+  teaPlantation: 'agriculture',
+  // Heavy industry — primary metals, tools, machinery tiers, electronics
+  steelMill: 'heavyIndustry',
+  sawmill: 'heavyIndustry',
+  toolWorkshop: 'heavyIndustry',
+  machineryFactory: 'heavyIndustry',
+  heavyMachineryPlant: 'heavyIndustry',
+  electricalMachineryPlant: 'heavyIndustry',
+  precisionMachineryPlant: 'heavyIndustry',
+  electronicsFactory: 'heavyIndustry',
+  semiconductorFab: 'heavyIndustry',
+  // Chemicals & materials
+  oilRefinery: 'chemicals',
+  chemicalPlant: 'chemicals',
+  fertilizerPlant: 'chemicals',
+  explosivesFactory: 'chemicals',
+  dyeWorks: 'chemicals',
+  glassworks: 'chemicals',
+  paperMill: 'chemicals',
+  // Consumer manufacturing
+  foodProcessor: 'consumerGoods',
+  consumerGoodsFactory: 'consumerGoods',
+  luxuryFactory: 'consumerGoods',
+  meatPacking: 'consumerGoods',
+  // Vehicles & craft
+  engineFactory: 'vehicles',
+  automobilePlant: 'vehicles',
+  locomotiveWorks: 'vehicles',
+  aircraftFactory: 'vehicles',
+  shipyard: 'vehicles',
+  spaceyard: 'vehicles',
+  rocketFactory: 'vehicles',
+  // Infrastructure (freight capacity)
+  roadNetwork: 'infrastructure',
+  railway: 'infrastructure',
+  spaceport: 'infrastructure',
+  // Public services
+  clinic: 'services',
+  school: 'services',
+  retailShop: 'services',
+  artStudio: 'services',
+  dataCenter: 'services',
+  // Corporate & government
+  corporateHq: 'civic',
+  financialCenter: 'civic',
+  governmentOffice: 'civic',
+  ministry: 'civic',
+}
+
+export function buildingGroup(recipeId: string): BuildingGroup {
+  return RECIPE_GROUP[recipeId] ?? 'civic'
+}
+
 export interface Recipe {
   id: string
   label: string
@@ -230,8 +349,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mechanized',
         label: 'Longwall Mining',
-        description: 'Cutting machines lift output sharply on grid power.',
-        inputs: [{ good: 'electricity', amount: 100 }],
+        description: 'Cutting machines lift output sharply on grid power and mining machinery.',
+        inputs: [
+          { good: 'machinery', amount: 15 },
+          { good: 'electricity', amount: 100 },
+        ],
         outputs: [{ good: 'coal', amount: 1150 }],
         jobs: [
           { class: 'labor', count: 150 },
@@ -349,12 +471,73 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mechanized',
         label: 'Strip Mining',
-        description: 'Powered strip mining doubles output.',
-        inputs: [{ good: 'electricity', amount: 110 }],
+        description: 'Powered strip mining doubles output, on excavating tools and grid power.',
+        inputs: [
+          { good: 'tools', amount: 25 },
+          { good: 'electricity', amount: 110 },
+        ],
         outputs: [{ good: 'phosphate', amount: 1050 }],
         jobs: [
           { class: 'labor', count: 140 },
           { class: 'technical', count: 80 },
+        ],
+      },
+    ],
+  },
+  sulfurMine: {
+    id: 'sulfurMine',
+    label: 'Sulfur Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Open-Pit Digging',
+        description: 'Manual sulfur extraction from surface deposits. No power needed.',
+        inputs: [],
+        outputs: [{ good: 'sulfur', amount: 400 }],
+        jobs: [{ class: 'labor', count: 280 }],
+      },
+      {
+        id: 'mechanized',
+        label: 'Frasch Process',
+        description: 'Superheated water and powered pumps double sulfur yield.',
+        inputs: [
+          { good: 'electricity', amount: 100 },
+          { good: 'tools', amount: 25 },
+        ],
+        outputs: [{ good: 'sulfur', amount: 800 }],
+        jobs: [
+          { class: 'labor', count: 140 },
+          { class: 'technical', count: 70 },
+        ],
+      },
+    ],
+  },
+  hardwoodLogging: {
+    id: 'hardwoodLogging',
+    label: 'Hardwood Logging',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Selective Felling',
+        description: 'Hand-felled hardwood from a separate, slower-growing stand than the timber camps. No power needed.',
+        inputs: [],
+        outputs: [{ good: 'hardwood', amount: 400 }],
+        jobs: [{ class: 'labor', count: 260 }],
+      },
+      {
+        id: 'mechanized',
+        label: 'Mechanized Hardwood Harvest',
+        description: 'Powered harvesters lift the cut of high-grade hardwood.',
+        inputs: [
+          { good: 'electricity', amount: 90 },
+          { good: 'tools', amount: 25 },
+        ],
+        outputs: [{ good: 'hardwood', amount: 800 }],
+        jobs: [
+          { class: 'labor', count: 130 },
+          { class: 'technical', count: 60 },
         ],
       },
     ],
@@ -462,6 +645,108 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
   },
+  sugarPlantation: {
+    id: 'sugarPlantation',
+    label: 'Sugar Plantation',
+    category: 'agriculture',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Cane Cutting',
+        description: 'Hand-cut sugarcane. Labor-heavy, no inputs.',
+        inputs: [],
+        outputs: [{ good: 'sugar', amount: 900 }],
+        jobs: [
+          { class: 'subsistence', count: 280 },
+          { class: 'labor', count: 90 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Mechanized Cane Harvest',
+        description: 'Fertilizer, tools and power lift the cane yield.',
+        inputs: [
+          { good: 'fertilizer', amount: 100 },
+          { good: 'tools', amount: 25 },
+          { good: 'electricity', amount: 50 },
+        ],
+        outputs: [{ good: 'sugar', amount: 1600 }],
+        jobs: [
+          { class: 'subsistence', count: 90 },
+          { class: 'labor', count: 80 },
+          { class: 'technical', count: 50 },
+        ],
+      },
+    ],
+  },
+  coffeePlantation: {
+    id: 'coffeePlantation',
+    label: 'Coffee Plantation',
+    category: 'agriculture',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Shade-Grown Picking',
+        description: 'Hand-picked coffee cherries. Labor-heavy, no inputs.',
+        inputs: [],
+        outputs: [{ good: 'coffee', amount: 500 }],
+        jobs: [
+          { class: 'subsistence', count: 260 },
+          { class: 'labor', count: 80 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Estate Cultivation',
+        description: 'Fertilizer, tools and power raise coffee yields.',
+        inputs: [
+          { good: 'fertilizer', amount: 80 },
+          { good: 'tools', amount: 20 },
+          { good: 'electricity', amount: 40 },
+        ],
+        outputs: [{ good: 'coffee', amount: 850 }],
+        jobs: [
+          { class: 'subsistence', count: 80 },
+          { class: 'labor', count: 70 },
+          { class: 'technical', count: 40 },
+        ],
+      },
+    ],
+  },
+  teaPlantation: {
+    id: 'teaPlantation',
+    label: 'Tea Plantation',
+    category: 'agriculture',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Hand-Picked Leaf',
+        description: 'Hand-picked tea leaf. Labor-heavy, no inputs.',
+        inputs: [],
+        outputs: [{ good: 'tea', amount: 550 }],
+        jobs: [
+          { class: 'subsistence', count: 260 },
+          { class: 'labor', count: 80 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Estate Cultivation',
+        description: 'Fertilizer, tools and power raise tea yields.',
+        inputs: [
+          { good: 'fertilizer', amount: 80 },
+          { good: 'tools', amount: 20 },
+          { good: 'electricity', amount: 40 },
+        ],
+        outputs: [{ good: 'tea', amount: 900 }],
+        jobs: [
+          { class: 'subsistence', count: 80 },
+          { class: 'labor', count: 70 },
+          { class: 'technical', count: 40 },
+        ],
+      },
+    ],
+  },
 
   // ---------------- Industry ----------------
   steelMill: {
@@ -488,9 +773,10 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'electricArc',
         label: 'Electric Arc',
-        description: 'Coal-free arc smelting — more power, more output, more skill.',
+        description: 'Coal-free arc smelting — trades the blast furnace\'s mechanical plant for heavy electrical equipment (transformers, electrodes), on much more power.',
         inputs: [
           { good: 'ironOre', amount: 320 },
+          { good: 'electricalMachinery', amount: 20 },
           { good: 'electricity', amount: 500 },
         ],
         outputs: [{ good: 'steel', amount: 1250 }],
@@ -792,11 +1078,12 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mixed',
         label: 'Full Processing',
-        description: 'A varied diet from wheat, rice and livestock — more food per plant.',
+        description: 'A varied diet from wheat, rice and livestock — more food per plant, on a bigger processing line.',
         inputs: [
           { good: 'wheat', amount: 400 },
           { good: 'rice', amount: 300 },
           { good: 'livestock', amount: 150 },
+          { good: 'tools', amount: 35 },
           { good: 'electricity', amount: 120 },
         ],
         outputs: [{ good: 'food', amount: 2700 }],
@@ -830,10 +1117,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'refined',
         label: 'Refined Line',
-        description: 'Steel and lumber for finer goods.',
+        description: 'Steel and lumber for finer goods, on heavier tooling than the basic line.',
         inputs: [
           { good: 'steel', amount: 200 },
           { good: 'lumber', amount: 200 },
+          { good: 'tools', amount: 45 },
           { good: 'electricity', amount: 250 },
         ],
         outputs: [{ good: 'consumerGoods', amount: 1300 }],
@@ -845,10 +1133,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'automated',
         label: 'Automated Line',
-        description: 'Automation raises throughput and skill demand, on more power.',
+        description: 'Robotic assembly lines raise throughput and skill demand, on heavy machinery and much more power.',
         inputs: [
           { good: 'steel', amount: 260 },
           { good: 'lumber', amount: 180 },
+          { good: 'machinery', amount: 70 },
           { good: 'electricity', amount: 400 },
         ],
         outputs: [{ good: 'consumerGoods', amount: 1650 }],
@@ -880,6 +1169,163 @@ export const RECIPES: Record<string, Recipe> = {
           { class: 'labor', count: 100 },
           { class: 'technical', count: 180 },
           { class: 'professional', count: 120 },
+        ],
+      },
+    ],
+  },
+
+  meatPacking: {
+    id: 'meatPacking',
+    label: 'Meat Packing Plant',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Packing Line',
+        description: 'Processes livestock into meat for the food chain.',
+        inputs: [
+          { good: 'livestock', amount: 300 },
+          { good: 'electricity', amount: 80 },
+        ],
+        outputs: [{ good: 'meat', amount: 700 }],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 40 },
+        ],
+      },
+    ],
+  },
+  dyeWorks: {
+    id: 'dyeWorks',
+    label: 'Dye Works',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Chemical Dyeing',
+        description: 'Synthesizes chemicals into dyes for textiles and luxury goods.',
+        inputs: [
+          { good: 'chemicals', amount: 200 },
+          { good: 'electricity', amount: 150 },
+        ],
+        outputs: [{ good: 'dyes', amount: 500 }],
+        jobs: [
+          { class: 'labor', count: 100 },
+          { class: 'technical', count: 120 },
+        ],
+      },
+    ],
+  },
+  glassworks: {
+    id: 'glassworks',
+    label: 'Glassworks',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Furnace Glassmaking',
+        description: 'Melts phosphate-bearing mineral feedstock into glass.',
+        inputs: [
+          { good: 'phosphate', amount: 250 },
+          { good: 'electricity', amount: 180 },
+        ],
+        outputs: [{ good: 'glass', amount: 650 }],
+        jobs: [
+          { class: 'labor', count: 140 },
+          { class: 'technical', count: 80 },
+        ],
+      },
+    ],
+  },
+  paperMill: {
+    id: 'paperMill',
+    label: 'Paper Mill',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Pulp & Press',
+        description: 'Pulps timber and hardwood with chemicals into paper.',
+        inputs: [
+          { good: 'timber', amount: 200 },
+          { good: 'hardwood', amount: 100 },
+          { good: 'chemicals', amount: 80 },
+          { good: 'electricity', amount: 120 },
+        ],
+        outputs: [{ good: 'paper', amount: 700 }],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 70 },
+        ],
+      },
+    ],
+  },
+  shipyard: {
+    id: 'shipyard',
+    label: 'Shipyard',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Hull Assembly',
+        description: 'Steel, engines and electronics into ocean-going ships for planetary logistics.',
+        inputs: [
+          { good: 'steel', amount: 300 },
+          { good: 'engines', amount: 150 },
+          { good: 'electronics', amount: 80 },
+          { good: 'electricity', amount: 220 },
+        ],
+        outputs: [{ good: 'oceanGoingShips', amount: 120 }],
+        jobs: [
+          { class: 'labor', count: 160 },
+          { class: 'technical', count: 180 },
+        ],
+      },
+    ],
+  },
+  spaceyard: {
+    id: 'spaceyard',
+    label: 'Spaceyard',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Orbital Assembly',
+        description: 'Precision machinery, electronics, heavy machinery and engines into spaceships — expensive, low-throughput, late-game capital construction.',
+        inputs: [
+          { good: 'precisionMachinery', amount: 120 },
+          { good: 'electronics', amount: 150 },
+          { good: 'heavyMachinery', amount: 100 },
+          { good: 'engines', amount: 100 },
+          { good: 'electricity', amount: 500 },
+        ],
+        outputs: [{ good: 'spaceships', amount: 15 }],
+        jobs: [
+          { class: 'technical', count: 200 },
+          { class: 'professional', count: 180 },
+        ],
+      },
+    ],
+  },
+  rocketFactory: {
+    id: 'rocketFactory',
+    label: 'Rocket Factory',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Booster Assembly',
+        description: 'Precision machinery, explosives and electronics into rockets for spaceport-tier logistics.',
+        inputs: [
+          { good: 'precisionMachinery', amount: 80 },
+          { good: 'explosives', amount: 100 },
+          { good: 'electronics', amount: 90 },
+          { good: 'electricity', amount: 300 },
+        ],
+        outputs: [{ good: 'rockets', amount: 60 }],
+        jobs: [
+          { class: 'technical', count: 180 },
+          { class: 'professional', count: 100 },
         ],
       },
     ],
@@ -1124,6 +1570,49 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'labor', count: 220 },
           { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
+
+  artStudio: {
+    id: 'artStudio',
+    label: 'Art Studio',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Studio & Gallery',
+        description: 'Artists and craftspeople producing culture and art for a comfortable population.',
+        inputs: [
+          { good: 'consumerGoods', amount: 60 },
+          { good: 'electricity', amount: 60 },
+        ],
+        outputs: [{ good: 'art', amount: 300 }],
+        jobs: [
+          { class: 'technical', count: 80 },
+          { class: 'professional', count: 120 },
+        ],
+      },
+    ],
+  },
+  dataCenter: {
+    id: 'dataCenter',
+    label: 'Data Center',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Server Farm',
+        description: 'Electronics and power running the online services pops and businesses rely on.',
+        inputs: [
+          { good: 'electronics', amount: 80 },
+          { good: 'electricity', amount: 250 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 600 }],
+        jobs: [
+          { class: 'technical', count: 180 },
+          { class: 'professional', count: 100 },
         ],
       },
     ],

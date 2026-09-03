@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RECIPES, DISTRICT_TYPES, DISTRICT_LABELS, districtOfRecipe } from '../economy/recipes'
+import { RECIPES, DISTRICT_TYPES, DISTRICT_LABELS, districtOfRecipe, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
 import { districtUsage, canBuild, constructionCost } from '../economy/economyTick'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
@@ -12,6 +12,20 @@ const DISTRICT_COLOR: Record<string, string> = {
   industrial: '#ffd23f',
   resource: '#4ade80',
 }
+
+// The full roster (~55 building types) bucketed into its finer sub-categories
+// (recipes.ts) so this all-districts build list reads as sections rather than
+// one long wall of buttons.
+const ALL_RECIPES = Object.values(RECIPES)
+const RECIPE_GROUPS: { group: BuildingGroup; items: (typeof ALL_RECIPES)[number][] }[] = (() => {
+  const buckets = new Map<BuildingGroup, (typeof ALL_RECIPES)[number][]>()
+  for (const r of ALL_RECIPES) {
+    const g = buildingGroup(r.id)
+    if (!buckets.has(g)) buckets.set(g, [])
+    buckets.get(g)!.push(r)
+  }
+  return BUILDING_GROUP_ORDER.filter((g) => buckets.has(g)).map((g) => ({ group: g, items: buckets.get(g)! }))
+})()
 
 // Economy → Construction: the planet's finite districts, the two construction
 // pools (the GOVERNMENT pool funded from the treasury, and PRIVATE pools funded
@@ -84,23 +98,28 @@ export function ConstructionPanel() {
           ))}
         </select>
       </div>
-      <div className="econ-build-buttons">
-        {Object.values(RECIPES).map((r) => {
-          const room = canBuild(world, r.id)
-          return (
-            <button
-              key={r.id}
-              type="button"
-              className="econ-build-btn"
-              disabled={!room}
-              title={room ? `Build a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district` : `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full`}
-              onClick={() => queueConstruction(world.id, r.id, owner)}
-            >
-              + {r.label}
-            </button>
-          )
-        })}
-      </div>
+      {RECIPE_GROUPS.map(({ group, items }) => (
+        <div className="econ-build-group" key={group}>
+          <div className="econ-build-group-label">{BUILDING_GROUP_LABELS[group]}</div>
+          <div className="econ-build-buttons">
+            {items.map((r) => {
+              const room = canBuild(world, r.id)
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  className="econ-build-btn"
+                  disabled={!room}
+                  title={room ? `Build a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district` : `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full`}
+                  onClick={() => queueConstruction(world.id, r.id, owner)}
+                >
+                  + {r.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
 
       {world.constructionQueue.length > 0 && (
         <>

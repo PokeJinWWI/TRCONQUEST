@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies } from '../economy/economySeed'
-import { tickEconomy, constructionCost, sharePrice, corporationValue, canBuild } from '../economy/economyTick'
+import { tickEconomy, constructionCost, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
 import { RECIPES } from '../economy/recipes'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
+import type { GoodId } from '../economy/goods'
 
 // The kind a corporation should be given its state shareholding: a state
 // majority makes it state-owned, otherwise private. A financial district keeps
@@ -117,6 +118,23 @@ interface EconomyStore {
   // Privatise a state corporation: float its shares publicly (state keeps a
   // minority stake) and credit the sale proceeds to the treasury.
   privatiseCorporation: (corporationId: string) => void
+  // Nationalise ONE building regardless of its owning corporation's overall
+  // status: it becomes state-owned. Unlike a full corporate nationalisation
+  // (no per-building compensation there — the whole company is bought out at
+  // once), this pays the building's own owner a proportional compensation from
+  // the treasury and costs a smaller bureaucracy hit (see economyStore).
+  nationaliseBuilding: (worldId: string, buildingId: string) => void
+  // --- Subsidies (a per-tick treasury → cash transfer; a real fiscal cost) ---
+  // Set (or, at 0, clear) a standing per-tick subsidy paid to a corporation.
+  setSubsidyForCorporation: (countryId: string, corporationId: string, amountPerTick: number) => void
+  // Set (or, at 0, clear) a standing per-tick subsidy paid toward one specific
+  // building — credited to its owning corporation's cash if corporation-owned,
+  // otherwise simply spent (funds a state/worker building's upkeep).
+  setSubsidyForBuilding: (countryId: string, worldId: string, buildingId: string, amountPerTick: number) => void
+  // --- Stockpiles (batch 3): the player's target reserve level for a good on
+  // one world. 0 (or below) clears the target — tickWorld then neither fills
+  // nor releases against it, though any already-held reserve is left in place.
+  setStockpileTarget: (worldId: string, good: GoodId, targetAmount: number) => void
   // The state buys `shares` of a corporation on the exchange (costs treasury);
   // negative sells. Moves shares between the public float and the state.
   tradeShares: (countryId: string, corporationId: string, shares: number) => void
@@ -355,6 +373,67 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         countries: state.countries.map((c) => (c.id === corp.countryId ? { ...c, treasury: c.treasury + proceeds } : c)),
       }
     }),
+
+  nationaliseBuilding: (worldId, buildingId) =>
+    set((state) => {
+      const world = state.worlds.find((w) => w.id === worldId)
+      const building = world?.buildings.find((b) => b.id === buildingId)
+      if (!world || !building || building.owner.kind === 'state') return state
+      // Proportional to the corporate flow (60% of value), but scoped to just
+      // this ONE building's estimated worth — not the whole company — since
+      // only this asset changes hands. A worker co-op has no shareholders to
+      // buy out, so its "compensation" is a smaller flat administrative/
+      // disruption cost instead (seizing a co-op still isn't free).
+      const value = building.level * BUILD_COST_PER_LEVEL
+      const compensation = building.owner.kind === 'corporation' ? value * 0.6 : value * 0.15
+      const bureaucracyHit = 50 + building.level * 30
+      const worlds = state.worlds.map((w) =>
+        w.id === worldId
+          ? { ...w, buildings: w.buildings.map((b) => (b.id === buildingId ? { ...b, owner: { kind: 'state' as const }, methodLocked: false } : b)) }
+          : w,
+      )
+      const countries = state.countries.map((c) =>
+        c.id === world.ownerId ? { ...c, treasury: c.treasury - compensation, bureaucracy: Math.max(0, c.bureaucracy - bureaucracyHit) } : c,
+      )
+      return { countries, worlds: syncCorporateHqs(worlds, state.corporations) }
+    }),
+
+  setSubsidyForCorporation: (countryId, corporationId, amountPerTick) =>
+    set((state) => ({
+      countries: state.countries.map((c) => {
+        if (c.id !== countryId) return c
+        const amt = Math.max(0, Math.min(5000, amountPerTick))
+        const corporations = { ...c.subsidies.corporations }
+        if (amt <= 0) delete corporations[corporationId]
+        else corporations[corporationId] = amt
+        return { ...c, subsidies: { ...c.subsidies, corporations } }
+      }),
+    })),
+
+  setSubsidyForBuilding: (countryId, worldId, buildingId, amountPerTick) =>
+    set((state) => ({
+      countries: state.countries.map((c) => {
+        if (c.id !== countryId) return c
+        const amt = Math.max(0, Math.min(2000, amountPerTick))
+        const key = `${worldId}:${buildingId}`
+        const buildings = { ...c.subsidies.buildings }
+        if (amt <= 0) delete buildings[key]
+        else buildings[key] = amt
+        return { ...c, subsidies: { ...c.subsidies, buildings } }
+      }),
+    })),
+
+  setStockpileTarget: (worldId, good, targetAmount) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => {
+        if (w.id !== worldId) return w
+        const amt = Math.max(0, targetAmount)
+        const stockpileTargets = { ...w.stockpileTargets }
+        if (amt <= 0) delete stockpileTargets[good]
+        else stockpileTargets[good] = amt
+        return { ...w, stockpileTargets }
+      }),
+    })),
 
   tradeShares: (countryId, corporationId, shares) =>
     set((state) => {

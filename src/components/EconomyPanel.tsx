@@ -133,6 +133,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
         <FiscalRow label="Welfare" value={fiscal?.welfare} tone="neg" />
         <FiscalRow label="Public services (healthcare)" value={fiscal?.services} tone="neg" />
         <FiscalRow label="Administration & defense" value={fiscal?.admin} tone="neg" />
+        <FiscalRow label="Subsidies" value={fiscal?.subsidiesSpent} tone="neg" />
         <FiscalRow label="Construction" value={fiscal?.construction} tone="neg" />
         <FiscalRow label="Debt interest" value={fiscal?.interest} tone="neg" />
         <div className="inspect-divider" />

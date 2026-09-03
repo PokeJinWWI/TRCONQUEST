@@ -11,6 +11,7 @@ import { CharactersPanel } from './CharactersPanel'
 import { DebtPanel } from './DebtPanel'
 import { ConstructionPanel } from './ConstructionPanel'
 import { TradePanel } from './TradePanel'
+import { StockpilePanel } from './StockpilePanel'
 import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
 import { usePlayerStore } from '../state/playerStore'
@@ -41,7 +42,7 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
-  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Debt', 'Construction', 'Trade', 'Welfare'] },
+  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Debt', 'Construction', 'Trade', 'Stockpiles', 'Welfare'] },
   { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private', 'Financial Districts'] },
   { name: STOCK_EXCHANGE_CATEGORY },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
@@ -71,6 +72,7 @@ function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Debt') return <DebtPanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Trade') return <TradePanel />
+  if (category.name === ECONOMY_CATEGORY && subcategory === 'Stockpiles') return <StockpilePanel />
   if (category.name === ECONOMY_CATEGORY) return <NationEconomyPanel subcategory={subcategory} />
   if (category.name === TECHNOLOGY_CATEGORY) return <NationTechPanel subcategory={subcategory} />
   if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />

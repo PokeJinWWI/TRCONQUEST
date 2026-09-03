@@ -19,6 +19,33 @@ export interface ForeignBondOffer {
   investor: string
 }
 
+// Government subsidies — a per-tick cash transfer FROM the treasury TO either a
+// whole corporation (boosts its cash directly) or one specific building (helps
+// fund that building's production even at a loss, regardless of the wider
+// company's health). `corporations` is keyed by corporationId; `buildings` is
+// keyed by `${worldId}:${buildingId}`. A subsidy is a REAL fiscal cost — it is
+// deducted from the treasury every tick like any other spending (see
+// tickEconomy's `subsidiesSpent`) — not free money. Setting an amount to 0
+// removes the entry (see economyStore's setSubsidyForCorporation/
+// setSubsidyForBuilding).
+export interface SubsidyBook {
+  corporations: Record<string, number>
+  buildings: Record<string, number>
+}
+
+// One line of a pop's per-good needs report (design doc Section 2, needs
+// presentation rework): what a cohort actually wanted and actually got of one
+// specific good this tick, in the SAME population-scaled units as `wealth`/
+// `wageIncome` elsewhere (i.e. NOT per-capita — divide by populationSize for a
+// per-person figure, which is what the UI shows). This is what lets the UI
+// show real consumption ("12.4 / 15.0 food per capita") instead of only the
+// blended `needsSatisfaction` percentage.
+export interface NeedDetailEntry {
+  good: GoodId
+  wanted: number
+  consumed: number
+}
+
 // A pop cohort — one aggregated agent standing in for a slice of a world's
 // population sharing all four social axes: species + culture + religion +
 // class (design doc v2, Section 2). Population is in MILLIONS of people (so
@@ -38,6 +65,11 @@ export interface Pop {
   // tiers the pop reaches. This is the legible headline number for a cohort.
   standardOfLiving: number
   needsSatisfaction: Record<NeedTier, number>
+  // Per-good breakdown behind `needsSatisfaction` — additive, populated
+  // alongside it each tick by tickWorld. Optional (and absent for a
+  // freshly-constructed Pop before its first tick) purely so nothing that
+  // predates this field has to change; every seeded/ticked pop gets one.
+  needsDetail?: Record<NeedTier, NeedDetailEntry[]>
 }
 
 // Who owns a building and takes its profit (design doc Section 3, "Ownership").
@@ -123,6 +155,24 @@ export interface World {
   // supply this tick. Refilled each tick by the logistics step from surplus
   // worlds; lets a world import what it can't make itself.
   importStock: Partial<Record<GoodId, number>>
+  // Remaining extractable reserve, in the same units as one tick's output, for
+  // genuinely finite raw resources (ore/coal/oil/rare metals/sulfur/hardwood/
+  // timber/phosphate — not crops, which regrow, nor manufactured/power goods).
+  // Optional: a good with no entry here is treated as unlimited. Extraction
+  // buildings producing a tracked good are capped by what's left and draw the
+  // deposit down each tick (economyTick); hitting 0 idles that building's
+  // output for that good, a slow long-game depletion pressure.
+  resourceDeposits?: Partial<Record<GoodId, number>>
+  // Strategic reserve (batch 3): a quantity of a good held back from the
+  // normal market, separate from building inventory/importStock. Player sets a
+  // `stockpileTargets` level per good (economyStore.setStockpileTarget);
+  // tickWorld drifts `stockpiles` toward it a capped fraction per tick — buying
+  // into the reserve out of genuine market surplus (a real treasury cost) when
+  // below target, releasing a capped fraction to cushion a genuine shortage
+  // when demand outruns supply. Per-world (not per-country) because the market
+  // it buffers is itself per-world, same as `importStock`/`market`.
+  stockpiles?: Partial<Record<GoodId, number>>
+  stockpileTargets?: Partial<Record<GoodId, number>>
 }
 
 // A country — the NATIONAL government layer. One treasury, one tax/welfare
@@ -160,6 +210,8 @@ export interface Country {
   // Freight capacity (units of goods movable between the country's worlds per
   // tick) — the logistics backbone of inter-world trade (Milestone 5).
   logisticsCapacity: number
+  // Standing per-tick subsidies to corporations and individual buildings.
+  subsidies: SubsidyBook
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---
@@ -275,6 +327,12 @@ export interface CountryFiscal {
   // tick, and the freight capacity available.
   tradeVolume: number
   logisticsCapacity: number
+  // Government subsidies paid out to corporations + individual buildings this
+  // tick — a real expenditure line, folded into `expenditure`/`balance`.
+  subsidiesSpent: number
+  // Treasury spent this tick buying goods into worlds' strategic stockpiles
+  // (batch 3) — folded into `expenditure`/`balance` like `construction`.
+  stockpileSpend: number
 }
 
 export interface TickReports {
