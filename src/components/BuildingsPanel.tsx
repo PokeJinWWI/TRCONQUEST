@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
-import { RECIPES, getMethod, BUREAUCRACY_OUTPUT } from '../economy/recipes'
+import { RECIPES, getMethod, BUREAUCRACY_OUTPUT, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
 import { GOODS } from '../economy/goods'
-import { estimateWorldGdp, constructionCost, JOB_SCALE, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
+import { estimateWorldGdp, constructionCost, JOB_SCALE, canBuild, BUILD_COST_PER_LEVEL, DEPLETABLE_GOODS, TICKS_PER_YEAR } from '../economy/economyTick'
 import { DISTRICT_LABELS, districtOfRecipe } from '../economy/recipes'
 import { economicSystemDef, type EconomicSystem } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
@@ -18,6 +18,27 @@ const CLASS_LABEL: Record<string, string> = {
   professional: 'Professional',
   investor: 'Investor',
   political: 'Political',
+}
+
+// Buckets a category-filtered list into its finer BuildingGroup subdivisions,
+// in BUILDING_GROUP_ORDER, dropping empty groups. Used to add divider headers
+// once a tab (or the build-buttons grid) holds enough distinct building types
+// that a flat list stops being legible.
+function groupedByBuilding<T>(items: T[], recipeIdOf: (t: T) => string): { group: BuildingGroup; items: T[] }[] {
+  const buckets = new Map<BuildingGroup, T[]>()
+  for (const item of items) {
+    const g = buildingGroup(recipeIdOf(item))
+    if (!buckets.has(g)) buckets.set(g, [])
+    buckets.get(g)!.push(item)
+  }
+  return BUILDING_GROUP_ORDER.filter((g) => buckets.has(g)).map((g) => ({ group: g, items: buckets.get(g)! }))
+}
+
+// Compact "12.3k" / "4.5M" formatting for a raw deposit quantity.
+function formatDeposit(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return n.toFixed(0)
 }
 
 // The full detail of one building — its inputs, outputs, employment by class,
@@ -101,6 +122,40 @@ function BuildingDetail({
           })}
         </div>
       </div>
+      {recipe.category === 'extraction' && method.outputs.some((o) => DEPLETABLE_GOODS.includes(o.good)) && (
+        <div className="bld-detail-reserve">
+          {method.outputs
+            .filter((o) => DEPLETABLE_GOODS.includes(o.good))
+            .map((o) => {
+              const remaining = world.resourceDeposits?.[o.good]
+              const rate = perTick(o.amount)
+              if (remaining === undefined) {
+                return (
+                  <div className="bld-detail-line" key={o.good}>
+                    <span>{GOODS[o.good].label} reserve</span>
+                    <span className="econ-pos">Unlimited (unsurveyed deposit)</span>
+                  </div>
+                )
+              }
+              const depleted = remaining <= 0
+              const yearsLeft = rate > 0 ? remaining / (rate * TICKS_PER_YEAR) : Infinity
+              return (
+                <div
+                  className="bld-detail-line"
+                  key={o.good}
+                  title="A finite reserve shared by every building on this world extracting this good — it draws down as they produce and does not regrow."
+                >
+                  <span>{GOODS[o.good].label} reserve (world)</span>
+                  <span className={depleted ? 'econ-neg' : undefined}>
+                    {depleted
+                      ? 'Depleted'
+                      : `${formatDeposit(remaining)} · ~${yearsLeft >= 100 ? '100+' : yearsLeft.toFixed(1)} yrs at this rate`}
+                  </span>
+                </div>
+              )
+            })}
+        </div>
+      )}
       <div className="bld-detail-foot">
         Throughput {Math.round(t * 100)}% · Employs {formatPop(b.employed)} of {formatPop(b.jobsPosted)} jobs · Profit{' '}
         <span className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</span>/tick
@@ -222,6 +277,14 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const treasury = country?.treasury ?? 0
   const buildable = Object.values(RECIPES).filter((r) => !cats || cats.includes(r.category))
 
+  // Once a tab holds more than a handful of distinct building types, a flat
+  // list stops being legible — add sub-category divider rows/headers. A tab
+  // with few types (or only one underlying group) stays flat.
+  const rowGroups = groupedByBuilding(rows, ({ b }) => b.recipeId)
+  const showRowHeaders = rowGroups.length > 1 && rows.length > 6
+  const buildGroups = groupedByBuilding(buildable, (r) => r.id)
+  const showBuildHeaders = buildGroups.length > 1 && buildable.length > 6
+
   return (
     <div className="econ-panel">
       <div className="econ-summary">
@@ -257,89 +320,110 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ b, recipe }) => {
-              const method = getMethod(b.recipeId, b.methodId)
-              const out = method?.outputs[0]
-              const runPct = Math.round(b.throughput * 100)
-              const jobPct = b.jobsPosted > 0 ? Math.round((b.employed / b.jobsPosted) * 100) : 0
-              const { control, pinned, malus } = buildingControl(b, country?.economicSystem ?? 'interventionism')
-              const malusPct = Math.round((1 - malus) * 100)
-              const nation = country ? getCountry(country.id)?.name ?? 'the state' : 'the state'
-              const ownerName = ownerLabel(b, corporations)
-              const ownerTitle =
-                control === 'state'
-                  ? `State-owned: run directly by ${nation}. Profit flows to the treasury.`
-                  : control === 'corporation'
-                    ? `Owned by the corporation ${ownerName}. Profit accrues to the company.`
-                    : `Worker co-op: owned by the pops who work here. Profit is paid to them as dividends.`
-              const open = detailId === b.id
-              return (
-                <Fragment key={b.id}>
-                <tr className="bld-row">
-                  <td>
-                    <button type="button" className="bld-name-btn" onClick={() => setDetailId(open ? null : b.id)} title="Click for full details">
-                      <span className="market-caret">{open ? '▾' : '▸'}</span>
-                      {recipe!.label}
-                    </button>
-                  </td>
-                  <td>{b.level}</td>
-                  <td>
-                    <span className={`econ-owner-tag econ-owner-${control}`} title={ownerTitle}>
-                      {ownerName}
-                    </span>
-                    {pinned && (
-                      <span className="econ-pin-badge" title={`State-directed against the market: −${malusPct}% output.`}>
-                        pinned −{malusPct}%
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <div className="econ-method-cell">
-                      {owned && recipe!.methods.length > 1 ? (
-                        <select
-                          className="econ-method-select"
-                          value={b.methodId}
-                          onChange={(e) => setProductionMethod(world.id, b.id, e.target.value)}
-                          title={method?.description}
-                        >
-                          {recipe!.methods.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span title={method?.description}>{method?.label ?? '—'}</span>
-                      )}
-                      {owned && pinned && (
-                        <button
-                          type="button"
-                          className="econ-release-btn"
-                          onClick={() => releaseProductionMethod(world.id, b.id)}
-                          title="Hand this building back to its owner"
-                        >
-                          ↩
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td>{out ? GOODS[out.good].label : '—'}</td>
-                  <td title={`Throughput ${runPct}% — ramps toward full as labor, inputs and demand allow`}>{runPct}%</td>
-                  <td title={`${formatPop(b.employed)} employed of ${formatPop(b.jobsPosted)} jobs posted`}>
-                    {b.jobsPosted > 0 ? `${formatPop(b.employed)} (${jobPct}%)` : '—'}
-                  </td>
-                  <td className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</td>
-                </tr>
-                {open && (
-                  <tr className="market-detail-row">
-                    <td colSpan={8}>
-                      <BuildingDetail b={b} world={world} country={country} owned={owned} corporations={corporations} />
-                    </td>
+            {rowGroups.map(({ group, items }) => (
+              <Fragment key={group}>
+                {showRowHeaders && (
+                  <tr className="bld-group-row">
+                    <td colSpan={8}>{BUILDING_GROUP_LABELS[group]}</td>
                   </tr>
                 )}
-                </Fragment>
-              )
-            })}
+                {items.map(({ b, recipe }) => {
+                  const method = getMethod(b.recipeId, b.methodId)
+                  const out = method?.outputs[0]
+                  const runPct = Math.round(b.throughput * 100)
+                  const jobPct = b.jobsPosted > 0 ? Math.round((b.employed / b.jobsPosted) * 100) : 0
+                  const { control, pinned, malus } = buildingControl(b, country?.economicSystem ?? 'interventionism')
+                  const malusPct = Math.round((1 - malus) * 100)
+                  const nation = country ? getCountry(country.id)?.name ?? 'the state' : 'the state'
+                  const ownerName = ownerLabel(b, corporations)
+                  const ownerTitle =
+                    control === 'state'
+                      ? `State-owned: run directly by ${nation}. Profit flows to the treasury.`
+                      : control === 'corporation'
+                        ? `Owned by the corporation ${ownerName}. Profit accrues to the company.`
+                        : `Worker co-op: owned by the pops who work here. Profit is paid to them as dividends.`
+                  const open = detailId === b.id
+                  const depletable = out && recipe!.category === 'extraction' && DEPLETABLE_GOODS.includes(out.good)
+                  const remaining = depletable ? world.resourceDeposits?.[out!.good] : undefined
+                  return (
+                    <Fragment key={b.id}>
+                    <tr className="bld-row">
+                      <td>
+                        <button type="button" className="bld-name-btn" onClick={() => setDetailId(open ? null : b.id)} title="Click for full details">
+                          <span className="market-caret">{open ? '▾' : '▸'}</span>
+                          {recipe!.label}
+                        </button>
+                      </td>
+                      <td>{b.level}</td>
+                      <td>
+                        <span className={`econ-owner-tag econ-owner-${control}`} title={ownerTitle}>
+                          {ownerName}
+                        </span>
+                        {pinned && (
+                          <span className="econ-pin-badge" title={`State-directed against the market: −${malusPct}% output.`}>
+                            pinned −{malusPct}%
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="econ-method-cell">
+                          {owned && recipe!.methods.length > 1 ? (
+                            <select
+                              className="econ-method-select"
+                              value={b.methodId}
+                              onChange={(e) => setProductionMethod(world.id, b.id, e.target.value)}
+                              title={method?.description}
+                            >
+                              {recipe!.methods.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span title={method?.description}>{method?.label ?? '—'}</span>
+                          )}
+                          {owned && pinned && (
+                            <button
+                              type="button"
+                              className="econ-release-btn"
+                              onClick={() => releaseProductionMethod(world.id, b.id)}
+                              title="Hand this building back to its owner"
+                            >
+                              ↩
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        {out ? GOODS[out.good].label : '—'}
+                        {depletable && remaining !== undefined && (
+                          <span
+                            className={`bld-reserve-badge${remaining <= 0 ? ' bld-reserve-depleted' : ''}`}
+                            title="Remaining world reserve of this good — finite, shared by every extraction building drawing on it, and does not regrow."
+                          >
+                            {remaining <= 0 ? 'depleted' : formatDeposit(remaining)}
+                          </span>
+                        )}
+                      </td>
+                      <td title={`Throughput ${runPct}% — ramps toward full as labor, inputs and demand allow`}>{runPct}%</td>
+                      <td title={`${formatPop(b.employed)} employed of ${formatPop(b.jobsPosted)} jobs posted`}>
+                        {b.jobsPosted > 0 ? `${formatPop(b.employed)} (${jobPct}%)` : '—'}
+                      </td>
+                      <td className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</td>
+                    </tr>
+                    {open && (
+                      <tr className="market-detail-row">
+                        <td colSpan={8}>
+                          <BuildingDetail b={b} world={world} country={country} owned={owned} corporations={corporations} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                  )
+                })}
+              </Fragment>
+            ))}
           </tbody>
         </table>
       )}
@@ -375,23 +459,28 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
           <div className="econ-subtitle" style={{ marginTop: 8 }}>
             Build (cost {formatMoney(constructionCost())} each — government pool)
           </div>
-          <div className="econ-build-buttons">
-            {buildable.map((r) => {
-              const room = canBuild(world, r.id)
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  className="econ-build-btn"
-                  onClick={() => queueConstruction(world.id, r.id)}
-                  disabled={!room}
-                  title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district`}
-                >
-                  + {r.label}
-                </button>
-              )
-            })}
-          </div>
+          {buildGroups.map(({ group, items }) => (
+            <div className="econ-build-group" key={group}>
+              {showBuildHeaders && <div className="econ-build-group-label">{BUILDING_GROUP_LABELS[group]}</div>}
+              <div className="econ-build-buttons">
+                {items.map((r) => {
+                  const room = canBuild(world, r.id)
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      className="econ-build-btn"
+                      onClick={() => queueConstruction(world.id, r.id)}
+                      disabled={!room}
+                      title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district`}
+                    >
+                      + {r.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
           <div className="ship-panel-hint">
             Buildings occupy their district (see Economy → Construction for space, private pools and materials). Private
             buildings are <b>owner-run</b>; overriding one pins it (a market-economy output cost). Release (↩) hands it back.

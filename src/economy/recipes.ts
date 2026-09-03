@@ -107,6 +107,125 @@ export function districtOfRecipe(recipeId: string): DistrictType {
   return cat ? CATEGORY_DISTRICT[cat] : 'urban'
 }
 
+// UI-only sub-categorization, finer-grained than BuildingCategory. `industry`
+// alone now spans steel mills through spaceyards to consumer-goods factories —
+// too wide a bucket to browse as one flat list once the roster passed ~45
+// entries. This is purely presentational (which header a building sits under
+// in the build menus): it carries no economic weight and the tick loop never
+// reads it. Kept as a lookup table here (data) rather than scattered
+// conditionals in the UI components.
+export type BuildingGroup =
+  | 'power'
+  | 'extraction'
+  | 'agriculture'
+  | 'heavyIndustry'
+  | 'chemicals'
+  | 'consumerGoods'
+  | 'vehicles'
+  | 'infrastructure'
+  | 'services'
+  | 'civic'
+
+export const BUILDING_GROUP_LABELS: Record<BuildingGroup, string> = {
+  power: 'Power',
+  extraction: 'Extraction',
+  agriculture: 'Agriculture',
+  heavyIndustry: 'Heavy Industry',
+  chemicals: 'Chemicals & Materials',
+  consumerGoods: 'Consumer Manufacturing',
+  vehicles: 'Vehicles & Craft',
+  infrastructure: 'Infrastructure',
+  services: 'Public Services',
+  civic: 'Corporate & Government',
+}
+
+// Display order for groups wherever they're listed together.
+export const BUILDING_GROUP_ORDER: BuildingGroup[] = [
+  'power',
+  'extraction',
+  'agriculture',
+  'heavyIndustry',
+  'chemicals',
+  'consumerGoods',
+  'vehicles',
+  'infrastructure',
+  'services',
+  'civic',
+]
+
+const RECIPE_GROUP: Record<string, BuildingGroup> = {
+  // Power
+  solarPlant: 'power',
+  coalPowerPlant: 'power',
+  fusionReactor: 'power',
+  // Extraction
+  ironMine: 'extraction',
+  coalMine: 'extraction',
+  oilWell: 'extraction',
+  rareMetalsMine: 'extraction',
+  loggingCamp: 'extraction',
+  phosphateMine: 'extraction',
+  sulfurMine: 'extraction',
+  hardwoodLogging: 'extraction',
+  // Agriculture
+  wheatFarm: 'agriculture',
+  riceFarm: 'agriculture',
+  livestockRanch: 'agriculture',
+  sugarPlantation: 'agriculture',
+  coffeePlantation: 'agriculture',
+  teaPlantation: 'agriculture',
+  // Heavy industry — primary metals, tools, machinery tiers, electronics
+  steelMill: 'heavyIndustry',
+  sawmill: 'heavyIndustry',
+  toolWorkshop: 'heavyIndustry',
+  machineryFactory: 'heavyIndustry',
+  heavyMachineryPlant: 'heavyIndustry',
+  electricalMachineryPlant: 'heavyIndustry',
+  precisionMachineryPlant: 'heavyIndustry',
+  electronicsFactory: 'heavyIndustry',
+  semiconductorFab: 'heavyIndustry',
+  // Chemicals & materials
+  oilRefinery: 'chemicals',
+  chemicalPlant: 'chemicals',
+  fertilizerPlant: 'chemicals',
+  explosivesFactory: 'chemicals',
+  dyeWorks: 'chemicals',
+  glassworks: 'chemicals',
+  paperMill: 'chemicals',
+  // Consumer manufacturing
+  foodProcessor: 'consumerGoods',
+  consumerGoodsFactory: 'consumerGoods',
+  luxuryFactory: 'consumerGoods',
+  meatPacking: 'consumerGoods',
+  // Vehicles & craft
+  engineFactory: 'vehicles',
+  automobilePlant: 'vehicles',
+  locomotiveWorks: 'vehicles',
+  aircraftFactory: 'vehicles',
+  shipyard: 'vehicles',
+  spaceyard: 'vehicles',
+  rocketFactory: 'vehicles',
+  // Infrastructure (freight capacity)
+  roadNetwork: 'infrastructure',
+  railway: 'infrastructure',
+  spaceport: 'infrastructure',
+  // Public services
+  clinic: 'services',
+  school: 'services',
+  retailShop: 'services',
+  artStudio: 'services',
+  dataCenter: 'services',
+  // Corporate & government
+  corporateHq: 'civic',
+  financialCenter: 'civic',
+  governmentOffice: 'civic',
+  ministry: 'civic',
+}
+
+export function buildingGroup(recipeId: string): BuildingGroup {
+  return RECIPE_GROUP[recipeId] ?? 'civic'
+}
+
 export interface Recipe {
   id: string
   label: string

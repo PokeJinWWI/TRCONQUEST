@@ -1836,6 +1836,39 @@
 .bld-detail-actions {
   margin-top: 6px;
 }
+.bld-detail-reserve {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Sub-category divider row within a building/build table (recipes.ts groups) */
+.bld-group-row td {
+  padding: 8px 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(111, 227, 255, 0.55);
+  border-bottom: 1px solid rgba(111, 227, 255, 0.15);
+}
+
+/* Compact deposit/reserve badge next to a depletable extraction building's output */
+.bld-reserve-badge {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: #ffcf8f;
+  background: rgba(255, 180, 80, 0.14);
+  border-radius: 3px;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+.bld-reserve-depleted {
+  color: #ff8f7a;
+  background: rgba(255, 107, 74, 0.16);
+}
 
 /* Confirmation dialog */
 .confirm-overlay {
@@ -2329,6 +2362,17 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+.econ-build-group {
+  margin-bottom: 6px;
+}
+.econ-build-group-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(111, 227, 255, 0.55);
+  margin-bottom: 3px;
 }
 .econ-build-btn {
   background: rgba(111, 227, 255, 0.08);

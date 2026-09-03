@@ -90,7 +90,7 @@ const INVENTORY_DECAY = 0.08
 export const DEPLETABLE_GOODS: GoodId[] = ['ironOre', 'coal', 'oil', 'rareMetals', 'sulfur', 'hardwood', 'timber', 'phosphate']
 export const BUILD_COST_PER_LEVEL = 6000
 const CONSTRUCTION_CAPACITY = 400
-const TICKS_PER_YEAR = 12
+export const TICKS_PER_YEAR = 12
 
 // --- Strategic stockpiles (batch 3) — a simple buffer/reserve, not a full
 // commodities model. Each tick closes a CAPPED fraction of the gap between
