@@ -31,7 +31,7 @@ function formatPercent(chance: number): string {
   return `${Math.round(chance * 100)}%`
 }
 
-// A labelled bar. `tone` drives the color band so the three component bars
+// A labeled bar. `tone` drives the color band so the three component bars
 // read as one family, distinct from the two consumable defense pools above
 // them — shields and armor are buffers that come and go, components are the
 // ship itself.
@@ -78,7 +78,7 @@ interface ShipPanelProps {
    * to it, independent of the lockOnEnabled toggle (which only governs
    * *continuous* follow). Omitted entirely — no button rendered — when
    * there's nowhere for "Go To" to send the camera, e.g. the ship is
-   * selected but actually elsewhere (a different system, still travelling
+   * selected but actually elsewhere (a different system, still traveling
    * through a view that doesn't render it). */
   onGoTo?: () => void
   goToPending?: boolean
@@ -94,7 +94,7 @@ interface ShipPanelProps {
 
 // The selected ship's info window — subscribes to simDays directly (same
 // pattern TimeControls already uses) so the "Current Action" line stays live
-// while travelling, not just at the moment it was opened. Selecting a ship
+// while traveling, not just at the moment it was opened. Selecting a ship
 // is always allowed regardless of allegiance (see shipStore.selectShip), so
 // this doubles as a read-only intel view for enemy/neutral/friendly fleets —
 // the right-click-to-redirect hint only applies to a ship the player

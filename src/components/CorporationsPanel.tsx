@@ -7,8 +7,8 @@ import { formatMoney } from '../economy/format'
 import type { Corporation } from '../economy/economyTypes'
 
 // Corporations category. Two tabs: State Owned and Private. The state can found
-// new corporations of either kind, nationalise a company (fold it into the
-// state), or privatise a state corporation (float it on the exchange).
+// new corporations of either kind, nationalize a company (fold it into the
+// state), or privatize a state corporation (float it on the exchange).
 export function CorporationsPanel({ subcategory }: { subcategory: string | null }) {
   const countryId = usePlayerStore((s) => s.selectedCountryId)
   const corporations = useEconomyStore((s) => s.corporations)
@@ -16,8 +16,8 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
   const worlds = useEconomyStore((s) => s.worlds)
   const countries = useEconomyStore((s) => s.countries)
   const createCorporation = useEconomyStore((s) => s.createCorporation)
-  const nationaliseCorporation = useEconomyStore((s) => s.nationaliseCorporation)
-  const privatiseCorporation = useEconomyStore((s) => s.privatiseCorporation)
+  const nationalizeCorporation = useEconomyStore((s) => s.nationalizeCorporation)
+  const privatizeCorporation = useEconomyStore((s) => s.privatizeCorporation)
   const setSubsidyForCorporation = useEconomyStore((s) => s.setSubsidyForCorporation)
   const requestConfirm = useConfirmStore((s) => s.requestConfirm)
   const country = countries.find((c) => c.id === countryId)
@@ -108,7 +108,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                     className="corp-btn corp-btn-danger"
                     onClick={() =>
                       requestConfirm({
-                        title: `Nationalise ${c.name}?`,
+                        title: `Nationalize ${c.name}?`,
                         body: 'The company becomes a state-owned enterprise you control directly.',
                         effects: [
                           `Pay shareholders ${formatMoney(corporationValue(c, worlds) * 0.6)} in compensation from the treasury`,
@@ -116,12 +116,12 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                           `Gain full control of ${buildingsOf(c.id)} building(s) and the company's cash`,
                           'It moves to the State Owned tab',
                         ],
-                        confirmLabel: 'Nationalise',
-                        onConfirm: () => nationaliseCorporation(c.id),
+                        confirmLabel: 'Nationalize',
+                        onConfirm: () => nationalizeCorporation(c.id),
                       })
                     }
                   >
-                    Nationalise
+                    Nationalize
                   </button>
                 ) : (
                   <button
@@ -129,19 +129,19 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                     className="corp-btn"
                     onClick={() =>
                       requestConfirm({
-                        title: `Privatise ${c.name}?`,
+                        title: `Privatize ${c.name}?`,
                         body: 'Float this state enterprise on the exchange.',
                         effects: [
                           `Sell 70% to the public, banking ${formatMoney(sharePrice(c, worlds) * c.totalShares * 0.7)} to the treasury`,
                           'The state keeps a 30% stake',
                           'It moves to the Private tab and its owners run it themselves',
                         ],
-                        confirmLabel: 'Privatise',
-                        onConfirm: () => privatiseCorporation(c.id),
+                        confirmLabel: 'Privatize',
+                        onConfirm: () => privatizeCorporation(c.id),
                       })
                     }
                   >
-                    Privatise
+                    Privatize
                   </button>
                 )}
               </div>
@@ -170,7 +170,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
           </div>
           <div className="ship-panel-hint">
             Founding capital is drawn from the treasury. Assign it buildings via Economy → Construction (fund with the
-            company), or nationalise an existing one.
+            company), or nationalize an existing one.
           </div>
         </>
       )}

@@ -50,7 +50,7 @@ const SHIP_FOCUS_ARRIVE_DISTANCE = 1.2
 // How far a route line's arrowhead reaches back from its destination, in
 // this view's own units (UNITS_PER_AU = 20, so this is ~1.25 AU) — sized
 // against typical in-system hop lengths (tens to hundreds of units), not
-// against the arena-scale constant CombatPathLine uses, which is metres by
+// against the arena-scale constant CombatPathLine uses, which is meters by
 // comparison at this view's zoom.
 const NAV_ARROW_LENGTH = 25
 
@@ -160,7 +160,7 @@ export function SolarSystemScene() {
   }, [systemShips])
   // Only track a selected ship for the camera lock while it's actually
   // present in this scene — same "focusing logic like planets" idea, but a
-  // planet is always here to lock onto while a ship might have travelled
+  // planet is always here to lock onto while a ship might have traveled
   // elsewhere since being selected.
   const trackedShip = useMemo(
     () => (selectedShipId ? systemShips.find((s) => s.id === selectedShipId) ?? null : null),

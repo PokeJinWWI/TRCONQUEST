@@ -107,7 +107,7 @@ function TabStrip() {
   )
 }
 
-// Occupies the header's centre slot — ResourceBar by default, the tab strip
+// Occupies the header's center slot — ResourceBar by default, the tab strip
 // once toggled. Never both at once, deliberately, to keep the top bar from
 // getting cluttered (per the user's own framing).
 export function HudCenterSwap() {

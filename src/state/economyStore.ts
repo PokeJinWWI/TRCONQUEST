@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies } from '../economy/economySeed'
 import { tickEconomy, constructionCost, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
@@ -109,21 +110,21 @@ interface EconomyStore {
   // private; it starts with no buildings (transfer some via setBuildingOwner or
   // build under it later). Returns nothing; a leader is auto-generated.
   createCorporation: (countryId: string, name: string, kind: 'state' | 'private', sector: string) => void
-  // Move a building to a new owner (nationalise → state, or assign to a corp /
-  // worker co-op). Used by the privatise/nationalise flows.
+  // Move a building to a new owner (nationalize → state, or assign to a corp /
+  // worker co-op). Used by the privatize/nationalize flows.
   setBuildingOwner: (worldId: string, buildingId: string, owner: BuildingOwner) => void
-  // Nationalise a whole corporation: all its buildings become state-owned and
+  // Nationalize a whole corporation: all its buildings become state-owned and
   // the company is dissolved into the treasury.
-  nationaliseCorporation: (corporationId: string) => void
-  // Privatise a state corporation: float its shares publicly (state keeps a
+  nationalizeCorporation: (corporationId: string) => void
+  // Privatize a state corporation: float its shares publicly (state keeps a
   // minority stake) and credit the sale proceeds to the treasury.
-  privatiseCorporation: (corporationId: string) => void
-  // Nationalise ONE building regardless of its owning corporation's overall
-  // status: it becomes state-owned. Unlike a full corporate nationalisation
+  privatizeCorporation: (corporationId: string) => void
+  // Nationalize ONE building regardless of its owning corporation's overall
+  // status: it becomes state-owned. Unlike a full corporate nationalization
   // (no per-building compensation there — the whole company is bought out at
   // once), this pays the building's own owner a proportional compensation from
   // the treasury and costs a smaller bureaucracy hit (see economyStore).
-  nationaliseBuilding: (worldId: string, buildingId: string) => void
+  nationalizeBuilding: (worldId: string, buildingId: string) => void
   // --- Subsidies (a per-tick treasury → cash transfer; a real fiscal cost) ---
   // Set (or, at 0, clear) a standing per-tick subsidy paid to a corporation.
   setSubsidyForCorporation: (countryId: string, corporationId: string, amountPerTick: number) => void
@@ -187,8 +188,15 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       let worldReports = state.worldReports
       let countryReports = state.countryReports
       const history: Record<string, FiscalSample[]> = { ...state.history }
+      // Nations NOT controlled by a human player are run by the country AI (see
+      // countryAI.ts). This is multiplayer-ready: humanCountryIds is a set, so a
+      // networked game can exclude every connected player's nation. This local
+      // store knows only its own player, so it contributes that one id; the
+      // authoritative sim would supply the full roster.
+      const localPlayer = usePlayerStore.getState().selectedCountryId
+      const humanCountryIds = localPlayer ? [localPlayer] : []
       for (let i = 0; i < steps; i++) {
-        const res = tickEconomy(countries, worlds, corporations)
+        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true })
         countries = res.countries
         worlds = res.worlds
         corporations = res.corporations
@@ -335,7 +343,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       return { worlds: syncCorporateHqs(worlds, state.corporations) }
     }),
 
-  nationaliseCorporation: (corporationId) =>
+  nationalizeCorporation: (corporationId) =>
     set((state) => {
       const corp = state.corporations.find((c) => c.id === corporationId)
       if (!corp || corp.kind === 'state') return state
@@ -356,7 +364,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       return { corporations, countries }
     }),
 
-  privatiseCorporation: (corporationId) =>
+  privatizeCorporation: (corporationId) =>
     set((state) => {
       const corp = state.corporations.find((c) => c.id === corporationId)
       if (!corp || corp.kind !== 'state') return state
@@ -374,7 +382,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       }
     }),
 
-  nationaliseBuilding: (worldId, buildingId) =>
+  nationalizeBuilding: (worldId, buildingId) =>
     set((state) => {
       const world = state.worlds.find((w) => w.id === worldId)
       const building = world?.buildings.find((b) => b.id === buildingId)

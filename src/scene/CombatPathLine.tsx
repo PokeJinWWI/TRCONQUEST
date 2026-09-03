@@ -93,7 +93,7 @@ export function CombatPathLine({ engagementId, shipId, color = '#4ade80' }: Comb
     }
 
     // Window-local: everything is drawn relative to the arena's current
-    // centre, which the scene positions as a group.
+    // center, which the scene positions as a group.
     let previous: ArenaPoint = { x: live.x, y: live.y, z: live.z }
     for (const waypoint of participant.path) {
       if (segment >= MAX_SEGMENTS) break

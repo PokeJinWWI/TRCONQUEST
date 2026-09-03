@@ -118,6 +118,11 @@ export interface Building {
   // buildings start low and climb.
   throughput: number
   lastProfit: number
+  // Consecutive ticks this building has run at a loss (reset to 0 on any
+  // profitable tick). A corporation owner divests a building that stays
+  // unprofitable too long even after the tick loop has tried its best method —
+  // see corporationAI.ts. Optional/absent = 0.
+  unprofitableStreak?: number
   // Diagnostics for the tick just run (display only): how many people this
   // building actually employs, and how many job slots it posted.
   employed: number
@@ -307,7 +312,7 @@ export interface CountryFiscal {
   revenue: number
   welfare: number
   admin: number
-  // Government spending on subsidised services (healthcare) this tick.
+  // Government spending on subsidized services (healthcare) this tick.
   services: number
   interest: number
   construction: number

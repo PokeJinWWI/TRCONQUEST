@@ -22,7 +22,7 @@ import { combatLocationLabel, engagementIsContested } from '../state/combatStore
 // How far out into system space a disengaging ship is placed, in system
 // units. Small — this is a nudge clear of whatever it was orbiting so it
 // renders as its own contact rather than sitting on the body's marker, not a
-// claim about how far it actually travelled. The arena has no consistent
+// claim about how far it actually traveled. The arena has no consistent
 // km-per-unit scale (see combatArena's arenaBodyRadius), so there is no
 // honest conversion from "30 arena units from the enemy" into a system-space
 // distance; this is a picked, documented placement instead of a fake one.
@@ -213,7 +213,7 @@ export function useCombatResolver() {
           if (away.length() < 1e-6) away.set(1, 0, 0)
           away.normalize()
 
-          // A ship that ran under its own power genuinely travelled; one whose
+          // A ship that ran under its own power genuinely traveled; one whose
           // engines are dead did not, and is left near the body it was
           // fighting at so local gravity can act on it (see the constants).
           const offset = stranded ? STRANDED_SYSTEM_OFFSET_UNITS : DISENGAGE_SYSTEM_OFFSET_UNITS

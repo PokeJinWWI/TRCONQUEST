@@ -37,7 +37,7 @@ export const FLEET_TABS: { id: FleetTab; label: string }[] = [
 // Damage-per-second at full weapons health, ignoring range and the defense
 // matrix. A deliberately crude number — it's the only way to compare two
 // loadouts at a glance, but it says nothing about *what* the damage is good
-// against, which is the actual point of the weapon types. Labelled "raw" in
+// against, which is the actual point of the weapon types. Labeled "raw" in
 // the UI for exactly that reason.
 function rawDps(profile: CombatProfile): number {
   return profile.weapons.reduce((sum, w) => sum + w.damage / w.cooldownSeconds, 0)

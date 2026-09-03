@@ -5,7 +5,7 @@ import { formatPop } from '../economy/format'
 
 // Economy → Trade: the country's logistics backbone (Milestone 5). Surplus goods
 // are shipped between the country's worlds each tick within the freight
-// capacity, minus transit losses, so worlds can specialise and import what they
+// capacity, minus transit losses, so worlds can specialize and import what they
 // don't produce. Shows capacity, this tick's trade volume, and what each world
 // is importing.
 export function TradePanel() {
@@ -32,7 +32,7 @@ export function TradePanel() {
           Shipped / tick <b>{Math.round(volume).toLocaleString()}</b>
         </span>
         <span>
-          Utilisation <b>{Math.round(util)}%</b>
+          Utilization <b>{Math.round(util)}%</b>
         </span>
       </div>
 
@@ -60,7 +60,7 @@ export function TradePanel() {
       })}
       <div className="ship-panel-hint">
         Goods flow from surplus worlds to those that fall short, within the freight capacity, losing {Math.round(0.12 * 100)}%
-        in transit. Raise capacity (freighter fleets, coming) to trade more and let worlds specialise further.
+        in transit. Raise capacity (freighter fleets, coming) to trade more and let worlds specialize further.
       </div>
     </div>
   )

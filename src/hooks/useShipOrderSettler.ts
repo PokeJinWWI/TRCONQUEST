@@ -13,7 +13,7 @@ import { planMove, resolveArrivalLocation, restingDestinationOf, destinationsEqu
 // happens to be mounted in the currently active view — since only one
 // view's <Canvas> is ever mounted at a time, an order finishing while the
 // player is looking at a different view (or a view that doesn't render the
-// travelling ship at all, like satellite view) would never settle until
+// traveling ship at all, like satellite view) would never settle until
 // they happened to revisit a view that does. A real, easily-hit gap once
 // players can issue orders from satellite view too (see
 // SatelliteViewScene's onOrderTo). Runs independent of any Canvas, same

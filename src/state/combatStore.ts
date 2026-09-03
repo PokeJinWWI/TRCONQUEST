@@ -162,7 +162,7 @@ export interface CombatParticipant {
   // close to) does not.
   ramming?: boolean
   // Thruster Boost / Shield Boost / Weapons Boost (see combatData's Tactics
-  // section and BOOST_TACTIC_IDS) — three toggles until cancelled, all
+  // section and BOOST_TACTIC_IDS) — three toggles until canceled, all
   // drawing from the same power grid, so at most ONE of the three is ever
   // true at once: every setter that turns one on (setThrusterBoost/
   // setShieldBoost/setWeaponsBoost, and the auto-tactics pass) clears the
@@ -176,7 +176,7 @@ export interface CombatParticipant {
   shieldBoostActive?: boolean
   weaponsBoostActive?: boolean
   // Spin Thrust (see combatData's Tactics section) — a toggle until
-  // cancelled. UNLIKE every other tactic, this one genuinely overrides
+  // canceled. UNLIKE every other tactic, this one genuinely overrides
   // movement rather than layering on top of it (see combatResolution's
   // movement step): while active, the ship's velocity is a random walk, full
   // stop, regardless of stance, Chase, Ram, or even a player's manual
@@ -243,7 +243,7 @@ export interface Engagement {
   locationLabel: string
   startedSimDays: number
   density: GridDensity
-  // The real point the visible window is centred on. Purely a camera
+  // The real point the visible window is centered on. Purely a camera
   // parameter — recentring never moves a ship or a body, only what's in
   // frame (see combatArena.ts's header).
   center: ArenaPoint
@@ -399,7 +399,7 @@ export const useCombatStore = create<CombatState>((set) => ({
   // Every position here is already real, density-independent game state (see
   // combatArena.ts's header) — density only changes the pathfinding/
   // visualization lattice, so switching it is nothing more than flipping
-  // this one field. Ships, bodies, the window centre, and any queued route
+  // this one field. Ships, bodies, the window center, and any queued route
   // all stay exactly where they were; nothing needs remapping. (An earlier
   // cut stored positions AS lattice indices and round-tripped them through a
   // remap on every density change, which snapped each one to the nearest

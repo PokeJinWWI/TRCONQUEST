@@ -62,7 +62,7 @@ function BuildingDetail({
   const recipe = RECIPES[b.recipeId]
   const method = getMethod(b.recipeId, b.methodId)
   const setSubsidyForBuilding = useEconomyStore((s) => s.setSubsidyForBuilding)
-  const nationaliseBuilding = useEconomyStore((s) => s.nationaliseBuilding)
+  const nationalizeBuilding = useEconomyStore((s) => s.nationalizeBuilding)
   const requestConfirm = useConfirmStore((s) => s.requestConfirm)
   if (!recipe || !method) return null
   const t = b.throughput
@@ -194,7 +194,7 @@ function BuildingDetail({
                       'The building becomes state-run and its method is unpinned',
                     ],
                     confirmLabel: 'Nationalize',
-                    onConfirm: () => nationaliseBuilding(world.id, b.id),
+                    onConfirm: () => nationalizeBuilding(world.id, b.id),
                   })
                 }
               >

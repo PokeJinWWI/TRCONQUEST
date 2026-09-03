@@ -235,7 +235,7 @@ export const STANCE_DESCRIPTIONS: Record<CombatStance, string> = {
   stall: 'Break line of fire behind the nearest body and stay hidden, avoiding engagement entirely.',
   // Distinct from Stall: Stall hides (breaks line of fire and stays put,
   // still an ambush option for an armed ship); Flee just runs, which is also
-  // the automatic behaviour for any ship with no weapons or none currently
+  // the automatic behavior for any ship with no weapons or none currently
   // online — see stanceDestination's own fallback.
   flee: 'Run as far from every hostile fleet as possible. Automatic for an unarmed ship, or one whose weapons are offline.',
   fleet: "Follow this ship's fleet-wide strategy.",
@@ -630,7 +630,7 @@ export const PROJECTILE_IMPACT_RADIUS_UNITS = 0.15
 // little, which stops this from being a free "finisher" bolted onto every
 // losing fight.
 export const SCUTTLE_MAX_DAMAGE = 260
-// Full damage at the centre, falling linearly to nothing at the edge. Sized
+// Full damage at the center, falling linearly to nothing at the edge. Sized
 // against the arena's short weapon ranges (autocannon reaches 3) so a scuttle
 // is a knife-range play — you have to be among them, which usually means the
 // ship really was cornered.
@@ -730,13 +730,13 @@ export const TACTIC_BADGE_LABELS: Record<TacticId, string> = {
 
 export const TACTIC_DESCRIPTIONS: Record<TacticId, string> = {
   'thruster-boost':
-    'Diverts power to the drive — real speed and evasion, at the cost of laser output (severely) and cannon/gun output (moderately). Stays on until cancelled.',
+    'Diverts power to the drive — real speed and evasion, at the cost of laser output (severely) and cannon/gun output (moderately). Stays on until canceled.',
   'shield-boost':
-    'Diverts power to the shield array — faster regeneration, at the cost of weapon output, evasion, and speed. A defensive last resort, not a free upgrade: stays on until cancelled.',
+    'Diverts power to the shield array — faster regeneration, at the cost of weapon output, evasion, and speed. A defensive last resort, not a free upgrade: stays on until canceled.',
   'weapons-boost':
-    'Diverts power to the weapon systems — real bonus damage across every mount, missiles and torpedoes included, at the cost of shield regeneration and speed. An offensive commitment, not a free upgrade: stays on until cancelled.',
+    'Diverts power to the weapon systems — real bonus damage across every mount, missiles and torpedoes included, at the cost of shield regeneration and speed. An offensive commitment, not a free upgrade: stays on until canceled.',
   'spin-thrust':
-    "Cuts the ship loose to tumble and jink unpredictably — harder to hit, harder to land a called shot on, but genuinely uncontrollable while it's active: no order, stance, or manual move steers it. Automatically cancels itself if it's about to drift into a body. Stays on until cancelled.",
+    "Cuts the ship loose to tumble and jink unpredictably — harder to hit, harder to land a called shot on, but genuinely uncontrollable while it's active: no order, stance, or manual move steers it. Automatically cancels itself if it's about to drift into a body. Stays on until canceled.",
   ramming: 'Charges straight at the target and collides with it, damaging both hulls. See CombatParticipant.ramming — unchanged, just grouped here as a tactic.',
 }
 
@@ -755,7 +755,7 @@ export function tacticBadge(id: string): { label: string; title?: string } {
   return { label: TACTIC_BADGE_LABELS[id as TacticId], title: `${known}: ${TACTIC_DESCRIPTIONS[id as TacticId]}` }
 }
 
-// --- Thruster Boost: a toggle, until cancelled ------------------------------
+// --- Thruster Boost: a toggle, until canceled ------------------------------
 //
 // The inverse trade of Shield Boost: power leaves the guns for the drive
 // instead of the shield array. Real, sustained speed/evasion, but a laser
@@ -780,7 +780,7 @@ export const THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER = 0.75
 // where the lost damage output would actually be missed. No threshold
 // constant needed for this one: the gate is binary (engaged or not).
 
-// --- Shield Boost: a toggle, until cancelled --------------------------------
+// --- Shield Boost: a toggle, until canceled --------------------------------
 //
 // The trade is explicit in the name: everything that isn't the shield array
 // gets starved to feed it — including, now, weapon output across the board
@@ -812,7 +812,7 @@ export const SHIELD_BOOST_SPEED_PENALTY_FRACTION = 0.4
 export const SHIELD_BOOST_AI_HEALTH_ENGAGE_THRESHOLD = 0.35
 export const SHIELD_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD = 0.65
 
-// --- Weapons Boost: a toggle, until cancelled -------------------------------
+// --- Weapons Boost: a toggle, until canceled -------------------------------
 //
 // The third destination for the same power grid Thruster Boost and Shield
 // Boost divert (see BOOST_TACTIC_IDS — only one of the three can ever be
@@ -842,7 +842,7 @@ export const WEAPONS_BOOST_SPEED_PENALTY_FRACTION = 0.3
 export const WEAPONS_BOOST_AI_HEALTH_ENGAGE_THRESHOLD = 0.6
 export const WEAPONS_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD = 0.3
 
-// --- Spin Thrust: a toggle, until cancelled ---------------------------------
+// --- Spin Thrust: a toggle, until canceled ---------------------------------
 //
 // Genuinely uncontrollable while active — see combatResolution's movement
 // step: a spin-thrusting ship's velocity is a random walk, full stop,

@@ -39,7 +39,7 @@ const NODE_SIZE: Record<GridDensity, number> = {
 }
 
 // All geometry below is built in *window-local* space — relative to the
-// window's centre point — so sliding the window (see Engagement.center) costs
+// window's center point — so sliding the window (see Engagement.center) costs
 // nothing to redraw. The scene positions the whole group; only a density
 // change rebuilds these buffers.
 
@@ -135,7 +135,7 @@ interface CombatGridProps {
 }
 
 // Drawn in window-local space and positioned by the caller — see
-// CombatViewScene, which offsets the whole arena so the window centre sits at
+// CombatViewScene, which offsets the whole arena so the window center sits at
 // the scene origin.
 export function CombatGrid({ center, density, obstacles, span, onPickPoint }: CombatGridProps) {
   const lattice = useLatticeGeometry(density, span)
@@ -169,7 +169,7 @@ export function CombatGrid({ center, density, obstacles, span, onPickPoint }: Co
           ships behind the body stay visible as silhouettes instead of
           vanishing, which would make "why can't I shoot?" unreadable. */}
       {obstacles.map((obstacle) => {
-        // Real position minus real centre = window-local offset — no
+        // Real position minus real center = window-local offset — no
         // density/spacing multiplication needed, both are already in real
         // arena units.
         const local: [number, number, number] = [

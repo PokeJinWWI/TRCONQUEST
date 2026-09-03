@@ -84,7 +84,7 @@ export const HEALTHCARE_SYSTEM_DEFS: Record<HealthcareSystem, HealthcareSystemDe
   mixed: {
     id: 'mixed',
     name: 'Mixed System',
-    description: 'The state subsidises half of healthcare; pops pay the rest. A middle path (à la Medicaid).',
+    description: 'The state subsidizes half of healthcare; pops pay the rest. A middle path (à la Medicaid).',
     publicFunding: 0.5,
   },
   private: {

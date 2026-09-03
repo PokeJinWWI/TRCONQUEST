@@ -18,7 +18,7 @@ const BASE_OFFSET_PX = { x: 4, y: -18 }
 
 interface ShipMarkerProps {
   /** Every hull this one marker represents — a fleet resting together (see
-   * shipPhysics.clusterRestingShipsByFleet), or just one ship travelling
+   * shipPhysics.clusterRestingShipsByFleet), or just one ship traveling
    * alone or resting somewhere not shared with anyone. Always non-empty; the
    * FIRST entry is this cluster's "lead" — whose position/color/name drive
    * the marker, and whose id is what gets selected/followed. */
@@ -67,7 +67,7 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
   // them apart — so the label comes back exactly when there's another
   // cluster to distinguish this one from, stacked vertically (see
   // stackIndex) so the labels themselves don't overlap either. A cluster
-  // still travelling (order in progress) or resting somewhere else (a star,
+  // still traveling (order in progress) or resting somewhere else (a star,
   // a bare point in space) always keeps its label regardless.
   const isOrbiting = !lead.order && lead.location.kind === 'orbiting'
   const hideLabel = isOrbiting && stackCount <= 1

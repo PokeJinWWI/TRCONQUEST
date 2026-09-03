@@ -7,12 +7,13 @@
 // Run:  npx tsx tests/economy.test.ts
 
 import { seedWorlds, seedCountries, seedCorporations } from '../src/economy/economySeed'
-import { tickEconomy, estimateWorldGdp, creditRating, corporationValue, sharePrice, districtUsage, districtOfRecipe, DISTRICT_TYPES, NEW_BUILDING_THROUGHPUT } from '../src/economy/economyTick'
-import { GOOD_IDS, GOODS, priceCeiling, PRICE_FLOOR } from '../src/economy/goods'
+import { tickEconomy, estimateWorldGdp, creditRating, corporationValue, sharePrice, districtUsage, districtOfRecipe, DISTRICT_TYPES, NEW_BUILDING_THROUGHPUT, distributeDividends } from '../src/economy/economyTick'
+import { GOOD_IDS, GOODS, priceCeiling, priceFloor } from '../src/economy/goods'
 import { POP_CLASSES, RECIPES, getMethod, qualificationFraction } from '../src/economy/recipes'
 import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
 import { useEconomyStore } from '../src/state/economyStore'
+import { runCorporationAI } from '../src/economy/corporationAI'
 import type { Building, Corporation, Country, World } from '../src/economy/economyTypes'
 
 let failures = 0
@@ -89,7 +90,7 @@ console.log('\n=== 2. Stable over hundreds of ticks ===')
   check('all worlds stay finite', worlds.every(worldFinite))
   check('all countries stay finite', countries.every(countryFinite))
   check('all corporations stay finite', corporations.every((c) => Number.isFinite(c.cash) && Number.isFinite(c.lastProfit)))
-  check('all prices within bounds', worlds.every((w) => GOOD_IDS.every((g) => w.market.prices[g] >= PRICE_FLOOR - 1e-9 && w.market.prices[g] <= priceCeiling(g) + 1e-9)))
+  check('all prices within bounds', worlds.every((w) => GOOD_IDS.every((g) => w.market.prices[g] >= priceFloor(g) - 1e-9 && w.market.prices[g] <= priceCeiling(g) + 1e-9)))
   check('every world keeps a living population', worlds.every((w) => w.pops.reduce((s, p) => s + p.populationSize, 0) > 0))
 }
 
@@ -495,7 +496,7 @@ console.log('\n=== 21. Government subsidies: a real treasury cost that credits t
 
 console.log('\n=== 22. Per-building nationalization (store action) ===')
 {
-  // The store action (economyStore.nationaliseBuilding) is exercised directly
+  // The store action (economyStore.nationalizeBuilding) is exercised directly
   // via zustand's getState(), same as any other store action would be called
   // from a component — no React/DOM needed.
   const store = useEconomyStore.getState()
@@ -505,7 +506,7 @@ console.log('\n=== 22. Per-building nationalization (store action) ===')
   const country = store.countries.find((c) => c.id === 'imperial-state-of-mars')!
   const treasuryBefore = country.treasury
 
-  store.nationaliseBuilding('Mars', corpBuilding.id)
+  store.nationalizeBuilding('Mars', corpBuilding.id)
 
   const after = useEconomyStore.getState()
   const nationalized = after.worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === corpBuilding.id)!
@@ -513,9 +514,9 @@ console.log('\n=== 22. Per-building nationalization (store action) ===')
   check('its method is unpinned on takeover', nationalized.methodLocked === false)
 
   const countryAfter = after.countries.find((c) => c.id === 'imperial-state-of-mars')!
-  const compensation = corpBuilding.level * 6000 * 0.6 // BUILD_COST_PER_LEVEL * 0.6, mirroring nationaliseCorporation's ratio
+  const compensation = corpBuilding.level * 6000 * 0.6 // BUILD_COST_PER_LEVEL * 0.6, mirroring nationalizeCorporation's ratio
   check('the treasury pays compensation for the seized asset (not free)', countryAfter.treasury < treasuryBefore, `${countryAfter.treasury.toFixed(1)} < ${treasuryBefore.toFixed(1)}`)
-  check('the compensation is proportional to the building\'s value at the corp-nationalisation ratio (60%)', Math.abs(treasuryBefore - countryAfter.treasury - compensation) < 1e-6, `paid=${(treasuryBefore - countryAfter.treasury).toFixed(2)} expected=${compensation.toFixed(2)}`)
+  check('the compensation is proportional to the building\'s value at the corp-nationalization ratio (60%)', Math.abs(treasuryBefore - countryAfter.treasury - compensation) < 1e-6, `paid=${(treasuryBefore - countryAfter.treasury).toFixed(2)} expected=${compensation.toFixed(2)}`)
 
   const stillOwnsElsewhere = after.worlds.some((w) => w.buildings.some((b) => b.owner.kind === 'corporation' && b.owner.corporationId === corpId && b.id !== corpBuilding.id))
   check('the owning corporation loses just this one asset (still exists / may own others)', after.corporations.some((c) => c.id === corpId), `corp still exists=${after.corporations.some((c) => c.id === corpId)}, owns other assets=${stillOwnsElsewhere}`)
@@ -631,6 +632,177 @@ console.log('\n=== 24. Stockpiling: fills toward target on surplus, releases on 
     satisfactionOf(withReserveMars) > satisfactionOf(noReserveMars),
     `${satisfactionOf(withReserveMars).toFixed(4)} > ${satisfactionOf(noReserveMars).toFixed(4)}`,
   )
+}
+
+console.log('\n=== 25. Country AI runs non-player nations (and never the player) ===')
+{
+  // Baseline: with no AI options, tickEconomy leaves policy exactly as-is —
+  // proving the AI is strictly opt-in and old behavior is untouched.
+  {
+    const c0 = seedCountries()
+    const r = tickEconomy(c0, seedWorlds(), seedCorporations())
+    const same = r.countries.every((c) => {
+      const src = c0.find((x) => x.id === c.id)!
+      return c.taxRate === src.taxRate && c.welfarePerCapita === src.welfarePerCapita
+    })
+    check('with no AI options, no nation changes its tax/welfare (AI is opt-in)', same)
+  }
+
+  // A deep, sustained deficit: the AI nation should raise revenue over time,
+  // and the PLAYER nation (excluded) should not be touched by the AI.
+  const player = 'imperial-state-of-mars'
+  const aiNation = 'orion-republic'
+  let countries = seedCountries().map((c) => ({ ...c, welfarePerCapita: 6, taxRate: 0.1 }))
+  let worlds = seedWorlds()
+  let corps = seedCorporations()
+  const startAi = { ...countries.find((c) => c.id === aiNation)! }
+  const startPlayer = { ...countries.find((c) => c.id === player)! }
+  // Multiplayer: TWO human nations, both must be excluded from the AI.
+  const player2 = 'republic-of-venus'
+  const startPlayer2 = { ...countries.find((c) => c.id === player2)! }
+  for (let i = 0; i < 40; i++) {
+    const r = tickEconomy(countries, worlds, corps, { humanCountryIds: [player, player2], tick: i + 1, enableAI: true })
+    countries = r.countries
+    worlds = r.worlds
+    corps = r.corporations
+  }
+  const endAi = countries.find((c) => c.id === aiNation)!
+  const endPlayer = countries.find((c) => c.id === player)!
+  const endPlayer2 = countries.find((c) => c.id === player2)!
+  check('the AI nation raised its tax rate to fight the deficit', endAi.taxRate > startAi.taxRate, `${startAi.taxRate} -> ${endAi.taxRate.toFixed(2)}`)
+  check('the AI nation trimmed its over-generous welfare', endAi.welfarePerCapita < startAi.welfarePerCapita, `${startAi.welfarePerCapita} -> ${endAi.welfarePerCapita.toFixed(2)}`)
+  check(
+    'BOTH human nations are left untouched by the AI (multiplayer)',
+    endPlayer.taxRate === startPlayer.taxRate && endPlayer.welfarePerCapita === startPlayer.welfarePerCapita &&
+      endPlayer2.taxRate === startPlayer2.taxRate && endPlayer2.welfarePerCapita === startPlayer2.welfarePerCapita,
+    `p1 tax ${endPlayer.taxRate}/welf ${endPlayer.welfarePerCapita}, p2 tax ${endPlayer2.taxRate}/welf ${endPlayer2.welfarePerCapita}`,
+  )
+  check('the AI funds its overdraft with bonds rather than leaving it unfunded', endAi.treasury >= startAi.treasury || endAi.bonds.pops > startAi.bonds.pops)
+
+  // Bureaucracy strain → the AI queues administrative capacity. Lalande is a
+  // command economy that runs on bureaucracy; a stack of decrees with an empty
+  // reserve drives consumption past production (running dry).
+  {
+    const admin = 'kingdom-of-lalande'
+    let cs = seedCountries().map((c) => (c.id === admin ? { ...c, treasury: 500000, bureaucracy: 0, decrees: ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'] } : c))
+    let ws = seedWorlds()
+    let cor = seedCorporations()
+    let queuedAdmin = false
+    for (let i = 0; i < 24 && !queuedAdmin; i++) {
+      const r = tickEconomy(cs, ws, cor, { humanCountryIds: [player], tick: i + 1, enableAI: true })
+      cs = r.countries
+      ws = r.worlds
+      cor = r.corporations
+      queuedAdmin = ws.some((w) => w.ownerId === admin && w.constructionQueue.some((o) => o.recipeId === 'ministry' || o.recipeId === 'governmentOffice'))
+    }
+    check('a bureaucracy-strained AI nation queues a government building', queuedAdmin)
+  }
+}
+
+console.log('\n=== 26. Corporation AI: reinvest winners, pull out of chronic losers ===')
+{
+  const corp = seedCorporations().find((c) => c.id === 'redmines')!
+  // Helper: run the corp AI across a full review cycle so it hits its review
+  // tick regardless of the company's phase offset.
+  const runCycle = (c: Corporation, worlds: World[]) => {
+    let cc = c
+    let ww = worlds
+    for (let t = 1; t <= 6; t++) {
+      const r = runCorporationAI(cc, ww, t)
+      cc = r.corp
+      ww = r.worlds
+    }
+    return { corp: cc, worlds: ww }
+  }
+  const buildingsOf = (worlds: World[], id: string) => worlds.reduce((n, w) => n + w.buildings.filter((b) => b.owner.kind === 'corporation' && b.owner.corporationId === id).length, 0)
+
+  // Investment: a cash-rich company with a proven, profitable building expands.
+  {
+    let worlds = seedWorlds()
+    // Give Redmines a clearly profitable building with room to grow on Mars.
+    worlds = worlds.map((w) =>
+      w.id === 'Mars'
+        ? { ...w, buildings: [...w.buildings, { id: 'winner', recipeId: 'toolWorkshop', methodId: 'standard', methodLocked: false, level: 1, owner: { kind: 'corporation' as const, corporationId: 'redmines' }, inventory: {}, throughput: 1, lastProfit: 5000, employed: 0, jobsPosted: 0 }] }
+        : w,
+    )
+    const flush = { ...corp, cash: 100000 }
+    const after = runCycle(flush, worlds)
+    const queuedForCorp = after.worlds.some((w) => w.constructionQueue.some((o) => o.owner.kind === 'corporation' && o.owner.corporationId === 'redmines'))
+    check('a cash-rich company with a profitable building invests (queues construction)', queuedForCorp)
+  }
+
+  // Divestment: a chronic loss-maker (long streak) is closed, with salvage.
+  {
+    let worlds = seedWorlds()
+    worlds = worlds.map((w) =>
+      w.id === 'Mars'
+        ? { ...w, buildings: [...w.buildings, { id: 'loser', recipeId: 'ironMine', methodId: 'mechanized', methodLocked: false, level: 3, owner: { kind: 'corporation' as const, corporationId: 'redmines' }, inventory: {}, throughput: 1, lastProfit: -4000, unprofitableStreak: 20, employed: 0, jobsPosted: 0 }] }
+        : w,
+    )
+    const before = buildingsOf(worlds, 'redmines')
+    const poor = { ...corp, cash: 0 }
+    const after = runCycle(poor, worlds)
+    const loserGone = !after.worlds.some((w) => w.buildings.some((b) => b.id === 'loser'))
+    check('a chronic loss-maker (streak ≥ 12) is divested', loserGone && buildingsOf(after.worlds, 'redmines') < before, `buildings ${before} -> ${buildingsOf(after.worlds, 'redmines')}`)
+    check('closing it returns salvage cash to the company', after.corp.cash > poor.cash, `cash ${poor.cash} -> ${after.corp.cash.toFixed(0)}`)
+  }
+
+  // A brief, recent loss (short streak) is NOT enough to trigger a pull-out —
+  // the firm tries first, it doesn't bail on one bad month.
+  {
+    let worlds = seedWorlds()
+    worlds = worlds.map((w) =>
+      w.id === 'Mars'
+        ? { ...w, buildings: [...w.buildings, { id: 'dip', recipeId: 'ironMine', methodId: 'mechanized', methodLocked: false, level: 3, owner: { kind: 'corporation' as const, corporationId: 'redmines' }, inventory: {}, throughput: 1, lastProfit: -4000, unprofitableStreak: 3, employed: 0, jobsPosted: 0 }] }
+        : w,
+    )
+    const after = runCycle({ ...corp, cash: 0 }, worlds)
+    check('a building with only a brief loss streak is kept (tries before pulling out)', after.worlds.some((w) => w.buildings.some((b) => b.id === 'dip')))
+  }
+
+  // Financial districts are institutional investors, not operators — the AI
+  // leaves them out of ordinary construction.
+  {
+    const fd = seedCorporations().find((c) => c.kind === 'financial')
+    if (fd) {
+      const after = runCycle({ ...fd, cash: 1000000 }, seedWorlds())
+      const built = after.worlds.some((w) => w.constructionQueue.some((o) => o.owner.kind === 'corporation' && o.owner.corporationId === fd.id))
+      check('a financial district does not build ordinary industry', !built)
+    }
+  }
+}
+
+console.log('\n=== 27. Dividends: profit flows to shareholders (state / public / financial) ===')
+{
+  const worlds = seedWorlds()
+  const countries = seedCountries()
+  // A private company wholly held by the public, and one wholly state-held.
+  const publicCorp: Corporation = { id: 'divpub', name: 'PubCo', countryId: 'imperial-state-of-mars', kind: 'private', cash: 0, totalShares: 100, shares: [{ holder: { kind: 'public' }, shares: 100 }], lastProfit: 0, sector: 'Test' }
+  const stateCorp: Corporation = { id: 'divstate', name: 'StateCo', countryId: 'imperial-state-of-mars', kind: 'state', cash: 0, totalShares: 100, shares: [{ holder: { kind: 'state' }, shares: 100 }], lastProfit: 0, sector: 'Test' }
+  const profit = new Map<string, number>([['divpub', 1000], ['divstate', 1000]])
+
+  const marsPopBefore = worlds.find((w) => w.id === 'Mars')!.pops.reduce((s, p) => s + p.wealth * p.populationSize, 0)
+  const treasBefore = countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+  const { corporations: dc, countries: dco, worlds: dw } = distributeDividends([publicCorp, stateCorp], countries, worlds, profit)
+  const marsPopAfter = dw.filter((w) => w.ownerId === 'imperial-state-of-mars').reduce((s, w) => s + w.pops.reduce((n, p) => n + p.wealth * p.populationSize, 0), 0)
+  const marsPopBeforeAll = worlds.filter((w) => w.ownerId === 'imperial-state-of-mars').reduce((s, w) => s + w.pops.reduce((n, p) => n + p.wealth * p.populationSize, 0), 0)
+  const treasAfter = dco.find((c) => c.id === 'imperial-state-of-mars')!.treasury
+
+  check('a publicly-held company pays its dividend out to pops (public wealth rises)', marsPopAfter > marsPopBeforeAll, `${marsPopBeforeAll.toFixed(0)} -> ${marsPopAfter.toFixed(0)}`)
+  check('...and the paying company sheds that cash from its account', dc.find((c) => c.id === 'divpub')!.cash < 0)
+  check('a state-held company pays its dividend into the treasury', treasAfter > treasBefore, `${treasBefore.toFixed(0)} -> ${treasAfter.toFixed(0)}`)
+  void marsPopBefore
+
+  // A loss-making company pays no dividend.
+  const lossProfit = new Map<string, number>([['divpub', -500]])
+  const { corporations: dc2 } = distributeDividends([publicCorp], countries, worlds, lossProfit)
+  check('a company that lost money pays no dividend', dc2.find((c) => c.id === 'divpub')!.cash === publicCorp.cash)
+
+  // A financial district earns from the private stakes it holds.
+  const heldCorp: Corporation = { id: 'held', name: 'HeldCo', countryId: 'imperial-state-of-mars', kind: 'private', cash: 0, totalShares: 100, shares: [{ holder: { kind: 'financial', id: 'fd1' }, shares: 100 }], lastProfit: 0, sector: 'Test' }
+  const fd: Corporation = { id: 'fd1', name: 'FD', countryId: 'imperial-state-of-mars', kind: 'financial', cash: 0, totalShares: 100, shares: [{ holder: { kind: 'public' }, shares: 100 }], lastProfit: 0, sector: 'Finance' }
+  const { corporations: dc3 } = distributeDividends([heldCorp, fd], countries, worlds, new Map([['held', 2000]]))
+  check('a financial district earns dividends from the corporate stakes it holds', dc3.find((c) => c.id === 'fd1')!.cash > 0, `FD cash ${dc3.find((c) => c.id === 'fd1')!.cash.toFixed(0)}`)
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

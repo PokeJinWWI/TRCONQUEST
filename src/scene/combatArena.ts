@@ -2,7 +2,7 @@
 // pathfinding.
 //
 // Every position that's actual game state (a ship's location, a celestial
-// body's location, where the visible window is centred) is a continuous
+// body's location, where the visible window is centered) is a continuous
 // `ArenaPoint` in real arena units — NOT an index into any grid. The lattice
 // (`GridNode`, subdivided per `GridDensity`) is a planning aid: when a ship
 // needs to route around a body, its current and desired real positions are
@@ -33,7 +33,7 @@
 // nothing is stored in density-relative terms to begin with.
 //
 // The visible cube the player sees is a *window* onto this real coordinate
-// space — centred on `Engagement.center` (a real point) and spanning
+// space — centered on `Engagement.center` (a real point) and spanning
 // ARENA_SPAN_UNITS, a constant regardless of density. Recentring slides the
 // window; it never touches a ship's or a body's actual position.
 //
@@ -101,7 +101,7 @@ export const GRID_DENSITY_LABELS: Record<GridDensity, string> = {
 }
 
 // A real, continuous point in arena units — actual game state (a ship's
-// position, a body's position, the window's centre). Plain numbers (not a
+// position, a body's position, the window's center). Plain numbers (not a
 // THREE.Vector3) so it stores cleanly in zustand; convert with toVector3
 // when vector math is needed.
 export interface ArenaPoint {
@@ -154,7 +154,7 @@ export interface CombatObstacle {
   // Set only for a body that's actually moving in this frame — an orbiting
   // moon (see combatResolution's moonArenaState), not the planet/star every
   // other position in the arena is implicitly anchored to (see this file's
-  // header: the arena is a real coordinate space centred on whatever the
+  // header: the arena is a real coordinate space centered on whatever the
   // fight is orbiting, so that body is always at rest here BY that framing,
   // whatever it's actually doing around the Sun). Absent, not zero, for
   // anything else — "this body doesn't move" and "this body moves at exactly
@@ -426,7 +426,7 @@ export function isNodeBlocked(
 // in 3D, so "which node did the cursor land on" has a single answer where
 // "how deep along this ray" has none.
 
-// A density's nodes are laid out relative to the WINDOW CENTRE (see
+// A density's nodes are laid out relative to the WINDOW Center (see
 // CombatGrid), not to the arena origin, so anything reasoning about "which
 // node is this" has to use the same origin. Clamped to the window's extent.
 export function snapToLatticeNode(
@@ -487,7 +487,7 @@ const DEFAULT_TIE_RADIUS_PX = 4
 // node within a fixed radius of the cursor as "clicked" and ranked that whole
 // band by depth, which let a node 13px away outrank the one the cursor was
 // sitting exactly on, purely for being nearer the camera. Measured live, four
-// of five clicks then landed on a neighbour rather than the dot aimed at —
+// of five clicks then landed on a neighbor rather than the dot aimed at —
 // wrong in a less dramatic way than the shell bug, but wrong for the same
 // underlying reason: something other than where the player pointed was
 // deciding the answer.
@@ -557,7 +557,7 @@ export function pickLatticeNode(
 // test: shots travel in straight lines, so a body between two ships stops
 // them shooting each other regardless of range.
 //
-// Solved by finding the closest approach of the segment to the sphere centre
+// Solved by finding the closest approach of the segment to the sphere center
 // and comparing against the radius — clamping the projection parameter to
 // [0,1] is what makes this a *segment* test rather than an infinite-line one,
 // so a body behind the shooter never blocks anything.
@@ -865,7 +865,7 @@ export function pathSeconds(
 // point. Deterministic (index-driven, no randomness) so a given engagement
 // always sets up the same way — same reasoning as shipPhysics's hash-derived
 // resting offsets. Returns a real point directly (relative to the window
-// centre being the origin at spawn time — see combatResolution.syncEngagements,
+// center being the origin at spawn time — see combatResolution.syncEngagements,
 // which anchors a fresh engagement's window at ARENA_ORIGIN).
 //
 // `windowSpan` is the engagement's own real span (see

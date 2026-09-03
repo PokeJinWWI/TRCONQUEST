@@ -207,7 +207,20 @@ export const GOODS: Record<GoodId, GoodDef> = {
 // of each good's own base price.
 export const PRICE_FLOOR = 0.1
 export const PRICE_CEILING_MULTIPLE = 12
+// The floor is RELATIVE to each good's base price, symmetric with the ceiling:
+// in a glut a good sinks toward this fraction of base value but no further. An
+// absolute floor let over-supplied RAW materials (mines, farms) crash to a few
+// percent of value — far below extraction cost — so their producers could never
+// break even. Keeping a relative floor means primary-sector producers stay
+// viable even when they've flooded the market. (PRICE_FLOOR remains an absolute
+// backstop so nothing ever reaches zero and breaks the "what can I afford"
+// division in pop buying.)
+export const PRICE_FLOOR_FRACTION = 0.4
 
 export function priceCeiling(good: GoodId): number {
   return GOODS[good].basePrice * PRICE_CEILING_MULTIPLE
+}
+
+export function priceFloor(good: GoodId): number {
+  return Math.max(PRICE_FLOOR, GOODS[good].basePrice * PRICE_FLOOR_FRACTION)
 }

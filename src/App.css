@@ -49,7 +49,7 @@
   border-bottom: 1px solid rgba(111, 227, 255, 0.25);
 }
 
-/* The header's centre slot swaps between ResourceBar and the tab strip
+/* The header's center slot swaps between ResourceBar and the tab strip
    (see TabBar.tsx's HudCenterSwap) rather than adding a second row — this
    is deliberate: a permanently-visible extra row would have needed the
    header's own measured height (--hud-top-height, read by NavBar/Outliner/
@@ -699,9 +699,9 @@
   animation: combat-charging-pulse 900ms ease-in-out infinite;
 }
 
-/* Chaff badge — deliberately a different colour from the FTL badge beside
+/* Chaff badge — deliberately a different color from the FTL badge beside
    it, since they mean opposite things: FTL is "this ship is leaving and
-   defenceless", chaff is "this ship is hard to hit right now". */
+   defenseless", chaff is "this ship is hard to hit right now". */
 .combat-marker-chaff {
   display: inline-block;
   margin-top: 2px;
@@ -721,8 +721,8 @@
 
 /* Tactic badges (see combatData's Tactics section) — same slot/shape as
    chaff's own badge (one per active tactic, so they stack left to right),
-   distinct colour so "a tactic is running" reads differently at a glance
-   from "chaff is up". Matches .combat-roster-tag.tactic's colour, the same
+   distinct color so "a tactic is running" reads differently at a glance
+   from "chaff is up". Matches .combat-roster-tag.tactic's color, the same
    information shown in the roster row (see CombatPanel.tsx). */
 .combat-marker-tactic {
   display: inline-block;
@@ -737,7 +737,7 @@
 }
 
 /* An in-flight missile/torpedo's own label + "how far through its flight"
-   bar (see CombatProjectileMarker.tsx) — deliberately small and centred
+   bar (see CombatProjectileMarker.tsx) — deliberately small and centered
    under the round's own moving dot, not styled off .ship-marker/.marker-
    label, since a projectile has no icon to sit beside the way a ship does.
    Non-interactive (see the component's pointerEvents: 'none') — a round in
@@ -881,7 +881,7 @@
   color: #ffd23f;
 }
 
-/* Tactic badges (see combatData's Tactics section) — a distinct colour from
+/* Tactic badges (see combatData's Tactics section) — a distinct color from
    FTL/chaff/target so all four read as different KINDS of information at a
    glance, not just different labels in the same box. */
 .combat-roster-tag.tactic {
@@ -894,9 +894,9 @@
 }
 
 /* Local odds on a roster row — how many enemies can shoot this hull right
-   now. Neutral at 1 (an even trade), warning-coloured above that, because
+   now. Neutral at 1 (an even trade), warning-colored above that, because
    "this ship is being focused" is the thing worth reacting to. */
-/* Scuttle is destructive and irreversible — coloured like the other
+/* Scuttle is destructive and irreversible — colored like the other
    danger states in this HUD rather than like an ordinary action button. */
 .scuttle-btn {
   color: #ff6b4a;
@@ -2038,7 +2038,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Pops panel — faith colour dot */
+/* Pops panel — faith color dot */
 .pops-faith-dot {
   display: inline-block;
   width: 7px;

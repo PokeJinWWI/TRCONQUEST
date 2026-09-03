@@ -130,14 +130,14 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     const width = axis === 'y' ? startW : Math.max(MIN_WIDTH, Math.min(window.innerWidth - 32, startW + dx))
     const height = axis === 'x' ? startH : Math.max(MIN_HEIGHT, Math.min(window.innerHeight - 32, startH + dy))
     setSize({ width, height })
-    // The window's box is centre-hung (see the transform below — `calc(-50%
+    // The window's box is center-hung (see the transform below — `calc(-50%
     // + Xpx)` on both axes), so growing width/height without correcting
     // `pos` expands the box symmetrically from its own middle: the left/top
     // edge would drift outward exactly as far as the right/bottom edge
-    // does. Shifting the centre by half of whatever each axis just grew by
+    // does. Shifting the center by half of whatever each axis just grew by
     // cancels that drift on the edge that's supposed to stay put, so only
     // the dragged edge actually moves — a real top-left-anchored resize.
-    // Y always re-centres this way; X only does when the window isn't
+    // Y always re-centers this way; X only does when the window isn't
     // edge-anchored (an anchored window's X position is pinned to the
     // screen edge via CSS instead, see the `anchor` prop and its className).
     setPos({
@@ -190,7 +190,7 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     dragRef.current = null
   }
 
-  // Every window opens centre-hung at the same default spot (see `pos`'s
+  // Every window opens center-hung at the same default spot (see `pos`'s
   // initializer) regardless of how tall its content turns out to be — fine
   // for the usual short inspector panel, but a genuinely tall one (a long
   // description, several rows) can end up with its title bar computed ABOVE
@@ -226,13 +226,13 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     [],
   )
 
-  // The window is centred vertically on `pos.y` (see the transform below —
+  // The window is centered vertically on `pos.y` (see the transform below —
   // `calc(-50% + Ypx)` on BOTH axes), which is deliberate for how a fresh
   // window opens, but means collapsing (the body leaving the DOM shrinks the
   // box) would shrink it toward its own vertical MIDDLE, visibly dropping
   // the title bar down instead of leaving it in place. Compensating `pos.y`
   // by half the body's own height exactly cancels that: the box still
-  // shrinks toward its centre, but the centre itself moves up by the same
+  // shrinks toward its center, but the center itself moves up by the same
   // amount the bottom edge is about to lose, so the TOP edge — and the title
   // bar sitting on it — doesn't move at all. Reversed symmetrically on the
   // way back out.
@@ -262,7 +262,7 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   // lets .animating interpolate the transition instead of snapping between
   // two unrelated positioning schemes). Not offered for an anchored window
   // (see the button's own guard below) — anchor's X offset means something
-  // different (a straight pin-to-edge distance, not a centred translate), so
+  // different (a straight pin-to-edge distance, not a centered translate), so
   // the fill-the-screen math below doesn't apply to it, and pinned combat
   // panels have no real reason to want fullscreen anyway — nor for one with
   // `maximizable={false}` (see that prop's own comment).
@@ -290,9 +290,9 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
         const hudTop = cssVarPx('--hud-top-height', 52)
         const hudBottom = cssVarPx('--hud-bottom-height', 58)
         const availableHeight = window.innerHeight - hudTop - hudBottom
-        // The box centres itself at `left: 32%, top: 55%` (see the base
+        // The box centers itself at `left: 32%, top: 55%` (see the base
         // CSS rule) plus this translate offset — solving for the offset
-        // that lands the centre at the fill-the-screen box's own centre
+        // that lands the center at the fill-the-screen box's own center
         // instead (full width, `hudTop` to `hudTop + availableHeight`).
         setPos({
           x: window.innerWidth * (0.5 - 0.32),
@@ -324,7 +324,7 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
       onPointerDownCapture={() => setZIndex(bringToFrontZIndex())}
       // An anchored window is positioned from its own edge (see the
       // .anchor-left/.anchor-right rules), so it must NOT also be pulled back
-      // by half its own width — only the default, centre-hung placement
+      // by half its own width — only the default, center-hung placement
       // wants that. Vertical centring is unchanged either way, which is what
       // keeps the collapse compensation above correct for both.
       style={{

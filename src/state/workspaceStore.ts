@@ -62,7 +62,7 @@ interface WorkspaceStore {
   closeTab: (id: string) => void
   switchToTab: (id: string) => void
   renameTab: (id: string, name: string | null) => void
-  // Whether the header's centre slot is currently showing the tab strip
+  // Whether the header's center slot is currently showing the tab strip
   // instead of ResourceBar (see TabBar.tsx's HudCenterSwap) — the two never
   // show at once, deliberately, to keep the top bar uncluttered.
   showTabBar: boolean

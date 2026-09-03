@@ -23,7 +23,7 @@ const CLASS_COLOR: Record<string, string> = {
   political: '#c77dff',
 }
 
-// One labelled proportional bar in a breakdown.
+// One labeled proportional bar in a breakdown.
 function Bar({ label, value, total, color, right }: { label: string; value: number; total: number; color: string; right?: string }) {
   const pct = total > 0 ? (value / total) * 100 : 0
   return (

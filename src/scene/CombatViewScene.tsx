@@ -118,7 +118,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
     setParticipant(engagement.id, { ...ordered, holdPosition: true, chasing: false, ramming: false, inheritVelocityFrom: null })
   }
 
-  // Slides the window so it re-centres on the selected ship, putting fresh
+  // Slides the window so it re-centers on the selected ship, putting fresh
   // space within ordering range. This is what stops the cube being a cage:
   // a ship can be walked anywhere, one window at a time.
   const handleRecenter = () => {
@@ -155,8 +155,8 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
         />
 
         {/* Committed routes for the player's own and allied ships only.
-            Hostile and neutral ships still manoeuvre exactly as before — this
-            hides the *information*, not the behaviour. Knowing precisely
+            Hostile and neutral ships still maneuver exactly as before — this
+            hides the *information*, not the behavior. Knowing precisely
             where an enemy is headed several seconds early trivialises the
             positioning the fight is played on; reading their heading off the
             hulls themselves is the intended skill. Each line reads its own

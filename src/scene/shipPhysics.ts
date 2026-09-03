@@ -90,14 +90,14 @@ export function systemGravityAcceleration(position: Vector3, simDays: number, st
 // to second order rather than lagging half a step.
 //
 // This exists so a hull stranded near a body inherits that body's motion. A
-// ship orbiting Earth is ALSO travelling with Earth around the Sun at roughly
+// ship orbiting Earth is ALSO traveling with Earth around the Sun at roughly
 // 0.34 units/day; seeding a drifting wreck at rest in the heliocentric frame
 // instead makes it drop the Sun-ward velocity it actually had, and it spirals
 // into Sol over a couple of months. Verified: a hull stranded 0.02 units from
 // Earth at heliocentric rest struck Sol after 64 sim-days rather than staying
 // anywhere near Earth. Inheriting the body's velocity keeps the local physics
 // local — Earth's pull dominates at that range, so the wreck falls toward
-// Earth or loops around it, which is the behaviour that reads correctly.
+// Earth or loops around it, which is the behavior that reads correctly.
 const ORBIT_VELOCITY_SAMPLE_DAYS = 0.01
 
 export function bodyOrbitalVelocity(bodyName: string, simDays: number): Vector3 {
@@ -177,7 +177,7 @@ export function systemDisplayName(systemId: string): string {
 }
 
 // Which system a ship currently belongs to, if any — null while it's out in
-// interstellar space (travelling between stars, or resting at/near one).
+// interstellar space (traveling between stars, or resting at/near one).
 // Derived purely from the ship's static order/location fields, not simDays,
 // so callers can memoize on `ships` alone (membership only changes at
 // order-issue/order-complete, both discrete store writes) — same reasoning
@@ -394,7 +394,7 @@ function interstellarAnchor(info: ShipRenderInfo): Vector3 {
 }
 
 // A ship's current on-screen position — always derived from its order (if
-// travelling) or its resting location, never accumulated per-frame state.
+// traveling) or its resting location, never accumulated per-frame state.
 // Same "pure function of simDays" approach as getPlanetPosition/getMoonPosition.
 export function getShipRenderPosition(ship: ShipInstance, simDays: number): ShipRenderInfo {
   if (ship.order) {
@@ -450,7 +450,7 @@ export function warpCooldownRemainingDays(ship: ShipInstance, simDays: number): 
 }
 
 // The ship's "Current Action" line (ShipPanel) — one short, human-readable
-// summary of what it's doing right now: travelling (and how), waiting on a
+// summary of what it's doing right now: traveling (and how), waiting on a
 // queued jump, resting somewhere, or following another ship. `ships`, when
 // supplied, is only used to look up a followed ship's *name* for the
 // "Following X — " prefix — omit it (e.g. a call site with no ships list

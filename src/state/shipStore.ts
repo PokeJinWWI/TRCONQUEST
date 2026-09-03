@@ -337,7 +337,7 @@ interface ShipState {
 
 // Picks the fleet a ship now resting at `location` should belong to: an
 // existing same-allegiance fleet already resting at that exact spot (see
-// combatLocationKey — a ship still travelling, or resting at a bare point in
+// combatLocationKey — a ship still traveling, or resting at a bare point in
 // space rather than a named anchor, never matches), or a freshly created
 // solo fleet otherwise. `excludeShipId` keeps a ship already in `ships` from
 // matching itself (setShipLocation's case); spawnShip has no such ship yet

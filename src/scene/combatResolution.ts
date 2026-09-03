@@ -745,7 +745,7 @@ export function nearestEnemy(self: CombatParticipant, participants: CombatPartic
 // its own comment there for the true-to-scale sizing this arena uses.
 
 // The bodies present at a fight, placed at the arena origin — which is where
-// a fresh engagement's window is centred too (see syncEngagements), so a
+// a fresh engagement's window is centered too (see syncEngagements), so a
 // fight in orbit starts with that body squarely between the two sides. This
 // is exactly the situation the design brief called out: two ships on
 // opposite sides of a star should not be able to shoot each other. The
@@ -909,7 +909,7 @@ function spawnHalfSpan(obstacles: CombatObstacle[]): number {
 // The arena WINDOW's own span, in real arena units — proportional to the
 // widest body sharing the engagement rather than a fixed 12 units. Sized
 // directly off spawnHalfSpan (doubled, since a span is edge-to-edge and a
-// half-span is centre-to-edge) so the window a player sees, the lattice a
+// half-span is center-to-edge) so the window a player sees, the lattice a
 // click resolves against, and the faces the fleets actually spawn on are all
 // the same span by construction — no separate tuning, and no "ship spawned
 // outside the frame" mismatch to Recenter away. Floored at ARENA_SPAN_UNITS
@@ -921,7 +921,7 @@ export function arenaWindowSpan(obstacles: CombatObstacle[]): number {
   return Math.max(ARENA_SPAN_UNITS, 2 * spawnHalfSpan(obstacles))
 }
 
-// Minimum centre-to-centre distance between any two hulls — effectively a
+// Minimum center-to-center distance between any two hulls — effectively a
 // ship's collision diameter. Enforced as a post-movement correction (see
 // stepEngagements) so two ships can never occupy the same point, however
 // their stances routed them there. Sized against the arena's own scale
@@ -1048,7 +1048,7 @@ export function approachNode(
 //              hide, which is why it's checked before the disarmed fallback
 //              below rather than being folded into it.
 //   flee     — run from the combined position of every hostile in the fight,
-//              not just the nearest one. The automatic behaviour for any
+//              not just the nearest one. The automatic behavior for any
 //              ship with no weapon mounts at all, or whose weapons are
 //              currently knocked out (weaponsOnline=false) — holding a
 //              firing line makes no sense for a ship that cannot fire,
@@ -2442,7 +2442,7 @@ export function orderParticipantTo(
 // A ship can end up closer to some LATER point on its route than to the very
 // next waypoint on it — steering (integrateMotion's velocity budget means a
 // turn isn't instant) can carry it wide of an intermediate corner faster
-// than it re-approaches that exact point. The old behaviour treated every
+// than it re-approaches that exact point. The old behavior treated every
 // waypoint as its own sub-destination the ship was required to actually
 // touch, which reads as a real bug once it happens: the ship visibly
 // arrives, then peels back AWAY from the destination to go tag a point

@@ -27,7 +27,7 @@ const TARGET_COMPONENTS: (ComponentKind | null)[] = [null, 'weapons', 'utility',
 
 // The combat view's two always-open windows are now pinned to OPPOSITE
 // screen edges (see DraggableWindow's `anchor` prop) rather than nudged
-// apart from a shared centre spot — this panel to the left, the selected
+// apart from a shared center spot — this panel to the left, the selected
 // ship's inspector to the right — so neither sits on top of the arena the
 // player is trying to watch. That makes the old viewport-derived horizontal
 // gap unnecessary: the edges themselves do the separating, at any width.
@@ -46,7 +46,7 @@ export function combatPanelVerticalOffset(): number {
 interface CombatPanelProps {
   engagement: Engagement
   /** Slides the arena window onto the selected ship. Omitted when there's no
-   * commandable ship selected to centre on. */
+   * commandable ship selected to center on. */
   onRecenter?: () => void
 }
 
@@ -288,7 +288,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           {selectedOutsideWindow ? (
             <span className="ship-panel-combat">Ship outside frame</span>
           ) : (
-            'Centred'
+            'Centered'
           )}
           {onRecenter && (
             <button type="button" className="ship-panel-unfollow-btn" onClick={onRecenter}>
@@ -433,7 +433,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           </div>
 
           {/* Thruster Boost / Shield Boost / Spin Thrust — all three are
-              toggles until cancelled, so Auto and the manual button ARE
+              toggles until canceled, so Auto and the manual button ARE
               mutually exclusive: with Auto on, the resolver is actively
               deciding this every step, and a manual click would just get
               overridden on the next one. Turn Auto off to take the wheel. */}

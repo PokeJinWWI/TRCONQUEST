@@ -11,7 +11,7 @@
 // tiers a pop reaches) and building OWNERSHIP (state / corporation / worker),
 // which routes each building's profit to a different place.
 
-import { GOOD_IDS, GOODS, PRICE_FLOOR, priceCeiling, type GoodId } from './goods'
+import { GOOD_IDS, GOODS, priceFloor, priceCeiling, type GoodId } from './goods'
 import { NEED_TIERS, SPECIES_TEMPLATES, type NeedTier } from './species'
 import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
 import { economicSystemDef, healthcareSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
@@ -27,13 +27,15 @@ import type {
   WorldReport,
   TickReports,
 } from './economyTypes'
+import { runCountryAI, type CountryAIOptions } from './countryAI'
+import { runCorporationAI } from './corporationAI'
 
 const PRICE_ADJUST = 0.15
 const WAGE_ADJUST = 0.1
 const WAGE_FLOOR = 1.0
 const WAGE_CEILING = 40
 // Baseline informal/subsistence income every pop earns regardless of formal
-// employment (self-provision, barter, the grey economy). Keeps under-employed
+// employment (self-provision, barter, the gray economy). Keeps under-employed
 // worlds — where there aren't enough building jobs for everyone — from
 // collapsing into destitution, without needing a job for every last pop.
 const SUBSISTENCE_INCOME = 3.5
@@ -348,7 +350,7 @@ function tickWorld(
           const want = need.amountPerPop * pop.populationSize
           const price = prices[need.good]
           // The pop only pays its share; the state covers the rest (healthcare
-          // law), so subsidised care is not throttled by a poor pop's budget.
+          // law), so subsidized care is not throttled by a poor pop's budget.
           const effPrice = price * (1 - govShareOf(need.good))
           const affordable = effPrice > 0 ? budget / effPrice : want
           const buy = Math.max(0, Math.min(want, affordable))
@@ -387,7 +389,7 @@ function tickWorld(
   for (const g of GOOD_IDS) {
     fulfill[g] = totalDemand[g] > 0 ? Math.min(1, supply[g] / totalDemand[g]) : 1
     sellThrough[g] = supply[g] > 0 ? Math.min(1, totalDemand[g] / supply[g]) : 1
-    prices[g] = clamp(clearingStep(prices[g], totalDemand[g], supply[g], PRICE_ADJUST), PRICE_FLOOR, priceCeiling(g))
+    prices[g] = clamp(clearingStep(prices[g], totalDemand[g], supply[g], PRICE_ADJUST), priceFloor(g), priceCeiling(g))
     report.goods[g] = { supply: supply[g], demand: totalDemand[g], transacted: Math.min(supply[g], totalDemand[g]), price: prices[g] }
   }
 
@@ -545,7 +547,8 @@ function tickWorld(
     else if (b.owner.kind === 'corporation') corpProfit.set(b.owner.corporationId, (corpProfit.get(b.owner.corporationId) ?? 0) + netProfit)
     else if (b.owner.kind === 'worker') workerDividendPool += Math.max(0, netProfit)
 
-    return { ...b, inventory: inv, throughput, lastProfit: netProfit, employed, jobsPosted }
+    const unprofitableStreak = netProfit < 0 ? (b.unprofitableStreak ?? 0) + 1 : 0
+    return { ...b, inventory: inv, throughput, lastProfit: netProfit, unprofitableStreak, employed, jobsPosted }
   })
 
   // --- Construction: government pool (treasury) funds state/worker orders,
@@ -680,11 +683,16 @@ export function tickEconomy(
   countries: Country[],
   worlds: World[],
   corporations: Corporation[] = [],
+  ai: CountryAIOptions = {},
 ): { countries: Country[]; worlds: World[]; corporations: Corporation[]; reports: TickReports } {
   const reports: TickReports = { worlds: {}, countries: {} }
   const nextWorlds: World[] = [...worlds]
   const nextCountries: Country[] = []
   const corpProfitTotal = new Map<string, number>()
+  // Subsidies folded into corpProfitTotal above — tracked separately so
+  // dividends are paid on OPERATING profit only, never on government subsidy
+  // money (the state should not be funding shareholder payouts).
+  const corpSubsidyTotal = new Map<string, number>()
   // Cash each corporation has available for its own construction this tick.
   const corpCash = new Map<string, number>()
   for (const c of corporations) corpCash.set(c.id, c.cash)
@@ -733,7 +741,7 @@ export function tickEconomy(
     // Ship each good's surplus (unsold production) to the country's worlds that
     // fell short, within the freight capacity, losing a fraction in transit. The
     // delivered goods become import stock those worlds draw on NEXT tick — so a
-    // world can specialise and import what it doesn't make.
+    // world can specialize and import what it doesn't make.
     // Market access: freight capacity is the country's base plus what its
     // infrastructure buildings (roads, railways, spaceports) provide.
     let infraLogistics = 0
@@ -781,6 +789,7 @@ export function tickEconomy(
       if (amt <= 0) continue
       subsidiesSpent += amt
       corpProfitTotal.set(corpId, (corpProfitTotal.get(corpId) ?? 0) + amt)
+      corpSubsidyTotal.set(corpId, (corpSubsidyTotal.get(corpId) ?? 0) + amt)
     }
     for (const [key, amt] of Object.entries(country.subsidies.buildings)) {
       if (amt <= 0) continue
@@ -795,6 +804,7 @@ export function tickEconomy(
       subsidiesSpent += amt
       if (building.owner.kind === 'corporation') {
         corpProfitTotal.set(building.owner.corporationId, (corpProfitTotal.get(building.owner.corporationId) ?? 0) + amt)
+        corpSubsidyTotal.set(building.owner.corporationId, (corpSubsidyTotal.get(building.owner.corporationId) ?? 0) + amt)
       }
     }
 
@@ -872,13 +882,119 @@ export function tickEconomy(
 
   // Pay corporations the net profit of the buildings they own, less what they
   // spent on their own construction this tick.
-  const nextCorporations = corporations.map((c) => {
+  const paidCorporations = corporations.map((c) => {
     const profit = corpProfitTotal.get(c.id) ?? 0
     const built = corpConstructionTotal.get(c.id) ?? 0
     return { ...c, cash: c.cash + profit - built, lastProfit: profit }
   })
 
-  return { countries: nextCountries, worlds: nextWorlds, corporations: nextCorporations, reports }
+  // Distribute dividends: a company pays part of its profit out to its
+  // shareholders (the state, the public, financial districts) — the income side
+  // of the for-profit economy. This is what makes owning shares, and the whole
+  // stock exchange and financial-district layer, actually pay. Paid on OPERATING
+  // profit only (subsidies excluded — see corpSubsidyTotal).
+  const operatingProfit = new Map<string, number>()
+  for (const [id, p] of corpProfitTotal) operatingProfit.set(id, p - (corpSubsidyTotal.get(id) ?? 0))
+  const dv = distributeDividends(paidCorporations, nextCountries, nextWorlds, operatingProfit)
+  const nextCorporations = dv.corporations
+  for (let i = 0; i < nextCountries.length; i++) nextCountries[i] = dv.countries[i]
+  for (let i = 0; i < nextWorlds.length; i++) nextWorlds[i] = dv.worlds[i]
+
+  // --- AI: run each NON-PLAYER nation's brain and every company's brain now
+  //     that this tick's production, fiscal and reports are settled, so their
+  //     policy/investment decisions land for next tick. Off unless the caller
+  //     opts in, so headless callers and tests keep their exact prior behavior.
+  let aiCountries = nextCountries
+  let aiWorlds = nextWorlds
+  let aiCorporations = nextCorporations
+  if (ai.enableAI) {
+    const tick = ai.tick ?? 0
+    const humans = ai.humanCountryIds
+    // Country AI (governments): non-player nations only.
+    aiCountries = nextCountries.map((country) => {
+      if (humans && humans.includes(country.id)) return country
+      const report = reports.countries[country.id]
+      if (!report) return country
+      const decided = runCountryAI(country, report, aiWorlds, aiCorporations, tick)
+      aiWorlds = decided.worlds
+      return decided.country
+    })
+    // Corporation AI (the invisible hand): every company, in the player's nation
+    // too — a market economy's firms run themselves; the player governs via law.
+    aiCorporations = aiCorporations.map((corp) => {
+      const decided = runCorporationAI(corp, aiWorlds, tick)
+      aiWorlds = decided.worlds
+      return decided.corp
+    })
+  }
+
+  return { countries: aiCountries, worlds: aiWorlds, corporations: aiCorporations, reports }
+}
+
+// The share of a company's profit paid out to shareholders each tick; the rest
+// is retained as cash for reinvestment (the corporation AI spends it). Shares
+// held by individual CHARACTERS are retained too for now (character wealth is
+// settled elsewhere), so only the state/public/financial portions actually leave
+// the company.
+const DIVIDEND_RATE = 0.35
+
+// Pay each profitable company's dividends to its shareholders: the state's share
+// to its treasury, a financial district's share to that district's cash, and the
+// public's share spread across the company's home-nation pops as wealth. Pure:
+// returns new arrays, positionally matching the inputs.
+export function distributeDividends(
+  corporations: Corporation[],
+  countries: Country[],
+  worlds: World[],
+  profitByCorp: Map<string, number>,
+): { corporations: Corporation[]; countries: Country[]; worlds: World[] } {
+  const corpCashDelta = new Map<string, number>()
+  const treasuryDelta = new Map<string, number>()
+  const popDividendByCountry = new Map<string, number>()
+  const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v)
+
+  for (const corp of corporations) {
+    const profit = profitByCorp.get(corp.id) ?? 0
+    if (profit <= 0 || corp.totalShares <= 0) continue
+    const pool = profit * DIVIDEND_RATE
+    for (const holding of corp.shares) {
+      const amt = pool * (holding.shares / corp.totalShares)
+      if (amt <= 0) continue
+      switch (holding.holder.kind) {
+        case 'state':
+          add(treasuryDelta, corp.countryId, amt)
+          add(corpCashDelta, corp.id, -amt)
+          break
+        case 'financial':
+          add(corpCashDelta, holding.holder.id, amt) // the district earns from its stake
+          add(corpCashDelta, corp.id, -amt)
+          break
+        case 'public':
+          add(popDividendByCountry, corp.countryId, amt)
+          add(corpCashDelta, corp.id, -amt)
+          break
+        case 'character':
+          // Retained by the company for now (character wealth settled elsewhere).
+          break
+      }
+    }
+  }
+
+  const nextCorporations = corporations.map((c) => (corpCashDelta.has(c.id) ? { ...c, cash: c.cash + corpCashDelta.get(c.id)! } : c))
+  const nextCountries = countries.map((c) => (treasuryDelta.has(c.id) ? { ...c, treasury: c.treasury + treasuryDelta.get(c.id)! } : c))
+
+  // Spread each nation's public-dividend pool across its worlds' pops in
+  // proportion to population.
+  const nextWorlds = worlds.map((w) => {
+    const pool = popDividendByCountry.get(w.ownerId)
+    if (!pool) return w
+    const countryPop = worlds.filter((x) => x.ownerId === w.ownerId).reduce((s, x) => s + x.pops.reduce((n, p) => n + p.populationSize, 0), 0)
+    if (countryPop <= 0) return w
+    const perCapita = pool / countryPop
+    return { ...w, pops: w.pops.map((p) => ({ ...p, wealth: p.wealth + perCapita * p.populationSize })) }
+  })
+
+  return { corporations: nextCorporations, countries: nextCountries, worlds: nextWorlds }
 }
 
 // A rough headline GDP for one world at its current prices — display only.

@@ -61,7 +61,7 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
     const participant = engagement?.participants.find((p) => p.shipId === shipId)
     if (!engagement || !participant) return
     // Positions are real, absolute arena coordinates; the view draws
-    // relative to the current window centre, so subtract it here.
+    // relative to the current window center, so subtract it here.
     const pos = participantArenaPosition(participant, useGameTimeStore.getState().simDays)
     pos.sub(toVector3(engagement.center))
     groupRef.current?.position.copy(pos)
@@ -93,7 +93,7 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
           <span className="combat-marker-health">
             <span className="combat-marker-health-fill" style={{ width: `${healthPercent}%`, background: color }} />
           </span>
-          {/* A ship spooling a drive is defenceless and about to leave — the
+          {/* A ship spooling a drive is defenseless and about to leave — the
               single most decision-relevant thing to see from across the
               arena, so it gets its own badge rather than living only in the
               panel. */}

@@ -174,7 +174,7 @@ console.log('\n=== 3. Real-coordinate positions: engagements form with obstacles
   const engs = syncEngagements([a, b], [], simDays)
   check('one engagement formed', engs.length === 1)
   check('body placed at the arena origin', nodesEqualLocal(engs[0].obstacles[0].position, ARENA_ORIGIN))
-  check('window starts centred on the origin too', nodesEqualLocal(engs[0].center, ARENA_ORIGIN))
+  check('window starts centered on the origin too', nodesEqualLocal(engs[0].center, ARENA_ORIGIN))
   const p1 = engs[0].participants.find((p) => p.shipId === 'p1')!
   check('spawn position is a real point, not a lattice index', typeof p1.position.x === 'number' && Number.isFinite(p1.position.x))
   const opening = pointDistance(p1.position, engs[0].participants.find((p) => p.shipId === 'e1')!.position)
@@ -966,20 +966,20 @@ console.log('\n=== 28. The densities nest, so every placement is a fine-lattice 
   )
 
   // snapToLatticeNode is window-RELATIVE: the drawn lattice hangs off the
-  // window centre, not the arena origin, so anything reasoning about nodes
+  // window center, not the arena origin, so anything reasoning about nodes
   // has to use the same origin the grid is drawn with.
   {
     const center: ArenaPoint = { x: 3.37, y: -1.11, z: 0.42 }
     const snapped = snapToLatticeNode({ x: center.x + 0.1, y: center.y - 0.1, z: center.z + 0.05 }, center, 'fine')
     check(
-      'a point beside the window centre snaps to the centre node',
+      'a point beside the window center snaps to the center node',
       pointDistance(snapped, center) < 1e-9,
       `(${snapped.x.toFixed(2)}, ${snapped.y.toFixed(2)}, ${snapped.z.toFixed(2)})`,
     )
     const offset = fineSpacing * 3
     const snappedOffset = snapToLatticeNode({ x: center.x + offset + 0.2, y: center.y, z: center.z }, center, 'fine')
     check(
-      'snapping lands a whole number of fine steps from the centre',
+      'snapping lands a whole number of fine steps from the center',
       Math.abs((snappedOffset.x - center.x) / fineSpacing - 3) < 1e-9,
       `${((snappedOffset.x - center.x) / fineSpacing).toFixed(3)} steps`,
     )
@@ -1174,7 +1174,7 @@ console.log('\n=== 33. Earth combat brings Luna along; other bodies are unaffect
 {
   const earthObstacles = obstaclesForLocation({ kind: 'orbiting', systemId: 'sol', bodyName: 'Earth', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 })
   check('a fight at Earth includes both Earth and Luna', earthObstacles.length === 2, earthObstacles.map((o) => o.name).join(', '))
-  check('Earth itself is still centred at the arena origin', earthObstacles.some((o) => o.name === 'Earth' && nodesEqualLocal(o.position, ARENA_ORIGIN)))
+  check('Earth itself is still centered at the arena origin', earthObstacles.some((o) => o.name === 'Earth' && nodesEqualLocal(o.position, ARENA_ORIGIN)))
   const luna = earthObstacles.find((o) => o.name === 'Luna')
   check('Luna is present, offset from Earth, and sized smaller than Earth', !!luna && pointDistance(luna.position, ARENA_ORIGIN) > 0)
   if (luna) {
@@ -1204,7 +1204,7 @@ console.log('\n=== 34. A ship with dead utility drifts ballistically and can col
   // combatResolution's own comment on this at the movement step.
   ships = ships.map((s) => (s.id === 'p1' ? { ...s, combat: { ...s.combat, componentHp: { ...s.combat.componentHp, utility: 0 } } } : s))
 
-  // Positioned just outside the body, already moving straight at its centre
+  // Positioned just outside the body, already moving straight at its center
   // at a fixed speed — with utility dead this velocity can never change.
   const approachSpeed = 1.5
   const startDistance = earth.radiusUnits + 3
@@ -1293,7 +1293,7 @@ console.log('\n=== 36. Flee stance: runs from the combined enemy fleet, and is t
   // as every other stance's no-op case).
   check('flee with no hostiles present returns null', stanceDestination(self, enemyA, profile, 'flee', [], [self], true) === null)
 
-  // An unarmed hull (no weapon mounts at all) defaults to flee-like behaviour
+  // An unarmed hull (no weapon mounts at all) defaults to flee-like behavior
   // regardless of the stance actually stored on it — same fallback rule as
   // the old stall-based one, just pointed at flee per the design ask.
   const unarmedProfile = SHIP_CLASSES.find((c) => c.id === 'swift-courier')!.combat
@@ -1354,7 +1354,7 @@ console.log('\n=== 37. Gravity: real relative strength, inverse-square falloff, 
   check('at the surface, pull magnitude equals surfaceGravityUnitsPerSecondSq exactly', Math.abs(atSurface.length() - gEarth) < 1e-9, `${atSurface.length().toFixed(6)} vs ${gEarth.toFixed(6)}`)
   check('pull points toward the body (negative x, standing on the +x side)', atSurface.x < 0)
 
-  // Inverse-square: doubling distance from the CENTRE should quarter the pull.
+  // Inverse-square: doubling distance from the Center should quarter the pull.
   const atOneRadius = gravitationalAcceleration({ x: earth.radiusUnits, y: 0, z: 0 }, [earth]).length()
   const atTwoRadii = gravitationalAcceleration({ x: earth.radiusUnits * 2, y: 0, z: 0 }, [earth]).length()
   check('doubling distance quarters the pull (inverse-square)', Math.abs(atOneRadius / atTwoRadii - 4) < 1e-6, `ratio ${(atOneRadius / atTwoRadii).toFixed(4)}`)
@@ -1620,7 +1620,7 @@ console.log('\n=== 41. Combat catch-up is bounded — no permanent debt from a s
     `lag ${(now - clamped).toFixed(9)}d vs one tick ${maxLagDays.toFixed(9)}d`,
   )
 
-  // Quantify what the old behaviour would have cost, so the regression is
+  // Quantify what the old behavior would have cost, so the regression is
   // legible rather than abstract: at 60fps the resolver clears
   // MAX_STEPS_PER_TICK*COMBAT_STEP_SECONDS per frame.
   const secondsOfCombatPerRealSecond = MAX_STEPS_PER_TICK * COMBAT_STEP_SECONDS * 60
@@ -1656,7 +1656,7 @@ console.log('\n=== 42. System-scale gravity: a stranded hull stays with its body
   // (This is exactly why the Hill sphere exists, and why the stranded-hull
   // simulation below stays bound to Earth despite the Sun dominating the raw
   // field.) Asserting on the net vector would be testing the wrong quantity —
-  // an earlier version of this test did, and failed while the behaviour it
+  // an earlier version of this test did, and failed while the behavior it
   // was checking was correct.
   const relativeGravity = (offsetUnits: number) => {
     const at = earthPosition.clone().add(new Vector3(offsetUnits, 0, 0))
@@ -3372,7 +3372,7 @@ console.log('\n=== 69. The three Boost tactics share one power grid: mutual excl
     store.setSpinThrust(engagementId, shipId, false)
     store.setThrusterBoost(engagementId, shipId, true)
     p = useCombatStore.getState().engagements[0].participants[0]
-    check('...but it activates normally once Spin Thrust is cancelled', p.thrusterBoostActive === true && p.spinThrustActive === false)
+    check('...but it activates normally once Spin Thrust is canceled', p.thrusterBoostActive === true && p.spinThrustActive === false)
     useCombatStore.setState({ engagements: [] })
   }
 
