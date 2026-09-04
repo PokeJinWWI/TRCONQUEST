@@ -18,7 +18,7 @@
 // entry point tickEconomy calls for each non-player country.
 
 import type { Country, CountryFiscal, World, Corporation, ConstructionOrder } from './economyTypes'
-import { RECIPES, districtOfRecipe, type DistrictType } from './recipes'
+import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
 import { economicSystemDef } from './laws'
 
 // --- Tunables (all deliberately gentle: the AI nudges, it does not lurch) ---
@@ -50,6 +50,9 @@ const MAX_DEBT_TO_GDP = 1.8 // stop borrowing past here (let the deficit bite)
 // Construction manager thresholds.
 const BUILD_TREASURY_BUFFER = 30000 // keep this much on hand before building
 const BUREAUCRACY_STRAIN = 0.85 // consumed/capacity above this = build admin
+// Below this nation-wide satisfaction of a core needs tier, the state steps in
+// and builds the essential that serves it — even a laissez-faire one.
+const ESSENTIAL_NEEDS_THRESHOLD = 0.8
 
 // A stable per-nation phase offset so nations act on different ticks.
 function phase(id: string, period: number): number {
@@ -149,15 +152,18 @@ function districtRoom(world: World, recipeId: string): boolean {
 //     Priority 1 is keeping the bureaucracy solvent; priority 2 is growing the
 //     economy where the state plausibly builds. ---
 function governanceManager(country: Country, report: CountryFiscal, worlds: World[], tick: number): World[] {
-  if (report.treasury < BUILD_TREASURY_BUFFER) return worlds
   const owned = worlds.filter((w) => w.ownerId === country.id)
   if (owned.length === 0) return worlds
+  // Necessities (bureaucracy, feeding/caring for people) get built even when the
+  // treasury is thin — the state borrows for them (that's what deficits are for).
+  // Only DISCRETIONARY growth waits until there's a real cash buffer.
+  const canAffordGrowth = report.treasury >= BUILD_TREASURY_BUFFER
 
   const alreadyQueuing = (recipeId: string) => owned.some((w) => w.constructionQueue.some((o) => o.recipeId === recipeId))
   const order = (recipeId: string): ConstructionOrder => ({
     id: `ai-${country.id}-${tick}-${recipeId}`,
     recipeId,
-    cost: 6000,
+    cost: constructionWork(recipeId),
     progress: 0,
     owner: { kind: 'state' },
   })
@@ -179,11 +185,34 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
     if (placed) return placed
   }
 
-  // Priority 2: growth — a command/interventionist state builds a needed plant
+  // Priority 2: BASIC PROVISION — regardless of economic system, a state keeps
+  // its people fed and cared for. If a core needs tier is going unmet
+  // nation-wide, build the essential that serves it (food / healthcare / power).
+  // This is the state backstop against the "invisible hand" (corporationAI)
+  // abandoning low-margin essentials — the reason laissez-faire nations' living
+  // standards sagged before this existed.
+  const pops = owned.flatMap((w) => w.pops)
+  const totalPop = pops.reduce((s, p) => s + p.populationSize, 0)
+  if (totalPop > 0) {
+    const tierAvg = (tier: 'basic' | 'healthcare' | 'everyday') => pops.reduce((s, p) => s + (p.needsSatisfaction[tier] ?? 1) * p.populationSize, 0) / totalPop
+    const essentials: { tier: 'basic' | 'healthcare' | 'everyday'; recipe: string }[] = [
+      { tier: 'basic', recipe: 'foodProcessor' },
+      { tier: 'healthcare', recipe: 'clinic' },
+      { tier: 'everyday', recipe: 'solarPlant' },
+    ]
+    for (const e of essentials) {
+      if (tierAvg(e.tier) < ESSENTIAL_NEEDS_THRESHOLD && !alreadyQueuing(e.recipe)) {
+        const placed = placeOn(e.recipe)
+        if (placed) return placed
+      }
+    }
+  }
+
+  // Priority 3: growth — a command/interventionist state builds a needed plant
   // itself; a laissez-faire state leaves production to the market (corps). The
   // interferenceMalus is the cleanest proxy: command 1.0 and interventionism
   // 0.9 direct production; laissez-faire 0.7 does not.
-  const buildsIndustry = economicSystemDef(country.economicSystem).interferenceMalus >= 0.9
+  const buildsIndustry = canAffordGrowth && economicSystemDef(country.economicSystem).interferenceMalus >= 0.9
   if (buildsIndustry) {
     // Pick the growth building whose output good is priciest across the nation
     // (a rough "most under-supplied" signal), that we're not already building.

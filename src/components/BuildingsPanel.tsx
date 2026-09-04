@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { RECIPES, getMethod, BUREAUCRACY_OUTPUT, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
 import { GOODS } from '../economy/goods'
-import { estimateWorldGdp, constructionCost, JOB_SCALE, canBuild, BUILD_COST_PER_LEVEL, DEPLETABLE_GOODS, TICKS_PER_YEAR } from '../economy/economyTick'
+import { estimateWorldGdp, estimateConstructionCost, JOB_SCALE, canBuild, BUILD_COST_PER_LEVEL, DEPLETABLE_GOODS, TICKS_PER_YEAR } from '../economy/economyTick'
 import { DISTRICT_LABELS, districtOfRecipe } from '../economy/recipes'
 import { economicSystemDef, type EconomicSystem } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
@@ -423,7 +423,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                                 type="button"
                                 className="bld-level-btn"
                                 onClick={() => downgradeBuilding(world.id, b.id)}
-                                title={b.level > 1 ? `Tear down one level (instant, salvages ${formatMoney(constructionCost() * 0.3)})` : `Demolish this building (instant, salvages ${formatMoney(constructionCost() * 0.3)})`}
+                                title={b.level > 1 ? `Tear down one level (instant, salvages ${formatMoney(BUILD_COST_PER_LEVEL * 0.3)})` : `Demolish this building (instant, salvages ${formatMoney(BUILD_COST_PER_LEVEL * 0.3)})`}
                               >
                                 −
                               </button>
@@ -441,8 +441,8 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                                 !canBuild(world, b.recipeId)
                                   ? 'District is full — no room to expand'
                                   : control === 'state'
-                                    ? `Queue an upgrade to level ${b.level + 1} (${formatMoney(constructionCost())} + materials, takes time)`
-                                    : `Build a state-owned ${recipe!.label} here (${formatMoney(constructionCost())} + materials, takes time) — separate from this ${control === 'worker' ? 'co-op' : 'company'}`
+                                    ? `Queue an upgrade to level ${b.level + 1} — about ${formatMoney(estimateConstructionCost(b.recipeId, world.market.prices))} of materials, built over time`
+                                    : `Build a state-owned ${recipe!.label} here (about ${formatMoney(estimateConstructionCost(b.recipeId, world.market.prices))} of materials, built over time) — separate from this ${control === 'worker' ? 'co-op' : 'company'}`
                               }
                             >
                               +
@@ -561,7 +561,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
       {owned ? (
         <>
           <div className="econ-subtitle" style={{ marginTop: 8 }}>
-            Build (cost {formatMoney(constructionCost())} each — government pool)
+            Build (state-owned — construction consumes materials, paid by the treasury)
           </div>
           {buildGroups.map(({ group, items }) => (
             <div className="econ-build-group" key={group}>
@@ -576,7 +576,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                       className="econ-build-btn"
                       onClick={() => queueConstruction(world.id, r.id)}
                       disabled={!room}
-                      title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district`}
+                      title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${formatMoney(estimateConstructionCost(r.id, world.market.prices))} of materials, built over time`}
                     >
                       + {r.label}
                     </button>

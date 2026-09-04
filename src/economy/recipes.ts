@@ -80,6 +80,14 @@ export const LOGISTICS_OUTPUT: Record<string, number> = {
   spaceport: 2000,
 }
 
+// Construction points a Construction Sector adds to its WORLD's build capacity
+// per level at full throughput. This is what makes building faster a strategic
+// investment (build more sectors) rather than a fixed rate — Stage 2 of the
+// construction rework. Tech can raise this later.
+export const CONSTRUCTION_OUTPUT: Record<string, number> = {
+  constructionSector: 55,
+}
+
 // A planet is not unlimited: buildings occupy DISTRICTS by category. The core
 // holds government + finance; the urban district holds services; the industrial
 // district holds power + heavy industry; the resource district holds mines and
@@ -191,7 +199,9 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   explosivesFactory: 'chemicals',
   dyeWorks: 'chemicals',
   glassworks: 'chemicals',
+  cementWorks: 'chemicals',
   paperMill: 'chemicals',
+  constructionSector: 'infrastructure',
   // Consumer manufacturing
   foodProcessor: 'consumerGoods',
   consumerGoodsFactory: 'consumerGoods',
@@ -224,6 +234,43 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
 
 export function buildingGroup(recipeId: string): BuildingGroup {
   return RECIPE_GROUP[recipeId] ?? 'civic'
+}
+
+// --- Construction work (design: Vic3-style) ---
+// A building level costs a fixed amount of CONSTRUCTION WORK (points), not a sum
+// of money. The money cost is emergent: producing that work consumes goods
+// (steel/concrete/tools/glass/lumber) bought at market prices, so a building
+// "costs" whatever those materials cost that tick — no arbitrary dollar figure.
+// Work scales by tier: cheap primary buildings are quick to throw up; advanced
+// and megastructure-tier ones take far more work.
+const CONSTRUCTION_WORK_BY_TIER: Record<number, number> = { 1: 100, 2: 250, 3: 450, 4: 650, 5: 900 }
+
+// Explicit tier per building. Anything unlisted falls back to a category default.
+const CONSTRUCTION_TIER: Record<string, number> = {
+  // T1 — primary sector, quick to build
+  ironMine: 1, coalMine: 1, oilWell: 1, rareMetalsMine: 1, loggingCamp: 1, phosphateMine: 1, sulfurMine: 1, hardwoodLogging: 1,
+  wheatFarm: 1, riceFarm: 1, livestockRanch: 1, sugarPlantation: 1, coffeePlantation: 1, teaPlantation: 1,
+  // T2 — light industry, services, basic power/infra
+  solarPlant: 2, coalPowerPlant: 2, foodProcessor: 2, meatPacking: 2, consumerGoodsFactory: 2, sawmill: 2, toolWorkshop: 2,
+  dyeWorks: 2, glassworks: 2, cementWorks: 2, paperMill: 2, clinic: 2, school: 2, retailShop: 2, artStudio: 2, roadNetwork: 2, governmentOffice: 2, constructionSector: 3,
+  // T3 — mid/heavy industry, advanced services, civic
+  steelMill: 3, machineryFactory: 3, oilRefinery: 3, chemicalPlant: 3, fertilizerPlant: 3, explosivesFactory: 3, electronicsFactory: 3,
+  engineFactory: 3, automobilePlant: 3, luxuryFactory: 3, dataCenter: 3, railway: 3, corporateHq: 3, financialCenter: 3,
+  // T4 — advanced industry & major infrastructure
+  heavyMachineryPlant: 4, electricalMachineryPlant: 4, precisionMachineryPlant: 4, semiconductorFab: 4, locomotiveWorks: 4,
+  aircraftFactory: 4, shipyard: 4, fusionReactor: 4, ministry: 4, spaceport: 4,
+  // T5 — the biggest, most complex yards
+  spaceyard: 5, rocketFactory: 5,
+}
+
+const CATEGORY_TIER_DEFAULT: Record<BuildingCategory, number> = {
+  extraction: 1, agriculture: 1, energy: 2, services: 2, industry: 3, corporate: 3, government: 3,
+}
+
+// Construction points to complete one level of a building.
+export function constructionWork(recipeId: string): number {
+  const tier = CONSTRUCTION_TIER[recipeId] ?? CATEGORY_TIER_DEFAULT[RECIPES[recipeId]?.category ?? 'industry'] ?? 3
+  return CONSTRUCTION_WORK_BY_TIER[tier] ?? 450
 }
 
 export interface Recipe {
@@ -1237,6 +1284,49 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
   },
+  constructionSector: {
+    id: 'constructionSector',
+    label: 'Construction Sector',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Construction Firms',
+        description: 'Contractors, cranes and crews. Produces the construction capacity that builds everything on this world — build more to build faster. Consumes some upkeep; the bulk materials are consumed by the projects themselves.',
+        inputs: [
+          { good: 'machinery', amount: 40 },
+          { good: 'tools', amount: 60 },
+          { good: 'electricity', amount: 90 },
+        ],
+        outputs: [],
+        jobs: [
+          { class: 'labor', count: 220 },
+          { class: 'technical', count: 90 },
+        ],
+      },
+    ],
+  },
+  cementWorks: {
+    id: 'cementWorks',
+    label: 'Cement Works',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Kiln Cement',
+        description: 'Fires coal-heated kilns to produce cement and concrete — the bulk material almost every construction consumes.',
+        inputs: [
+          { good: 'coal', amount: 200 },
+          { good: 'electricity', amount: 160 },
+        ],
+        outputs: [{ good: 'concrete', amount: 1400 }],
+        jobs: [
+          { class: 'labor', count: 170 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
   paperMill: {
     id: 'paperMill',
     label: 'Paper Mill',
@@ -1655,16 +1745,17 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Banks & Exchanges',
-        description: 'Banks, exchanges and brokerages — the financial district providing financial services.',
+        description: 'Banks, exchanges and brokerages. A lean overhead — the financial district earns its keep MANAGING the country\'s investment pool (a fee on the capital it stewards), not from this building.',
         inputs: [
-          { good: 'consumerGoods', amount: 90 },
-          { good: 'electricity', amount: 90 },
+          { good: 'consumerGoods', amount: 35 },
+          { good: 'electricity', amount: 45 },
         ],
-        outputs: [{ good: 'retail', amount: 700 }],
+        outputs: [{ good: 'retail', amount: 400 }],
+        // A small professional staff. (No investor "jobs": investor pops draw
+        // dividends, not wages, and never fill building slots.)
         jobs: [
-          { class: 'professional', count: 160 },
-          { class: 'investor', count: 60 },
-          { class: 'technical', count: 60 },
+          { class: 'professional', count: 60 },
+          { class: 'technical', count: 25 },
         ],
       },
     ],

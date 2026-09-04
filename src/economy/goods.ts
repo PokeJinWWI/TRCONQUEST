@@ -34,6 +34,7 @@ export type GoodId =
   | 'meat'
   // Intermediate / industrial
   | 'steel'
+  | 'concrete'
   | 'lumber'
   | 'fuel'
   | 'chemicals'
@@ -107,6 +108,7 @@ export const GOOD_IDS: GoodId[] = [
   'tea',
   'meat',
   'steel',
+  'concrete',
   'lumber',
   'fuel',
   'chemicals',
@@ -168,6 +170,7 @@ export const GOODS: Record<GoodId, GoodDef> = {
   tea: { id: 'tea', label: 'Tea', category: 'agricultural', basePrice: 7 },
   meat: { id: 'meat', label: 'Meat', category: 'agricultural', basePrice: 7 },
   steel: { id: 'steel', label: 'Steel', category: 'intermediate', basePrice: 8 },
+  concrete: { id: 'concrete', label: 'Concrete', category: 'intermediate', basePrice: 3 },
   lumber: { id: 'lumber', label: 'Lumber', category: 'intermediate', basePrice: 5 },
   fuel: { id: 'fuel', label: 'Fuel', category: 'intermediate', basePrice: 8 },
   chemicals: { id: 'chemicals', label: 'Chemicals', category: 'intermediate', basePrice: 7 },

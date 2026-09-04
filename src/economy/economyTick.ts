@@ -13,7 +13,7 @@
 
 import { GOOD_IDS, GOODS, priceFloor, priceCeiling, type GoodId } from './goods'
 import { NEED_TIERS, SPECIES_TEMPLATES, type NeedTier } from './species'
-import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
+import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, CONSTRUCTION_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, constructionWork, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
 import { economicSystemDef, healthcareSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
 import type {
   Building,
@@ -29,6 +29,7 @@ import type {
 } from './economyTypes'
 import { runCountryAI, type CountryAIOptions } from './countryAI'
 import { runCorporationAI } from './corporationAI'
+import { runForeignInvestmentAI } from './foreignInvestmentAI'
 
 const PRICE_ADJUST = 0.15
 const WAGE_ADJUST = 0.1
@@ -91,7 +92,17 @@ const INVENTORY_DECAY = 0.08
 // regrow and power/manufactured goods aren't a deposit, so they're excluded.
 export const DEPLETABLE_GOODS: GoodId[] = ['ironOre', 'coal', 'oil', 'rareMetals', 'sulfur', 'hardwood', 'timber', 'phosphate']
 export const BUILD_COST_PER_LEVEL = 6000
-const CONSTRUCTION_CAPACITY = 400
+// Construction points a world can install per tick. A small base capacity (so a
+// world with no sectors can still build slowly) plus what its CONSTRUCTION
+// SECTOR buildings produce — build more sectors to build faster (Stage 2). A
+// building costs 100–900 points, so it takes a handful of months, more when the
+// queue is long (capacity is split across it) or sectors are understaffed.
+const CONSTRUCTION_BASE_CAPACITY = 15
+function worldConstructionCapacity(buildings: Building[]): number {
+  let cap = CONSTRUCTION_BASE_CAPACITY
+  for (const b of buildings) cap += (CONSTRUCTION_OUTPUT[b.recipeId] ?? 0) * b.level * b.throughput
+  return cap
+}
 export const TICKS_PER_YEAR = 12
 
 // --- Strategic stockpiles (batch 3) — a simple buffer/reserve, not a full
@@ -133,6 +144,15 @@ const CPI_WEIGHTS: Partial<Record<GoodId, number>> = {
 
 export function constructionCost(): number {
   return BUILD_COST_PER_LEVEL
+}
+
+// A live estimate of the MONEY it will cost to build one level of `recipeId` at
+// the given world's current prices: its construction work (points) times the
+// market value of the materials each point consumes. Varies with prices — steel
+// getting dearer makes everything cost more to build. UI/AI display only.
+export function estimateConstructionCost(recipeId: string, prices: Record<GoodId, number>): number {
+  const perPoint = CONSTRUCTION_GOODS_PER_POINT.reduce((s, m) => s + m.amount * (prices[m.good] ?? GOODS[m.good].basePrice), 0)
+  return constructionWork(recipeId) * perPoint
 }
 
 export function creditRating(debtToGdp: number): CreditRating {
@@ -229,20 +249,23 @@ interface WorldTickResult {
   corpProfit: Map<string, number>
   // What the government pays this tick to fund services (healthcare) for pops.
   serviceSubsidy: number
-  // Cash a corporation spent on its own construction here this tick, by corp id.
-  corpConstructionSpend: Map<string, number>
   // Treasury spent this tick buying goods into this world's stockpiles.
   stockpileSpend: number
 }
 
-// Building materials consumed while a building is under construction — this
-// demand is what makes construction fuel the wider economy.
-const CONSTRUCTION_MATERIALS: { good: GoodId; amount: number }[] = [
-  { good: 'steel', amount: 220 },
-  { good: 'tools', amount: 60 },
-  { good: 'machinery', amount: 50 },
-  { good: 'heavyMachinery', amount: 30 },
-  { good: 'consumerGoods', amount: 80 },
+// Materials consumed PER POINT of construction work (design: Vic3-style). A
+// building costs a fixed number of construction points (see constructionWork);
+// each point of progress pulls this basket of goods from the market, bought at
+// the current price. So a building's MONEY cost is emergent — the value of the
+// materials it takes to build, which floats with the market — rather than a flat
+// dollar figure. Concrete is the bulk material; steel/glass/lumber/tools round
+// it out.
+const CONSTRUCTION_GOODS_PER_POINT: { good: GoodId; amount: number }[] = [
+  { good: 'concrete', amount: 2.0 },
+  { good: 'steel', amount: 0.7 },
+  { good: 'lumber', amount: 0.25 },
+  { good: 'tools', amount: 0.15 },
+  { good: 'glass', amount: 0.08 },
 ]
 
 // Fraction of a shipment lost in transit (the transport cost of inter-world
@@ -275,7 +298,8 @@ function tickWorld(
   govHealthShare: number,
   stateBureaucracyMalus: number,
   treasuryAvailable: number,
-  corpCash: Map<string, number>,
+  poolByCountry: Map<string, number>,
+  corpCountry: Map<string, string>,
 ): WorldTickResult {
   const report = emptyWorldReport()
   const law = economicSystemDef(system)
@@ -326,9 +350,12 @@ function tickWorld(
     const plan = buildingPlannedRun.get(b.id) ?? 0
     for (const input of method.inputs) buildingInputDemand[input.good] += input.amount * b.level * plan
   }
-  // Active construction pulls building materials from the market (fuels demand).
+  // Active construction pulls materials from the market (fuels demand), scaled by
+  // how much work will actually be done this tick — the capacity, capped by the
+  // work the queue still needs.
   if (world.constructionQueue.length > 0) {
-    for (const m of CONSTRUCTION_MATERIALS) buildingInputDemand[m.good] += m.amount
+    const pointsThisTick = Math.min(worldConstructionCapacity(world.buildings), world.constructionQueue.reduce((s, o) => s + Math.max(0, o.cost - o.progress), 0))
+    for (const m of CONSTRUCTION_GOODS_PER_POINT) buildingInputDemand[m.good] += m.amount * pointsThisTick
   }
 
   const popIncome: number[] = []
@@ -552,36 +579,49 @@ function tickWorld(
   })
 
   // --- Construction: EVERY queued order progresses at once (Victoria 3 style),
-  //     the world's construction capacity split evenly across them. Government
-  //     pool (treasury) funds state/worker orders; the private pool (a company's
-  //     own cash) funds that corporation's orders. Several can finish in a tick. ---
+  //     the world's construction CAPACITY (points/tick) split evenly across them.
+  //     Progress is in construction points; the MONEY spent is the value of the
+  //     materials those points consume at market prices (no flat dollar cost).
+  //     Government pool (treasury) funds state/worker orders; a company's own
+  //     cash funds its orders. Several can finish in a tick. ---
   let builtBuildings = nextBuildings
   let nextQueue = world.constructionQueue
   let constructionSpend = 0 // drawn from the treasury (government pool)
-  const corpConstructionSpend = new Map<string, number>()
   if (world.constructionQueue.length > 0) {
     const queue = world.constructionQueue.map((o) => ({ ...o }))
-    const perOrder = CONSTRUCTION_CAPACITY / queue.length
+    // Capacity comes from this world's construction sectors (using their
+    // freshly-computed throughput this tick).
+    const perOrder = worldConstructionCapacity(builtBuildings) / queue.length
+    // Money cost of one construction point right now = the market value of the
+    // materials it consumes.
+    const costPerPoint = CONSTRUCTION_GOODS_PER_POINT.reduce((s, m) => s + m.amount * (prices[m.good] ?? 0), 0)
     let govBudget = Math.max(0, treasuryAvailable) // shared across all gov/worker orders
-    const corpBudget = new Map<string, number>() // per-corp remaining cash this tick
     for (const o of queue) {
       const remaining = o.cost - o.progress
       if (remaining <= 0) continue
+      const pointsWanted = Math.min(perOrder, remaining)
       if (o.owner.kind === 'corporation') {
-        const corpId = o.owner.corporationId
-        if (!corpBudget.has(corpId)) corpBudget.set(corpId, Math.max(0, corpCash.get(corpId) ?? 0))
-        const fund = Math.min(perOrder, remaining, corpBudget.get(corpId)!)
-        if (fund > 0) {
-          o.progress += fund
-          corpBudget.set(corpId, corpBudget.get(corpId)! - fund)
-          corpConstructionSpend.set(corpId, (corpConstructionSpend.get(corpId) ?? 0) + fund)
+        // Private construction is financed by the investment pool of the owning
+        // company's HOME country — the capital market that backs it — not the
+        // world it's building on. So a FOREIGN company building here draws on its
+        // own nation's capital (cross-border investment), and a cash-poor firm
+        // can still be financed to expand. The shared poolByCountry map threads
+        // draws across every world this tick.
+        const homeCountry = corpCountry.get(o.owner.corporationId) ?? world.ownerId
+        const avail = Math.max(0, poolByCountry.get(homeCountry) ?? 0)
+        const points = costPerPoint > 0 ? Math.min(pointsWanted, avail / costPerPoint) : pointsWanted
+        if (points > 0) {
+          const spend = points * costPerPoint
+          o.progress += points
+          poolByCountry.set(homeCountry, avail - spend)
         }
       } else {
-        const fund = Math.min(perOrder, remaining, govBudget)
-        if (fund > 0) {
-          o.progress += fund
-          govBudget -= fund
-          constructionSpend += fund
+        const points = costPerPoint > 0 ? Math.min(pointsWanted, govBudget / costPerPoint) : pointsWanted
+        if (points > 0) {
+          const spend = points * costPerPoint
+          o.progress += points
+          govBudget -= spend
+          constructionSpend += spend
         }
       }
     }
@@ -690,7 +730,6 @@ function tickWorld(
     constructionSpend,
     corpProfit,
     serviceSubsidy,
-    corpConstructionSpend,
     stockpileSpend,
   }
 }
@@ -711,10 +750,18 @@ export function tickEconomy(
   // dividends are paid on OPERATING profit only, never on government subsidy
   // money (the state should not be funding shareholder payouts).
   const corpSubsidyTotal = new Map<string, number>()
-  // Cash each corporation has available for its own construction this tick.
-  const corpCash = new Map<string, number>()
-  for (const c of corporations) corpCash.set(c.id, c.cash)
-  const corpConstructionTotal = new Map<string, number>()
+  // What each private company paid INTO its country's investment pool this tick
+  // (a slice of its retained profit) — deducted from its cash below. Private
+  // construction is then financed from that shared pool, not per-company cash.
+  const corpPoolContribution = new Map<string, number>()
+  // The investment pool per country — a SHARED, mutable accumulator for the whole
+  // tick. Construction on ANY world draws from the OWNING company's home-country
+  // pool (so a foreign company building here spends its own nation's capital),
+  // and each country's private profit is added back after its worlds tick. Final
+  // values are written onto the countries after the whole loop, so cross-border
+  // draws from later-processed nations are reflected.
+  const poolByCountry = new Map(countries.map((c) => [c.id, Math.max(0, c.investmentPool)]))
+  const corpCountry = new Map(corporations.map((c) => [c.id, c.countryId]))
 
   for (const country of countries) {
     const owned = worlds.map((w, idx) => ({ w, idx })).filter(({ w }) => w.ownerId === country.id)
@@ -735,7 +782,7 @@ export function tickEconomy(
     const stateBureaucracyMalus = country.bureaucracy > 0 ? 1 : BUREAUCRACY_SHORTAGE_MALUS
 
     for (const { w, idx } of owned) {
-      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, govHealthShare, stateBureaucracyMalus, runningTreasury, corpCash)
+      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, govHealthShare, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry)
       runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
       stockpileSpend += res.stockpileSpend
@@ -749,11 +796,25 @@ export function tickEconomy(
       nextWorlds[idx] = res.world
       reports.worlds[w.id] = res.report
       for (const [corpId, profit] of res.corpProfit) corpProfitTotal.set(corpId, (corpProfitTotal.get(corpId) ?? 0) + profit)
-      for (const [corpId, spend] of res.corpConstructionSpend) {
-        corpConstructionTotal.set(corpId, (corpConstructionTotal.get(corpId) ?? 0) + spend)
-        corpCash.set(corpId, (corpCash.get(corpId) ?? 0) - spend) // so a corp can't double-spend across worlds this tick
+    }
+
+    // Feed the investment pool from this country's PRIVATE companies' retained
+    // operating profit (capital seeking a return), then settle what construction
+    // drew from it this tick. This is the private economy's savings pooling into
+    // the capital market that finances new private ventures.
+    let poolContribution = 0
+    for (const c of corporations) {
+      if (c.kind !== 'private' || c.countryId !== country.id) continue
+      const op = (corpProfitTotal.get(c.id) ?? 0) - (corpSubsidyTotal.get(c.id) ?? 0)
+      if (op > 0) {
+        const contrib = op * POOL_CONTRIBUTION_RATE
+        poolContribution += contrib
+        corpPoolContribution.set(c.id, contrib)
       }
     }
+    // Add this country's private savings to its pool (construction already drew
+    // from it in place via tickWorld).
+    poolByCountry.set(country.id, Math.max(0, (poolByCountry.get(country.id) ?? 0) + poolContribution))
 
     // --- Milestone 5: inter-world trade & logistics ---
     // Ship each good's surplus (unsold production) to the country's worlds that
@@ -898,12 +959,20 @@ export function tickEconomy(
     nextCountries.push({ ...country, treasury, bureaucracy })
   }
 
-  // Pay corporations the net profit of the buildings they own, less what they
-  // spent on their own construction this tick.
+  // Finalize each country's investment pool now that construction draws from
+  // EVERY world (including foreign companies building here) and all contributions
+  // are settled.
+  for (let i = 0; i < nextCountries.length; i++) {
+    nextCountries[i] = { ...nextCountries[i], investmentPool: Math.max(0, poolByCountry.get(nextCountries[i].id) ?? nextCountries[i].investmentPool) }
+  }
+
+  // Pay corporations the net profit of the buildings they own, less the slice of
+  // it they contributed to the investment pool (construction is financed from
+  // that pool now, not their own cash).
   const paidCorporations = corporations.map((c) => {
     const profit = corpProfitTotal.get(c.id) ?? 0
-    const built = corpConstructionTotal.get(c.id) ?? 0
-    return { ...c, cash: c.cash + profit - built, lastProfit: profit }
+    const contributed = corpPoolContribution.get(c.id) ?? 0
+    return { ...c, cash: c.cash + profit - contributed, lastProfit: profit }
   })
 
   // Distribute dividends: a company pays part of its profit out to its
@@ -914,9 +983,29 @@ export function tickEconomy(
   const operatingProfit = new Map<string, number>()
   for (const [id, p] of corpProfitTotal) operatingProfit.set(id, p - (corpSubsidyTotal.get(id) ?? 0))
   const dv = distributeDividends(paidCorporations, nextCountries, nextWorlds, operatingProfit)
-  const nextCorporations = dv.corporations
   for (let i = 0; i < nextCountries.length; i++) nextCountries[i] = dv.countries[i]
   for (let i = 0; i < nextWorlds.length; i++) nextWorlds[i] = dv.worlds[i]
+
+  // The financial sector earns a MANAGEMENT FEE on the investment pool it runs —
+  // this is the real business of financial districts (and banks/asset managers),
+  // and it ties their prosperity to the private economy whose capital they
+  // steward. A bigger, healthier private economy → a bigger pool → more fees.
+  // The fee is split among each country's financial companies by their value.
+  const finByCountry = new Map<string, Corporation[]>()
+  for (const c of dv.corporations) if (c.kind === 'financial') (finByCountry.get(c.countryId) ?? finByCountry.set(c.countryId, []).get(c.countryId)!).push(c)
+  const fdIncome = new Map<string, number>()
+  for (const [countryId, fins] of finByCountry) {
+    const pool = poolByCountry.get(countryId) ?? 0
+    const feePot = pool * POOL_MANAGEMENT_FEE
+    if (feePot <= 0) continue
+    const values = fins.map((f) => Math.max(1, corporationValue(f, nextWorlds)))
+    const totalValue = values.reduce((s, v) => s + v, 0)
+    fins.forEach((f, i) => fdIncome.set(f.id, feePot * (values[i] / totalValue)))
+  }
+  const nextCorporations = dv.corporations.map((c) => {
+    const inc = fdIncome.get(c.id)
+    return inc && inc > 0 ? { ...c, cash: c.cash + inc, lastProfit: c.lastProfit + inc } : c
+  })
 
   // --- AI: run each NON-PLAYER nation's brain and every company's brain now
   //     that this tick's production, fiscal and reports are settled, so their
@@ -939,11 +1028,19 @@ export function tickEconomy(
     })
     // Corporation AI (the invisible hand): every company, in the player's nation
     // too — a market economy's firms run themselves; the player governs via law.
+    // Financed from their country's investment pool (the capital market).
+    const poolOf = new Map(aiCountries.map((c) => [c.id, c.investmentPool]))
+    const openHosts = new Set(aiCountries.filter((c) => c.foreignInvestmentPolicy !== 'closed').map((c) => c.id))
     aiCorporations = aiCorporations.map((corp) => {
-      const decided = runCorporationAI(corp, aiWorlds, tick)
+      const decided = runCorporationAI(corp, aiWorlds, tick, poolOf.get(corp.countryId) ?? 0, openHosts)
       aiWorlds = decided.worlds
       return decided.corp
     })
+    // Foreign investment: non-player states and cash-rich firms take equity
+    // stakes abroad (cross-border capital), whose dividends repatriate.
+    const fi = runForeignInvestmentAI(aiCountries, aiCorporations, aiWorlds, tick, ai.humanCountryIds ?? [], (c) => sharePrice(c, aiWorlds))
+    aiCountries = fi.countries
+    aiCorporations = fi.corporations
   }
 
   return { countries: aiCountries, worlds: aiWorlds, corporations: aiCorporations, reports }
@@ -955,6 +1052,14 @@ export function tickEconomy(
 // settled elsewhere), so only the state/public/financial portions actually leave
 // the company.
 const DIVIDEND_RATE = 0.35
+
+// The slice of a private company's retained operating profit that flows into its
+// country's INVESTMENT POOL each tick — the private sector's savings pooling into
+// the capital market that finances new private construction (Stage 3).
+const POOL_CONTRIBUTION_RATE = 0.3
+// The per-tick fee the financial sector (financial districts, banks, asset
+// managers) earns for managing that pool — their core income.
+const POOL_MANAGEMENT_FEE = 0.02
 
 // Pay each profitable company's dividends to its shareholders: the state's share
 // to its treasury, a financial district's share to that district's cash, and the
@@ -980,11 +1085,21 @@ export function distributeDividends(
       if (amt <= 0) continue
       switch (holding.holder.kind) {
         case 'state':
-          add(treasuryDelta, corp.countryId, amt)
+          // Repatriation: a state stake's dividend goes to THAT government's
+          // treasury — the corp's own country by default, or a FOREIGN one when
+          // the holding names a different country (cross-border investment).
+          add(treasuryDelta, holding.holder.countryId ?? corp.countryId, amt)
           add(corpCashDelta, corp.id, -amt)
           break
         case 'financial':
           add(corpCashDelta, holding.holder.id, amt) // the district earns from its stake
+          add(corpCashDelta, corp.id, -amt)
+          break
+        case 'corporation':
+          // One company holding equity in another (an SOE or private firm, at
+          // home or abroad): the dividend flows to the holding company's cash —
+          // cross-border, this repatriates profit to the foreign owner.
+          add(corpCashDelta, holding.holder.id, amt)
           add(corpCashDelta, corp.id, -amt)
           break
         case 'public':
@@ -1046,6 +1161,12 @@ export function sharePrice(corp: Corporation, worlds: World[]): number {
 // Building slots used per district on a world (existing buildings by level +
 // queued construction). Compared against world.districtCapacity to see whether
 // there is room to build.
+// A world's construction capacity (points/tick) from its Construction Sectors —
+// exported for the UI. Uses live throughput, so understaffed sectors count less.
+export function constructionCapacityOf(world: World): number {
+  return worldConstructionCapacity(world.buildings)
+}
+
 export function districtUsage(world: World): Record<DistrictType, number> {
   const used = { core: 0, urban: 0, industrial: 0, resource: 0 } as Record<DistrictType, number>
   for (const b of world.buildings) used[districtOfRecipe(b.recipeId)] += b.level

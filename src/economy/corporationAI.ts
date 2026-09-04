@@ -19,12 +19,19 @@
 // does not mutate cash itself.
 
 import type { Corporation, World, ConstructionOrder, Building } from './economyTypes'
-import { RECIPES, districtOfRecipe, type DistrictType } from './recipes'
+import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
 import { GOODS } from './goods'
 
 // Review twice a year, staggered per-company so they don't all act at once.
 const INVEST_REVIEW_PERIOD = 6
+// A reference asset value for one building level — used to size the cash cushion
+// a company keeps and the salvage it recovers on divestment. (Construction's
+// actual money cost is now the materials it consumes; see constructionWork.)
 const BUILD_COST = 6000
+// Foreign margins are discounted vs domestic when deciding where to found a new
+// building — a mild home bias (repatriation friction, unfamiliarity), so a firm
+// only builds abroad when the foreign opportunity is clearly better.
+const FOREIGN_BUILD_BIAS = 0.85
 // Keep a cash cushion beyond one building's cost before investing, so a company
 // doesn't spend itself to zero (it still needs to ride out loss-making ticks).
 const INVEST_CASH_BUFFER = BUILD_COST * 2.5
@@ -105,7 +112,7 @@ function ownsHere(building: Building, corpId: string): boolean {
 // appended (owned by, and funded from, this company). Financial districts don't
 // operate ordinary industry — they're institutional investors, not operating
 // companies — so they're left alone here.
-export function runCorporationAI(corp: Corporation, worlds: World[], tick: number): { corp: Corporation; worlds: World[] } {
+export function runCorporationAI(corp: Corporation, worlds: World[], tick: number, investmentPool = Infinity, openHosts: Set<string> = new Set()): { corp: Corporation; worlds: World[] } {
   if (corp.kind === 'financial') return { corp, worlds }
   if (tick % INVEST_REVIEW_PERIOD !== phase(corp.id, INVEST_REVIEW_PERIOD)) return { corp, worlds }
 
@@ -127,13 +134,14 @@ export function runCorporationAI(corp: Corporation, worlds: World[], tick: numbe
     nextWorlds = worlds.map((w) => (w.id === worstLoser!.worldId ? { ...w, buildings: w.buildings.filter((b) => b.id !== worstLoser!.buildingId) } : w))
   }
 
-  const invested = invest(nextCorp, nextWorlds, tick)
+  const invested = invest(nextCorp, nextWorlds, tick, investmentPool, openHosts)
   return { corp: nextCorp, worlds: invested }
 }
 
-// The investment half of the decision: expand a winner or found a new venture.
-function invest(corp: Corporation, worlds: World[], tick: number): World[] {
-  if (corp.cash < INVEST_CASH_BUFFER) return worlds // too poor to invest — it must fix its books first
+// The investment half of the decision: expand a winner or found a new venture,
+// financed from the country's investment pool (the capital market).
+function invest(corp: Corporation, worlds: World[], tick: number, investmentPool: number, openHosts: Set<string>): World[] {
+  if (investmentPool < INVEST_CASH_BUFFER) return worlds // the capital market is dry — no financing available
   // One order at a time: don't stack up spend it can't cover.
   const alreadyBuilding = worlds.some((w) => w.constructionQueue.some((o) => o.owner.kind === 'corporation' && o.owner.corporationId === corp.id))
   if (alreadyBuilding) return worlds
@@ -141,7 +149,7 @@ function invest(corp: Corporation, worlds: World[], tick: number): World[] {
   const order = (recipeId: string): ConstructionOrder => ({
     id: `cai-${corp.id}-${tick}-${recipeId}`,
     recipeId,
-    cost: BUILD_COST,
+    cost: constructionWork(recipeId),
     progress: 0,
     owner: { kind: 'corporation', corporationId: corp.id },
   })
@@ -160,14 +168,18 @@ function invest(corp: Corporation, worlds: World[], tick: number): World[] {
     }
   }
 
-  // --- Option 2: FOUND a new building in the highest-margin foundable sector,
-  //     on one of the company's home-country worlds with district room. ---
-  const homeWorlds = worlds.filter((w) => w.ownerId === corp.countryId)
+  // --- Option 2: FOUND a new building in the highest-margin foundable sector.
+  //     On the company's OWN worlds, or ABROAD on a foreign world whose host is
+  //     open to foreign capital (cross-border direct investment) — a foreign
+  //     build is financed from the company's HOME investment pool. Foreign
+  //     margins are discounted a little (home bias / repatriation friction). ---
   let bestFound: { recipeId: string; worldId: string; score: number } | null = null
-  for (const w of homeWorlds) {
+  for (const w of worlds) {
+    const home = w.ownerId === corp.countryId
+    if (!home && !openHosts.has(w.ownerId)) continue // can't invest in a closed nation
     for (const recipeId of FOUNDABLE_SECTORS) {
       if (!districtRoom(w, recipeId)) continue
-      const m = grossMargin(recipeId, w)
+      const m = grossMargin(recipeId, w) * (home ? 1 : FOREIGN_BUILD_BIAS)
       if (m <= 0) continue
       if (!bestFound || m > bestFound.score) bestFound = { recipeId, worldId: w.id, score: m }
     }

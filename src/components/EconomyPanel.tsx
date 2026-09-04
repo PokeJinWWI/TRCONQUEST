@@ -10,6 +10,17 @@ import type { Country, World } from '../economy/economyTypes'
 
 // For a good on a world: which buildings produce it (sellers) and which
 // buildings + household needs consume it (buyers).
+// A plain-language label for a welfare level (the per-person monthly benefit),
+// so the number isn't a bare figure — you can see at a glance how generous your
+// social policy is.
+function welfareTier(perCapita: number): string {
+  if (perCapita <= 0) return 'None'
+  if (perCapita < 1) return 'Minimal'
+  if (perCapita < 2.5) return 'Basic'
+  if (perCapita < 4.5) return 'Generous'
+  return 'Comprehensive'
+}
+
 function marketParticipants(world: World, good: GoodId) {
   const sellers: string[] = []
   const buyers: string[] = []
@@ -140,10 +151,11 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
         <FiscalRow label="Balance / tick" value={fiscal?.balance} tone="signed" />
         <FiscalRow label="Treasury" value={fiscal?.treasury} tone="signed" />
         <FiscalRow label="National debt" value={fiscal?.debt} tone="neg" />
+        <FiscalRow label="Private investment pool" value={country.investmentPool} tone="pos" />
 
         <div className="inspect-divider" />
         <div className="econ-subtitle">Controls</div>
-        <div className="econ-control-row">
+        <div className="econ-control-row" title="The income tax rate on all wages and profits — your main revenue lever.">
           <span className="inspect-label">Income tax</span>
           <span className="econ-control">
             <button type="button" onClick={() => setTaxRate(country.id, country.taxRate - 0.05)}>
@@ -155,21 +167,20 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             </button>
           </span>
         </div>
-        <div className="econ-control-row">
-          <span className="inspect-label">Welfare / capita</span>
+        <div className="econ-control-row" title="A social benefit paid to every person each month (like a pension/UBI) — so total welfare spending scales with population. This sets the per-person amount; the total is the Welfare line above.">
+          <span className="inspect-label">Welfare — {welfareTier(country.welfarePerCapita)}</span>
           <span className="econ-control">
-            <button type="button" onClick={() => setWelfare(country.id, country.welfarePerCapita - 0.02)}>
+            <button type="button" onClick={() => setWelfare(country.id, country.welfarePerCapita - 0.5)}>
               −
             </button>
-            <span className="econ-control-value">{country.welfarePerCapita.toFixed(2)}</span>
-            <button type="button" onClick={() => setWelfare(country.id, country.welfarePerCapita + 0.02)}>
+            <span className="econ-control-value">{formatMoney(country.welfarePerCapita)}/person</span>
+            <button type="button" onClick={() => setWelfare(country.id, country.welfarePerCapita + 0.5)}>
               +
             </button>
           </span>
         </div>
         <div className="ship-panel-hint">
-          One national budget for the whole country. Spend past tax revenue and the deficit piles up as debt and
-          downgrades your credit rating.
+          Welfare is a <b>per-person</b> benefit → total = per-person × population ({fiscal ? formatPop(fiscal.population) : '—'}). Two more budget levers live elsewhere: <b>healthcare funding</b> (Government → Laws) and <b>subsidies</b> (Corporations, and each building's detail). Spend past tax revenue and the deficit piles up as debt and downgrades your credit rating.
         </div>
       </div>
     )

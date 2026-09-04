@@ -1,18 +1,70 @@
 import { create } from 'zustand'
 import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies } from '../economy/economySeed'
-import { tickEconomy, constructionCost, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
+import { tickEconomy, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
-import { RECIPES } from '../economy/recipes'
+import { RECIPES, constructionWork } from '../economy/recipes'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
 import type { GoodId } from '../economy/goods'
 
-// The kind a corporation should be given its state shareholding: a state
-// majority makes it state-owned, otherwise private. A financial district keeps
-// its own kind regardless.
-function derivedKind(corp: Corporation, stateShares: number): Corporation['kind'] {
+// Shares held by the corporation's OWN (home) government — foreign-state stakes
+// don't count toward domestic state ownership.
+function homeStateShares(corp: Corporation): number {
+  return corp.shares.filter((s) => s.holder.kind === 'state' && (s.holder.countryId === undefined || s.holder.countryId === corp.countryId)).reduce((n, s) => n + s.shares, 0)
+}
+
+// The kind a corporation should be given its HOME-state shareholding: a domestic
+// state majority makes it state-owned, otherwise private. A financial district
+// keeps its own kind regardless.
+function derivedKind(corp: Corporation): Corporation['kind'] {
   if (corp.kind === 'financial') return 'financial'
-  return corp.totalShares > 0 && stateShares / corp.totalShares >= 0.5 ? 'state' : 'private'
+  return corp.totalShares > 0 && homeStateShares(corp) / corp.totalShares >= 0.5 ? 'state' : 'private'
+}
+
+// Execute a foreign-equity buy/sell: a state (investorKind 'state', investorId a
+// countryId) or a company (investorKind 'corporation', investorId a corp id)
+// takes/sells `shares` of `targetCorpId` from its public float, paid from the
+// investor's treasury/cash. Returns updated corporations + countries, or null if
+// the trade can't happen (no float, can't afford, etc.). Shared by the direct
+// invest actions and the approval flow.
+function executeForeignBuy(
+  corporations: Corporation[],
+  countries: Country[],
+  worlds: World[],
+  investorKind: 'state' | 'corporation',
+  investorId: string,
+  targetCorpId: string,
+  shares: number,
+): { corporations: Corporation[]; countries: Country[] } | null {
+  const target = corporations.find((c) => c.id === targetCorpId)
+  if (!target) return null
+  const match = (h: Corporation['shares'][number]['holder']) => (investorKind === 'state' ? h.kind === 'state' && h.countryId === investorId : h.kind === 'corporation' && h.id === investorId)
+  const held = target.shares.filter((s) => match(s.holder)).reduce((n, s) => n + s.shares, 0)
+  const publicHolding = target.shares.find((s) => s.holder.kind === 'public')?.shares ?? 0
+  const delta = Math.max(-held, Math.min(publicHolding, Math.round(shares)))
+  if (delta === 0) return null
+  const cost = delta * sharePrice(target, worlds)
+  if (investorKind === 'state') {
+    const inv = countries.find((c) => c.id === investorId)
+    if (!inv || (delta > 0 && cost > inv.treasury)) return null
+  } else {
+    const inv = corporations.find((c) => c.id === investorId)
+    if (!inv || (delta > 0 && cost > inv.cash)) return null
+  }
+  const nextShares: Corporation['shares'] = []
+  for (const h of target.shares) {
+    if (match(h.holder) || h.holder.kind === 'public') continue
+    nextShares.push(h)
+  }
+  if (held + delta > 0) nextShares.push({ holder: investorKind === 'state' ? { kind: 'state', countryId: investorId } : { kind: 'corporation', id: investorId }, shares: held + delta })
+  if (publicHolding - delta > 0) nextShares.push({ holder: { kind: 'public' }, shares: publicHolding - delta })
+  const nextCorporations = corporations.map((c) => {
+    if (c.id === targetCorpId) return { ...c, shares: nextShares }
+    if (investorKind === 'corporation' && c.id === investorId) return { ...c, cash: c.cash - cost }
+    return c
+  })
+  const nextCountries = investorKind === 'state' ? countries.map((c) => (c.id === investorId ? { ...c, treasury: c.treasury - cost } : c)) : countries
+  return { corporations: nextCorporations, countries: nextCountries }
 }
 
 // A corporation's HQ grows with the assets it owns.
@@ -236,6 +288,26 @@ interface EconomyStore {
   // The state buys `shares` of a corporation on the exchange (costs treasury);
   // negative sells. Moves shares between the public float and the state.
   tradeShares: (countryId: string, corporationId: string, shares: number) => void
+  // --- Foreign investment (cross-border capital) ---
+  // Set this country's foreign-investment LAW (may foreign capital own equity in
+  // its corporations).
+  setForeignInvestmentPolicy: (countryId: string, policy: import('../economy/laws').ForeignInvestmentPolicy) => void
+  // Under the 'approval' law, auto-approve incoming foreign investments instead
+  // of queueing them for the player.
+  setForeignInvestmentAutoApprove: (countryId: string, auto: boolean) => void
+  // Approve / reject a pending foreign investment into this country's companies.
+  approveForeignInvestment: (hostCountryId: string, offerId: string) => void
+  rejectForeignInvestment: (hostCountryId: string, offerId: string) => void
+  // The investor country's STATE buys (or, negative, sells) `shares` of a
+  // FOREIGN corporation from its public float — cross-border state investment.
+  // Blocked if the target company's country is closed to foreign capital. The
+  // stake's dividends are repatriated to the investor's treasury.
+  investAbroad: (investorCountryId: string, corporationId: string, shares: number) => void
+  // A COMPANY (an SOE or a private firm, at home or abroad) buys/sells equity in
+  // another company from its own cash — corporate/SOE foreign investment. Blocked
+  // cross-border if the target's country is closed to foreign capital. Dividends
+  // flow to the holding company's cash.
+  corpInvest: (holdingCorpId: string, targetCorpId: string, shares: number) => void
   // A character interaction (grant funds, demand dividend, dismiss, etc.).
   characterAction: (characterId: string, action: string) => void
   // --- Laws / bonds / debt ---
@@ -339,7 +411,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         if (w.id !== worldId) return w
         if (!canBuild(w, recipeId)) return w // district full — no room
         constructionCounter += 1
-        const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionCost(), progress: 0, owner }
+        const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionWork(recipeId), progress: 0, owner }
         return { ...w, constructionQueue: [...w.constructionQueue, order] }
       }),
     })),
@@ -640,7 +712,9 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const country = state.countries.find((c) => c.id === countryId)
       if (!corp || !country) return state
       const price = sharePrice(corp, state.worlds)
-      const stateHolding = corp.shares.find((s) => s.holder.kind === 'state')?.shares ?? 0
+      // Only the corp's OWN government trades here (foreign stakes are separate).
+      const isHomeState = (s: Corporation['shares'][number]) => s.holder.kind === 'state' && (s.holder.countryId === undefined || s.holder.countryId === corp.countryId)
+      const stateHolding = corp.shares.filter(isHomeState).reduce((n, s) => n + s.shares, 0)
       const publicHolding = corp.shares.find((s) => s.holder.kind === 'public')?.shares ?? 0
       // Clamp: can't buy more than floats publicly, can't sell more than held.
       const delta = Math.max(-stateHolding, Math.min(publicHolding, Math.round(shares)))
@@ -651,21 +725,115 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const newState = stateHolding + delta
       const newPublic = publicHolding - delta
       for (const h of corp.shares) {
-        if (h.holder.kind === 'state') continue
+        if (isHomeState(h)) continue // rebuilt below
         if (h.holder.kind === 'public') continue
-        nextShares.push(h)
+        nextShares.push(h) // keeps foreign-state, financial and character stakes intact
       }
       if (newState > 0) nextShares.push({ holder: { kind: 'state' }, shares: newState })
       if (newPublic > 0) nextShares.push({ holder: { kind: 'public' }, shares: newPublic })
-      // Ownership decides the kind: if the state no longer holds a majority the
-      // company is no longer state-owned (and vice-versa). This keeps the tab a
-      // corporation shows up in congruent with who actually owns it — you can't
-      // sell off all of a "state" corp yet have it still called state-owned.
+      // Ownership decides the kind: if the home state no longer holds a majority
+      // the company is no longer state-owned (and vice-versa).
       return {
         corporations: state.corporations.map((c) =>
-          c.id === corporationId ? { ...c, shares: nextShares, kind: derivedKind(c, newState) } : c,
+          c.id === corporationId ? { ...c, shares: nextShares, kind: derivedKind({ ...c, shares: nextShares }) } : c,
         ),
         countries: state.countries.map((c) => (c.id === countryId ? { ...c, treasury: c.treasury - cost } : c)),
+      }
+    }),
+
+  setForeignInvestmentPolicy: (countryId, policy) =>
+    set((state) => ({
+      countries: state.countries.map((c) => (c.id === countryId ? { ...c, foreignInvestmentPolicy: policy } : c)),
+    })),
+
+  setForeignInvestmentAutoApprove: (countryId, auto) =>
+    set((state) => ({
+      countries: state.countries.map((c) => (c.id === countryId ? { ...c, foreignInvestmentAutoApprove: auto } : c)),
+    })),
+
+  approveForeignInvestment: (hostCountryId, offerId) =>
+    set((state) => {
+      const host = state.countries.find((c) => c.id === hostCountryId)
+      const offer = host?.pendingForeignInvestment.find((o) => o.id === offerId)
+      if (!host || !offer) return state
+      const res = executeForeignBuy(state.corporations, state.countries, state.worlds, offer.investorKind, offer.investorId, offer.targetCorpId, offer.shares)
+      const baseCountries = res?.countries ?? state.countries
+      return {
+        corporations: res?.corporations ?? state.corporations,
+        countries: baseCountries.map((c) => (c.id === hostCountryId ? { ...c, pendingForeignInvestment: c.pendingForeignInvestment.filter((o) => o.id !== offerId) } : c)),
+      }
+    }),
+
+  rejectForeignInvestment: (hostCountryId, offerId) =>
+    set((state) => ({
+      countries: state.countries.map((c) => (c.id === hostCountryId ? { ...c, pendingForeignInvestment: c.pendingForeignInvestment.filter((o) => o.id !== offerId) } : c)),
+    })),
+
+  investAbroad: (investorCountryId, corporationId, shares) =>
+    set((state) => {
+      const corp = state.corporations.find((c) => c.id === corporationId)
+      const investor = state.countries.find((c) => c.id === investorCountryId)
+      const target = corp ? state.countries.find((c) => c.id === corp.countryId) : undefined
+      if (!corp || !investor || !target) return state
+      if (corp.countryId === investorCountryId) return state // this is domestic — use tradeShares
+      if (target.foreignInvestmentPolicy === 'closed') return state // host bars foreign capital
+      const price = sharePrice(corp, state.worlds)
+      const held = corp.shares.filter((s) => s.holder.kind === 'state' && s.holder.countryId === investorCountryId).reduce((n, s) => n + s.shares, 0)
+      const publicHolding = corp.shares.find((s) => s.holder.kind === 'public')?.shares ?? 0
+      // Buy from the public float (positive) or sell back to it (negative).
+      const delta = Math.max(-held, Math.min(publicHolding, Math.round(shares)))
+      if (delta === 0) return state
+      const cost = delta * price
+      if (delta > 0 && cost > investor.treasury) return state
+      const newHeld = held + delta
+      const newPublic = publicHolding - delta
+      const nextShares: Corporation['shares'] = []
+      for (const h of corp.shares) {
+        if (h.holder.kind === 'state' && h.holder.countryId === investorCountryId) continue // rebuilt
+        if (h.holder.kind === 'public') continue
+        nextShares.push(h)
+      }
+      if (newHeld > 0) nextShares.push({ holder: { kind: 'state', countryId: investorCountryId }, shares: newHeld })
+      if (newPublic > 0) nextShares.push({ holder: { kind: 'public' }, shares: newPublic })
+      return {
+        corporations: state.corporations.map((c) => (c.id === corporationId ? { ...c, shares: nextShares } : c)),
+        countries: state.countries.map((c) => (c.id === investorCountryId ? { ...c, treasury: c.treasury - cost } : c)),
+      }
+    }),
+
+  corpInvest: (holdingCorpId, targetCorpId, shares) =>
+    set((state) => {
+      const holder = state.corporations.find((c) => c.id === holdingCorpId)
+      const target = state.corporations.find((c) => c.id === targetCorpId)
+      if (!holder || !target || holder.id === target.id) return state
+      const crossBorder = holder.countryId !== target.countryId
+      if (crossBorder) {
+        const host = state.countries.find((c) => c.id === target.countryId)
+        if (host?.foreignInvestmentPolicy === 'closed') return state // host bars foreign capital
+      }
+      const price = sharePrice(target, state.worlds)
+      const held = target.shares.filter((s) => s.holder.kind === 'corporation' && s.holder.id === holdingCorpId).reduce((n, s) => n + s.shares, 0)
+      const publicHolding = target.shares.find((s) => s.holder.kind === 'public')?.shares ?? 0
+      const delta = Math.max(-held, Math.min(publicHolding, Math.round(shares)))
+      if (delta === 0) return state
+      const cost = delta * price
+      if (delta > 0 && cost > holder.cash) return state // must afford it from its own cash
+      const newHeld = held + delta
+      const newPublic = publicHolding - delta
+      const nextShares: Corporation['shares'] = []
+      for (const h of target.shares) {
+        if (h.holder.kind === 'corporation' && h.holder.id === holdingCorpId) continue // rebuilt
+        if (h.holder.kind === 'public') continue
+        nextShares.push(h)
+      }
+      if (newHeld > 0) nextShares.push({ holder: { kind: 'corporation', id: holdingCorpId }, shares: newHeld })
+      if (newPublic > 0) nextShares.push({ holder: { kind: 'public' }, shares: newPublic })
+      return {
+        corporations: state.corporations.map((c) => {
+          if (c.id === targetCorpId) return { ...c, shares: nextShares }
+          if (c.id === holdingCorpId) return { ...c, cash: c.cash - cost }
+          return c
+        }),
       }
     }),
 

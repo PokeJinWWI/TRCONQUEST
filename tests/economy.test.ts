@@ -7,9 +7,9 @@
 // Run:  npx tsx tests/economy.test.ts
 
 import { seedWorlds, seedCountries, seedCorporations } from '../src/economy/economySeed'
-import { tickEconomy, estimateWorldGdp, creditRating, corporationValue, sharePrice, districtUsage, districtOfRecipe, DISTRICT_TYPES, NEW_BUILDING_THROUGHPUT, distributeDividends } from '../src/economy/economyTick'
+import { tickEconomy, estimateWorldGdp, estimateConstructionCost, constructionCapacityOf, creditRating, corporationValue, sharePrice, districtUsage, districtOfRecipe, DISTRICT_TYPES, NEW_BUILDING_THROUGHPUT, distributeDividends } from '../src/economy/economyTick'
 import { GOOD_IDS, GOODS, priceCeiling, priceFloor } from '../src/economy/goods'
-import { POP_CLASSES, RECIPES, getMethod, qualificationFraction } from '../src/economy/recipes'
+import { POP_CLASSES, RECIPES, getMethod, qualificationFraction, constructionWork } from '../src/economy/recipes'
 import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
 import { useEconomyStore } from '../src/state/economyStore'
@@ -135,7 +135,7 @@ console.log('\n=== 5. Local markets respond; power flows; needs behave ===')
 console.log('\n=== 6. Construction funded from the national treasury lands capacity ===')
 {
   let countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, treasury: 500000 } : c))
-  let worlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, constructionQueue: [{ id: 'o', recipeId: 'wheatFarm', cost: 6000, progress: 0, owner: { kind: 'state' as const } }] } : w))
+  let worlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, constructionQueue: [{ id: 'o', recipeId: 'wheatFarm', cost: constructionWork('wheatFarm'), progress: 0, owner: { kind: 'state' as const } }] } : w))
   let corporations = seedCorporations()
   const farmBefore = worlds.find((w) => w.id === 'Mars')!.buildings.filter((b) => b.recipeId === 'wheatFarm').reduce((s, b) => s + b.level, 0)
   let completed = false
@@ -342,7 +342,7 @@ console.log('\n=== 17. Districts + private (corporation-funded) construction ===
     let countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, treasury: 500000 } : c))
     let w2 = seedWorlds().map((x) =>
       x.id === 'Mars' && withOrder
-        ? { ...x, constructionQueue: [{ id: 'co', recipeId: 'school', cost: 6000, progress: 0, owner: { kind: 'corporation' as const, corporationId: 'mra' } }] }
+        ? { ...x, constructionQueue: [{ id: 'co', recipeId: 'school', cost: constructionWork('school'), progress: 0, owner: { kind: 'corporation' as const, corporationId: 'mra' } }] }
         : x,
     )
     let corps = seedCorporations().map((c) => (c.id === 'mra' ? { ...c, cash: 200000 } : c))
@@ -813,9 +813,9 @@ console.log('\n=== 28. Parallel construction: every queued order progresses at o
       ? {
           ...w,
           constructionQueue: [
-            { id: 'q1', recipeId: 'school', cost: 6000, progress: 0, owner: { kind: 'state' as const } },
-            { id: 'q2', recipeId: 'clinic', cost: 6000, progress: 0, owner: { kind: 'state' as const } },
-            { id: 'q3', recipeId: 'retailShop', cost: 6000, progress: 0, owner: { kind: 'state' as const } },
+            { id: 'q1', recipeId: 'school', cost: constructionWork('school'), progress: 0, owner: { kind: 'state' as const } },
+            { id: 'q2', recipeId: 'clinic', cost: constructionWork('clinic'), progress: 0, owner: { kind: 'state' as const } },
+            { id: 'q3', recipeId: 'retailShop', cost: constructionWork('retailShop'), progress: 0, owner: { kind: 'state' as const } },
           ],
         }
       : w,
@@ -827,7 +827,7 @@ console.log('\n=== 28. Parallel construction: every queued order progresses at o
 
   // Queue a single order with plenty of ticks — it completes and lands the building.
   let cs = countries
-  let ws = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, constructionQueue: [{ id: 'solo', recipeId: 'clinic', cost: 6000, progress: 0, owner: { kind: 'state' as const } }] } : w))
+  let ws = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, constructionQueue: [{ id: 'solo', recipeId: 'clinic', cost: constructionWork('clinic'), progress: 0, owner: { kind: 'state' as const } }] } : w))
   let cor = seedCorporations()
   const clinicsBefore = ws.find((w) => w.id === 'Mars')!.buildings.filter((b) => b.recipeId === 'clinic').length
   for (let i = 0; i < 20; i++) {
@@ -893,6 +893,221 @@ console.log('\n=== 29. Nationalize / privatize a chosen NUMBER of building level
   } else {
     check('a multi-level state building exists to test privatize', false, 'none found')
   }
+}
+
+console.log('\n=== 30. Construction is work-points + emergent goods cost (no flat dollar price) ===')
+{
+  check('construction work scales by tier (farm < steel mill < spaceyard)', constructionWork('wheatFarm') < constructionWork('steelMill') && constructionWork('steelMill') < constructionWork('spaceyard'), `${constructionWork('wheatFarm')} < ${constructionWork('steelMill')} < ${constructionWork('spaceyard')}`)
+
+  const mars0 = seedWorlds().find((w) => w.id === 'Mars')!
+  const costCheap = estimateConstructionCost('wheatFarm', mars0.market.prices)
+  const costDear = estimateConstructionCost('spaceyard', mars0.market.prices)
+  check('estimated money cost is positive and scales with the work', costCheap > 0 && costDear > costCheap, `${costCheap.toFixed(0)} < ${costDear.toFixed(0)}`)
+
+  // A government build draws its cost from the treasury as it consumes materials.
+  // Compared against a no-build control to isolate the construction spend from
+  // the nation's normal fiscal flows.
+  const runBuild = (withOrder: boolean) => {
+    let countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, treasury: 1e7 } : c))
+    let worlds = seedWorlds().map((w) => (w.id === 'Mars' && withOrder ? { ...w, constructionQueue: [{ id: 'b30', recipeId: 'clinic', cost: constructionWork('clinic'), progress: 0, owner: { kind: 'state' as const } }] } : w))
+    let corps = seedCorporations()
+    let completed = -1
+    const cash: number[] = []
+    for (let i = 0; i < 15; i++) {
+      const r = tickEconomy(countries, worlds, corps)
+      countries = r.countries
+      worlds = r.worlds
+      corps = r.corporations
+      cash.push(countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury)
+      if (withOrder && completed < 0 && worlds.find((w) => w.id === 'Mars')!.constructionQueue.length === 0) completed = i
+    }
+    return { worlds, cash, completed }
+  }
+  const built = runBuild(true)
+  const control = runBuild(false)
+  const marsBuilt = built.worlds.find((w) => w.id === 'Mars')!
+  check('the build completes over several ticks (a point cost, not instant)', built.completed > 0, `done at tick ${built.completed}`)
+  check('...landing a new clinic level', marsBuilt.buildings.filter((b) => b.recipeId === 'clinic').length >= 1)
+  const t = Math.max(0, built.completed)
+  check('the treasury paid for the materials (lower than the no-build control)', built.cash[t] < control.cash[t], `${built.cash[t].toFixed(0)} < ${control.cash[t].toFixed(0)}`)
+}
+
+console.log('\n=== 31. Construction Sectors provide build capacity (build them to build faster) ===')
+{
+  const worlds = seedWorlds()
+  const withSectors = worlds.find((w) => w.buildings.some((b) => b.recipeId === 'constructionSector'))!
+  const withoutSectors = worlds.find((w) => !w.buildings.some((b) => b.recipeId === 'constructionSector'))!
+  check('a world with construction sectors has more capacity than one without', constructionCapacityOf(withSectors) > constructionCapacityOf(withoutSectors), `${constructionCapacityOf(withSectors).toFixed(0)} vs ${constructionCapacityOf(withoutSectors).toFixed(0)}`)
+  check('even a sector-less world keeps a small base capacity', constructionCapacityOf(withoutSectors) > 0, constructionCapacityOf(withoutSectors).toFixed(0))
+
+  // The same build finishes faster where there are more construction sectors.
+  const timeToBuild = (worldId: string) => {
+    let countries = seedCountries().map((c) => ({ ...c, treasury: 1e8 }))
+    let ws = seedWorlds().map((w) => (w.id === worldId ? { ...w, constructionQueue: [{ id: 'cap', recipeId: 'clinic', cost: constructionWork('clinic'), progress: 0, owner: { kind: 'state' as const } }] } : w))
+    let corps = seedCorporations()
+    for (let i = 0; i < 60; i++) {
+      const r = tickEconomy(countries, ws, corps)
+      countries = r.countries
+      ws = r.worlds
+      corps = r.corporations
+      if (ws.find((w) => w.id === worldId)!.constructionQueue.length === 0) return i + 1
+    }
+    return 999
+  }
+  check('a high-capacity world builds the same thing faster than a low-capacity one', timeToBuild(withSectors.id) < timeToBuild(withoutSectors.id), `${timeToBuild(withSectors.id)} < ${timeToBuild(withoutSectors.id)} ticks`)
+}
+
+console.log('\n=== 32. Investment pool finances private construction; financial sector earns a fee ===')
+{
+  // A private company's construction is financed from the country's investment
+  // pool, not its own cash — so a cash-poor company can still be built.
+  const runPrivateBuild = (pool: number, withOrder: boolean) => {
+    let countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, investmentPool: pool } : c))
+    let worlds = seedWorlds().map((w) => (w.id === 'Mars' && withOrder ? { ...w, constructionQueue: [{ id: 'pv', recipeId: 'toolWorkshop', cost: constructionWork('toolWorkshop'), progress: 0, owner: { kind: 'corporation' as const, corporationId: 'redmines' } }] } : w))
+    let corps = seedCorporations().map((c) => (c.id === 'redmines' ? { ...c, cash: 500 } : c)) // deliberately cash-poor
+    const r = tickEconomy(countries, worlds, corps)
+    const mars = r.worlds.find((w) => w.id === 'Mars')!
+    const ism = r.countries.find((c) => c.id === 'imperial-state-of-mars')!
+    const order = mars.constructionQueue.find((o) => o.id === 'pv')
+    return { poolAfter: ism.investmentPool, progress: withOrder ? order?.progress ?? constructionWork('toolWorkshop') : 0 }
+  }
+  const funded = runPrivateBuild(100000, true)
+  const control = runPrivateBuild(100000, false)
+  check('private construction progresses even when the company is cash-poor (financed by the pool)', funded.progress > 0, `progress ${funded.progress.toFixed(0)}`)
+  check('...and it is the POOL that pays (lower than a no-build control given the same contributions)', funded.poolAfter < control.poolAfter, `${funded.poolAfter.toFixed(0)} < ${control.poolAfter.toFixed(0)}`)
+
+  // With a dry pool, the same cash-poor company cannot build.
+  const dry = runPrivateBuild(0, true)
+  check('a dry investment pool cannot finance the same cash-poor build', dry.progress === 0, `progress ${dry.progress.toFixed(0)}`)
+
+  // A financial district earns more where the pool it manages is larger.
+  const finCash = (pool: number) => {
+    let countries = seedCountries().map((c) => ({ ...c, investmentPool: pool }))
+    let worlds = seedWorlds()
+    let corps = seedCorporations()
+    for (let i = 0; i < 5; i++) {
+      const r = tickEconomy(countries, worlds, corps)
+      countries = r.countries
+      worlds = r.worlds
+      corps = r.corporations
+    }
+    return corps.filter((c) => c.kind === 'financial').reduce((s, c) => s + c.cash, 0)
+  }
+  check('the financial sector earns more managing a bigger investment pool', finCash(200000) > finCash(0), `${finCash(0).toFixed(0)} -> ${finCash(200000).toFixed(0)}`)
+}
+
+console.log('\n=== 33. Foreign investment: cross-border state stakes + repatriated dividends ===')
+{
+  const store = useEconomyStore.getState()
+  // Redmines is an Orion... no — Redmines is ISM's. Find a private corp and a
+  // DIFFERENT country to invest from.
+  const targetCorp = store.corporations.find((c) => c.kind === 'private')!
+  const hostCountryId = targetCorp.countryId
+  const investorId = store.countries.find((c) => c.id !== hostCountryId)!.id
+
+  // Open the host to foreign capital, then invest from abroad.
+  store.setForeignInvestmentPolicy(hostCountryId, 'open')
+  const before = useEconomyStore.getState()
+  const beforeShares = before.corporations.find((c) => c.id === targetCorp.id)!.shares.filter((s) => s.holder.kind === 'state' && (s.holder as { countryId?: string }).countryId === investorId).reduce((n, s) => n + s.shares, 0)
+  store.investAbroad(investorId, targetCorp.id, 100)
+  const after = useEconomyStore.getState()
+  const foreignStake = after.corporations.find((c) => c.id === targetCorp.id)!.shares.find((s) => s.holder.kind === 'state' && (s.holder as { countryId?: string }).countryId === investorId)
+  check('a state can take an equity stake in a FOREIGN company', !!foreignStake && foreignStake.shares > beforeShares, `foreign shares: ${beforeShares} -> ${foreignStake?.shares ?? 0}`)
+  check('...and it did NOT flip the company to home-state-owned (foreign stakes do not)', after.corporations.find((c) => c.id === targetCorp.id)!.kind !== 'state')
+
+  // The foreign stake's dividends repatriate to the INVESTOR's treasury.
+  const corpNow = after.corporations.find((c) => c.id === targetCorp.id)!
+  const countriesNow = after.countries
+  const investorTreasuryBefore = countriesNow.find((c) => c.id === investorId)!.treasury
+  const profit = new Map<string, number>([[corpNow.id, 2000]])
+  const dv = distributeDividends([corpNow], countriesNow, after.worlds, profit)
+  const investorTreasuryAfter = dv.countries.find((c) => c.id === investorId)!.treasury
+  check('the foreign stake\'s dividends are repatriated to the investor\'s treasury', investorTreasuryAfter > investorTreasuryBefore, `Δ=${(investorTreasuryAfter - investorTreasuryBefore).toFixed(0)}`)
+
+  // A country CLOSED to foreign capital blocks the investment.
+  store.setForeignInvestmentPolicy(hostCountryId, 'closed')
+  const closedBefore = useEconomyStore.getState().corporations.find((c) => c.id === targetCorp.id)!.shares.filter((s) => s.holder.kind === 'state' && (s.holder as { countryId?: string }).countryId === investorId).reduce((n, s) => n + s.shares, 0)
+  store.investAbroad(investorId, targetCorp.id, 100)
+  const closedAfter = useEconomyStore.getState().corporations.find((c) => c.id === targetCorp.id)!.shares.filter((s) => s.holder.kind === 'state' && (s.holder as { countryId?: string }).countryId === investorId).reduce((n, s) => n + s.shares, 0)
+  check('a country closed to foreign capital blocks the investment', closedAfter === closedBefore, `${closedBefore} == ${closedAfter}`)
+}
+
+console.log('\n=== 34. Company foreign investment + AI cross-border capital ===')
+{
+  // A company holding equity in another company gets that stake's dividends
+  // routed to its own cash (the mechanism behind SOE/company foreign investment).
+  const holderCorp: Corporation = { id: 'holdco', name: 'HoldCo', countryId: 'orion-republic', kind: 'private', cash: 0, totalShares: 100, shares: [{ holder: { kind: 'public' }, shares: 100 }], lastProfit: 0, sector: 'Finance' }
+  const ownedCorp: Corporation = { id: 'ownedco', name: 'OwnedCo', countryId: 'imperial-state-of-mars', kind: 'private', cash: 0, totalShares: 100, shares: [{ holder: { kind: 'corporation', id: 'holdco' }, shares: 100 }], lastProfit: 0, sector: 'Test' }
+  const { corporations: dc } = distributeDividends([holderCorp, ownedCorp], seedCountries(), seedWorlds(), new Map([['ownedco', 1000]]))
+  check('a company that holds equity in another gets that stake\'s dividends in its cash', dc.find((c) => c.id === 'holdco')!.cash > 0, `HoldCo cash ${dc.find((c) => c.id === 'holdco')!.cash.toFixed(0)}`)
+
+  // The foreign-investment AI spreads cross-border stakes: with everyone AI and
+  // open to foreign capital, foreign governments end up owning slices of the one
+  // profitable private company.
+  let countries = seedCountries().map((c) => ({ ...c, foreignInvestmentPolicy: 'open' as const, treasury: 200000 }))
+  let worlds = seedWorlds()
+  let corps = seedCorporations()
+  for (let i = 0; i < 120; i++) {
+    const r = tickEconomy(countries, worlds, corps, { humanCountryIds: [], tick: i + 1, enableAI: true })
+    countries = r.countries
+    worlds = r.worlds
+    corps = r.corporations
+  }
+  const anyForeignStake = corps.some((c) => c.shares.some((s) => s.holder.kind === 'state' && s.holder.countryId !== undefined && s.holder.countryId !== c.countryId))
+  check('the foreign-investment AI forms cross-border state stakes over time', anyForeignStake)
+}
+
+console.log('\n=== 35. Cross-border construction: a foreign firm builds abroad on its HOME capital ===')
+{
+  // A Venus-based company builds a new factory on MARS. It should be financed
+  // from VENUS's investment pool (its home capital market), not Mars's — and the
+  // finished building is foreign-owned (its profit repatriates).
+  const venCorp: Corporation = { id: 'vencorp', name: 'Venus Ventures', countryId: 'republic-of-venus', kind: 'private', cash: 0, totalShares: 100, shares: [{ holder: { kind: 'public' }, shares: 100 }], lastProfit: 0, sector: 'Industry' }
+  const countries = seedCountries().map((c) => {
+    if (c.id === 'republic-of-venus') return { ...c, investmentPool: 500000 } // Venus is flush
+    if (c.id === 'imperial-state-of-mars') return { ...c, investmentPool: 0 } // Mars pool is empty
+    return c
+  })
+  const worlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, constructionQueue: [{ id: 'xb', recipeId: 'toolWorkshop', cost: constructionWork('toolWorkshop'), progress: 0, owner: { kind: 'corporation' as const, corporationId: 'vencorp' } }] } : w))
+  const corps = [...seedCorporations(), venCorp]
+  const r = tickEconomy(countries, worlds, corps)
+  const marsQueue = r.worlds.find((w) => w.id === 'Mars')!.constructionQueue
+  const order = marsQueue.find((o) => o.id === 'xb')
+  const venPoolAfter = r.countries.find((c) => c.id === 'republic-of-venus')!.investmentPool
+  check('the foreign firm\'s build on Mars progresses despite Mars\'s empty pool', (order?.progress ?? constructionWork('toolWorkshop')) > 0, `progress ${order?.progress?.toFixed(0) ?? 'done'}`)
+  check('...financed from VENUS\'s home investment pool (which drops)', venPoolAfter < 500000, `Venus pool 500000 -> ${venPoolAfter.toFixed(0)}`)
+}
+
+console.log('\n=== 36. Foreign-investment approval queue + auto-approve toggle ===')
+{
+  const store = useEconomyStore.getState()
+  const targetCorp = store.corporations.find((c) => c.kind === 'private')!
+  const hostId = targetCorp.countryId
+  const investorId = store.countries.find((c) => c.id !== hostId)!.id
+
+  // Host on the 'approval' law with auto-approve OFF: a foreign state's
+  // investment does NOT execute — but the store's investAbroad is player-driven
+  // and executes into a foreign host directly, so the QUEUE is populated by the
+  // AI. Here we test the approve/reject store actions on a hand-made offer.
+  store.setForeignInvestmentPolicy(hostId, 'approval')
+  store.setForeignInvestmentAutoApprove(hostId, false)
+  // Inject a pending offer as the AI would.
+  useEconomyStore.setState((s) => ({
+    countries: s.countries.map((c) => (c.id === hostId ? { ...c, pendingForeignInvestment: [{ id: 'offer1', investorKind: 'state' as const, investorId, investorName: 'Investor', targetCorpId: targetCorp.id, shares: 60 }] } : c)),
+  }))
+  const beforeShares = useEconomyStore.getState().corporations.find((c) => c.id === targetCorp.id)!.shares.filter((s) => s.holder.kind === 'state' && (s.holder as { countryId?: string }).countryId === investorId).reduce((n, s) => n + s.shares, 0)
+  store.approveForeignInvestment(hostId, 'offer1')
+  const after = useEconomyStore.getState()
+  const afterShares = after.corporations.find((c) => c.id === targetCorp.id)!.shares.filter((s) => s.holder.kind === 'state' && (s.holder as { countryId?: string }).countryId === investorId).reduce((n, s) => n + s.shares, 0)
+  check('approving a pending foreign investment executes the buy', afterShares > beforeShares, `${beforeShares} -> ${afterShares}`)
+  check('...and removes it from the queue', after.countries.find((c) => c.id === hostId)!.pendingForeignInvestment.length === 0)
+
+  // Rejecting simply drops the offer.
+  useEconomyStore.setState((s) => ({
+    countries: s.countries.map((c) => (c.id === hostId ? { ...c, pendingForeignInvestment: [{ id: 'offer2', investorKind: 'state' as const, investorId, investorName: 'Investor', targetCorpId: targetCorp.id, shares: 60 }] } : c)),
+  }))
+  store.rejectForeignInvestment(hostId, 'offer2')
+  check('rejecting a pending foreign investment discards it', useEconomyStore.getState().countries.find((c) => c.id === hostId)!.pendingForeignInvestment.length === 0)
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

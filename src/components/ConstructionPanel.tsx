@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RECIPES, DISTRICT_TYPES, DISTRICT_LABELS, districtOfRecipe, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
-import { districtUsage, canBuild, constructionCost } from '../economy/economyTick'
+import { districtUsage, canBuild, estimateConstructionCost, constructionCapacityOf } from '../economy/economyTick'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { formatMoney } from '../economy/format'
@@ -43,7 +43,6 @@ export function ConstructionPanel() {
   const usage = districtUsage(world)
   const myCorps = corporations.filter((c) => c.countryId === country.id)
   const owner: BuildingOwner = funder === 'state' ? { kind: 'state' } : { kind: 'corporation', corporationId: funder }
-  const funderName = funder === 'state' ? 'the Government' : myCorps.find((c) => c.id === funder)?.name ?? 'a company'
 
   return (
     <div className="econ-panel">
@@ -51,6 +50,9 @@ export function ConstructionPanel() {
         <span>
           <span className="econ-summary-label">{world.name}</span> · Districts (finite building space)
         </span>
+      </div>
+      <div className="ship-panel-hint" style={{ marginTop: 0, marginBottom: 6 }}>
+        Construction capacity: <b>{constructionCapacityOf(world).toFixed(0)}</b> points/tick — build <b>Construction Sectors</b> (Development) to build faster. Buildings cost construction points; the money is the materials they consume.
       </div>
 
       {DISTRICT_TYPES.map((d) => {
@@ -71,29 +73,27 @@ export function ConstructionPanel() {
       })}
 
       <div className="econ-subtitle" style={{ marginTop: 10 }}>
-        Construction pools
+        Construction funding
       </div>
       <div className="inspect-row">
         <span className="inspect-label">Government pool (treasury)</span>
         <span className="inspect-value">{formatMoney(country.treasury)}</span>
       </div>
-      {myCorps.map((c) => (
-        <div className="inspect-row" key={c.id}>
-          <span className="inspect-label">{c.name}</span>
-          <span className="inspect-value">{formatMoney(c.cash)}</span>
-        </div>
-      ))}
+      <div className="inspect-row" title="The private sector's pooled capital — a slice of company profits, managed by the financial sector — that finances PRIVATE construction.">
+        <span className="inspect-label">Private investment pool</span>
+        <span className="inspect-value">{formatMoney(country.investmentPool)}</span>
+      </div>
 
       <div className="econ-subtitle" style={{ marginTop: 10 }}>
-        Build (cost {formatMoney(constructionCost())}, paid by {funderName})
+        Build — construction consumes materials over time
       </div>
       <div className="econ-econsystem" style={{ marginBottom: 6 }}>
-        <span>Funded by:</span>
+        <span>Owner / funding:</span>
         <select className="econ-method-select" value={funder} onChange={(e) => setFunder(e.target.value)}>
-          <option value="state">Government (treasury)</option>
+          <option value="state">Government — state-owned, paid by the treasury</option>
           {myCorps.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {c.name} — private, financed by the investment pool
             </option>
           ))}
         </select>
@@ -110,7 +110,7 @@ export function ConstructionPanel() {
                   type="button"
                   className="econ-build-btn"
                   disabled={!room}
-                  title={room ? `Build a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district` : `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full`}
+                  title={room ? `Build a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${formatMoney(estimateConstructionCost(r.id, world.market.prices))} of materials` : `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full`}
                   onClick={() => queueConstruction(world.id, r.id, owner)}
                 >
                   + {r.label}

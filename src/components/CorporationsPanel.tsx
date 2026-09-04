@@ -56,7 +56,17 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
         mine.map((c) => {
           const leader = characters.find((ch) => ch.id === c.leaderId)
           const price = sharePrice(c, worlds)
-          const stateStake = c.shares.find((s) => s.holder.kind === 'state')?.shares ?? 0
+          const stateStake = c.shares.filter((s) => s.holder.kind === 'state' && (s.holder.countryId === undefined || s.holder.countryId === c.countryId)).reduce((n, s) => n + s.shares, 0)
+          // Equity held by FOREIGN entities — a foreign government, or a company
+          // based in another nation. Their dividends are repatriated abroad.
+          const foreignHeld = c.shares.reduce((n, s) => {
+            if (s.holder.kind === 'state' && s.holder.countryId && s.holder.countryId !== c.countryId) return n + s.shares
+            if (s.holder.kind === 'corporation') {
+              const holderCorp = corporations.find((x) => x.id === (s.holder as { id: string }).id)
+              if (holderCorp && holderCorp.countryId !== c.countryId) return n + s.shares
+            }
+            return n
+          }, 0)
           return (
             <div key={c.id} className="corp-card">
               <div className="corp-card-head">
@@ -76,6 +86,11 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                 <span>Buildings {buildingsOf(c.id)}</span>
                 <span>Share {formatMoney(price)}</span>
                 <span>State stake {Math.round((stateStake / c.totalShares) * 100)}%</span>
+                {foreignHeld > 0 && (
+                  <span title="Equity held by foreign governments or companies — their dividends are repatriated abroad.">
+                    Foreign-held <b className="econ-neg">{Math.round((foreignHeld / c.totalShares) * 100)}%</b>
+                  </span>
+                )}
               </div>
               <div className="corp-card-leader">
                 Leader: <b>{leader?.name ?? '—'}</b>

@@ -119,6 +119,27 @@ export function foreignBondPolicyDef(p: ForeignBondPolicy): ForeignBondPolicyDef
   return FOREIGN_BOND_POLICY_DEFS[p]
 }
 
+// The foreign-INVESTMENT law: may foreign capital take equity stakes in THIS
+// country's companies? (Distinct from the foreign-bond law, which is about
+// lending.) Open lets foreign states/companies buy in; closed keeps ownership
+// domestic.
+export type ForeignInvestmentPolicy = 'open' | 'approval' | 'closed'
+export const FOREIGN_INVESTMENT_POLICIES: ForeignInvestmentPolicy[] = ['open', 'approval', 'closed']
+
+export interface ForeignInvestmentPolicyDef {
+  id: ForeignInvestmentPolicy
+  name: string
+  description: string
+}
+export const FOREIGN_INVESTMENT_POLICY_DEFS: Record<ForeignInvestmentPolicy, ForeignInvestmentPolicyDef> = {
+  open: { id: 'open', name: 'Open to Foreign Capital', description: 'Foreign governments and companies may buy equity stakes in this country’s corporations. Their profits are repatriated abroad.' },
+  approval: { id: 'approval', name: 'Screened', description: 'Foreign investment is permitted but reviewed — treated as open for now (a formal approval queue is a later addition).' },
+  closed: { id: 'closed', name: 'Closed to Foreign Capital', description: 'Only domestic entities may own this country’s corporations.' },
+}
+export function foreignInvestmentPolicyDef(p: ForeignInvestmentPolicy): ForeignInvestmentPolicyDef {
+  return FOREIGN_INVESTMENT_POLICY_DEFS[p]
+}
+
 // When a building's production method changes (owner or state), it retools:
 // utilization dips to this fraction and ramps back up — so a switch is never a
 // free instant win, and rapid flip-flopping is self-penalizing.

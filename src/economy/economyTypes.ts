@@ -1,7 +1,7 @@
 import type { GoodId } from './goods'
 import type { NeedTier } from './species'
 import type { PopClass, DistrictType } from './recipes'
-import type { EconomicSystem, HealthcareSystem, ForeignBondPolicy } from './laws'
+import type { EconomicSystem, HealthcareSystem, ForeignBondPolicy, ForeignInvestmentPolicy } from './laws'
 
 // Government bonds — the debt the state sells to finance deficits. Held by three
 // classes of buyer; foreign holders are gated by law + an approval setting.
@@ -17,6 +17,20 @@ export interface ForeignBondOffer {
   id: string
   amount: number
   investor: string
+}
+
+// A pending foreign EQUITY investment awaiting the host government's approval
+// (when its foreign-investment law is 'approval' and auto-approve is off). The
+// buy executes at approval time; it targets one of the host's own corporations.
+export interface ForeignInvestmentOffer {
+  id: string
+  // Who wants to invest: a foreign STATE (investorId = its countryId) or a
+  // foreign COMPANY (investorId = its corp id).
+  investorKind: 'state' | 'corporation'
+  investorId: string
+  investorName: string
+  targetCorpId: string
+  shares: number
 }
 
 // Government subsidies — a per-tick cash transfer FROM the treasury TO either a
@@ -200,6 +214,14 @@ export interface Country {
   // Foreign-bond LAW (may we sell to foreigners at all) + the SETTING for
   // whether inbound foreign purchases need the player's approval.
   foreignBondPolicy: ForeignBondPolicy
+  // The foreign-INVESTMENT law: may foreign capital own equity in this country's
+  // corporations? (See laws.ts; distinct from the foreign-bond/lending law.)
+  foreignInvestmentPolicy: ForeignInvestmentPolicy
+  // Under the 'approval' (Screened) law: auto-approve incoming foreign
+  // investments instead of queueing them for the player's decision.
+  foreignInvestmentAutoApprove: boolean
+  // Foreign equity investments into this country's companies awaiting approval.
+  pendingForeignInvestment: ForeignInvestmentOffer[]
   requireForeignApproval: boolean
   // Foreign purchase offers awaiting approval.
   pendingForeign: ForeignBondOffer[]
@@ -217,6 +239,13 @@ export interface Country {
   logisticsCapacity: number
   // Standing per-tick subsidies to corporations and individual buildings.
   subsidies: SubsidyBook
+  // The private-sector INVESTMENT POOL (Stage 3 of the construction rework): the
+  // capital the country's private companies have pooled (a slice of their
+  // retained profits) and that FINANCES private construction — managed by the
+  // financial sector (financial districts / banks), who earn a fee on it. So a
+  // profitable-but-cash-poor company can still be financed to expand, and the
+  // financial sector has a real business.
+  investmentPool: number
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---
@@ -224,7 +253,12 @@ export interface Country {
 // A shareholder in a corporation. The state (the player, as government), a named
 // character (a magnate), the anonymous public float traded on the exchange, or a
 // world's financial district (an institutional investor).
-export type ShareHolder = { kind: 'state' } | { kind: 'character'; id: string } | { kind: 'public' } | { kind: 'financial'; id: string }
+// A shareholder. A 'state' holder optionally names WHICH country's government
+// holds the stake: absent (or equal to the corp's own country) = the company's
+// home state; a different countryId = a FOREIGN government's stake (whose
+// dividends are repatriated to that foreign treasury). This is how cross-border
+// state investment is represented.
+export type ShareHolder = { kind: 'state'; countryId?: string } | { kind: 'character'; id: string } | { kind: 'public' } | { kind: 'financial'; id: string } | { kind: 'corporation'; id: string }
 
 export interface ShareHolding {
   holder: ShareHolder
