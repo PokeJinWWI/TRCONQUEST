@@ -805,5 +805,95 @@ console.log('\n=== 27. Dividends: profit flows to shareholders (state / public /
   check('a financial district earns dividends from the corporate stakes it holds', dc3.find((c) => c.id === 'fd1')!.cash > 0, `FD cash ${dc3.find((c) => c.id === 'fd1')!.cash.toFixed(0)}`)
 }
 
+console.log('\n=== 28. Parallel construction: every queued order progresses at once ===')
+{
+  const countries = seedCountries().map((c) => (c.id === 'imperial-state-of-mars' ? { ...c, treasury: 1e7 } : c))
+  const worlds = seedWorlds().map((w) =>
+    w.id === 'Mars'
+      ? {
+          ...w,
+          constructionQueue: [
+            { id: 'q1', recipeId: 'school', cost: 6000, progress: 0, owner: { kind: 'state' as const } },
+            { id: 'q2', recipeId: 'clinic', cost: 6000, progress: 0, owner: { kind: 'state' as const } },
+            { id: 'q3', recipeId: 'retailShop', cost: 6000, progress: 0, owner: { kind: 'state' as const } },
+          ],
+        }
+      : w,
+  )
+  const r = tickEconomy(countries, worlds, seedCorporations())
+  const q = r.worlds.find((w) => w.id === 'Mars')!.constructionQueue
+  check('all three orders advanced in a single tick (not just the front one)', q.length === 3 && q.every((o) => o.progress > 0), q.map((o) => o.progress.toFixed(0)).join('/'))
+  check('the capacity is shared, so each got a fraction of a solo build', q.every((o) => o.progress < 400 + 1e-9))
+
+  // Queue a single order with plenty of ticks — it completes and lands the building.
+  let cs = countries
+  let ws = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, constructionQueue: [{ id: 'solo', recipeId: 'clinic', cost: 6000, progress: 0, owner: { kind: 'state' as const } }] } : w))
+  let cor = seedCorporations()
+  const clinicsBefore = ws.find((w) => w.id === 'Mars')!.buildings.filter((b) => b.recipeId === 'clinic').length
+  for (let i = 0; i < 20; i++) {
+    const rr = tickEconomy(cs, ws, cor)
+    cs = rr.countries
+    ws = rr.worlds
+    cor = rr.corporations
+  }
+  const mars = ws.find((w) => w.id === 'Mars')!
+  check('a fully-funded order completes and lands a building', mars.constructionQueue.length === 0 && mars.buildings.filter((b) => b.recipeId === 'clinic').length >= clinicsBefore)
+}
+
+console.log('\n=== 29. Nationalize / privatize a chosen NUMBER of building levels ===')
+{
+  const store = useEconomyStore.getState()
+  const totalLevelsOf = (worlds: World[], worldId: string, recipeId: string, ownerKind: string) =>
+    worlds.find((w) => w.id === worldId)!.buildings.filter((b) => b.recipeId === recipeId && b.owner.kind === ownerKind).reduce((s, b) => s + b.level, 0)
+
+  // Find any corporation/worker building with 2+ levels to split.
+  let target: { worldId: string; b: Building } | undefined
+  for (const w of store.worlds) {
+    const b = w.buildings.find((x) => x.owner.kind !== 'state' && x.level >= 2)
+    if (b) {
+      target = { worldId: w.id, b }
+      break
+    }
+  }
+  if (target) {
+    const { worldId, b } = target
+    const stateBefore = totalLevelsOf(store.worlds, worldId, b.recipeId, 'state')
+    store.nationalizeBuildingLevels(worldId, b.id, 1)
+    const after = useEconomyStore.getState()
+    const srcAfter = after.worlds.find((w) => w.id === worldId)!.buildings.find((x) => x.id === b.id)
+    const stateAfter = totalLevelsOf(after.worlds, worldId, b.recipeId, 'state')
+    check('nationalizing 1 level drops the source building by exactly one', (srcAfter?.level ?? 0) === b.level - 1, `${b.level} -> ${srcAfter?.level}`)
+    check('...and a state building of the same type gains exactly that level', stateAfter === stateBefore + 1, `state levels ${stateBefore} -> ${stateAfter}`)
+  } else {
+    check('a splittable non-state building exists to test', false, 'none found')
+  }
+
+  // Privatize a chosen number of levels from a multi-level state building.
+  const s2 = useEconomyStore.getState()
+  let stateTarget: { worldId: string; b: Building } | undefined
+  for (const w of s2.worlds) {
+    const b = w.buildings.find((x) => x.owner.kind === 'state' && x.level >= 3)
+    if (b) {
+      stateTarget = { worldId: w.id, b }
+      break
+    }
+  }
+  if (stateTarget) {
+    const { worldId, b } = stateTarget
+    const privBefore = s2.worlds.find((w) => w.id === worldId)!.buildings.filter((x) => x.recipeId === b.recipeId && x.owner.kind === 'corporation').reduce((s, x) => s + x.level, 0)
+    const treasuryBefore = s2.countries.find((c) => c.id === s2.worlds.find((w) => w.id === worldId)!.ownerId)!.treasury
+    store.privatizeBuildingLevels(worldId, b.id, 2)
+    const after = useEconomyStore.getState()
+    const srcAfter = after.worlds.find((w) => w.id === worldId)!.buildings.find((x) => x.id === b.id)
+    const privAfter = after.worlds.find((w) => w.id === worldId)!.buildings.filter((x) => x.recipeId === b.recipeId && x.owner.kind === 'corporation').reduce((s, x) => s + x.level, 0)
+    const treasuryAfter = after.countries.find((c) => c.id === after.worlds.find((w) => w.id === worldId)!.ownerId)!.treasury
+    check('privatizing 2 levels drops the state building by exactly two', (srcAfter?.level ?? 0) === b.level - 2, `${b.level} -> ${srcAfter?.level}`)
+    check('...and a private company gains those two levels', privAfter === privBefore + 2, `private levels ${privBefore} -> ${privAfter}`)
+    check('...and the sale proceeds land in the treasury', treasuryAfter > treasuryBefore, `Δ=${(treasuryAfter - treasuryBefore).toFixed(0)}`)
+  } else {
+    check('a multi-level state building exists to test privatize', false, 'none found')
+  }
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)
 process.exit(failures === 0 ? 0 : 1)

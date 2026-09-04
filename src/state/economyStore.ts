@@ -37,6 +37,84 @@ function makeHqBuilding(corporationId: string, level: number): Building {
   }
 }
 
+// A fresh level-1 building of a recipe for a given owner (used when
+// nationalizing/privatizing a level into a type nobody owns yet on that world).
+let levelBuildCounter = 0
+function makeLevelBuilding(recipeId: string, owner: BuildingOwner): Building {
+  levelBuildCounter += 1
+  return {
+    id: `lvl-${recipeId}-${levelBuildCounter}`,
+    recipeId,
+    methodId: RECIPES[recipeId]?.methods[0]?.id ?? 'standard',
+    methodLocked: false,
+    level: 1,
+    owner,
+    inventory: {},
+    throughput: 0.1,
+    lastProfit: 0,
+    employed: 0,
+    jobsPosted: 0,
+  }
+}
+
+// In a world's building list, add `count` levels of `recipeId` for `owner`:
+// grow an existing same-owner building of that type, or append a fresh one.
+function addOwnerLevels(buildings: Building[], recipeId: string, owner: BuildingOwner, count: number): Building[] {
+  if (count <= 0) return buildings
+  const match = buildings.find(
+    (b) => b.recipeId === recipeId && b.owner.kind === owner.kind && (owner.kind !== 'corporation' || (b.owner as { corporationId?: string }).corporationId === owner.corporationId),
+  )
+  if (match) return buildings.map((b) => (b.id === match.id ? { ...b, level: b.level + count } : b))
+  return [...buildings, { ...makeLevelBuilding(recipeId, owner), level: count }]
+}
+
+// Remove `count` levels of a building (demolished when nothing is left).
+function removeLevels(buildings: Building[], buildingId: string, count: number): Building[] {
+  const b = buildings.find((x) => x.id === buildingId)
+  if (!b) return buildings
+  if (b.level - count <= 0) return buildings.filter((x) => x.id !== buildingId)
+  return buildings.map((x) => (x.id === buildingId ? { ...x, level: x.level - count } : x))
+}
+
+// Float a fresh private company for a country (used when privatizing a level and
+// no private company exists to receive it). Publicly held, with a leader.
+function makePrivateCorp(countryId: string, name: string, sector: string, cultureId: string): { corp: Corporation; leader: Character } {
+  corpCounter += 1
+  charCounter += 1
+  const corpId = `corp-${corpCounter}`
+  const leaderId = `char-${charCounter}`
+  const leader: Character = {
+    id: leaderId,
+    name: randomName(),
+    age: 40 + Math.floor(Math.random() * 20),
+    role: 'corp-leader',
+    corporationId: corpId,
+    cultureId,
+    religionId: 'non-affiliated',
+    speciesTemplateId: 'baseline-organic',
+    traits: [randomTrait()],
+    wealth: 300,
+    skills: { administration: 4, finance: 4, diplomacy: 4 },
+    log: [`Founded ${name}.`],
+  }
+  const corp: Corporation = {
+    id: corpId,
+    name,
+    countryId,
+    kind: 'private',
+    cash: 2000,
+    totalShares: 1000,
+    shares: [
+      { holder: { kind: 'character', id: leaderId }, shares: 500 },
+      { holder: { kind: 'public' }, shares: 500 },
+    ],
+    leaderId,
+    lastProfit: 0,
+    sector,
+  }
+  return { corp, leader }
+}
+
 // Ensure every corporation has exactly one HQ building, on the world where it
 // holds the most assets (or its country's first world if it owns nothing),
 // sized to its asset count. Rebuilt whenever ownership changes.
@@ -79,6 +157,9 @@ export interface FiscalSample {
 
 const HISTORY_LENGTH = 104
 const MAX_CATCH_UP_TICKS = 40
+// Fraction of a level's build cost recovered when a building is torn down a
+// level (or demolished). Demolition is quick but you don't get it all back.
+const DOWNGRADE_SALVAGE = 0.3
 
 interface EconomyStore {
   countries: Country[]
@@ -125,6 +206,22 @@ interface EconomyStore {
   // once), this pays the building's own owner a proportional compensation from
   // the treasury and costs a smaller bureaucracy hit (see economyStore).
   nationalizeBuilding: (worldId: string, buildingId: string) => void
+  // Nationalize `levels` levels of a corporation- or worker-owned building into
+  // a STATE building of the same type (the source loses them; a state building
+  // gains them, created if none exists). Taking every level flips the whole
+  // building to the state in place. Compensation scales with the level count
+  // (60% of build cost for a company, 15% for a co-op), plus a bureaucracy cost.
+  nationalizeBuildingLevels: (worldId: string, buildingId: string, levels: number) => void
+  // Privatize `levels` levels of a state-owned building to a PRIVATE company
+  // (the country's largest, or a newly floated one if none exists). Selling
+  // every level flips the whole building to the company in place. Per-level sale
+  // proceeds go to the treasury.
+  privatizeBuildingLevels: (worldId: string, buildingId: string, levels: number) => void
+  // Tear down one level of a building instantly (no construction time — unlike an
+  // upgrade, which is queued via queueConstruction). At level 1 the building is
+  // demolished outright. Recovers a fraction of a level's build cost as salvage,
+  // paid to the owner's pool (state → treasury, corporation → its cash).
+  downgradeBuilding: (worldId: string, buildingId: string) => void
   // --- Subsidies (a per-tick treasury → cash transfer; a real fiscal cost) ---
   // Set (or, at 0, clear) a standing per-tick subsidy paid to a corporation.
   setSubsidyForCorporation: (countryId: string, corporationId: string, amountPerTick: number) => void
@@ -404,6 +501,100 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         c.id === world.ownerId ? { ...c, treasury: c.treasury - compensation, bureaucracy: Math.max(0, c.bureaucracy - bureaucracyHit) } : c,
       )
       return { countries, worlds: syncCorporateHqs(worlds, state.corporations) }
+    }),
+
+  nationalizeBuildingLevels: (worldId, buildingId, levels) =>
+    set((state) => {
+      const world = state.worlds.find((w) => w.id === worldId)
+      const building = world?.buildings.find((b) => b.id === buildingId)
+      if (!world || !building || building.owner.kind === 'state') return state
+      const count = Math.max(1, Math.min(Math.floor(levels), building.level))
+      // Per-level compensation at the same ratios as a full nationalization
+      // (60% for a company, 15% for a co-op).
+      const ratio = building.owner.kind === 'corporation' ? 0.6 : 0.15
+      const compensation = count * BUILD_COST_PER_LEVEL * ratio
+      const bureaucracyHit = 20 + count * 20
+      let worlds: World[]
+      if (count >= building.level) {
+        // Taking the whole thing: flip the building to the state in place, so it
+        // keeps its throughput/identity rather than being rebuilt from scratch.
+        worlds = state.worlds.map((w) =>
+          w.id === worldId ? { ...w, buildings: w.buildings.map((b) => (b.id === buildingId ? { ...b, owner: { kind: 'state' as const }, methodLocked: false } : b)) } : w,
+        )
+      } else {
+        worlds = state.worlds.map((w) => {
+          if (w.id !== worldId) return w
+          const stripped = removeLevels(w.buildings, buildingId, count)
+          return { ...w, buildings: addOwnerLevels(stripped, building.recipeId, { kind: 'state' }, count) }
+        })
+      }
+      const countries = state.countries.map((c) =>
+        c.id === world.ownerId ? { ...c, treasury: c.treasury - compensation, bureaucracy: Math.max(0, c.bureaucracy - bureaucracyHit) } : c,
+      )
+      return { countries, worlds: syncCorporateHqs(worlds, state.corporations) }
+    }),
+
+  privatizeBuildingLevels: (worldId, buildingId, levels) =>
+    set((state) => {
+      const world = state.worlds.find((w) => w.id === worldId)
+      const building = world?.buildings.find((b) => b.id === buildingId)
+      if (!world || !building || building.owner.kind !== 'state') return state
+      const count = Math.max(1, Math.min(Math.floor(levels), building.level))
+      // Route the levels to the country's largest private company; if none
+      // exists, float a new one to receive them.
+      let corporations = state.corporations
+      let characters = state.characters
+      let target = state.corporations.filter((c) => c.countryId === world.ownerId && c.kind === 'private').sort((a, b) => b.cash - a.cash)[0]
+      if (!target) {
+        const label = RECIPES[building.recipeId]?.label ?? 'New'
+        const made = makePrivateCorp(world.ownerId, `${label} Ventures`, RECIPES[building.recipeId]?.category ?? 'industry', world.cultureId)
+        target = made.corp
+        corporations = [...corporations, made.corp]
+        characters = [...characters, made.leader]
+      }
+      const owner: BuildingOwner = { kind: 'corporation', corporationId: target.id }
+      const proceeds = count * BUILD_COST_PER_LEVEL * 0.7
+      let worlds: World[]
+      if (count >= building.level) {
+        // Selling the whole building: flip its owner to the company in place.
+        worlds = state.worlds.map((w) =>
+          w.id === worldId ? { ...w, buildings: w.buildings.map((b) => (b.id === buildingId ? { ...b, owner } : b)) } : w,
+        )
+      } else {
+        worlds = state.worlds.map((w) => {
+          if (w.id !== worldId) return w
+          const stripped = removeLevels(w.buildings, buildingId, count)
+          return { ...w, buildings: addOwnerLevels(stripped, building.recipeId, owner, count) }
+        })
+      }
+      const countries = state.countries.map((c) => (c.id === world.ownerId ? { ...c, treasury: c.treasury + proceeds } : c))
+      return { countries, corporations, characters, worlds: syncCorporateHqs(worlds, corporations) }
+    }),
+
+  downgradeBuilding: (worldId, buildingId) =>
+    set((state) => {
+      const world = state.worlds.find((w) => w.id === worldId)
+      const building = world?.buildings.find((b) => b.id === buildingId)
+      if (!world || !building) return state
+      const salvage = BUILD_COST_PER_LEVEL * DOWNGRADE_SALVAGE
+      // Level 1 → demolished; otherwise drop a level (throughput carries over).
+      const worlds = state.worlds.map((w) => {
+        if (w.id !== worldId) return w
+        if (building.level <= 1) return { ...w, buildings: w.buildings.filter((b) => b.id !== buildingId) }
+        return { ...w, buildings: w.buildings.map((b) => (b.id === buildingId ? { ...b, level: b.level - 1 } : b)) }
+      })
+      // Salvage goes to the owner's pool.
+      let countries = state.countries
+      let corporations = state.corporations
+      if (building.owner.kind === 'state') {
+        countries = state.countries.map((c) => (c.id === world.ownerId ? { ...c, treasury: c.treasury + salvage } : c))
+      } else if (building.owner.kind === 'corporation') {
+        const corpId = building.owner.corporationId
+        corporations = state.corporations.map((c) => (c.id === corpId ? { ...c, cash: c.cash + salvage } : c))
+      }
+      // A demolished corporate building can change HQ sizing.
+      const synced = building.owner.kind === 'corporation' && building.level <= 1 ? syncCorporateHqs(worlds, corporations) : worlds
+      return { worlds: synced, countries, corporations }
     }),
 
   setSubsidyForCorporation: (countryId, corporationId, amountPerTick) =>

@@ -551,52 +551,70 @@ function tickWorld(
     return { ...b, inventory: inv, throughput, lastProfit: netProfit, unprofitableStreak, employed, jobsPosted }
   })
 
-  // --- Construction: government pool (treasury) funds state/worker orders,
-  //     the private pool (a company's own cash) funds corporation orders. ---
+  // --- Construction: EVERY queued order progresses at once (Victoria 3 style),
+  //     the world's construction capacity split evenly across them. Government
+  //     pool (treasury) funds state/worker orders; the private pool (a company's
+  //     own cash) funds that corporation's orders. Several can finish in a tick. ---
   let builtBuildings = nextBuildings
   let nextQueue = world.constructionQueue
   let constructionSpend = 0 // drawn from the treasury (government pool)
   const corpConstructionSpend = new Map<string, number>()
   if (world.constructionQueue.length > 0) {
     const queue = world.constructionQueue.map((o) => ({ ...o }))
-    const front = queue[0]
-    const corpFunded = front.owner.kind === 'corporation'
-    const corpId = front.owner.kind === 'corporation' ? front.owner.corporationId : ''
-    const available = corpFunded ? corpCash.get(corpId) ?? 0 : treasuryAvailable
-    const fund = Math.min(CONSTRUCTION_CAPACITY, Math.max(0, available), front.cost - front.progress)
-    if (fund > 0) {
-      if (corpFunded) corpConstructionSpend.set(corpId, fund)
-      else constructionSpend = fund
-      front.progress += fund
-      if (front.progress >= front.cost - 1e-9) {
-        const sameOwner = (a: Building['owner'], o: Building['owner']) =>
-          a.kind === o.kind && (a.kind !== 'corporation' || a.corporationId === (o as { corporationId: string }).corporationId)
-        const existing = builtBuildings.find((b) => b.recipeId === front.recipeId && sameOwner(b.owner, front.owner))
-        if (existing)
-          builtBuildings = builtBuildings.map((b) =>
-            b.id === existing.id ? { ...b, level: b.level + 1, throughput: (b.throughput * b.level) / (b.level + 1) } : b,
-          )
-        else
-          builtBuildings = [
-            ...builtBuildings,
-            {
-              id: `${front.id}-built`,
-              recipeId: front.recipeId,
-              methodId: getMethod(front.recipeId, undefined)?.id ?? '',
-              methodLocked: false,
-              level: 1,
-              owner: front.owner,
-              inventory: {},
-              throughput: NEW_BUILDING_THROUGHPUT,
-              lastProfit: 0,
-              employed: 0,
-              jobsPosted: 0,
-            },
-          ]
-        queue.shift()
+    const perOrder = CONSTRUCTION_CAPACITY / queue.length
+    let govBudget = Math.max(0, treasuryAvailable) // shared across all gov/worker orders
+    const corpBudget = new Map<string, number>() // per-corp remaining cash this tick
+    for (const o of queue) {
+      const remaining = o.cost - o.progress
+      if (remaining <= 0) continue
+      if (o.owner.kind === 'corporation') {
+        const corpId = o.owner.corporationId
+        if (!corpBudget.has(corpId)) corpBudget.set(corpId, Math.max(0, corpCash.get(corpId) ?? 0))
+        const fund = Math.min(perOrder, remaining, corpBudget.get(corpId)!)
+        if (fund > 0) {
+          o.progress += fund
+          corpBudget.set(corpId, corpBudget.get(corpId)! - fund)
+          corpConstructionSpend.set(corpId, (corpConstructionSpend.get(corpId) ?? 0) + fund)
+        }
+      } else {
+        const fund = Math.min(perOrder, remaining, govBudget)
+        if (fund > 0) {
+          o.progress += fund
+          govBudget -= fund
+          constructionSpend += fund
+        }
       }
-      nextQueue = queue
     }
+    // Land every order that finished this tick (processed in order so two orders
+    // for the same recipe+owner stack onto each other correctly).
+    const sameOwner = (a: Building['owner'], o: Building['owner']) =>
+      a.kind === o.kind && (a.kind !== 'corporation' || a.corporationId === (o as { corporationId: string }).corporationId)
+    for (const o of queue) {
+      if (o.progress < o.cost - 1e-9) continue
+      const existing = builtBuildings.find((b) => b.recipeId === o.recipeId && sameOwner(b.owner, o.owner))
+      if (existing)
+        builtBuildings = builtBuildings.map((b) =>
+          b.id === existing.id ? { ...b, level: b.level + 1, throughput: (b.throughput * b.level) / (b.level + 1) } : b,
+        )
+      else
+        builtBuildings = [
+          ...builtBuildings,
+          {
+            id: `${o.id}-built`,
+            recipeId: o.recipeId,
+            methodId: getMethod(o.recipeId, undefined)?.id ?? '',
+            methodLocked: false,
+            level: 1,
+            owner: o.owner,
+            inventory: {},
+            throughput: NEW_BUILDING_THROUGHPUT,
+            lastProfit: 0,
+            employed: 0,
+            jobsPosted: 0,
+          },
+        ]
+    }
+    nextQueue = queue.filter((o) => o.progress < o.cost - 1e-9)
   }
 
   // --- Admin + GDP ---

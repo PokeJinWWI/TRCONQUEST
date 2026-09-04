@@ -62,17 +62,19 @@ function BuildingDetail({
   const recipe = RECIPES[b.recipeId]
   const method = getMethod(b.recipeId, b.methodId)
   const setSubsidyForBuilding = useEconomyStore((s) => s.setSubsidyForBuilding)
-  const nationalizeBuilding = useEconomyStore((s) => s.nationalizeBuilding)
+  const nationalizeBuildingLevels = useEconomyStore((s) => s.nationalizeBuildingLevels)
+  const privatizeBuildingLevels = useEconomyStore((s) => s.privatizeBuildingLevels)
   const requestConfirm = useConfirmStore((s) => s.requestConfirm)
+  // How many levels to nationalize/privatize (clamped to the building's level).
+  const [xferInput, setXferInput] = useState(1)
   if (!recipe || !method) return null
+  const xfer = Math.max(1, Math.min(Math.floor(xferInput) || 1, b.level))
   const t = b.throughput
   const perTick = (amount: number) => amount * b.level * t
   const owner = ownerLabel(b, corporations)
   const bureaucracy = BUREAUCRACY_OUTPUT[b.recipeId]
   const subsidyKey = `${world.id}:${b.id}`
   const subsidy = country?.subsidies.buildings[subsidyKey] ?? 0
-  const value = b.level * BUILD_COST_PER_LEVEL
-  const compensation = b.owner.kind === 'corporation' ? value * 0.6 : value * 0.15
 
   return (
     <div className="bld-detail">
@@ -177,28 +179,81 @@ function BuildingDetail({
               </button>
             </span>
           </div>
-          {b.owner.kind !== 'state' && (
+          {b.owner.kind !== 'state' ? (
             <div className="bld-detail-actions">
+              <span className="bld-xfer-picker">
+                <input
+                  type="number"
+                  className="bld-xfer-input"
+                  min={1}
+                  max={b.level}
+                  value={xferInput}
+                  onChange={(e) => setXferInput(Number(e.target.value))}
+                  aria-label="Levels to nationalize"
+                />
+                <span className="bld-xfer-of">/ {b.level}</span>
+                <button type="button" className="bld-xfer-all" onClick={() => setXferInput(b.level)}>
+                  All
+                </button>
+              </span>
               <button
                 type="button"
                 className="corp-btn corp-btn-danger"
                 onClick={() =>
                   requestConfirm({
-                    title: `Nationalize ${recipe!.label}?`,
-                    body: `This will transfer ownership of this building to the state. The owning ${
-                      b.owner.kind === 'corporation' ? 'corporation' : 'worker co-op'
-                    } loses this asset and receives only partial compensation for a single building (unlike full corporate nationalization, which buys out the whole company).`,
+                    title: `Nationalize ${xfer} of ${b.level} level${b.level > 1 ? 's' : ''} — ${recipe!.label}?`,
+                    body:
+                      xfer >= b.level
+                        ? `Seize this whole building from its ${b.owner.kind === 'corporation' ? 'company' : 'co-op'}. It becomes state-run and its method is unpinned.`
+                        : `Seize ${xfer} level${xfer > 1 ? 's' : ''} from this ${b.owner.kind === 'corporation' ? 'company' : 'co-op'} into a state building of the same type. The rest stays with its owner.`,
                     effects: [
-                      `Pay ${formatMoney(compensation)} in compensation from the treasury`,
-                      `Lose ~${50 + b.level * 30} bureaucracy (administrative takeover)`,
-                      'The building becomes state-run and its method is unpinned',
+                      `Pay ${formatMoney(xfer * BUILD_COST_PER_LEVEL * (b.owner.kind === 'corporation' ? 0.6 : 0.15))} compensation from the treasury`,
+                      xfer >= b.level ? 'The entire building becomes state-owned' : `This building drops to level ${b.level - xfer}; a state ${recipe!.label} gains ${xfer} level${xfer > 1 ? 's' : ''}`,
+                      `Lose ~${20 + xfer * 20} bureaucracy`,
                     ],
-                    confirmLabel: 'Nationalize',
-                    onConfirm: () => nationalizeBuilding(world.id, b.id),
+                    confirmLabel: `Nationalize ${xfer}`,
+                    onConfirm: () => nationalizeBuildingLevels(world.id, b.id, xfer),
                   })
                 }
               >
                 Nationalize
+              </button>
+            </div>
+          ) : (
+            <div className="bld-detail-actions">
+              <span className="bld-xfer-picker">
+                <input
+                  type="number"
+                  className="bld-xfer-input"
+                  min={1}
+                  max={b.level}
+                  value={xferInput}
+                  onChange={(e) => setXferInput(Number(e.target.value))}
+                  aria-label="Levels to privatize"
+                />
+                <span className="bld-xfer-of">/ {b.level}</span>
+                <button type="button" className="bld-xfer-all" onClick={() => setXferInput(b.level)}>
+                  All
+                </button>
+              </span>
+              <button
+                type="button"
+                className="corp-btn"
+                onClick={() =>
+                  requestConfirm({
+                    title: `Privatize ${xfer} of ${b.level} level${b.level > 1 ? 's' : ''} — ${recipe!.label}?`,
+                    body: "Sell to the private sector — the country's largest private company (or a newly floated one if none exists) takes the levels over and runs them for profit.",
+                    effects: [
+                      `Bank ${formatMoney(xfer * BUILD_COST_PER_LEVEL * 0.7)} in sale proceeds to the treasury`,
+                      xfer >= b.level ? 'The entire state building is sold off' : `This state building drops to level ${b.level - xfer}`,
+                      `A private company gains ${xfer} level${xfer > 1 ? 's' : ''} of this type and runs it itself`,
+                    ],
+                    confirmLabel: `Privatize ${xfer}`,
+                    onConfirm: () => privatizeBuildingLevels(world.id, b.id, xfer),
+                  })
+                }
+              >
+                Privatize
               </button>
             </div>
           )}
@@ -208,11 +263,16 @@ function BuildingDetail({
   )
 }
 
-const TAB_CATEGORIES: Record<string, string[] | null> = {
-  Development: null,
+// Each tab filters by BUILDING GROUP (the fine-grained grouping in recipes.ts),
+// not by the broad BuildingCategory, so every building lands in exactly ONE
+// sensible tab. Power/utilities/civic development together; extraction on its
+// own; manufacturing under Industry; the soft public services under Services.
+const TAB_GROUPS: Record<string, BuildingGroup[] | null> = {
+  Development: ['power', 'infrastructure', 'civic'],
   Agriculture: ['agriculture'],
-  Resources: ['extraction', 'energy'],
-  Urban: ['industry', 'services', 'corporate'],
+  Resources: ['extraction'],
+  Industry: ['heavyIndustry', 'chemicals', 'consumerGoods', 'vehicles'],
+  Services: ['services'],
 }
 
 interface BuildingsPanelProps {
@@ -255,18 +315,19 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const countryId = usePlayerStore((s) => s.selectedCountryId)
   const queueConstruction = useEconomyStore((s) => s.queueConstruction)
   const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
+  const downgradeBuilding = useEconomyStore((s) => s.downgradeBuilding)
   const setProductionMethod = useEconomyStore((s) => s.setProductionMethod)
   const releaseProductionMethod = useEconomyStore((s) => s.releaseProductionMethod)
   const corporations = useEconomyStore((s) => s.corporations)
   const [detailId, setDetailId] = useState<string | null>(null)
 
-  const cats = subtab ? TAB_CATEGORIES[subtab] : null
+  const groups = subtab ? TAB_GROUPS[subtab] ?? null : null
   const rows = useMemo(() => {
     if (!world) return []
     return world.buildings
       .map((b) => ({ b, recipe: RECIPES[b.recipeId] }))
-      .filter(({ recipe }) => recipe && (!cats || cats.includes(recipe.category)))
-  }, [world, cats])
+      .filter(({ recipe }) => recipe && (!groups || groups.includes(buildingGroup(recipe.id))))
+  }, [world, groups])
 
   if (!world) {
     return <div className="nav-placeholder">{worldName ? `${worldName} is uninhabited — no economy.` : 'No world in focus.'}</div>
@@ -275,7 +336,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const totalPop = world.pops.reduce((s, p) => s + p.populationSize, 0)
   const owned = !!countryId && world.ownerId === countryId
   const treasury = country?.treasury ?? 0
-  const buildable = Object.values(RECIPES).filter((r) => !cats || cats.includes(r.category))
+  const buildable = Object.values(RECIPES).filter((r) => !groups || groups.includes(buildingGroup(r.id)))
 
   // Once a tab holds more than a handful of distinct building types, a flat
   // list stops being legible — add sub-category divider rows/headers. A tab
@@ -354,7 +415,43 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                           {recipe!.label}
                         </button>
                       </td>
-                      <td>{b.level}</td>
+                      <td>
+                        {owned ? (
+                          <div className="bld-level-cell">
+                            {control === 'state' ? (
+                              <button
+                                type="button"
+                                className="bld-level-btn"
+                                onClick={() => downgradeBuilding(world.id, b.id)}
+                                title={b.level > 1 ? `Tear down one level (instant, salvages ${formatMoney(constructionCost() * 0.3)})` : `Demolish this building (instant, salvages ${formatMoney(constructionCost() * 0.3)})`}
+                              >
+                                −
+                              </button>
+                            ) : (
+                              // Can't instantly demolish a company's or co-op's property — nationalize it first.
+                              <span className="bld-level-btn bld-level-btn-empty" aria-hidden="true" />
+                            )}
+                            <span className="bld-level-num">{b.level}</span>
+                            <button
+                              type="button"
+                              className="bld-level-btn"
+                              onClick={() => queueConstruction(world.id, b.recipeId, { kind: 'state' })}
+                              disabled={!canBuild(world, b.recipeId)}
+                              title={
+                                !canBuild(world, b.recipeId)
+                                  ? 'District is full — no room to expand'
+                                  : control === 'state'
+                                    ? `Queue an upgrade to level ${b.level + 1} (${formatMoney(constructionCost())} + materials, takes time)`
+                                    : `Build a state-owned ${recipe!.label} here (${formatMoney(constructionCost())} + materials, takes time) — separate from this ${control === 'worker' ? 'co-op' : 'company'}`
+                              }
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          b.level
+                        )}
+                      </td>
                       <td>
                         <span className={`econ-owner-tag econ-owner-${control}`} title={ownerTitle}>
                           {ownerName}
@@ -436,9 +533,16 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
           {world.constructionQueue.map((o) => {
             const recipe = RECIPES[o.recipeId]
             const pct = Math.max(0, Math.min(100, (o.progress / o.cost) * 100))
+            const oc = o.owner.kind
+            const ownerTag = oc === 'state' ? 'State' : oc === 'worker' ? 'Co-op' : corporations.find((c) => c.id === (o.owner as { corporationId: string }).corporationId)?.name ?? 'Corp'
             return (
               <div key={o.id} className="econ-build-row">
-                <span className="econ-build-name">{recipe?.label ?? o.recipeId}</span>
+                <span className="econ-build-name">
+                  {recipe?.label ?? o.recipeId}
+                  <span className={`econ-owner-tag econ-owner-${oc === 'corporation' ? 'corporation' : oc} econ-build-owner`} title={`This will be a ${ownerTag}-owned building`}>
+                    {ownerTag}
+                  </span>
+                </span>
                 <span className="econ-build-bar">
                   <span className="econ-build-fill" style={{ width: `${pct}%` }} />
                 </span>

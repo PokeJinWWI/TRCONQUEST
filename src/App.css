@@ -244,6 +244,78 @@
   opacity: 0.75;
 }
 
+/* Planet switcher in the dock header — click the world name to pick another. */
+.action-dock-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.action-dock-switcher {
+  position: relative;
+  display: inline-block;
+}
+.action-dock-scope-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: #9fe8ff;
+  font: inherit;
+  font-weight: 400;
+  letter-spacing: inherit;
+  cursor: pointer;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.action-dock-scope-btn:hover {
+  border-color: rgba(111, 227, 255, 0.4);
+  background: rgba(111, 227, 255, 0.1);
+  color: #fff;
+}
+.action-dock-caret {
+  font-size: 9px;
+  opacity: 0.7;
+}
+.action-dock-scope-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 160px;
+  background: #0c1620;
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 5px;
+  padding: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.action-dock-scope-item {
+  background: none;
+  border: none;
+  color: #cfe9f5;
+  font: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-align: left;
+  cursor: pointer;
+  padding: 5px 9px;
+  border-radius: 3px;
+}
+.action-dock-scope-item:hover {
+  background: rgba(111, 227, 255, 0.15);
+  color: #fff;
+}
+.action-dock-scope-item.active {
+  color: #6fe3ff;
+  background: rgba(111, 227, 255, 0.12);
+}
+.action-dock-scope-follow {
+  color: #9fe8ff;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+  border-radius: 0;
+  margin-bottom: 2px;
+}
+
 .action-dock-close {
   background: none;
   border: none;
@@ -1931,6 +2003,90 @@
 .bld-reserve-depleted {
   color: #ff8f7a;
   background: rgba(255, 107, 74, 0.16);
+}
+
+/* Per-row level up/down controls */
+.bld-level-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bld-level-num {
+  min-width: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.bld-level-btn {
+  background: none;
+  border: 1px solid rgba(120, 200, 255, 0.4);
+  color: #7fd0ff;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bld-level-btn:hover:not(:disabled) {
+  background: rgba(120, 200, 255, 0.18);
+  color: #fff;
+}
+.bld-level-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+/* Keeps the level number + "+" aligned on rows that have no "−" (non-state). */
+.bld-level-btn-empty {
+  border-color: transparent;
+  background: none;
+  pointer-events: none;
+}
+/* Owner tag on a queued construction row, so + on a private building visibly
+   builds a separate STATE-owned one. */
+.econ-build-owner {
+  margin-left: 6px;
+  font-size: 9px;
+  vertical-align: middle;
+}
+
+/* "N / L (All)" level picker before the Nationalize/Privatize button. */
+.bld-xfer-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 8px;
+}
+.bld-xfer-input {
+  width: 42px;
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 3px;
+  color: #eaf6ff;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 4px;
+  text-align: right;
+}
+.bld-xfer-of {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.bld-xfer-all {
+  background: none;
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  color: #9fe8ff;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.bld-xfer-all:hover {
+  background: rgba(111, 227, 255, 0.15);
+  color: #fff;
 }
 
 /* Confirmation dialog */

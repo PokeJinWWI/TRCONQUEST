@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMapModeStore, type MapMode } from '../state/mapModeStore'
 import { BuildingsPanel } from './BuildingsPanel'
 import { useContextEconomy } from '../hooks/useContextEconomy'
+import { useEconomyStore } from '../state/economyStore'
+import { usePlayerStore } from '../state/playerStore'
 
 type PanelId = 'buildings' | 'politics' | 'diplomacy'
 
@@ -20,7 +22,7 @@ interface PanelDef {
 // there's no separate diplomatic-standing data to visualize yet that would
 // justify a distinct overlay.
 const PANELS: PanelDef[] = [
-  { id: 'buildings', title: 'Buildings', icon: '⚙', mapMode: 'gdp', subtabs: ['Development', 'Agriculture', 'Resources', 'Urban'] },
+  { id: 'buildings', title: 'Buildings', icon: '⚙', mapMode: 'gdp', subtabs: ['Development', 'Agriculture', 'Resources', 'Industry', 'Services'] },
   { id: 'politics', title: 'Politics', icon: '⚖', mapMode: 'political', subtabs: ['Decrees', 'Government Actions'] },
   { id: 'diplomacy', title: 'Diplomacy', icon: '⚑', mapMode: 'political', subtabs: ['Diplomatic Actions', 'Diplomatic Demands'] },
 ]
@@ -37,11 +39,28 @@ const PANELS: PanelDef[] = [
 export function ActionBar() {
   const [activePanelId, setActivePanelId] = useState<PanelId | null>(null)
   const [activeSubtab, setActiveSubtab] = useState<string | null>(null)
+  // A world the player has pinned via the dock's planet switcher. Null = follow
+  // the in-scene focus (the default). Lets you switch planets straight from the
+  // panel instead of hunting for the body in the 3D view.
+  const [overrideWorldName, setOverrideWorldName] = useState<string | null>(null)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
   const setMapMode = useMapModeStore((s) => s.setMode)
   // The panels follow whatever planet the player is focused on (falls back to
   // the capital when nothing is in focus) — look at Luna and it's about Luna,
   // not Mars.
   const context = useContextEconomy()
+  const worlds = useEconomyStore((s) => s.worlds)
+  const countries = useEconomyStore((s) => s.countries)
+  const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
+  // Every inhabited world the player's nation owns — the switcher's options.
+  const ownedWorlds = worlds.filter((w) => w.ownerId === playerCountryId)
+
+  // Resolve the world the panel is actually about: a pinned override wins,
+  // otherwise the focus-following context.
+  const overrideWorld = overrideWorldName ? worlds.find((w) => w.name === overrideWorldName) : undefined
+  const scopeWorld = overrideWorld ?? context.world
+  const scopeName = overrideWorld?.name ?? context.worldName
+  const scopeCountry = overrideWorld ? countries.find((c) => c.id === overrideWorld.ownerId) : context.country
 
   const activePanel = PANELS.find((p) => p.id === activePanelId) ?? null
 
@@ -68,9 +87,49 @@ export function ActionBar() {
       {activePanel && (
         <div className="action-dock-panel">
           <div className="action-dock-header">
-            <span>
+            <span className="action-dock-title-wrap">
               {activePanel.title}
-              {context.worldName && <span className="action-dock-scope"> · {context.worldName}</span>}
+              {ownedWorlds.length > 0 && (
+                <span className="action-dock-switcher">
+                  <button
+                    type="button"
+                    className="action-dock-scope-btn"
+                    onClick={() => setSwitcherOpen((o) => !o)}
+                    title="Switch planet"
+                  >
+                    · {scopeName ?? 'Select planet'} <span className="action-dock-caret">▾</span>
+                  </button>
+                  {switcherOpen && (
+                    <div className="action-dock-scope-menu">
+                      {overrideWorldName && (
+                        <button
+                          type="button"
+                          className="action-dock-scope-item action-dock-scope-follow"
+                          onClick={() => {
+                            setOverrideWorldName(null)
+                            setSwitcherOpen(false)
+                          }}
+                        >
+                          ↺ Follow selection
+                        </button>
+                      )}
+                      {ownedWorlds.map((w) => (
+                        <button
+                          key={w.id}
+                          type="button"
+                          className={`action-dock-scope-item${w.name === scopeName ? ' active' : ''}`}
+                          onClick={() => {
+                            setOverrideWorldName(w.name)
+                            setSwitcherOpen(false)
+                          }}
+                        >
+                          {w.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </span>
+              )}
             </span>
             <button type="button" className="action-dock-close" onClick={handleClose} aria-label="Close">
               ×
@@ -92,7 +151,7 @@ export function ActionBar() {
           )}
           <div className="action-dock-content">
             {activePanel.id === 'buildings' ? (
-              <BuildingsPanel subtab={activeSubtab} worldName={context.worldName} world={context.world} country={context.country} />
+              <BuildingsPanel subtab={activeSubtab} worldName={scopeName} world={scopeWorld} country={scopeCountry} />
             ) : (
               <div className="nav-placeholder">Not yet available</div>
             )}
