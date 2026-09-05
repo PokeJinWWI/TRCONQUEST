@@ -84,10 +84,14 @@ function LawSection<T extends string>({
   )
 }
 
-// Government → Institutions → Central Bank. The country's monetary institution:
-// its model and governance up top, then the policy levers (usable directly only
-// if the government controls the bank), then the seven institutional laws.
-export function CentralBankPanel() {
+// The Central Bank category (its own top-level menu now). Split across sub-tabs:
+//   overview  — model, governance, events, and the institutional-design laws
+//   policy    — the monetary-policy levers, transmission readout, regional banks
+//   balance   — the balance sheet + money supply
+//   currency  — this nation's currency, exchange-rate regime, FX reserves
+// (Commercial Banks live in their own BanksPanel under this category.)
+export type CentralBankSection = 'overview' | 'policy' | 'balance' | 'currency'
+export function CentralBankPanel({ section = 'overview' }: { section?: CentralBankSection }) {
   const { country } = usePlayerEconomy()
   const establishCentralBank = useEconomyStore((s) => s.establishCentralBank)
   const setCentralBankStatus = useEconomyStore((s) => s.setCentralBankStatus)
@@ -144,97 +148,164 @@ export function CentralBankPanel() {
     setCentralBankStatus(country.id, id)
   }
 
-  return (
-    <div className="econ-panel">
-      <div className="econ-subtitle">{cb.name}</div>
-      <div className="cb-model">{centralBankModelLabel(cb)}</div>
+  // ---- OVERVIEW: model, governance, events, institutional-design laws ----
+  if (section === 'overview') {
+    const recent = events.filter((e) => e.countryId === country.id).slice(-5).reverse()
+    return (
+      <div className="econ-panel">
+        <div className="econ-subtitle">{cb.name}</div>
+        <div className="cb-model">{centralBankModelLabel(cb)}</div>
 
-      <div className="cb-governance">
-        <Meter label="Independence" value={indep} hint="How far the bank is insulated from government control. Set by its status and governor-appointment law, reduced by standing government pressure." />
-        <Meter label="Credibility" value={cb.credibility} hint="Monetary credibility — how much markets and pops trust the bank to hold its mandate. Eroded by political pressure and money-printing." />
-        {cb.governmentPressure > 0 && (
-          <Meter label="Govt. pressure" value={cb.governmentPressure} hint="How hard the government is currently leaning on the bank for easy money." />
-        )}
-      </div>
+        <div className="cb-governance">
+          <Meter label="Independence" value={indep} hint="How far the bank is insulated from government control. Set by its status and governor-appointment law, reduced by standing government pressure." />
+          <Meter label="Credibility" value={cb.credibility} hint="Monetary credibility — how much markets and pops trust the bank to hold its mandate. Eroded by political pressure and money-printing." />
+          {cb.governmentPressure > 0 && (
+            <Meter label="Govt. pressure" value={cb.governmentPressure} hint="How hard the government is currently leaning on the bank for easy money." />
+          )}
+        </div>
 
-      {(() => {
-        const mine = events.filter((e) => e.countryId === country.id).slice(-4).reverse()
-        if (mine.length === 0) return null
-        return (
+        {recent.length > 0 && (
           <div className="cb-events">
-            {mine.map((e) => (
+            {recent.map((e) => (
               <div key={e.id} className={`cb-event cb-event-${e.kind}`}>{e.text}</div>
             ))}
           </div>
-        )
-      })()}
+        )}
 
-      <div className="cb-facts">
-        <div><span className="inspect-label">Governor</span><span>{cb.governorName}</span></div>
-        <div><span className="inspect-label">Mandate</span><span>{centralBankMandateDef(cb.mandate).name}</span></div>
-        <div><span className="inspect-label">Policy authority</span><span>{policyAuthorityDef(cb.policyAuthority).name}</span></div>
-        <div><span className="inspect-label">Control</span><span>{govControls ? 'Government-directed' : 'Bank-independent'}</span></div>
+        <div className="cb-facts">
+          <div><span className="inspect-label">Governor</span><span>{cb.governorName}</span></div>
+          <div><span className="inspect-label">Mandate</span><span>{centralBankMandateDef(cb.mandate).name}</span></div>
+          <div><span className="inspect-label">Policy authority</span><span>{policyAuthorityDef(cb.policyAuthority).name}</span></div>
+          <div><span className="inspect-label">Control</span><span>{govControls ? 'Government-directed' : 'Bank-independent'}</span></div>
+        </div>
+
+        <LawSection
+          title="Central Bank Status"
+          hint="How far the bank is removed from the treasury. The single biggest driver of independence and credibility."
+          ids={CENTRAL_BANK_STATUSES}
+          current={cb.status}
+          def={centralBankStatusDef}
+          onEnact={enactStatus}
+        />
+        <LawSection
+          title="Organizational Structure"
+          hint="A single bank, a bank with branches, or a federal reserve system of regional banks."
+          ids={BANK_STRUCTURES}
+          current={cb.structure}
+          def={bankStructureDef}
+          onEnact={(id) => setBankStructure(country.id, id)}
+        />
+        <LawSection
+          title="Monetary Policy Authority"
+          hint="Who has final say over policy. Government/finance-ministry authority means the state pulls the levers; a governor, board or committee means the bank decides."
+          ids={POLICY_AUTHORITIES}
+          current={cb.policyAuthority}
+          def={policyAuthorityDef}
+          onEnact={(id) => setPolicyAuthority(country.id, id)}
+        />
+        <LawSection
+          title="Governor Appointment"
+          hint="How the governor is chosen — longer, more insulated appointments raise independence."
+          ids={GOVERNOR_APPOINTMENTS}
+          current={cb.appointment}
+          def={(id) => {
+            const d = governorAppointmentDef(id)
+            return { name: d.name, description: `${d.description} (term ${Math.round(d.termTicks / 12)} yr)` }
+          }}
+          onEnact={(id) => setGovernorAppointment(country.id, id)}
+        />
+        <LawSection
+          title="Central Bank Mandate"
+          hint="What the bank prioritizes when setting policy — price stability, employment, the currency, financial stability, or state development."
+          ids={CENTRAL_BANK_MANDATES}
+          current={cb.mandate}
+          def={centralBankMandateDef}
+          onEnact={(id) => setCentralBankMandate(country.id, id)}
+        />
       </div>
+    )
+  }
 
-      {/* Currency & exchange rate (Stage 3 FX) */}
-      {country.currency && (
-        <>
-          <div className="econ-subtitle" style={{ marginTop: 12 }}>Currency & exchange rate</div>
-          <div className="cb-facts">
-            <div><span className="inspect-label">Currency</span><span>{country.currency.name} ({country.currency.code})</span></div>
-            <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} TSC</span></div>
-            <div><span className="inspect-label">Regime</span><span>{exchangeRateRegimeDef(cb.exchangeRegime).name}</span></div>
-            {cb.exchangeRegime !== 'float' && (
-              <div>
-                <span className="inspect-label">Peg target</span>
-                <span>
-                  {country.currency.target.toFixed(3)} TSC{' '}
-                  <span style={{ opacity: 0.6 }}>
-                    ({country.currency.rate >= country.currency.target ? 'held' : `−${(((country.currency.target - country.currency.rate) / country.currency.target) * 100).toFixed(1)}%`})
-                  </span>
-                </span>
-              </div>
-            )}
-            <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
-          </div>
-          <div className="ship-panel-hint" style={{ marginTop: 2 }}>
-            1 TSC = the Terra Standard Credit, the interstellar reference. A higher rate is a stronger currency; cross-border
-            trade, dividends and investment convert through it.
-          </div>
-        </>
-      )}
-
-      {/* Federal / regional readout (Stage 5) — regional reserve banks monitor
-          local conditions, though policy stays national. */}
-      {bankStructureDef(cb.structure).regional && (() => {
-        const worlds = allWorlds.filter((w) => w.ownerId === country.id)
-        if (worlds.length === 0) return null
-        return (
+  // ---- BALANCE SHEET & MONEY ----
+  if (section === 'balance') {
+    return (
+      <div className="econ-panel">
+        <div className="econ-subtitle">Balance sheet & money</div>
+        {money ? (
           <>
-            <div className="econ-subtitle" style={{ marginTop: 12 }}>Regional reserve banks</div>
-            <div className="ship-panel-hint" style={{ marginBottom: 6 }}>
-              {bankStructureDef(cb.structure).name} — regional banks report local conditions; monetary policy remains national.
-            </div>
             <div className="cb-facts">
-              {worlds.map((w) => {
-                const rep = worldReports[w.id]
-                const labor = rep ? Object.values(rep.labor) : []
-                const emp = labor.length > 0 ? labor.reduce((s, l) => s + l.employmentRate, 0) / labor.length : undefined
-                const pop = w.pops.reduce((s, p) => s + p.populationSize, 0)
-                return (
-                  <div key={w.id}>
-                    <span className="inspect-label">{w.name}</span>
-                    <span>{formatPop(pop)}{emp !== undefined ? ` · ${Math.round(emp * 100)}% emp` : ''}</span>
-                  </div>
-                )
-              })}
+              <div><span className="inspect-label">Base money (M0)</span><span>{formatMoney(money.baseMoney)}</span></div>
+              <div><span className="inspect-label">Broad money (M2)</span><span>{formatMoney(money.broadMoney)}</span></div>
+              <div><span className="inspect-label">Currency in circulation</span><span>{formatMoney(money.currency)}</span></div>
+              <div><span className="inspect-label">Bank deposits</span><span>{formatMoney(money.deposits)}</span></div>
+              <div><span className="inspect-label">Bank reserves</span><span>{formatMoney(money.bankReserves)}</span></div>
+              <div><span className="inspect-label">Loans outstanding</span><span>{formatMoney(money.loans)}</span></div>
+              <div><span className="inspect-label">Reserve ratio</span><span>{(money.reserveRatio * 100).toFixed(1)}% <span style={{ opacity: 0.5 }}>(req {(cb.reserveRequirement * 100).toFixed(0)}%)</span></span></div>
+              <div><span className="inspect-label">Loan / deposit</span><span>{(money.loanToDeposit * 100).toFixed(0)}%</span></div>
+            </div>
+            <div className="ship-panel-hint" style={{ margin: '6px 0 2px' }}>Central bank balance sheet</div>
+            <div className="cb-facts">
+              <div><span className="inspect-label">Gov. securities</span><span>{formatMoney(cb.govSecurities)}</span></div>
+              <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
+              <div><span className="inspect-label">Loans to banks</span><span>{formatMoney(cb.loansToBanks)}</span></div>
+              <div><span className="inspect-label">CB equity</span><span>{formatMoney(centralBankEquity(cb, money.bankReserves))}</span></div>
             </div>
           </>
-        )
-      })()}
+        ) : (
+          <div className="ship-panel-hint">Advance time to populate the money supply and balance sheet.</div>
+        )}
+      </div>
+    )
+  }
 
-      {/* Policy levers */}
-      <div className="econ-subtitle" style={{ marginTop: 12 }}>Monetary policy</div>
+  // ---- CURRENCY & EXCHANGE RATE ----
+  if (section === 'currency') {
+    return (
+      <div className="econ-panel">
+        <div className="econ-subtitle">Currency & exchange rate</div>
+        {country.currency ? (
+          <>
+            <div className="cb-facts">
+              <div><span className="inspect-label">Currency</span><span>{country.currency.name} ({country.currency.code})</span></div>
+              <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} TSC</span></div>
+              <div><span className="inspect-label">Regime</span><span>{exchangeRateRegimeDef(cb.exchangeRegime).name}</span></div>
+              {cb.exchangeRegime !== 'float' && (
+                <div>
+                  <span className="inspect-label">Peg target</span>
+                  <span>
+                    {country.currency.target.toFixed(3)} TSC{' '}
+                    <span style={{ opacity: 0.6 }}>
+                      ({country.currency.rate >= country.currency.target ? 'held' : `−${(((country.currency.target - country.currency.rate) / country.currency.target) * 100).toFixed(1)}%`})
+                    </span>
+                  </span>
+                </div>
+              )}
+              <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
+            </div>
+            <div className="ship-panel-hint" style={{ marginTop: 2 }}>
+              1 TSC = the Terra Standard Credit, the interstellar reference. A higher rate is a stronger currency; cross-border
+              trade, dividends and investment convert through it. The full cross-nation table is in Markets → Forex.
+            </div>
+          </>
+        ) : (
+          <div className="ship-panel-hint">This nation has no currency.</div>
+        )}
+        <LawSection
+          title="Exchange-Rate Regime"
+          hint="How the currency's external value is managed — a free float, a managed float, a band, or a hard peg defended with FX reserves."
+          ids={EXCHANGE_RATE_REGIMES}
+          current={cb.exchangeRegime}
+          def={exchangeRateRegimeDef}
+          onEnact={(id) => setExchangeRateRegime(country.id, id)}
+        />
+      </div>
+    )
+  }
+
+  // ---- MONETARY POLICY (default fall-through) ----
+  return (
+    <div className="econ-panel">
+      <div className="econ-subtitle">Monetary policy</div>
       {govControls ? (
         <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
           The government directs this bank — you set policy directly. Loose rates and money-printing stoke inflation with a
@@ -329,76 +400,35 @@ export function CentralBankPanel() {
         </div>
       )}
 
-      {/* Balance sheet & money supply (Stage 2) */}
-      <div className="econ-subtitle" style={{ marginTop: 12 }}>Balance sheet & money</div>
-      {money ? (
-        <>
-          <div className="cb-facts">
-            <div><span className="inspect-label">Base money (M0)</span><span>{formatMoney(money.baseMoney)}</span></div>
-            <div><span className="inspect-label">Broad money (M2)</span><span>{formatMoney(money.broadMoney)}</span></div>
-            <div><span className="inspect-label">Currency in circulation</span><span>{formatMoney(money.currency)}</span></div>
-            <div><span className="inspect-label">Bank deposits</span><span>{formatMoney(money.deposits)}</span></div>
-            <div><span className="inspect-label">Bank reserves</span><span>{formatMoney(money.bankReserves)}</span></div>
-            <div><span className="inspect-label">Loans outstanding</span><span>{formatMoney(money.loans)}</span></div>
-            <div><span className="inspect-label">Reserve ratio</span><span>{(money.reserveRatio * 100).toFixed(1)}% <span style={{ opacity: 0.5 }}>(req {(cb.reserveRequirement * 100).toFixed(0)}%)</span></span></div>
-            <div><span className="inspect-label">Loan / deposit</span><span>{(money.loanToDeposit * 100).toFixed(0)}%</span></div>
-          </div>
-          <div className="ship-panel-hint" style={{ margin: '6px 0 2px' }}>Central bank balance sheet</div>
-          <div className="cb-facts">
-            <div><span className="inspect-label">Gov. securities</span><span>{formatMoney(cb.govSecurities)}</span></div>
-            <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
-            <div><span className="inspect-label">Loans to banks</span><span>{formatMoney(cb.loansToBanks)}</span></div>
-            <div><span className="inspect-label">CB equity</span><span>{formatMoney(centralBankEquity(cb, money.bankReserves))}</span></div>
-          </div>
-        </>
-      ) : (
-        <div className="ship-panel-hint" style={{ marginBottom: 8 }}>Advance time to populate the money supply and balance sheet.</div>
-      )}
+      {/* Federal / regional readout (Stage 5) — regional reserve banks monitor
+          local conditions, though policy stays national. */}
+      {bankStructureDef(cb.structure).regional && (() => {
+        const worlds = allWorlds.filter((w) => w.ownerId === country.id)
+        if (worlds.length === 0) return null
+        return (
+          <>
+            <div className="econ-subtitle" style={{ marginTop: 12 }}>Regional reserve banks</div>
+            <div className="ship-panel-hint" style={{ marginBottom: 6 }}>
+              {bankStructureDef(cb.structure).name} — regional banks report local conditions; monetary policy remains national.
+            </div>
+            <div className="cb-facts">
+              {worlds.map((w) => {
+                const rep = worldReports[w.id]
+                const labor = rep ? Object.values(rep.labor) : []
+                const emp = labor.length > 0 ? labor.reduce((s, l) => s + l.employmentRate, 0) / labor.length : undefined
+                const pop = w.pops.reduce((s, p) => s + p.populationSize, 0)
+                return (
+                  <div key={w.id}>
+                    <span className="inspect-label">{w.name}</span>
+                    <span>{formatPop(pop)}{emp !== undefined ? ` · ${Math.round(emp * 100)}% emp` : ''}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )
+      })()}
 
-      {/* Institutional laws */}
-      <LawSection
-        title="Central Bank Status"
-        hint="How far the bank is removed from the treasury. The single biggest driver of independence and credibility."
-        ids={CENTRAL_BANK_STATUSES}
-        current={cb.status}
-        def={centralBankStatusDef}
-        onEnact={enactStatus}
-      />
-      <LawSection
-        title="Organizational Structure"
-        hint="A single bank, a bank with branches, or a federal reserve system of regional banks."
-        ids={BANK_STRUCTURES}
-        current={cb.structure}
-        def={bankStructureDef}
-        onEnact={(id) => setBankStructure(country.id, id)}
-      />
-      <LawSection
-        title="Monetary Policy Authority"
-        hint="Who has final say over policy. Government/finance-ministry authority means the state pulls the levers; a governor, board or committee means the bank decides."
-        ids={POLICY_AUTHORITIES}
-        current={cb.policyAuthority}
-        def={policyAuthorityDef}
-        onEnact={(id) => setPolicyAuthority(country.id, id)}
-      />
-      <LawSection
-        title="Governor Appointment"
-        hint="How the governor is chosen — longer, more insulated appointments raise independence."
-        ids={GOVERNOR_APPOINTMENTS}
-        current={cb.appointment}
-        def={(id) => {
-          const d = governorAppointmentDef(id)
-          return { name: d.name, description: `${d.description} (term ${Math.round(d.termTicks / 12)} yr)` }
-        }}
-        onEnact={(id) => setGovernorAppointment(country.id, id)}
-      />
-      <LawSection
-        title="Central Bank Mandate"
-        hint="What the bank prioritizes when setting policy — price stability, employment, the currency, financial stability, or state development."
-        ids={CENTRAL_BANK_MANDATES}
-        current={cb.mandate}
-        def={centralBankMandateDef}
-        onEnact={(id) => setCentralBankMandate(country.id, id)}
-      />
       <LawSection
         title="Government Debt Financing"
         hint="Whether — and how far — the bank may fund the government. Direct monetary financing is powerful but a standing inflation and credibility risk."
@@ -406,14 +436,6 @@ export function CentralBankPanel() {
         current={cb.debtFinancing}
         def={debtFinancingRegimeDef}
         onEnact={(id) => setDebtFinancingRegime(country.id, id)}
-      />
-      <LawSection
-        title="Exchange-Rate Regime"
-        hint="How the currency's external value is managed. Fully wired with the currency system in a later stage."
-        ids={EXCHANGE_RATE_REGIMES}
-        current={cb.exchangeRegime}
-        def={exchangeRateRegimeDef}
-        onEnact={(id) => setExchangeRateRegime(country.id, id)}
       />
     </div>
   )

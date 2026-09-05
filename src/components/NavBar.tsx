@@ -4,8 +4,9 @@ import { NationEconomyPanel } from './EconomyPanel'
 import { NationTechPanel } from './TechPanel'
 import { FleetManagement } from './FleetManagement'
 import { LawsPanel } from './LawsPanel'
-import { CentralBankPanel } from './CentralBankPanel'
+import { CentralBankPanel, type CentralBankSection } from './CentralBankPanel'
 import { BanksPanel } from './BanksPanel'
+import { ForexPanel } from './ForexPanel'
 import { CorporationsPanel } from './CorporationsPanel'
 import { StockExchangePanel } from './StockExchangePanel'
 import { DemographicsPanel } from './DemographicsPanel'
@@ -28,9 +29,9 @@ const ECONOMY_CATEGORY = 'Economy'
 const TECHNOLOGY_CATEGORY = 'Technology'
 const GOVERNMENT_CATEGORY = 'Government'
 const LAWS_SUBCATEGORY = 'Laws'
-const INSTITUTIONS_SUBCATEGORY = 'Institutions'
 const CORPORATIONS_CATEGORY = 'Corporations'
-const STOCK_EXCHANGE_CATEGORY = 'Stock Exchange'
+const MARKETS_CATEGORY = 'Markets'
+const CENTRAL_BANK_CATEGORY = 'Central Bank'
 const SOCIETY_CATEGORY = 'Society'
 const DEMOGRAPHICS_SUBCATEGORY = 'Demographics'
 const CHARACTERS_CATEGORY = 'Characters'
@@ -45,9 +46,10 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
-  { name: 'Economy', subcategories: ['Market', 'Budget', 'Finance', 'Banking', 'Debt', 'Construction', 'Trade', 'Stockpiles', 'Welfare'] },
+  { name: 'Economy', subcategories: ['Budget', 'Finance', 'Construction', 'Trade', 'Stockpiles', 'Welfare'] },
+  { name: MARKETS_CATEGORY, subcategories: ['Market', 'Stock Exchange', 'Bond Market', 'Forex'] },
+  { name: CENTRAL_BANK_CATEGORY, subcategories: ['Overview', 'Monetary Policy', 'Balance Sheet', 'Commercial Banks', 'Currency'] },
   { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private', 'Financial Districts'] },
-  { name: STOCK_EXCHANGE_CATEGORY },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
   { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
   { name: 'Diplomacy' },
@@ -57,6 +59,14 @@ const CATEGORIES: CategoryDef[] = [
   { name: MAP_MODES_CATEGORY },
   { name: SETTINGS_CATEGORY },
 ]
+
+// Central Bank sub-tab label → the panel's internal section id.
+const CB_SECTIONS: Record<string, CentralBankSection> = {
+  Overview: 'overview',
+  'Monetary Policy': 'policy',
+  'Balance Sheet': 'balance',
+  Currency: 'currency',
+}
 
 // What actually renders inside a category/subcategory pairing. Three slots
 // have real content behind them — Fleet Management's existing UI (ship
@@ -72,17 +82,21 @@ const CATEGORIES: CategoryDef[] = [
 function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
-  if (category.name === ECONOMY_CATEGORY && subcategory === 'Debt') return <DebtPanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />
-  if (category.name === ECONOMY_CATEGORY && subcategory === 'Banking') return <BanksPanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Trade') return <TradePanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Stockpiles') return <StockpilePanel />
   if (category.name === ECONOMY_CATEGORY) return <NationEconomyPanel subcategory={subcategory} />
+  // Markets — the trading venues: goods market, equities, bonds, currencies.
+  if (category.name === MARKETS_CATEGORY && subcategory === 'Stock Exchange') return <StockExchangePanel />
+  if (category.name === MARKETS_CATEGORY && subcategory === 'Bond Market') return <DebtPanel />
+  if (category.name === MARKETS_CATEGORY && subcategory === 'Forex') return <ForexPanel />
+  if (category.name === MARKETS_CATEGORY) return <NationEconomyPanel subcategory="Market" />
+  // Central Bank — its own category, split across sub-tabs.
+  if (category.name === CENTRAL_BANK_CATEGORY && subcategory === 'Commercial Banks') return <BanksPanel />
+  if (category.name === CENTRAL_BANK_CATEGORY) return <CentralBankPanel section={CB_SECTIONS[subcategory ?? 'Overview'] ?? 'overview'} />
   if (category.name === TECHNOLOGY_CATEGORY) return <NationTechPanel subcategory={subcategory} />
   if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />
-  if (category.name === GOVERNMENT_CATEGORY && subcategory === INSTITUTIONS_SUBCATEGORY) return <CentralBankPanel />
   if (category.name === CORPORATIONS_CATEGORY) return <CorporationsPanel subcategory={subcategory} />
-  if (category.name === STOCK_EXCHANGE_CATEGORY) return <StockExchangePanel />
   if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return <DemographicsPanel />
   if (category.name === CHARACTERS_CATEGORY) return <CharactersPanel subcategory={subcategory} />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
