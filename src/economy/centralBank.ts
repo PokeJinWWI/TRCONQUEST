@@ -417,6 +417,20 @@ export interface CentralBank {
   // government-controlled; otherwise managed by the bank per its mandate.
   policyRate: number
   reserveRequirement: number
+  // --- Balance sheet (Stage 2) ---
+  // The central bank's own assets and liabilities. Assets: government securities
+  // it holds (open-market operations, wired Stage 4), foreign-exchange reserves
+  // (Stage 3), and loans to commercial banks via the discount window (mirrors
+  // the banks' cbBorrowings, reconciled each tick). Liabilities: currency in
+  // circulation, and the reserves commercial banks hold at the CB (summed from
+  // the banks each tick). Equity = assets − liabilities. These evolve with the
+  // banking tick; seeded so the sheet balances at the start.
+  fxReserves: number
+  govSecurities: number
+  currencyInCirculation: number
+  // Discount-window lending outstanding (Σ of banks' cbBorrowings) — an asset,
+  // reconciled from the banks each tick so the two sides never drift apart.
+  loansToBanks: number
 }
 
 // Does the country actually have a central bank (vs. none)? NOT a type predicate
@@ -504,6 +518,20 @@ export function defaultCentralBank(countryId: string, tick: number, overrides: P
     governorTermLength: governorAppointmentDef('government').termTicks,
     policyRate: 0.03,
     reserveRequirement: 0.1,
+    fxReserves: 20000,
+    govSecurities: 15000,
+    currencyInCirculation: 30000,
+    loansToBanks: 0,
     ...overrides,
   }
+}
+
+// The central bank's balance-sheet identity, as displayed numbers. Assets =
+// govSecurities + fxReserves + loansToBanks; liabilities = currencyInCirculation
+// + bankReserves (the reserves banks hold at the CB, passed in from the banking
+// aggregates). Equity is the residual.
+export function centralBankEquity(cb: CentralBank, bankReserves: number): number {
+  const assets = cb.govSecurities + cb.fxReserves + cb.loansToBanks
+  const liabilities = cb.currencyInCirculation + bankReserves
+  return assets - liabilities
 }

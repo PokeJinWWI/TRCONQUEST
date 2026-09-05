@@ -2316,6 +2316,83 @@
 .cb-facts > div > span:last-child {
   text-align: right;
 }
+.cb-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.cb-event {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-left: 2px solid rgba(111, 227, 255, 0.5);
+  background: rgba(111, 227, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+.cb-event-inflation-crisis,
+.cb-event-currency-crisis,
+.cb-event-peg-broken,
+.cb-event-banking-crisis,
+.cb-event-bank-recapitalized {
+  border-left-color: rgba(255, 140, 120, 0.7);
+  background: rgba(255, 120, 120, 0.06);
+}
+
+/* --- Commercial banks panel --- */
+.bank-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 7px 9px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.bank-card.bank-stressed {
+  border-color: rgba(255, 120, 120, 0.5);
+  background: rgba(255, 120, 120, 0.05);
+}
+.bank-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.bank-name {
+  color: #cdeeff;
+  font-weight: 700;
+  font-size: 11px;
+}
+.bank-ratio {
+  font-size: 10px;
+  color: #6fe3ff;
+}
+.bank-ratio-low {
+  color: #ff9a9a;
+}
+.bank-sheet {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+.bank-col-title {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 2px;
+}
+.bank-col > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+}
+.bank-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
 /* .econ-pos/.econ-neg themselves are defined further down (right after
    .inspect-value) — every real usage combines one of them with
    .inspect-value (`className="inspect-value econ-neg"` etc.), and with

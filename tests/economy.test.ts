@@ -14,8 +14,12 @@ import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
 import { useEconomyStore } from '../src/state/economyStore'
 import { runCorporationAI } from '../src/economy/corporationAI'
-import { hasCentralBank, effectiveIndependence, governmentControlsPolicy, centralBankModelLabel, governorAppointmentDef } from '../src/economy/centralBank'
-import type { Building, Corporation, Country, World } from '../src/economy/economyTypes'
+import { hasCentralBank, effectiveIndependence, governmentControlsPolicy, centralBankModelLabel, governorAppointmentDef, centralBankEquity } from '../src/economy/centralBank'
+import { seedBanks } from '../src/economy/economySeed'
+import { tickBanking, bankCapital, capitalRatio, monetaryAggregatesFor } from '../src/economy/banking'
+import { convert, convertBetween, updateExchangeRates, depreciationBias } from '../src/economy/fx'
+import { tickMonetary, defaultMonetaryState } from '../src/economy/monetaryPolicy'
+import type { Bank, Building, Corporation, Country, World } from '../src/economy/economyTypes'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -1170,6 +1174,332 @@ console.log('\n=== 37. Central banking Stage 1: institution, laws, governance ga
   }
   check('central bank survives ticking (records preserved)', cbCountries.every((c) => hasCentralBank(c.centralBank)))
   check('all worlds finite after ticks with central banks', cbWorlds.every(worldFinite))
+}
+
+console.log('\n=== 38. Central banking Stage 2: commercial banks, money supply, reserve requirement bites ===')
+{
+  const raiseRR = (cs: Country[], id: string, rr: number): Country[] =>
+    cs.map((c) => (c.id === id && c.centralBank ? { ...c, centralBank: { ...c.centralBank, reserveRequirement: rr } } : c))
+  const setPolicy = (cs: Country[], id: string, rate: number): Country[] =>
+    cs.map((c) => (c.id === id && c.centralBank ? { ...c, centralBank: { ...c.centralBank, policyRate: rate } } : c))
+
+  // Seed banks exist and are well-capitalized with a coherent balance sheet.
+  const banks0 = seedBanks()
+  check('banks are seeded', banks0.length > 0)
+  check('every seeded bank is solvent (capital > 0)', banks0.every((b) => bankCapital(b) > 0))
+  check('every seeded bank meets the 8% capital target', banks0.every((b) => capitalRatio(b) >= 0.08), banks0.map((b) => capitalRatio(b).toFixed(2)).join(','))
+
+  // Aggregate identities hold.
+  const cid = 'imperial-state-of-mars'
+  const cs0 = seedCountries()
+  const cb0 = cs0.find((c) => c.id === cid)!.centralBank!
+  const m0 = monetaryAggregatesFor(cid, banks0, cb0)
+  check('broad money = currency + deposits', Math.abs(m0.broadMoney - (m0.currency + m0.deposits)) < 1e-6)
+  check('base money = currency + bank reserves', Math.abs(m0.baseMoney - (m0.currency + m0.bankReserves)) < 1e-6)
+  check('all aggregates finite', Object.values(m0).every((v) => Number.isFinite(v)))
+
+  // Reserve requirement BITES: raising it shrinks broad money over the following
+  // ticks (vs. leaving it alone). This is the core Stage-2 monetary transmission.
+  function runFor(ticks: number, rrOverride?: number): number {
+    let cs = seedCountries()
+    let bs = seedBanks()
+    if (rrOverride !== undefined) cs = raiseRR(cs, cid, rrOverride)
+    let money = monetaryAggregatesFor(cid, bs, cs.find((c) => c.id === cid)!.centralBank)
+    for (let i = 0; i < ticks; i++) {
+      const r = tickBanking(cs, bs)
+      cs = r.countries
+      bs = r.banks
+      money = r.money[cid]
+    }
+    return money.broadMoney
+  }
+  const baseline = runFor(25)
+  const tightened = runFor(25, 0.25)
+  check('raising the reserve requirement shrinks broad money', tightened < baseline, `${tightened.toFixed(0)} < ${baseline.toFixed(0)}`)
+
+  // A reserve-SHORT bank draws on the central-bank discount window.
+  {
+    let cs = raiseRR(seedCountries(), cid, 0.4) // force required reserves above holdings
+    const short: Bank = { ...seedBanks().find((b) => b.countryId === cid)! }
+    const r = tickBanking(cs, [short])
+    check('a reserve-short bank borrows from the discount window', r.banks[0].cbBorrowings > 0, r.banks[0].cbBorrowings.toFixed(0))
+    // The CB's loans-to-banks asset mirrors that borrowing.
+    check('CB loans-to-banks mirrors bank discount borrowing', Math.abs(r.countries.find((c) => c.id === cid)!.centralBank!.loansToBanks - r.banks[0].cbBorrowings) < 1e-6)
+  }
+
+  // A higher policy rate widens bank net interest margins → more profit.
+  {
+    const lowCs = setPolicy(seedCountries(), cid, 0.02)
+    const highCs = setPolicy(seedCountries(), cid, 0.08)
+    const bs = seedBanks().filter((b) => b.countryId === cid)
+    const lowProfit = tickBanking(lowCs, bs.map((b) => ({ ...b }))).banks.reduce((s, b) => s + b.lastProfit, 0)
+    const highProfit = tickBanking(highCs, bs.map((b) => ({ ...b }))).banks.reduce((s, b) => s + b.lastProfit, 0)
+    check('a higher policy rate widens bank margins (more profit)', highProfit > lowProfit, `${highProfit.toFixed(0)} > ${lowProfit.toFixed(0)}`)
+  }
+
+  // CB balance-sheet equity is finite and the identity computes.
+  check('central-bank equity is finite', Number.isFinite(centralBankEquity(cb0, m0.bankReserves)))
+
+  // Full tickEconomy wires banking through and stays finite over many ticks.
+  {
+    let cs = seedCountries()
+    let ws = seedWorlds()
+    let corps = seedCorporations()
+    let bs = seedBanks()
+    let lastMoney: Record<string, import('../src/economy/economyTypes').MonetaryAggregates> = {}
+    for (let i = 0; i < 12; i++) {
+      const res = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs)
+      cs = res.countries
+      ws = res.worlds
+      corps = res.corporations
+      bs = res.banks
+      lastMoney = res.reports.money
+    }
+    check('tickEconomy returns banks', bs.length > 0)
+    check('tickEconomy produces a money report per country', cs.every((c) => !!lastMoney[c.id]))
+    check('banks stay finite through full ticks', bs.every((b) => Number.isFinite(bankCapital(b)) && Number.isFinite(b.deposits) && Number.isFinite(b.loans)))
+    check('money aggregates stay finite through full ticks', Object.values(lastMoney).every((m) => Object.values(m).every((v) => Number.isFinite(v))))
+  }
+}
+
+console.log('\n=== 39. Central banking Stage 3: multi-currency + FX (rates, peg defense, cross-border conversion) ===')
+{
+  // Every country issues a currency.
+  const cs0 = seedCountries()
+  check('every country has a currency', cs0.every((c) => !!c.currency && c.currency.rate > 0))
+
+  // convert() obeys the rate convention (stronger currency buys more of a weaker one).
+  check('convert: 100 of a rate-1.15 currency → ~131 of a rate-0.7 currency', Math.abs(convert(100, 1.15, 0.7) - (100 * 1.15) / 0.7) < 1e-6)
+  check('convertBetween same country is a 1:1 passthrough', convertBetween(500, 'imperial-state-of-mars', 'imperial-state-of-mars', cs0) === 500)
+
+  // Depreciation bias: a low-credibility, money-financing bank (Lalande) wants to
+  // depreciate; a high-credibility independent bank (Venus) wants to appreciate.
+  const venus = cs0.find((c) => c.id === 'republic-of-venus')!
+  const lalande = cs0.find((c) => c.id === 'kingdom-of-lalande')!
+  check('a weak-institution currency has depreciation pressure', depreciationBias(lalande) > 0, depreciationBias(lalande).toFixed(3))
+  check('a strong-institution currency has appreciation pressure', depreciationBias(venus) < 0, depreciationBias(venus).toFixed(3))
+
+  // Float: over time the strong currency appreciates and Lalande weakens.
+  {
+    let cs = seedCountries()
+    for (let i = 0; i < 30; i++) cs = updateExchangeRates(cs)
+    const v1 = cs.find((c) => c.id === 'republic-of-venus')!.currency!.rate
+    const l1 = cs.find((c) => c.id === 'kingdom-of-lalande')!.currency!.rate
+    check('the strong currency appreciates over 30 ticks', v1 > venus.currency!.rate, `${venus.currency!.rate} → ${v1.toFixed(3)}`)
+    check('the weak currency depreciates over 30 ticks', l1 < lalande.currency!.rate, `${lalande.currency!.rate} → ${l1.toFixed(3)}`)
+  }
+
+  // Peg defense: Lalande (fixed regime) spends FX reserves to hold its peg, then —
+  // when reserves run out — the peg breaks (devaluation + credibility hit).
+  {
+    let cs = seedCountries()
+    const startFx = cs.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!.fxReserves
+    const startCred = cs.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!.credibility
+    let brokeTick = -1
+    for (let i = 0; i < 60; i++) {
+      cs = updateExchangeRates(cs)
+      const ll = cs.find((c) => c.id === 'kingdom-of-lalande')!
+      if (brokeTick < 0 && ll.centralBank!.fxReserves <= 0 && ll.centralBank!.credibility < startCred) brokeTick = i
+    }
+    const ll = cs.find((c) => c.id === 'kingdom-of-lalande')!
+    check('defending the peg drains FX reserves to zero', ll.centralBank!.fxReserves === 0, `from ${startFx}`)
+    check('the peg eventually breaks (credibility falls)', ll.centralBank!.credibility < startCred, `${startCred} → ${ll.centralBank!.credibility.toFixed(2)}`)
+    check('after the break the currency has devalued below its peg', ll.currency!.rate < ll.currency!.target, `${ll.currency!.rate.toFixed(3)} < ${ll.currency!.target}`)
+  }
+
+  // Cross-border dividends REPATRIATE through the exchange rate. Build a foreign
+  // state stake in a home corp and confirm the repatriated amount is FX-converted.
+  {
+    // Give a Venus corp a stake held by the Mars government, then distribute a
+    // known profit and check the Mars treasury delta equals the FX-converted share.
+    // (distributeDividends is exercised indirectly via §33/§34; here we assert the
+    // conversion arithmetic the repatriation relies on.)
+    const home = cs0.find((c) => c.id === 'republic-of-venus')!.currency! // corp earns in VNC
+    const inv = cs0.find((c) => c.id === 'imperial-state-of-mars')!.currency! // Mars repatriates in MSV
+    const earned = 1000
+    const repatriated = convert(earned, home.rate, inv.rate)
+    check('a dividend earned abroad repatriates at the exchange rate', Math.abs(repatriated - (earned * home.rate) / inv.rate) < 1e-6 && repatriated !== earned)
+  }
+
+  // Foreign equity costs MORE in a weak currency: buying a strong-currency (VNC)
+  // company from a weak-currency (LLD) treasury converts the price upward.
+  {
+    const costHostVNC = 1000
+    const inLLD = convertBetween(costHostVNC, 'republic-of-venus', 'kingdom-of-lalande', cs0)
+    check('buying a strong-currency company costs more in a weak currency', inLLD > costHostVNC, `${costHostVNC} VNC → ${inLLD.toFixed(0)} LLD`)
+  }
+
+  // Full tickEconomy keeps currencies finite and positive over many ticks.
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 24; i++) {
+      const res = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs)
+      cs = res.countries; ws = res.worlds; corps = res.corporations; bs = res.banks
+    }
+    check('all currency rates stay finite and positive through ticks', cs.every((c) => Number.isFinite(c.currency!.rate) && c.currency!.rate > 0))
+    check('all FX reserves stay finite and non-negative', cs.every((c) => !c.centralBank || (Number.isFinite(c.centralBank.fxReserves) && c.centralBank.fxReserves >= 0)))
+  }
+}
+
+console.log('\n=== 40. Central banking Stage 4: transmission with lags, inflation, reaction, financing, OMO ===')
+{
+  const marsId = 'imperial-state-of-mars'
+  const lalandeId = 'kingdom-of-lalande'
+  const setRate = (cs: Country[], id: string, r: number): Country[] =>
+    cs.map((c) => (c.id === id && c.centralBank ? { ...c, centralBank: { ...c.centralBank, policyRate: r } } : c))
+
+  // Run the full economy N ticks, returning the modeled inflation of a country.
+  function runInflation(id: string, ticks: number, mutate: (cs: Country[]) => Country[] = (x) => x): { infl: number; rate: number } {
+    let cs = mutate(seedCountries()), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    let last = { infl: 0.02, rate: 0.03 }
+    for (let i = 0; i < ticks; i++) {
+      const res = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs)
+      cs = res.countries; ws = res.worlds; corps = res.corporations; bs = res.banks
+      const f = res.reports.countries[id]
+      last = { infl: f.inflation, rate: f.policyRate ?? 0 }
+    }
+    return last
+  }
+
+  // LAG: inflation does not jump the tick a rate change is made.
+  {
+    let cs = setRate(seedCountries(), marsId, 0.005), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    const res = tickEconomy(cs, ws, corps, { tick: 1, enableAI: true }, bs)
+    const infl1 = res.reports.countries[marsId].inflation
+    check('inflation does not jump on the first tick of a rate cut (lagged)', Math.abs(infl1 - 0.02) < 0.02, `${(infl1 * 100).toFixed(2)}%`)
+  }
+
+  // LOOSE vs TIGHT: after many ticks, a forced-loose bank has higher inflation
+  // than a forced-tight one.
+  const loose = runInflation(marsId, 12, (cs) => setRate(cs, marsId, 0.005))
+  const tight = runInflation(marsId, 12, (cs) => setRate(cs, marsId, 0.14))
+  check('loose policy yields higher inflation than tight policy (with lag)', loose.infl > tight.infl, `${(loose.infl * 100).toFixed(2)}% vs ${(tight.infl * 100).toFixed(2)}%`)
+
+  // REACTION: an independent bank (Mars) raises its policy rate as inflation runs
+  // above target; a government-controlled bank (Lalande) does not move.
+  const marsAfter = runInflation(marsId, 20)
+  check('an independent bank raises its rate against inflation (Taylor rule)', marsAfter.rate > 0.03, `${(marsAfter.rate * 100).toFixed(2)}%`)
+  {
+    // The PLAYER's government-controlled bank keeps the rate the player set (the
+    // AI monetary manager only steers NON-player government banks — see §41).
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 20; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [lalandeId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const lalandeRate = cs.find((c) => c.id === lalandeId)!.centralBank!.policyRate
+    check('the PLAYER’s government-controlled bank keeps its rate (no auto-reaction)', Math.abs(lalandeRate - 0.02) < 1e-9, `${(lalandeRate * 100).toFixed(2)}%`)
+  }
+
+  // FINANCING: direct monetary financing lifts inflation above an otherwise
+  // identical country that may not finance the deficit. Craft two countries with a
+  // deficit and compare one tick of tickMonetary.
+  {
+    const base = seedCountries().find((c) => c.id === lalandeId)!
+    const money = { [lalandeId]: { baseMoney: 0, currency: 30000, bankReserves: 0, deposits: 0, broadMoney: 100000, loans: 0, bankCapital: 0, reserveRatio: 0, loanToDeposit: 0, cbBorrowings: 0 } }
+    const mkReports = (): import('../src/economy/economyTypes').TickReports => ({ worlds: {}, countries: { [lalandeId]: { gdp: 5000, priceLevel: 1, inflation: 0.02, revenue: 100, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: -2000, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A' as const, population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] })
+    const direct = { ...base, monetary: defaultMonetaryState() }
+    const prohibited = { ...base, monetary: defaultMonetaryState(), centralBank: { ...base.centralBank!, debtFinancing: 'prohibited' as const } }
+    const r1 = mkReports(); const outDirect = tickMonetary([direct], money, r1)[0]
+    const r2 = mkReports(); const outProhib = tickMonetary([prohibited], money, r2)[0]
+    check('direct monetary financing credits the treasury', outDirect.treasury > outProhib.treasury, `${outDirect.treasury.toFixed(0)} vs ${outProhib.treasury.toFixed(0)}`)
+    check('direct monetary financing yields higher inflation than no financing', r1.countries[lalandeId].inflation > r2.countries[lalandeId].inflation, `${(r1.countries[lalandeId].inflation * 100).toFixed(2)}% vs ${(r2.countries[lalandeId].inflation * 100).toFixed(2)}%`)
+  }
+
+  // IMPORTED INFLATION: a currency that has depreciated since last tick imports
+  // inflation. Craft a monetary state whose lastRate is above the current rate.
+  {
+    const c = seedCountries().find((c) => c.id === marsId)!
+    const depreciated = { ...c, currency: { ...c.currency!, rate: 0.8 }, monetary: { ...defaultMonetaryState(), lastRate: 1.0 } }
+    const stable = { ...c, currency: { ...c.currency!, rate: 1.0 }, monetary: { ...defaultMonetaryState(), lastRate: 1.0 } }
+    const money = { [marsId]: { baseMoney: 0, currency: 0, bankReserves: 0, deposits: 0, broadMoney: 0, loans: 0, bankCapital: 0, reserveRatio: 0, loanToDeposit: 0, cbBorrowings: 0 } }
+    const mk = (): import('../src/economy/economyTypes').TickReports => ({ worlds: {}, countries: { [marsId]: { gdp: 5000, priceLevel: 1, inflation: 0.02, revenue: 0, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: 0, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A' as const, population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] })
+    const rd = mk(); tickMonetary([depreciated], money, rd)
+    const rs = mk(); tickMonetary([stable], money, rs)
+    check('currency depreciation imports inflation', rd.countries[marsId].inflation > rs.countries[marsId].inflation, `${(rd.countries[marsId].inflation * 100).toFixed(2)}% vs ${(rs.countries[marsId].inflation * 100).toFixed(2)}%`)
+  }
+
+  // OMO: buying securities injects bank reserves and grows the CB's holdings;
+  // selling drains them. Selling is gated when the regime forbids the secondary
+  // market (Orion runs 'prohibited').
+  {
+    const store = useEconomyStore.getState()
+    useEconomyStore.setState({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), banks: seedBanks(), tick: 0 })
+    const before = useEconomyStore.getState()
+    const marsReserves0 = before.banks.filter((b) => b.countryId === marsId).reduce((s, b) => s + b.reserves, 0)
+    const marsSec0 = before.countries.find((c) => c.id === marsId)!.centralBank!.govSecurities
+    store.openMarketOperation(marsId, 5000) // buy
+    const after = useEconomyStore.getState()
+    const marsReserves1 = after.banks.filter((b) => b.countryId === marsId).reduce((s, b) => s + b.reserves, 0)
+    const marsSec1 = after.countries.find((c) => c.id === marsId)!.centralBank!.govSecurities
+    check('OMO purchase injects bank reserves', marsReserves1 > marsReserves0, `${marsReserves0.toFixed(0)} → ${marsReserves1.toFixed(0)}`)
+    check('OMO purchase grows CB securities holdings', Math.abs(marsSec1 - (marsSec0 + 5000)) < 1e-6)
+
+    // Orion's bank forbids OMO (debtFinancing 'prohibited') — a no-op.
+    const orionSec0 = after.countries.find((c) => c.id === 'orion-republic')!.centralBank!.govSecurities
+    store.openMarketOperation('orion-republic', 5000)
+    const orionSec1 = useEconomyStore.getState().countries.find((c) => c.id === 'orion-republic')!.centralBank!.govSecurities
+    check('OMO is refused when the regime forbids the secondary market', orionSec1 === orionSec0)
+  }
+}
+
+console.log('\n=== 41. Central banking Stage 5: AI monetary manager, banking crisis + LOLR, events ===')
+{
+  const lalandeId = 'kingdom-of-lalande'
+  const marsId = 'imperial-state-of-mars'
+
+  // AI MONETARY MANAGER: a NON-player government-controlled bank (Lalande) with
+  // rising inflation eventually leans against it (raises its rate) — even a
+  // development-minded government won't let a runaway go forever. (Contrast §40,
+  // where the PLAYER's government bank stays put.)
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 40; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [marsId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const rate = cs.find((c) => c.id === lalandeId)!.centralBank!.policyRate
+    check('the AI steers a non-player government bank’s rate up against inflation', rate > 0.02, `${(rate * 100).toFixed(2)}%`)
+  }
+
+  // LOAN LOSSES: a deep downturn (very negative output gap) writes off loans, so
+  // a bank loses capital versus the same bank in calm conditions.
+  {
+    const country = seedCountries().find((c) => c.id === marsId)!
+    const bank = seedBanks().find((b) => b.countryId === marsId)!
+    const calm = { ...country, monetary: { ...defaultMonetaryState(), outputGap: 0 } }
+    const bust = { ...country, monetary: { ...defaultMonetaryState(), outputGap: -0.3 } }
+    const capCalm = bankCapital(tickBanking([calm], [{ ...bank }], 1).banks[0])
+    const capBust = bankCapital(tickBanking([bust], [{ ...bank }], 1).banks[0])
+    check('a deep downturn inflicts loan losses (lower bank capital)', capBust < capCalm, `${capBust.toFixed(0)} < ${capCalm.toFixed(0)}`)
+  }
+
+  // BANKING CRISIS + LENDER OF LAST RESORT: an insolvent bank is recapitalized by
+  // the state, restoring positive capital, debiting the treasury, and logging an
+  // event.
+  {
+    const country = seedCountries().find((c) => c.id === marsId)!
+    const treasury0 = country.treasury
+    const insolvent: Bank = { id: 'bank-x', name: 'Failing Bank', countryId: marsId, reserves: 50, loans: 900, securities: 0, deposits: 1000, cbBorrowings: 200, riskAppetite: 0.5, lastProfit: 0 }
+    check('the test bank starts insolvent', bankCapital(insolvent) < 0, `${bankCapital(insolvent).toFixed(0)}`)
+    const res = tickBanking([country], [insolvent], 7)
+    check('LOLR recapitalizes the insolvent bank to solvency', bankCapital(res.banks[0]) >= 0, `${bankCapital(res.banks[0]).toFixed(0)}`)
+    check('the bailout is paid from the treasury', res.countries[0].treasury < treasury0, `${res.countries[0].treasury.toFixed(0)} < ${treasury0}`)
+    check('a banking-crisis event is logged', res.events.some((e) => e.kind === 'bank-recapitalized'), res.events.map((e) => e.kind).join(','))
+  }
+
+  // GOVERNOR TERM: past the term length, a new governor is appointed with an event.
+  {
+    const country = seedCountries().find((c) => c.id === marsId)!
+    const oldGov = country.centralBank!.governorName
+    const reports: import('../src/economy/economyTypes').TickReports = { worlds: {}, countries: { [marsId]: { gdp: 5000, priceLevel: 1, inflation: 0.02, revenue: 0, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: 0, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A', population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] }
+    const termLen = country.centralBank!.governorTermLength
+    const out = tickMonetary([{ ...country, monetary: defaultMonetaryState() }], {}, reports, termLen + 1, [])[0]
+    check('a governor is replaced when the term expires', out.centralBank!.governorName !== oldGov, `${oldGov} → ${out.centralBank!.governorName}`)
+    check('a governor-appointment event is logged', reports.events.some((e) => e.kind === 'governor-appointed'))
+  }
+
+  // EVENTS accumulate over a real run.
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    let total = 0
+    for (let i = 0; i < 60; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [marsId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks; total += r.reports.events.length }
+    check('central-banking events accumulate over a 60-tick run', total > 0, `${total} events`)
+  }
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

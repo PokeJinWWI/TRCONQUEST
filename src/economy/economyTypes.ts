@@ -3,6 +3,8 @@ import type { NeedTier } from './species'
 import type { PopClass, DistrictType } from './recipes'
 import type { EconomicSystem, HealthcareSystem, ForeignBondPolicy, ForeignInvestmentPolicy } from './laws'
 import type { CentralBank } from './centralBank'
+import type { Currency } from './fx'
+import type { MonetaryState } from './monetaryPolicy'
 
 // Government bonds — the debt the state sells to finance deficits. Held by three
 // classes of buyer; foreign holders are gated by law + an approval setting.
@@ -247,6 +249,10 @@ export interface Country {
   // profitable-but-cash-poor company can still be financed to expand, and the
   // financial sector has a real business.
   investmentPool: number
+  // The country's currency and its floating/pegged exchange rate (see fx.ts).
+  // Domestic values are denominated in it; the rate converts value at borders.
+  // Optional so anything predating it still type-checks; seeded for every country.
+  currency?: Currency
   // The country's central bank — the monetary institution (see centralBank.ts).
   // Every country carries a record; a country with no central bank has one with
   // status 'no-bank'. The seven law selections configure it; the governance/
@@ -254,6 +260,9 @@ export interface Country {
   // tick. Optional so anything predating this field still type-checks; seeded
   // for every country.
   centralBank?: CentralBank
+  // Monetary transmission/inflation state (see monetaryPolicy.ts, Stage 4).
+  // Evolves each tick; defaulted on first use, so optional.
+  monetary?: MonetaryState
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---
@@ -324,12 +333,56 @@ export interface Family {
   prestige: number
 }
 
+// A commercial bank — a distinct institution with its own balance sheet (design:
+// Central Banking System, Stage 2). Banks take deposits, hold reserves at the
+// central bank, make loans (creating deposits — broad money), hold government
+// securities, and borrow from the central bank's discount window when short of
+// reserves. Their lending capacity is gated by the reserve requirement and their
+// own capital. Run by the bank AI. All figures in the same money units as
+// treasury/cash. Capital (equity) is DERIVED = reserves + loans + securities −
+// deposits − cbBorrowings (see bankCapital in banking.ts).
+export interface Bank {
+  id: string
+  name: string
+  countryId: string
+  // Assets.
+  reserves: number // deposits held at the central bank (plus vault cash)
+  loans: number // credit extended to the economy
+  securities: number // government bonds held
+  // Liabilities.
+  deposits: number // customer deposits owed
+  cbBorrowings: number // borrowed from the central bank discount window
+  // Behavior / diagnostics.
+  riskAppetite: number // 0..1 — how aggressively it deploys excess reserves into loans
+  lastProfit: number // net interest margin earned last tick (display)
+  // Consecutive ticks the bank has been under its capital target (a stressed
+  // bank pulls back lending; used by the bank AI / Stage 5 crises). Absent = 0.
+  stressStreak?: number
+}
+
+// Per-country monetary aggregates for a tick — the money-supply readout the UI
+// and (Stage 4) the transmission mechanism read. Summed from the country's banks
+// plus its central bank's currency issuance.
+export interface MonetaryAggregates {
+  baseMoney: number // M0: currency in circulation + total bank reserves
+  currency: number // currency in circulation (held by the public)
+  bankReserves: number // total reserves banks hold at the central bank
+  deposits: number // total customer deposits across banks
+  broadMoney: number // M2-ish: currency + deposits
+  loans: number // total loans outstanding
+  bankCapital: number // total commercial-bank equity
+  reserveRatio: number // bankReserves / deposits (vs. the requirement)
+  loanToDeposit: number // loans / deposits
+  cbBorrowings: number // total discount-window borrowing outstanding
+}
+
 export interface EconomyState {
   countries: Country[]
   worlds: World[]
   corporations: Corporation[]
   characters: Character[]
   families: Family[]
+  banks: Bank[]
   tick: number
 }
 
@@ -350,7 +403,16 @@ export type CreditRating = 'AAA' | 'AA' | 'A' | 'BBB' | 'BB' | 'B' | 'CCC'
 export interface CountryFiscal {
   gdp: number
   priceLevel: number
+  // Modeled inflation from the monetary transmission model (Stage 4), patched in
+  // after the monetary tick — no longer the raw price-level ratio.
   inflation: number
+  // Monetary conditions readout (Stage 4). Optional: present once the monetary
+  // tick has patched this report (i.e. from tick 1 on).
+  policyRate?: number
+  realRate?: number
+  inflationExpectation?: number
+  outputGap?: number
+  monetaryFinanced?: number
   revenue: number
   welfare: number
   admin: number
@@ -382,7 +444,22 @@ export interface CountryFiscal {
   stockpileSpend: number
 }
 
+// A notable central-banking event this tick (Stage 5) — a governor change, a
+// crisis, a bailout. Collected into the tick reports and logged by the store for
+// the Situations/Central Bank UI. Data, not a prompt: these are informational.
+export interface CentralBankEvent {
+  id: string
+  tick: number
+  countryId: string
+  kind: 'governor-appointed' | 'inflation-crisis' | 'currency-crisis' | 'peg-broken' | 'banking-crisis' | 'bank-recapitalized'
+  text: string
+}
+
 export interface TickReports {
   worlds: Record<string, WorldReport>
   countries: Record<string, CountryFiscal>
+  // Per-country monetary aggregates (Stage 2 banking). Keyed by country id.
+  money: Record<string, MonetaryAggregates>
+  // Notable central-banking events this tick (Stage 5).
+  events: CentralBankEvent[]
 }

@@ -4,6 +4,7 @@ import { DEPLETABLE_GOODS } from './economyTick'
 import { governorAppointmentDef, type CentralBank } from './centralBank'
 import type { ReligionMix } from './demographics'
 import type {
+  Bank,
   Building,
   BuildingOwner,
   Character,
@@ -426,12 +427,21 @@ const WORLDS: World[] = [
 // monetary institution so the models read differently from the start — a
 // government-directed development bank, an independent price-stability bank, a
 // federal reserve system, etc. `governorTermLength` follows the appointment law.
-function seedCentralBank(countryId: string, name: string, cb: Omit<CentralBank, 'countryId' | 'name' | 'governorTermStart' | 'governorTermLength'>): CentralBank {
+type SeedCentralBank = Omit<CentralBank, 'countryId' | 'name' | 'governorTermStart' | 'governorTermLength' | 'fxReserves' | 'govSecurities' | 'currencyInCirculation' | 'loansToBanks'> &
+  Partial<Pick<CentralBank, 'fxReserves' | 'govSecurities' | 'currencyInCirculation' | 'loansToBanks'>>
+function seedCentralBank(countryId: string, name: string, cb: SeedCentralBank): CentralBank {
   return {
     countryId,
     name,
     governorTermStart: 0,
     governorTermLength: governorAppointmentDef(cb.appointment).termTicks,
+    // Balance-sheet defaults (Stage 2) — seeded so the CB sheet balances at the
+    // start; per-country overrides (e.g. a fixed-rate regime holds more FX
+    // reserves) are passed in explicitly.
+    fxReserves: 20000,
+    govSecurities: 15000,
+    currencyInCirculation: 30000,
+    loansToBanks: 0,
     ...cb,
   }
 }
@@ -459,6 +469,7 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Imperial Standard Credit', code: 'ISC', rate: 1.0, target: 1.0 },
     centralBank: seedCentralBank('imperial-state-of-mars', 'Imperial Reserve of Mars', {
       status: 'state-bank',
       structure: 'regional-branches',
@@ -494,6 +505,7 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Venusian National Credit', code: 'VNC', rate: 1.15, target: 1.15 },
     centralBank: seedCentralBank('republic-of-venus', 'Venusian Federal Reserve', {
       status: 'highly-independent',
       structure: 'federal-reserve',
@@ -529,6 +541,7 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Orion Republic Dollar', code: 'ORD', rate: 0.95, target: 0.95 },
     centralBank: seedCentralBank('orion-republic', 'Bank of Orion', {
       status: 'independent',
       structure: 'single',
@@ -564,6 +577,7 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Lalande Royal Dinar', code: 'LRD', rate: 0.70, target: 0.70 },
     centralBank: seedCentralBank('kingdom-of-lalande', 'Lalande State Monetary Directorate', {
       status: 'treasury-office',
       structure: 'single',
@@ -577,6 +591,8 @@ const COUNTRIES: Country[] = [
       governorName: 'Minister Hal Renner',
       policyRate: 0.02,
       reserveRequirement: 0.06,
+      // A fixed exchange rate must be defended with reserves — Lalande holds more.
+      fxReserves: 45000,
     }),
   },
 ]
@@ -763,6 +779,39 @@ export function seedWorlds(): World[] {
 }
 export function seedCountries(): Country[] {
   return COUNTRIES.map((c) => ({ ...c }))
+}
+
+// Commercial banks (Stage 2). Each bank starts near a balanced sheet: reserves
+// 15% + loans 80% + securities 15% of its deposit base, so capital ≈ 10% of
+// deposits (≈12.5% of loans — comfortably above the 8% target) and reserves sit
+// above any seeded reserve requirement, leaving a little room to lend. Larger
+// economies carry more/bigger banks.
+function makeBank(id: string, name: string, countryId: string, deposits: number, riskAppetite: number): Bank {
+  return {
+    id,
+    name,
+    countryId,
+    reserves: Math.round(deposits * 0.15),
+    loans: Math.round(deposits * 0.8),
+    securities: Math.round(deposits * 0.15),
+    deposits,
+    cbBorrowings: 0,
+    riskAppetite,
+    lastProfit: 0,
+  }
+}
+
+const BANKS: Bank[] = [
+  makeBank('bank-mars-1', 'First Bank of Mars', 'imperial-state-of-mars', 70000, 0.55),
+  makeBank('bank-mars-2', 'Tharsis Mercantile', 'imperial-state-of-mars', 50000, 0.6),
+  makeBank('bank-venus-1', 'Aphrodite Savings', 'republic-of-venus', 52000, 0.5),
+  makeBank('bank-venus-2', 'Cytherean Trust', 'republic-of-venus', 40000, 0.55),
+  makeBank('bank-orion-1', 'Arcadia Commercial Bank', 'orion-republic', 42000, 0.6),
+  makeBank('bank-lalande-1', 'Lalande People’s Bank', 'kingdom-of-lalande', 48000, 0.7),
+]
+
+export function seedBanks(): Bank[] {
+  return BANKS.map((b) => ({ ...b }))
 }
 export function seedCorporations(): Corporation[] {
   // Base corporations, with private ones giving their country's capital

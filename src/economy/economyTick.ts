@@ -16,6 +16,7 @@ import { NEED_TIERS, SPECIES_TEMPLATES, type NeedTier } from './species'
 import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, CONSTRUCTION_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, constructionWork, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
 import { economicSystemDef, healthcareSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
 import type {
+  Bank,
   Building,
   Corporation,
   Country,
@@ -29,6 +30,9 @@ import type {
 } from './economyTypes'
 import { runCountryAI, type CountryAIOptions } from './countryAI'
 import { runCorporationAI } from './corporationAI'
+import { tickBanking } from './banking'
+import { updateExchangeRates, convertBetween } from './fx'
+import { tickMonetary } from './monetaryPolicy'
 import { runForeignInvestmentAI } from './foreignInvestmentAI'
 
 const PRICE_ADJUST = 0.15
@@ -300,6 +304,10 @@ function tickWorld(
   treasuryAvailable: number,
   poolByCountry: Map<string, number>,
   corpCountry: Map<string, string>,
+  // Currency rate (TSC value) per country id — for converting a cross-border
+  // construction draw from the host world's currency into the financing
+  // country's currency (Stage 3 FX). Same-country builds convert 1:1.
+  fxRate: Map<string, number>,
 ): WorldTickResult {
   const report = emptyWorldReport()
   const law = economicSystemDef(system)
@@ -609,9 +617,15 @@ function tickWorld(
         // draws across every world this tick.
         const homeCountry = corpCountry.get(o.owner.corporationId) ?? world.ownerId
         const avail = Math.max(0, poolByCountry.get(homeCountry) ?? 0)
-        const points = costPerPoint > 0 ? Math.min(pointsWanted, avail / costPerPoint) : pointsWanted
+        // Materials are priced in the HOST world's currency; the financing pool
+        // is in the home country's currency. Convert the per-point cost so the
+        // affordability check and the draw are both in home-currency terms.
+        const hostRate = fxRate.get(world.ownerId) ?? 1
+        const homeRate = fxRate.get(homeCountry) ?? 1
+        const costPerPointHome = costPerPoint * (hostRate / (homeRate || 1))
+        const points = costPerPointHome > 0 ? Math.min(pointsWanted, avail / costPerPointHome) : pointsWanted
         if (points > 0) {
-          const spend = points * costPerPoint
+          const spend = points * costPerPointHome
           o.progress += points
           poolByCountry.set(homeCountry, avail - spend)
         }
@@ -741,8 +755,9 @@ export function tickEconomy(
   worlds: World[],
   corporations: Corporation[] = [],
   ai: CountryAIOptions = {},
-): { countries: Country[]; worlds: World[]; corporations: Corporation[]; reports: TickReports } {
-  const reports: TickReports = { worlds: {}, countries: {} }
+  banks: Bank[] = [],
+): { countries: Country[]; worlds: World[]; corporations: Corporation[]; banks: Bank[]; reports: TickReports } {
+  const reports: TickReports = { worlds: {}, countries: {}, money: {}, events: [] }
   const nextWorlds: World[] = [...worlds]
   const nextCountries: Country[] = []
   const corpProfitTotal = new Map<string, number>()
@@ -762,6 +777,8 @@ export function tickEconomy(
   // draws from later-processed nations are reflected.
   const poolByCountry = new Map(countries.map((c) => [c.id, Math.max(0, c.investmentPool)]))
   const corpCountry = new Map(corporations.map((c) => [c.id, c.countryId]))
+  // Currency rate per country (TSC value) for cross-border construction FX.
+  const fxRate = new Map(countries.map((c) => [c.id, c.currency?.rate ?? 1]))
 
   for (const country of countries) {
     const owned = worlds.map((w, idx) => ({ w, idx })).filter(({ w }) => w.ownerId === country.id)
@@ -782,7 +799,7 @@ export function tickEconomy(
     const stateBureaucracyMalus = country.bureaucracy > 0 ? 1 : BUREAUCRACY_SHORTAGE_MALUS
 
     for (const { w, idx } of owned) {
-      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, govHealthShare, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry)
+      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, govHealthShare, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate)
       runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
       stockpileSpend += res.stockpileSpend
@@ -1043,7 +1060,28 @@ export function tickEconomy(
     aiCorporations = fi.corporations
   }
 
-  return { countries: aiCountries, worlds: aiWorlds, corporations: aiCorporations, reports }
+  // --- Banking + money supply (Stage 2): every commercial bank steps under its
+  //     central bank's policy (the reserve requirement and policy rate set above
+  //     finally bite here), the CB balance sheets reconcile, and per-country
+  //     monetary aggregates are produced. Runs last, on the settled countries, so
+  //     it sees this tick's policy. Not yet fed back into pops/inflation (Stage 4).
+  const banking = tickBanking(aiCountries, banks, ai.tick ?? 0)
+  reports.money = banking.money
+  for (const e of banking.events) reports.events.push(e)
+
+  // --- Foreign exchange (Stage 3): every currency floats toward its fundamentals
+  //     or is defended toward its peg (spending FX reserves). Runs after banking
+  //     so it sees this tick's central-bank state (credibility, reserves).
+  const fxCountries = updateExchangeRates(banking.countries)
+
+  // --- Monetary transmission + inflation (Stage 4): the policy rate, money
+  //     growth, currency depreciation and deficit financing feed a lagged output
+  //     gap and inflation; an independent bank reacts (Taylor rule), a
+  //     government-run bank does not. Runs last so it sees this tick's money +
+  //     FX; patches the fiscal report's modeled inflation and monetary readout.
+  const monetaryCountries = tickMonetary(fxCountries, banking.money, reports, ai.tick ?? 0, ai.humanCountryIds ?? [])
+
+  return { countries: monetaryCountries, worlds: aiWorlds, corporations: aiCorporations, banks: banking.banks, reports }
 }
 
 // The share of a company's profit paid out to shareholders each tick; the rest
@@ -1075,6 +1113,11 @@ export function distributeDividends(
   const treasuryDelta = new Map<string, number>()
   const popDividendByCountry = new Map<string, number>()
   const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v)
+  // The country each corporation belongs to — for converting a cross-border
+  // dividend from where it was EARNED (the paying corp's currency) into the
+  // FOREIGN owner's currency (Stage 3 FX). Dividends paid to a home holder never
+  // convert (same currency → passthrough).
+  const corpCountryId = new Map(corporations.map((c) => [c.id, c.countryId]))
 
   for (const corp of corporations) {
     const profit = profitByCorp.get(corp.id) ?? 0
@@ -1084,24 +1127,30 @@ export function distributeDividends(
       const amt = pool * (holding.shares / corp.totalShares)
       if (amt <= 0) continue
       switch (holding.holder.kind) {
-        case 'state':
+        case 'state': {
           // Repatriation: a state stake's dividend goes to THAT government's
           // treasury — the corp's own country by default, or a FOREIGN one when
-          // the holding names a different country (cross-border investment).
-          add(treasuryDelta, holding.holder.countryId ?? corp.countryId, amt)
+          // the holding names a different country (cross-border investment). A
+          // foreign stake's dividend is converted into the investor's currency.
+          const dest = holding.holder.countryId ?? corp.countryId
+          add(treasuryDelta, dest, convertBetween(amt, corp.countryId, dest, countries))
           add(corpCashDelta, corp.id, -amt)
           break
+        }
         case 'financial':
           add(corpCashDelta, holding.holder.id, amt) // the district earns from its stake
           add(corpCashDelta, corp.id, -amt)
           break
-        case 'corporation':
+        case 'corporation': {
           // One company holding equity in another (an SOE or private firm, at
           // home or abroad): the dividend flows to the holding company's cash —
-          // cross-border, this repatriates profit to the foreign owner.
-          add(corpCashDelta, holding.holder.id, amt)
+          // cross-border, this repatriates profit to the foreign owner, converted
+          // into the holding company's currency.
+          const ownerCountry = corpCountryId.get(holding.holder.id) ?? corp.countryId
+          add(corpCashDelta, holding.holder.id, convertBetween(amt, corp.countryId, ownerCountry, countries))
           add(corpCashDelta, corp.id, -amt)
           break
+        }
         case 'public':
           add(popDividendByCountry, corp.countryId, amt)
           add(corpCashDelta, corp.id, -amt)
