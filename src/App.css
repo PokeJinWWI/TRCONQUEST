@@ -2264,6 +2264,58 @@
   font-size: 10px;
   color: rgba(255, 255, 255, 0.45);
 }
+
+/* --- Central bank panel --- */
+.cb-model {
+  font-size: 11px;
+  color: #6fe3ff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.cb-governance {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.cb-meter-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 2px;
+}
+.cb-meter-val {
+  color: #cdeeff;
+  font-weight: 700;
+}
+.cb-meter-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.cb-meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(111, 227, 255, 0.5), rgba(111, 227, 255, 0.9));
+}
+.cb-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+.cb-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  color: #cdeeff;
+}
+.cb-facts > div > span:last-child {
+  text-align: right;
+}
 /* .econ-pos/.econ-neg themselves are defined further down (right after
    .inspect-value) — every real usage combines one of them with
    .inspect-value (`className="inspect-value econ-neg"` etc.), and with

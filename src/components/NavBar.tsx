@@ -4,6 +4,7 @@ import { NationEconomyPanel } from './EconomyPanel'
 import { NationTechPanel } from './TechPanel'
 import { FleetManagement } from './FleetManagement'
 import { LawsPanel } from './LawsPanel'
+import { CentralBankPanel } from './CentralBankPanel'
 import { CorporationsPanel } from './CorporationsPanel'
 import { StockExchangePanel } from './StockExchangePanel'
 import { DemographicsPanel } from './DemographicsPanel'
@@ -26,6 +27,7 @@ const ECONOMY_CATEGORY = 'Economy'
 const TECHNOLOGY_CATEGORY = 'Technology'
 const GOVERNMENT_CATEGORY = 'Government'
 const LAWS_SUBCATEGORY = 'Laws'
+const INSTITUTIONS_SUBCATEGORY = 'Institutions'
 const CORPORATIONS_CATEGORY = 'Corporations'
 const STOCK_EXCHANGE_CATEGORY = 'Stock Exchange'
 const SOCIETY_CATEGORY = 'Society'
@@ -76,6 +78,7 @@ function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === ECONOMY_CATEGORY) return <NationEconomyPanel subcategory={subcategory} />
   if (category.name === TECHNOLOGY_CATEGORY) return <NationTechPanel subcategory={subcategory} />
   if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />
+  if (category.name === GOVERNMENT_CATEGORY && subcategory === INSTITUTIONS_SUBCATEGORY) return <CentralBankPanel />
   if (category.name === CORPORATIONS_CATEGORY) return <CorporationsPanel subcategory={subcategory} />
   if (category.name === STOCK_EXCHANGE_CATEGORY) return <StockExchangePanel />
   if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return <DemographicsPanel />

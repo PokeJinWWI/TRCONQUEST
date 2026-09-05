@@ -2,6 +2,7 @@ import type { GoodId } from './goods'
 import type { NeedTier } from './species'
 import type { PopClass, DistrictType } from './recipes'
 import type { EconomicSystem, HealthcareSystem, ForeignBondPolicy, ForeignInvestmentPolicy } from './laws'
+import type { CentralBank } from './centralBank'
 
 // Government bonds — the debt the state sells to finance deficits. Held by three
 // classes of buyer; foreign holders are gated by law + an approval setting.
@@ -246,6 +247,13 @@ export interface Country {
   // profitable-but-cash-poor company can still be financed to expand, and the
   // financial sector has a real business.
   investmentPool: number
+  // The country's central bank — the monetary institution (see centralBank.ts).
+  // Every country carries a record; a country with no central bank has one with
+  // status 'no-bank'. The seven law selections configure it; the governance/
+  // policy fields evolve through reforms, appointments and (later) the monetary
+  // tick. Optional so anything predating this field still type-checks; seeded
+  // for every country.
+  centralBank?: CentralBank
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---

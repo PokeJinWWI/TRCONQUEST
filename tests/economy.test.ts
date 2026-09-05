@@ -14,6 +14,7 @@ import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
 import { useEconomyStore } from '../src/state/economyStore'
 import { runCorporationAI } from '../src/economy/corporationAI'
+import { hasCentralBank, effectiveIndependence, governmentControlsPolicy, centralBankModelLabel, governorAppointmentDef } from '../src/economy/centralBank'
 import type { Building, Corporation, Country, World } from '../src/economy/economyTypes'
 
 let failures = 0
@@ -1108,6 +1109,67 @@ console.log('\n=== 36. Foreign-investment approval queue + auto-approve toggle =
   }))
   store.rejectForeignInvestment(hostId, 'offer2')
   check('rejecting a pending foreign investment discards it', useEconomyStore.getState().countries.find((c) => c.id === hostId)!.pendingForeignInvestment.length === 0)
+}
+
+console.log('\n=== 37. Central banking Stage 1: institution, laws, governance gate ===')
+{
+  const store = useEconomyStore.getState()
+  useEconomyStore.setState({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), tick: 0 })
+
+  // Every seeded country carries a central bank, and the models read differently.
+  const seeded = useEconomyStore.getState().countries
+  check('every seeded country has a central bank', seeded.every((c) => hasCentralBank(c.centralBank)))
+  const venus = seeded.find((c) => c.id === 'republic-of-venus')!
+  const lalande = seeded.find((c) => c.id === 'kingdom-of-lalande')!
+  check('Venus runs a Federal Reserve System', centralBankModelLabel(venus.centralBank!) === 'Federal Reserve System', centralBankModelLabel(venus.centralBank!))
+  check('Lalande runs a Treasury Banking System', centralBankModelLabel(lalande.centralBank!) === 'Treasury Banking System', centralBankModelLabel(lalande.centralBank!))
+
+  // Effective independence: the independent MPC bank beats the government-run one.
+  check('an independent bank is more independent than a treasury bank', effectiveIndependence(venus.centralBank!) > effectiveIndependence(lalande.centralBank!), `${effectiveIndependence(venus.centralBank!).toFixed(2)} vs ${effectiveIndependence(lalande.centralBank!).toFixed(2)}`)
+
+  // Governance gate: the government controls Lalande's bank but NOT Venus's.
+  check('government controls the treasury bank', governmentControlsPolicy(lalande.centralBank!))
+  check('government does NOT control the independent bank', !governmentControlsPolicy(venus.centralBank!))
+
+  // setPolicyRate: takes effect on the government-run bank, no-op on the independent one.
+  const lalandeRate0 = lalande.centralBank!.policyRate
+  store.setPolicyRate('kingdom-of-lalande', lalandeRate0 + 0.02)
+  check('government CAN set its own bank’s rate', Math.abs(useEconomyStore.getState().countries.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!.policyRate - (lalandeRate0 + 0.02)) < 1e-9)
+  const venusRate0 = venus.centralBank!.policyRate
+  store.setPolicyRate('republic-of-venus', venusRate0 + 0.02)
+  check('government CANNOT set an independent bank’s rate directly', useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!.policyRate === venusRate0)
+
+  // Pressure erodes independence & credibility, and can eventually break independence.
+  const cred0 = useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!.credibility
+  const indep0 = effectiveIndependence(useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!)
+  store.pressureCentralBank('republic-of-venus', 0.3)
+  const afterPressure = useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!
+  check('pressure lowers credibility', afterPressure.credibility < cred0, `${cred0.toFixed(2)} -> ${afterPressure.credibility.toFixed(2)}`)
+  check('pressure lowers effective independence', effectiveIndependence(afterPressure) < indep0, `${indep0.toFixed(2)} -> ${effectiveIndependence(afterPressure).toFixed(2)}`)
+
+  // Changing the appointment law resets the governor's term length.
+  store.setGovernorAppointment('kingdom-of-lalande', 'staggered')
+  const relawed = useEconomyStore.getState().countries.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!
+  check('changing appointment law resets term length', relawed.governorTermLength === governorAppointmentDef('staggered').termTicks)
+
+  // Abolish then re-establish.
+  store.setCentralBankStatus('orion-republic', 'no-bank')
+  check('setting status to no-bank abolishes the bank', !hasCentralBank(useEconomyStore.getState().countries.find((c) => c.id === 'orion-republic')!.centralBank))
+  store.establishCentralBank('orion-republic')
+  check('establishing gives a functioning bank again', hasCentralBank(useEconomyStore.getState().countries.find((c) => c.id === 'orion-republic')!.centralBank))
+
+  // A central bank must never break the tick (finiteness).
+  let cbCountries = seedCountries()
+  let cbWorlds = seedWorlds()
+  let cbCorps = seedCorporations()
+  for (let i = 0; i < 6; i++) {
+    const res = tickEconomy(cbCountries, cbWorlds, cbCorps, { tick: i + 1, enableAI: true })
+    cbCountries = res.countries
+    cbWorlds = res.worlds
+    cbCorps = res.corporations
+  }
+  check('central bank survives ticking (records preserved)', cbCountries.every((c) => hasCentralBank(c.centralBank)))
+  check('all worlds finite after ticks with central banks', cbWorlds.every(worldFinite))
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

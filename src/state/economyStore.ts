@@ -3,6 +3,20 @@ import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies } from '../economy/economySeed'
 import { tickEconomy, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
+import {
+  defaultCentralBank,
+  governmentControlsPolicy,
+  governorAppointmentDef,
+  hasCentralBank,
+  type CentralBank,
+  type CentralBankStatus,
+  type BankStructure,
+  type PolicyAuthority,
+  type GovernorAppointment,
+  type CentralBankMandate,
+  type DebtFinancingRegime,
+  type ExchangeRateRegime,
+} from '../economy/centralBank'
 import { RECIPES, constructionWork } from '../economy/recipes'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
 import type { GoodId } from '../economy/goods'
@@ -321,6 +335,30 @@ interface EconomyStore {
   setForeignApproval: (countryId: string, require: boolean) => void
   approveForeignOffer: (countryId: string, offerId: string) => void
   rejectForeignOffer: (countryId: string, offerId: string) => void
+  // --- Central bank (monetary institution) ---
+  // Found a central bank in a country that has none (status 'no-bank' → a basic
+  // state bank). No-op if one already exists.
+  establishCentralBank: (countryId: string) => void
+  // Enact the central bank's institutional laws. Setting the status to 'no-bank'
+  // abolishes it. Changing the appointment law resets the governor's term length.
+  setCentralBankStatus: (countryId: string, status: CentralBankStatus) => void
+  setBankStructure: (countryId: string, structure: BankStructure) => void
+  setPolicyAuthority: (countryId: string, authority: PolicyAuthority) => void
+  setGovernorAppointment: (countryId: string, appointment: GovernorAppointment) => void
+  setCentralBankMandate: (countryId: string, mandate: CentralBankMandate) => void
+  setDebtFinancingRegime: (countryId: string, regime: DebtFinancingRegime) => void
+  setExchangeRateRegime: (countryId: string, regime: ExchangeRateRegime) => void
+  // Set the policy interest rate / reserve requirement DIRECTLY. Only takes
+  // effect when the government controls policy (a dependent bank); on an
+  // independent bank it is a no-op — the player must pressure or reform instead.
+  setPolicyRate: (countryId: string, rate: number) => void
+  setReserveRequirement: (countryId: string, requirement: number) => void
+  // Lean on an independent central bank for easier money — raises standing
+  // government pressure (eroding effective independence and credibility). The
+  // political lever a government has over a bank it cannot command directly.
+  pressureCentralBank: (countryId: string, amount: number) => void
+  // Appoint a new governor, resetting their term from the current tick.
+  appointGovernor: (countryId: string, name: string) => void
 }
 
 let constructionCounter = 0
@@ -922,7 +960,97 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
     set((state) => ({
       countries: state.countries.map((c) => (c.id === countryId ? { ...c, pendingForeign: c.pendingForeign.filter((o) => o.id !== offerId) } : c)),
     })),
+
+  // --- Central bank ---
+  establishCentralBank: (countryId) =>
+    set((state) => ({
+      countries: state.countries.map((c) => {
+        if (c.id !== countryId) return c
+        const existing = c.centralBank
+        if (hasCentralBank(existing)) return c // already has one
+        const name = existing ? existing.name : 'Central Bank'
+        return { ...c, centralBank: { ...defaultCentralBank(countryId, state.tick), name } }
+      }),
+    })),
+
+  setCentralBankStatus: (countryId, status) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, status })) })),
+  setBankStructure: (countryId, structure) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, structure })) })),
+  setPolicyAuthority: (countryId, authority) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, policyAuthority: authority })) })),
+  setGovernorAppointment: (countryId, appointment) =>
+    set((state) => ({
+      // Changing how the governor is appointed resets their term length (and
+      // restarts the clock) per the new law.
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({
+        ...cb,
+        appointment,
+        governorTermLength: governorAppointmentDef(appointment).termTicks,
+        governorTermStart: state.tick,
+      })),
+    })),
+  setCentralBankMandate: (countryId, mandate) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, mandate })) })),
+  setDebtFinancingRegime: (countryId, regime) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, debtFinancing: regime })) })),
+  setExchangeRateRegime: (countryId, regime) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, exchangeRegime: regime })) })),
+
+  setPolicyRate: (countryId, rate) =>
+    set((state) => ({
+      // The government may set the rate directly ONLY on a bank it controls. On
+      // an independent bank this is a no-op — the whole point of independence.
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) =>
+        governmentControlsPolicy(cb) ? { ...cb, policyRate: clampRate(rate) } : cb,
+      ),
+    })),
+  setReserveRequirement: (countryId, requirement) =>
+    set((state) => ({
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) =>
+        governmentControlsPolicy(cb) ? { ...cb, reserveRequirement: clamp01(requirement) } : cb,
+      ),
+    })),
+
+  pressureCentralBank: (countryId, amount) =>
+    set((state) => ({
+      // Leaning on the bank raises standing pressure (capped) and chips at its
+      // credibility — the cost of politicizing monetary policy.
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({
+        ...cb,
+        governmentPressure: clamp01(cb.governmentPressure + amount),
+        credibility: clamp01(cb.credibility - amount * 0.15),
+      })),
+    })),
+
+  appointGovernor: (countryId, name) =>
+    set((state) => ({
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({
+        ...cb,
+        governorName: name,
+        governorTermStart: state.tick,
+        governorTermLength: governorAppointmentDef(cb.appointment).termTicks,
+      })),
+    })),
 }))
+
+// Apply `fn` to a country's central bank if it has one. A country with no
+// central bank (undefined or status 'no-bank') is left untouched — callers use
+// establishCentralBank first. `tick` is threaded for actions that need it.
+function mapCentralBank(countries: Country[], countryId: string, _tick: number, fn: (cb: CentralBank) => CentralBank): Country[] {
+  return countries.map((c) => {
+    if (c.id !== countryId || !c.centralBank) return c
+    return { ...c, centralBank: fn(c.centralBank) }
+  })
+}
+
+function clamp01(x: number): number {
+  return Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0
+}
+// Policy rate is an annual fraction; clamp to a sane 0..50% band.
+function clampRate(x: number): number {
+  return Number.isFinite(x) ? Math.max(0, Math.min(0.5, x)) : 0
+}
 
 let corpCounter = 0
 let charCounter = 100

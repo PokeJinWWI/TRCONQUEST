@@ -1,6 +1,7 @@
 import { GOODS, GOOD_IDS, type GoodId } from './goods'
 import { POP_CLASSES, RECIPES, getMethod, type PopClass } from './recipes'
 import { DEPLETABLE_GOODS } from './economyTick'
+import { governorAppointmentDef, type CentralBank } from './centralBank'
 import type { ReligionMix } from './demographics'
 import type {
   Building,
@@ -421,6 +422,20 @@ const WORLDS: World[] = [
   }),
 ]
 
+// Seed a central bank for a country. Each of the four powers runs a distinct
+// monetary institution so the models read differently from the start — a
+// government-directed development bank, an independent price-stability bank, a
+// federal reserve system, etc. `governorTermLength` follows the appointment law.
+function seedCentralBank(countryId: string, name: string, cb: Omit<CentralBank, 'countryId' | 'name' | 'governorTermStart' | 'governorTermLength'>): CentralBank {
+  return {
+    countryId,
+    name,
+    governorTermStart: 0,
+    governorTermLength: governorAppointmentDef(cb.appointment).termTicks,
+    ...cb,
+  }
+}
+
 // Every state starts with existing national debt (bonds outstanding) — no one
 // runs a balanced budget from a standing start.
 const COUNTRIES: Country[] = [
@@ -444,6 +459,20 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    centralBank: seedCentralBank('imperial-state-of-mars', 'Imperial Reserve of Mars', {
+      status: 'state-bank',
+      structure: 'regional-branches',
+      policyAuthority: 'governor',
+      appointment: 'head-of-state',
+      mandate: 'multiple',
+      debtFinancing: 'supported',
+      exchangeRegime: 'managed',
+      credibility: 0.6,
+      governmentPressure: 0.1,
+      governorName: 'Gov. Adaeze Okonkwo',
+      policyRate: 0.03,
+      reserveRequirement: 0.1,
+    }),
   },
   {
     id: 'republic-of-venus',
@@ -465,6 +494,20 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    centralBank: seedCentralBank('republic-of-venus', 'Venusian Federal Reserve', {
+      status: 'highly-independent',
+      structure: 'federal-reserve',
+      policyAuthority: 'mpc',
+      appointment: 'staggered',
+      mandate: 'price',
+      debtFinancing: 'secondary-only',
+      exchangeRegime: 'float',
+      credibility: 0.85,
+      governmentPressure: 0,
+      governorName: 'Chair Lena Vasquez',
+      policyRate: 0.025,
+      reserveRequirement: 0.08,
+    }),
   },
   {
     id: 'orion-republic',
@@ -486,6 +529,20 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    centralBank: seedCentralBank('orion-republic', 'Bank of Orion', {
+      status: 'independent',
+      structure: 'single',
+      policyAuthority: 'board',
+      appointment: 'fixed-term',
+      mandate: 'currency',
+      debtFinancing: 'prohibited',
+      exchangeRegime: 'float',
+      credibility: 0.75,
+      governmentPressure: 0,
+      governorName: 'Gov. Toma Ilyich',
+      policyRate: 0.035,
+      reserveRequirement: 0.12,
+    }),
   },
   {
     id: 'kingdom-of-lalande',
@@ -507,6 +564,20 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    centralBank: seedCentralBank('kingdom-of-lalande', 'Lalande State Monetary Directorate', {
+      status: 'treasury-office',
+      structure: 'single',
+      policyAuthority: 'finance-ministry',
+      appointment: 'government',
+      mandate: 'development',
+      debtFinancing: 'direct',
+      exchangeRegime: 'fixed',
+      credibility: 0.35,
+      governmentPressure: 0.5,
+      governorName: 'Minister Hal Renner',
+      policyRate: 0.02,
+      reserveRequirement: 0.06,
+    }),
   },
 ]
 
