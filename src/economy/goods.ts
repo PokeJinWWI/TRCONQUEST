@@ -23,15 +23,17 @@ export type GoodId =
   | 'phosphate'
   | 'sulfur'
   | 'hardwood'
-  // Farm crops (raw agricultural)
-  | 'wheat'
-  | 'rice'
+  // Farm crops (raw agricultural). GRAINS is the universal staple crop — the
+  // output of wheat/rice/maize farms, greenhouses and hydroponic farms alike.
+  | 'grains'
   | 'livestock'
   | 'sugar'
   | 'coffee'
   | 'tea'
-  // Meat — a farm-chain end-good (livestock → meat), alongside crops.
+  // Proteins — meat (livestock → meat) and fish (fisheries). Pops demand both
+  // and substitute one for the other.
   | 'meat'
+  | 'fish'
   // Intermediate / industrial
   | 'steel'
   | 'concrete'
@@ -71,9 +73,13 @@ export type GoodId =
   | 'oceanGoingShips'
   | 'spaceships'
   | 'rockets'
-  // Consumer / end goods
-  | 'food'
+  // Consumer / end goods. GROCERIES are processed foods bought at the grocery
+  // store (grains + proteins → groceries) — the everyday processed-food staple.
+  | 'groceries'
   | 'consumerGoods'
+  // Furniture — a household durable (lumber/hardwood/glass → furniture). A
+  // premium substitute for plain consumer goods in the pop household need.
+  | 'furniture'
   | 'luxuryGoods'
   // A "culture" consumer good — produced by an Art Studio, bought like any
   // other luxury.
@@ -82,6 +88,9 @@ export type GoodId =
   // funded (see the healthcare law). Services are the soft economy: care,
   // schooling, shops, and now online/digital services from data centers.
   | 'healthcare'
+  // Dental care — a distinct health service the state can publicly fund
+  // separately from general healthcare (produced alongside it at clinics).
+  | 'dental'
   | 'education'
   | 'retail'
   | 'onlineServices'
@@ -100,13 +109,13 @@ export const GOOD_IDS: GoodId[] = [
   'phosphate',
   'sulfur',
   'hardwood',
-  'wheat',
-  'rice',
+  'grains',
   'livestock',
   'sugar',
   'coffee',
   'tea',
   'meat',
+  'fish',
   'steel',
   'concrete',
   'lumber',
@@ -131,11 +140,13 @@ export const GOOD_IDS: GoodId[] = [
   'oceanGoingShips',
   'spaceships',
   'rockets',
-  'food',
+  'groceries',
   'consumerGoods',
+  'furniture',
   'luxuryGoods',
   'art',
   'healthcare',
+  'dental',
   'education',
   'retail',
   'onlineServices',
@@ -162,13 +173,13 @@ export const GOODS: Record<GoodId, GoodDef> = {
   phosphate: { id: 'phosphate', label: 'Phosphate', category: 'raw', basePrice: 4 },
   sulfur: { id: 'sulfur', label: 'Sulfur', category: 'raw', basePrice: 4 },
   hardwood: { id: 'hardwood', label: 'Hardwood', category: 'raw', basePrice: 5 },
-  wheat: { id: 'wheat', label: 'Wheat', category: 'agricultural', basePrice: 2 },
-  rice: { id: 'rice', label: 'Rice', category: 'agricultural', basePrice: 2 },
+  grains: { id: 'grains', label: 'Grains', category: 'agricultural', basePrice: 2 },
   livestock: { id: 'livestock', label: 'Livestock', category: 'agricultural', basePrice: 6 },
   sugar: { id: 'sugar', label: 'Sugar', category: 'agricultural', basePrice: 3 },
   coffee: { id: 'coffee', label: 'Coffee', category: 'agricultural', basePrice: 8 },
   tea: { id: 'tea', label: 'Tea', category: 'agricultural', basePrice: 7 },
   meat: { id: 'meat', label: 'Meat', category: 'agricultural', basePrice: 7 },
+  fish: { id: 'fish', label: 'Fish', category: 'agricultural', basePrice: 6 },
   steel: { id: 'steel', label: 'Steel', category: 'intermediate', basePrice: 8 },
   concrete: { id: 'concrete', label: 'Concrete', category: 'intermediate', basePrice: 3 },
   lumber: { id: 'lumber', label: 'Lumber', category: 'intermediate', basePrice: 5 },
@@ -193,11 +204,13 @@ export const GOODS: Record<GoodId, GoodDef> = {
   oceanGoingShips: { id: 'oceanGoingShips', label: 'Ocean-Going Ships', category: 'intermediate', basePrice: 160 },
   spaceships: { id: 'spaceships', label: 'Spaceships', category: 'intermediate', basePrice: 450 },
   rockets: { id: 'rockets', label: 'Rockets', category: 'intermediate', basePrice: 200 },
-  food: { id: 'food', label: 'Food', category: 'consumer', basePrice: 3 },
+  groceries: { id: 'groceries', label: 'Groceries', category: 'consumer', basePrice: 4 },
   consumerGoods: { id: 'consumerGoods', label: 'Consumer Goods', category: 'consumer', basePrice: 6 },
+  furniture: { id: 'furniture', label: 'Furniture', category: 'consumer', basePrice: 14 },
   luxuryGoods: { id: 'luxuryGoods', label: 'Luxury Goods', category: 'consumer', basePrice: 26 },
   art: { id: 'art', label: 'Art', category: 'consumer', basePrice: 22 },
   healthcare: { id: 'healthcare', label: 'Healthcare', category: 'service', basePrice: 12 },
+  dental: { id: 'dental', label: 'Dental Care', category: 'service', basePrice: 10 },
   education: { id: 'education', label: 'Education', category: 'service', basePrice: 11 },
   retail: { id: 'retail', label: 'Retail', category: 'service', basePrice: 7 },
   onlineServices: { id: 'onlineServices', label: 'Online Services', category: 'service', basePrice: 9 },

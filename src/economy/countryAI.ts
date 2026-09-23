@@ -195,8 +195,13 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
   const totalPop = pops.reduce((s, p) => s + p.populationSize, 0)
   if (totalPop > 0) {
     const tierAvg = (tier: 'basic' | 'healthcare' | 'everyday') => pops.reduce((s, p) => s + (p.needsSatisfaction[tier] ?? 1) * p.populationSize, 0) / totalPop
+    // For food, build the GRAIN supply first (pops eat grains directly, and it's
+    // the input every processor needs) — a robust, input-free backstop — then the
+    // grocery processor. Grains being short is the usual bottleneck.
     const essentials: { tier: 'basic' | 'healthcare' | 'everyday'; recipe: string }[] = [
-      { tier: 'basic', recipe: 'foodProcessor' },
+      { tier: 'basic', recipe: 'wheatFarm' }, // grains (staple)
+      { tier: 'basic', recipe: 'fishery' }, // protein — robust, no inputs
+      { tier: 'basic', recipe: 'foodProcessor' }, // groceries
       { tier: 'healthcare', recipe: 'clinic' },
       { tier: 'everyday', recipe: 'solarPlant' },
     ]

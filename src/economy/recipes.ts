@@ -178,6 +178,8 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   // Agriculture
   wheatFarm: 'agriculture',
   riceFarm: 'agriculture',
+  hydroponicsFarm: 'agriculture',
+  fishery: 'agriculture',
   livestockRanch: 'agriculture',
   sugarPlantation: 'agriculture',
   coffeePlantation: 'agriculture',
@@ -205,6 +207,7 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   // Consumer manufacturing
   foodProcessor: 'consumerGoods',
   consumerGoodsFactory: 'consumerGoods',
+  furnitureFactory: 'consumerGoods',
   luxuryFactory: 'consumerGoods',
   meatPacking: 'consumerGoods',
   // Vehicles & craft
@@ -249,9 +252,10 @@ const CONSTRUCTION_WORK_BY_TIER: Record<number, number> = { 1: 100, 2: 250, 3: 4
 const CONSTRUCTION_TIER: Record<string, number> = {
   // T1 — primary sector, quick to build
   ironMine: 1, coalMine: 1, oilWell: 1, rareMetalsMine: 1, loggingCamp: 1, phosphateMine: 1, sulfurMine: 1, hardwoodLogging: 1,
-  wheatFarm: 1, riceFarm: 1, livestockRanch: 1, sugarPlantation: 1, coffeePlantation: 1, teaPlantation: 1,
+  wheatFarm: 1, riceFarm: 1, fishery: 1, livestockRanch: 1, sugarPlantation: 1, coffeePlantation: 1, teaPlantation: 1,
+  hydroponicsFarm: 3,
   // T2 — light industry, services, basic power/infra
-  solarPlant: 2, coalPowerPlant: 2, foodProcessor: 2, meatPacking: 2, consumerGoodsFactory: 2, sawmill: 2, toolWorkshop: 2,
+  solarPlant: 2, coalPowerPlant: 2, foodProcessor: 2, meatPacking: 2, consumerGoodsFactory: 2, furnitureFactory: 2, sawmill: 2, toolWorkshop: 2,
   dyeWorks: 2, glassworks: 2, cementWorks: 2, paperMill: 2, clinic: 2, school: 2, retailShop: 2, artStudio: 2, roadNetwork: 2, governmentOffice: 2, constructionSector: 3,
   // T3 — mid/heavy industry, advanced services, civic
   steelMill: 3, machineryFactory: 3, oilRefinery: 3, chemicalPlant: 3, fertilizerPlant: 3, explosivesFactory: 3, electronicsFactory: 3,
@@ -601,7 +605,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Subsistence Farming',
         description: 'Hands and simple tools. Employs many, needs no inputs.',
         inputs: [],
-        outputs: [{ good: 'wheat', amount: 1200 }],
+        outputs: [{ good: 'grains', amount: 1200 }],
         jobs: [
           { class: 'subsistence', count: 300 },
           { class: 'labor', count: 100 },
@@ -616,7 +620,7 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'tools', amount: 30 },
           { good: 'electricity', amount: 60 },
         ],
-        outputs: [{ good: 'wheat', amount: 2000 }],
+        outputs: [{ good: 'grains', amount: 2000 }],
         jobs: [
           { class: 'subsistence', count: 100 },
           { class: 'labor', count: 90 },
@@ -635,7 +639,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Paddy Farming',
         description: 'Traditional flooded-paddy cultivation. Labor-heavy, no inputs.',
         inputs: [],
-        outputs: [{ good: 'rice', amount: 1150 }],
+        outputs: [{ good: 'grains', amount: 1150 }],
         jobs: [
           { class: 'subsistence', count: 320 },
           { class: 'labor', count: 100 },
@@ -650,7 +654,7 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'tools', amount: 25 },
           { good: 'electricity', amount: 50 },
         ],
-        outputs: [{ good: 'rice', amount: 1900 }],
+        outputs: [{ good: 'grains', amount: 1900 }],
         jobs: [
           { class: 'subsistence', count: 110 },
           { class: 'labor', count: 90 },
@@ -668,7 +672,7 @@ export const RECIPES: Record<string, Recipe> = {
         id: 'manual',
         label: 'Open Grazing',
         description: 'Herds fed on feed grain, tended by hand.',
-        inputs: [{ good: 'wheat', amount: 200 }],
+        inputs: [{ good: 'grains', amount: 200 }],
         outputs: [{ good: 'livestock', amount: 500 }],
         jobs: [
           { class: 'subsistence', count: 200 },
@@ -680,7 +684,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Intensive Ranching',
         description: 'Feedlots and powered handling raise more stock on more feed.',
         inputs: [
-          { good: 'wheat', amount: 300 },
+          { good: 'grains', amount: 300 },
           { good: 'electricity', amount: 60 },
           { good: 'tools', amount: 20 },
         ],
@@ -688,6 +692,61 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'labor', count: 120 },
           { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
+  hydroponicsFarm: {
+    id: 'hydroponicsFarm',
+    label: 'Hydroponic Farm',
+    category: 'agriculture',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Vertical Hydroponics',
+        description: 'Stacked, climate-controlled grain growing — high yield in little space, on power and fertilizer. The backbone of food security on marginal worlds.',
+        inputs: [
+          { good: 'fertilizer', amount: 100 },
+          { good: 'electricity', amount: 200 },
+          { good: 'machinery', amount: 20 },
+        ],
+        outputs: [{ good: 'grains', amount: 2600 }],
+        jobs: [
+          { class: 'labor', count: 90 },
+          { class: 'technical', count: 150 },
+        ],
+      },
+    ],
+  },
+  fishery: {
+    id: 'fishery',
+    label: 'Fishery',
+    category: 'agriculture',
+    methods: [
+      {
+        id: 'coastal',
+        label: 'Coastal Fishing',
+        description: 'Small boats and nets. Employs many, needs no inputs.',
+        inputs: [],
+        outputs: [{ good: 'fish', amount: 900 }],
+        jobs: [
+          { class: 'subsistence', count: 220 },
+          { class: 'labor', count: 120 },
+        ],
+      },
+      {
+        id: 'trawler',
+        label: 'Trawler Fleet',
+        description: 'Powered trawlers and processing raise the catch, on fuel and heavier gear.',
+        inputs: [
+          { good: 'fuel', amount: 80 },
+          { good: 'electricity', amount: 60 },
+          { good: 'tools', amount: 25 },
+        ],
+        outputs: [{ good: 'fish', amount: 1700 }],
+        jobs: [
+          { class: 'labor', count: 130 },
+          { class: 'technical', count: 70 },
         ],
       },
     ],
@@ -1110,13 +1169,13 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'grain',
         label: 'Grain Milling',
-        description: 'Mills wheat into staple food — a simple, robust food supply.',
+        description: 'Mills grains into packaged groceries — a simple, robust processed-food supply.',
         inputs: [
-          { good: 'wheat', amount: 500 },
+          { good: 'grains', amount: 500 },
           { good: 'tools', amount: 20 },
           { good: 'electricity', amount: 100 },
         ],
-        outputs: [{ good: 'food', amount: 2000 }],
+        outputs: [{ good: 'groceries', amount: 2000 }],
         jobs: [
           { class: 'labor', count: 200 },
           { class: 'technical', count: 80 },
@@ -1125,15 +1184,14 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mixed',
         label: 'Full Processing',
-        description: 'A varied diet from wheat, rice and livestock — more food per plant, on a bigger processing line.',
+        description: 'A varied grocery line from grains and livestock — more processed food per plant, on a bigger line.',
         inputs: [
-          { good: 'wheat', amount: 400 },
-          { good: 'rice', amount: 300 },
+          { good: 'grains', amount: 700 },
           { good: 'livestock', amount: 150 },
           { good: 'tools', amount: 35 },
           { good: 'electricity', amount: 120 },
         ],
-        outputs: [{ good: 'food', amount: 2700 }],
+        outputs: [{ good: 'groceries', amount: 2700 }],
         jobs: [
           { class: 'labor', count: 200 },
           { class: 'technical', count: 100 },
@@ -1216,6 +1274,46 @@ export const RECIPES: Record<string, Recipe> = {
           { class: 'labor', count: 100 },
           { class: 'technical', count: 180 },
           { class: 'professional', count: 120 },
+        ],
+      },
+    ],
+  },
+
+  furnitureFactory: {
+    id: 'furnitureFactory',
+    label: 'Furniture Factory',
+    category: 'industry',
+    methods: [
+      {
+        id: 'basic',
+        label: 'Joinery',
+        description: 'Lumber and hardwood worked into household furniture.',
+        inputs: [
+          { good: 'lumber', amount: 220 },
+          { good: 'hardwood', amount: 120 },
+          { good: 'electricity', amount: 150 },
+        ],
+        outputs: [{ good: 'furniture', amount: 620 }],
+        jobs: [
+          { class: 'labor', count: 200 },
+          { class: 'technical', count: 120 },
+        ],
+      },
+      {
+        id: 'finished',
+        label: 'Finished Goods Line',
+        description: 'Adds glass and consumer fittings for finer furniture, on heavier tooling.',
+        inputs: [
+          { good: 'lumber', amount: 200 },
+          { good: 'hardwood', amount: 110 },
+          { good: 'glass', amount: 60 },
+          { good: 'tools', amount: 40 },
+          { good: 'electricity', amount: 220 },
+        ],
+        outputs: [{ good: 'furniture', amount: 900 }],
+        jobs: [
+          { class: 'labor', count: 160 },
+          { class: 'technical', count: 200 },
         ],
       },
     ],
@@ -1599,7 +1697,10 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'consumerGoods', amount: 150 },
           { good: 'electricity', amount: 100 },
         ],
-        outputs: [{ good: 'healthcare', amount: 560 }],
+        outputs: [
+          { good: 'healthcare', amount: 560 },
+          { good: 'dental', amount: 180 },
+        ],
         jobs: [
           { class: 'technical', count: 100 },
           { class: 'professional', count: 100 },
@@ -1614,7 +1715,10 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'consumerGoods', amount: 100 },
           { good: 'electricity', amount: 200 },
         ],
-        outputs: [{ good: 'healthcare', amount: 950 }],
+        outputs: [
+          { good: 'healthcare', amount: 950 },
+          { good: 'dental', amount: 300 },
+        ],
         jobs: [
           { class: 'technical', count: 120 },
           { class: 'professional', count: 190 },

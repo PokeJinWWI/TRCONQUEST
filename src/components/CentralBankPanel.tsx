@@ -160,8 +160,13 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
           <Meter label="Independence" value={indep} hint="How far the bank is insulated from government control. Set by its status and governor-appointment law, reduced by standing government pressure." />
           <Meter label="Credibility" value={cb.credibility} hint="Monetary credibility — how much markets and pops trust the bank to hold its mandate. Eroded by political pressure and money-printing." />
           {cb.governmentPressure > 0 && (
-            <Meter label="Govt. pressure" value={cb.governmentPressure} hint="How hard the government is currently leaning on the bank for easy money." />
+            <Meter label="Govt. pressure" value={cb.governmentPressure} hint="How hard the government is currently leaning on the bank for easy money. Fades over time." />
           )}
+        </div>
+        <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
+          <b>Independence</b> comes from the Status &amp; Governor-Appointment laws below (and falls under government pressure).
+          <b> Credibility</b> is earned slowly — by a more independent bank and by holding inflation near target — and lost by
+          money-printing and pressure. Both move over years, not months.
         </div>
 
         {recent.length > 0 && (
@@ -395,7 +400,7 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
           <span className="inspect-label" title="Buying securities injects bank reserves (loosens); selling drains them (tightens).">Open-market ops</span>
           <span>
             <button type="button" className="laws-enact-btn" onClick={() => openMarketOperation(country.id, 5000)}>Buy (loosen)</button>{' '}
-            <button type="button" className="econ-build-cancel" style={{ padding: '2px 8px' }} onClick={() => openMarketOperation(country.id, -5000)}>Sell (tighten)</button>
+            <button type="button" className="laws-enact-btn cb-omo-sell" onClick={() => openMarketOperation(country.id, -5000)}>Sell (tighten)</button>
           </span>
         </div>
       )}

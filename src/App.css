@@ -2316,6 +2316,16 @@
 .cb-facts > div > span:last-child {
   text-align: right;
 }
+/* The Sell (tighten) OMO button: same button chrome as Buy, tinted amber. */
+.cb-omo-sell {
+  border-color: rgba(255, 140, 90, 0.5);
+  color: #ffb27a;
+  background: rgba(255, 140, 90, 0.08);
+}
+.cb-omo-sell:hover {
+  background: rgba(255, 140, 90, 0.2);
+  color: #fff;
+}
 .cb-events {
   display: flex;
   flex-direction: column;
@@ -2419,6 +2429,54 @@
 }
 .fx-table .fx-row-home td {
   color: #cdeeff;
+}
+
+/* --- Welfare / public services --- */
+.welfare-service {
+  margin-bottom: 8px;
+}
+.welfare-service-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  padding-left: 2px;
+}
+.welfare-service-detail .laws-enact-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --- Per-cohort consumption drill-down --- */
+.pops-cohort-row {
+  cursor: pointer;
+}
+.pops-cohort-row:hover {
+  background: rgba(111, 227, 255, 0.06);
+}
+.pops-cohort-detail-row > td {
+  padding: 4px 8px 8px 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.cohort-consumption {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cohort-tier-name {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 2px;
+}
+/* Emergent-good adoption tag in the pops consumption view. */
+.pops-adoption-tag {
+  color: #6fe3ff;
+  font-size: 9px;
+  opacity: 0.85;
 }
 /* .econ-pos/.econ-neg themselves are defined further down (right after
    .inspect-value) — every real usage combines one of them with

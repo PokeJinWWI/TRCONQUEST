@@ -12,9 +12,9 @@
 // which routes each building's profit to a different place.
 
 import { GOOD_IDS, GOODS, priceFloor, priceCeiling, type GoodId } from './goods'
-import { NEED_TIERS, SPECIES_TEMPLATES, type NeedTier } from './species'
+import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor, type NeedTier, type NeedGroup } from './species'
 import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, CONSTRUCTION_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, constructionWork, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
-import { economicSystemDef, healthcareSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
+import { economicSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
 import type {
   Bank,
   Building,
@@ -95,6 +95,32 @@ const INVENTORY_DECAY = 0.08
 // capped by (and draw down) `World.resourceDeposits` each tick. Farm crops
 // regrow and power/manufactured goods aren't a deposit, so they're excluded.
 export const DEPLETABLE_GOODS: GoodId[] = ['ironOre', 'coal', 'oil', 'rareMetals', 'sulfur', 'hardwood', 'timber', 'phosphate']
+// Service goods the state can publicly fund (welfare). The per-service coverage
+// %/$ shown in the budget UI applies to these.
+export const WELFARE_SERVICES: GoodId[] = ['healthcare', 'dental', 'education']
+
+// EMERGENT (non-essential) goods: demand for these is LATENT — it exists only to
+// the degree the good has been ADOPTED on a world (see World.adoption). A good
+// nobody supplies has ~no demand; as it becomes available and is consumed,
+// adoption rises (the rich take it up first via wealth-scaling), spreading
+// demand; if supply dries up, adoption decays and demand fades. Essentials
+// (food, energy, healthcare, everyday services) are always fully demanded and
+// are NOT in this set.
+export const EMERGENT_GOODS: GoodId[] = ['furniture', 'electronics', 'automobiles', 'onlineServices', 'luxuryGoods', 'art', 'aircraft']
+const EMERGENT_SET = new Set<GoodId>(EMERGENT_GOODS)
+export function isEmergentGood(good: GoodId): boolean {
+  return EMERGENT_SET.has(good)
+}
+// Adoption dynamics (per world, per emergent good, per tick).
+const ADOPT_UP = 0.06 // rise toward the ceiling when the good is available
+const ADOPT_DOWN = 0.04 // decay when it is not being supplied
+const ADOPT_FLOOR = 0.02 // a whiff of latent curiosity so a good can bootstrap
+const ADOPT_AVAILABLE_FRAC = 0.35 // "available" = at least this share of demand was met
+// A world's adoption CEILING for emergent goods rises with its standard of
+// living — richer worlds adopt discretionary goods more fully.
+function adoptionCeiling(avgSoL: number): number {
+  return clamp(0.35 + 0.65 * avgSoL, 0, 1)
+}
 export const BUILD_COST_PER_LEVEL = 6000
 // Construction points a world can install per tick. A small base capacity (so a
 // world with no sectors can still build slowly) plus what its CONSTRUCTION
@@ -137,7 +163,10 @@ const BUREAUCRACY_PER_DECREE = 200
 const BUREAUCRACY_SHORTAGE_MALUS = 0.6
 // Consumer goods the CPI tracks (what households actually buy).
 const CPI_WEIGHTS: Partial<Record<GoodId, number>> = {
-  food: 1.0,
+  grains: 0.6,
+  groceries: 0.5,
+  meat: 0.3,
+  fish: 0.2,
   consumerGoods: 0.5,
   electricity: 0.3,
   healthcare: 0.2,
@@ -251,8 +280,12 @@ interface WorldTickResult {
   constructionSpend: number
   // Net profit earned by corporation-owned buildings on this world, by corp id.
   corpProfit: Map<string, number>
-  // What the government pays this tick to fund services (healthcare) for pops.
+  // What the government pays this tick to fund services for pops (all services).
   serviceSubsidy: number
+  // The state's welfare spend split per service good, and the gross value pops
+  // consumed of each welfare service (state + pop spending) — for the UI.
+  serviceCostByGood: Partial<Record<GoodId, number>>
+  serviceValueByGood: Partial<Record<GoodId, number>>
   // Treasury spent this tick buying goods into this world's stockpiles.
   stockpileSpend: number
 }
@@ -292,14 +325,82 @@ function exportFromWorld(world: World, good: GoodId, amount: number): World {
   }
 }
 
-// Advance one world's local economy. `govHealthShare` is the fraction of pops'
-// healthcare the state pays for (the healthcare law).
+// --- Pop consumption: need groups + substitution (Vic3-style) ---------------
+// Total need-units a pop wants of one group, scaled by wealth (Engel's law) and
+// population size.
+function groupTarget(group: NeedGroup, popSize: number, wealthFactor: number): number {
+  return group.base * wealthFactor * popSize
+}
+
+// Buy across a need group's substitutable goods to satisfy `target` need-units,
+// from the running `budget`. Two rounds: first a weighted split (the pop's
+// preferred mix), then a substitution round covering any shortfall from the
+// cheapest still-available good (so a shortage in one good shifts demand to
+// another). `govShareOf` is the fraction of a good's price the state funds.
+// Returns what was actually consumed per good (delivered), the spend, and the
+// per-good want (for the needs readout). Pure. Exported for testing.
+export function consumeGroup(
+  group: NeedGroup,
+  target: number,
+  budget: number,
+  prices: Record<GoodId, number>,
+  fulfill: Record<GoodId, number>,
+  govShareOf: (good: GoodId) => number,
+  // Per-good ADOPTION factor 0..1 (emergent demand): 1 = fully demanded, 0 = no
+  // latent demand (the good isn't part of life here yet). Scales a good's share
+  // of the group AND shrinks the group's effective want, so an unadopted good
+  // neither is bought nor counts as an unmet need. Defaults to 1 (all demanded).
+  adopt: (good: GoodId) => number = () => 1,
+): { got: number; spent: number; wanted: Partial<Record<GoodId, number>>; consumed: Partial<Record<GoodId, number>>; effWant: number } {
+  const opts = group.goods.map((g) => ({ good: g.good, weight: g.weight, effPrice: prices[g.good] * (1 - govShareOf(g.good)), fulfill: fulfill[g.good] ?? 0, adopt: clamp(adopt(g.good), 0, 1) }))
+  const totalW = opts.reduce((s, o) => s + o.weight, 0) || 1
+  // The group's want, reduced by how adopted its goods are.
+  const effWant = opts.reduce((s, o) => s + (target * o.weight * o.adopt) / totalW, 0)
+  const wanted: Partial<Record<GoodId, number>> = {}
+  const consumed: Partial<Record<GoodId, number>> = {}
+  let avail = budget
+  let got = 0
+
+  // Round 1 — the preferred weighted mix, each good scaled by its adoption.
+  for (const o of opts) {
+    const want = (target * o.weight * o.adopt) / totalW
+    wanted[o.good] = (wanted[o.good] ?? 0) + want
+    const maxAfford = o.effPrice > 0 ? avail / o.effPrice : want
+    const buy = Math.max(0, Math.min(want, maxAfford))
+    const bought = buy * o.fulfill
+    avail -= bought * o.effPrice
+    got += bought
+    consumed[o.good] = (consumed[o.good] ?? 0) + bought
+  }
+
+  // Round 2 — substitution: cover the shortfall from the cheapest still-available
+  // ADOPTED goods (a fish shortage pushes toward grain; but pops won't take up a
+  // good they haven't adopted just to substitute).
+  let shortfall = effWant - got
+  if (shortfall > 1e-9) {
+    const order = opts.filter((o) => o.adopt > 1e-3).sort((a, b) => a.effPrice - b.effPrice)
+    for (const o of order) {
+      if (shortfall <= 1e-9) break
+      const maxAfford = o.effPrice > 0 ? avail / o.effPrice : shortfall
+      const buy = Math.max(0, Math.min(shortfall, maxAfford))
+      const bought = buy * o.fulfill
+      avail -= bought * o.effPrice
+      got += bought
+      consumed[o.good] = (consumed[o.good] ?? 0) + bought
+      shortfall = effWant - got
+    }
+  }
+  return { got, spent: budget - avail, wanted, consumed, effWant }
+}
+
+// Advance one world's local economy. `publicServices` maps a service good to the
+// fraction of its price the state funds for pops (the welfare coverage).
 function tickWorld(
   world: World,
   taxRate: number,
   welfarePerUnit: number,
   system: EconomicSystem,
-  govHealthShare: number,
+  publicServices: Partial<Record<GoodId, number>>,
   stateBureaucracyMalus: number,
   treasuryAvailable: number,
   poolByCountry: Map<string, number>,
@@ -311,7 +412,7 @@ function tickWorld(
 ): WorldTickResult {
   const report = emptyWorldReport()
   const law = economicSystemDef(system)
-  const govShareOf = (good: GoodId) => (good === 'healthcare' ? govHealthShare : 0)
+  const govShareOf = (good: GoodId) => publicServices[good] ?? 0
   // Directly-state-run buildings seize up when the state has no bureaucracy.
   const outputFactor = (b: Building) => interferenceMultiplier(b, system) * (b.owner.kind === 'state' ? stateBureaucracyMalus : 1)
 
@@ -350,6 +451,22 @@ function tickWorld(
   for (const g of GOOD_IDS) supply[g] += world.importStock[g] ?? 0
   const prices: PerGood = { ...world.market.prices }
 
+  // Emergent-demand adoption (see EMERGENT_GOODS). A world with no adoption map
+  // treats everything as fully demanded (pre-feature); one that tracks adoption
+  // uses per-good levels (a missing entry = latent/unadopted at the floor).
+  const adoptOf = (good: GoodId): number => {
+    if (!isEmergentGood(good)) return 1
+    if (!world.adoption) return 1
+    return world.adoption[good] ?? ADOPT_FLOOR
+  }
+  // What each emergent good's demand WOULD be at full adoption — the yardstick for
+  // whether the good is "available" enough to keep spreading (supply vs. this).
+  const potentialEmergentDemand: Partial<Record<GoodId, number>> = {}
+  // Snapshot of pre-clearing supply (last tick's production + imports) for the
+  // availability check that drives adoption.
+  const supplySnapshot: Partial<Record<GoodId, number>> = {}
+  for (const g of EMERGENT_GOODS) supplySnapshot[g] = supply[g]
+
   // --- Demand: building inputs + pop consumption (budget-constrained) ---
   const buildingInputDemand = zeroGoods()
   for (const b of world.buildings) {
@@ -380,17 +497,22 @@ function tickWorld(
     let budget = pop.wealth + income
     const species = SPECIES_TEMPLATES[pop.speciesTemplateId]
     if (species) {
+      // Post affordability-capped, wealth-scaled demand across each need group's
+      // goods (the preferred weighted mix), spending the budget in tier order.
       for (const tier of NEED_TIERS) {
-        for (const need of species.needs[tier]) {
-          const want = need.amountPerPop * pop.populationSize
-          const price = prices[need.good]
-          // The pop only pays its share; the state covers the rest (healthcare
-          // law), so subsidized care is not throttled by a poor pop's budget.
-          const effPrice = price * (1 - govShareOf(need.good))
-          const affordable = effPrice > 0 ? budget / effPrice : want
-          const buy = Math.max(0, Math.min(want, affordable))
-          popDemand[need.good] += buy
-          budget -= buy * effPrice
+        const wf = tierWealthFactor(tier, pop.standardOfLiving)
+        for (const group of species.needs[tier]) {
+          const target = groupTarget(group, pop.populationSize, wf)
+          const totalW = group.goods.reduce((s, g) => s + g.weight, 0) || 1
+          for (const g of group.goods) {
+            const fullWant = (target * g.weight) / totalW
+            if (isEmergentGood(g.good)) potentialEmergentDemand[g.good] = (potentialEmergentDemand[g.good] ?? 0) + fullWant
+            const want = fullWant * adoptOf(g.good) // emergent goods are only wanted to the degree they're adopted
+            const effPrice = prices[g.good] * (1 - govShareOf(g.good))
+            const buy = Math.max(0, Math.min(want, effPrice > 0 ? budget / effPrice : want))
+            popDemand[g.good] += buy
+            budget -= buy * effPrice
+          }
         }
       }
     }
@@ -476,6 +598,11 @@ function tickWorld(
   // goods in everyday AND comfort), spending the budget in tier order and only
   // getting the market-fulfilled fraction of what's bought.
   let serviceSubsidy = 0
+  // Per-service breakdown so the welfare UI can show a concrete dollar cost per
+  // service (what the state pays) and the gross value pops consume of it (so a
+  // coverage % reads as a fraction of a real number, not "out of nothing").
+  const serviceCostByGood: Partial<Record<GoodId, number>> = {}
+  const serviceValueByGood: Partial<Record<GoodId, number>> = {}
   const nextPops: Pop[] = world.pops.map((pop, i) => {
     let budget = pop.wealth + popIncome[i]
     const species = SPECIES_TEMPLATES[pop.speciesTemplateId]
@@ -487,28 +614,36 @@ function tickWorld(
     const nextDetail: Record<NeedTier, NeedDetailEntry[]> = { basic: [], everyday: [], healthcare: [], comfort: [], luxury: [] }
     if (species) {
       for (const tier of NEED_TIERS) {
-        const entries = species.needs[tier]
-        if (entries.length === 0) {
+        const groups = species.needs[tier]
+        if (groups.length === 0) {
           nextSatisfaction[tier] = 1
           continue
         }
-        let got = 0
-        let want = 0
-        for (const need of entries) {
-          const desired = need.amountPerPop * pop.populationSize
-          want += desired
-          const price = prices[need.good]
-          const gShare = govShareOf(need.good)
-          const effPrice = price * (1 - gShare)
-          const affordable = effPrice > 0 ? budget / effPrice : desired
-          const buy = Math.max(0, Math.min(desired, affordable))
-          const bought = buy * fulfill[need.good]
-          budget -= bought * effPrice
-          serviceSubsidy += gShare * price * bought // the state's share of what was delivered
-          got += bought
-          nextDetail[tier].push({ good: need.good, wanted: desired, consumed: bought })
+        const wf = tierWealthFactor(tier, pop.standardOfLiving)
+        let tierGot = 0
+        let tierWant = 0
+        for (const group of groups) {
+          const target = groupTarget(group, pop.populationSize, wf)
+          const res = consumeGroup(group, target, budget, prices, fulfill, govShareOf, adoptOf)
+          tierWant += res.effWant // adoption-reduced want (an unadopted good is not a missed need)
+          budget -= res.spent
+          tierGot += res.got
+          // The state's share of everything actually delivered in this group.
+          for (const g of group.goods) {
+            const delivered = res.consumed[g.good] ?? 0
+            if (delivered > 0) {
+              const gross = prices[g.good] * delivered
+              const share = govShareOf(g.good)
+              serviceSubsidy += share * gross
+              if (share > 0) serviceCostByGood[g.good] = (serviceCostByGood[g.good] ?? 0) + share * gross
+              // Gross value delivered of any WELFARE-eligible service, so the UI
+              // shows what the coverage % is a fraction OF (total pop spending).
+              if (WELFARE_SERVICES.includes(g.good)) serviceValueByGood[g.good] = (serviceValueByGood[g.good] ?? 0) + gross
+            }
+            nextDetail[tier].push({ good: g.good, wanted: res.wanted[g.good] ?? 0, consumed: delivered })
+          }
         }
-        nextSatisfaction[tier] = want > 0 ? Math.min(1, got / want) : 1
+        nextSatisfaction[tier] = tierWant > 0 ? Math.min(1, tierGot / tierWant) : 1
       }
     }
     // Standard of Living: weighted needs satisfaction, smoothed.
@@ -721,6 +856,28 @@ function tickWorld(
   })
   const grownPopulation = grownPops.reduce((s, p) => s + p.populationSize, 0)
 
+  // --- Adoption update (emergent demand): each emergent good's adoption rises
+  //     toward the world's wealth-set ceiling while it is available (enough
+  //     supply relative to its full-adoption potential), and decays otherwise.
+  //     Only a world that already tracks adoption evolves it (pre-feature worlds
+  //     are left untouched).
+  let nextAdoption = world.adoption
+  if (world.adoption) {
+    const totalPop0 = world.pops.reduce((s, p) => s + p.populationSize, 0)
+    const avgSoL = totalPop0 > 0 ? world.pops.reduce((s, p) => s + p.standardOfLiving * p.populationSize, 0) / totalPop0 : 0.5
+    const ceiling = adoptionCeiling(avgSoL)
+    const updated: Partial<Record<GoodId, number>> = { ...world.adoption }
+    for (const good of EMERGENT_GOODS) {
+      const cur = updated[good] ?? ADOPT_FLOOR
+      const potential = potentialEmergentDemand[good] ?? 0
+      const supplied = supplySnapshot[good] ?? 0
+      const availFrac = potential > 0 ? supplied / potential : supplied > 0 ? 1 : 0
+      const next = availFrac >= ADOPT_AVAILABLE_FRAC ? cur + (ceiling - cur) * ADOPT_UP : Math.max(ADOPT_FLOOR, cur * (1 - ADOPT_DOWN))
+      updated[good] = clamp(next, 0, 1)
+    }
+    nextAdoption = updated
+  }
+
   return {
     // importStock is consumed this tick; the logistics step refills it after.
     world: {
@@ -733,6 +890,7 @@ function tickWorld(
       importStock: {},
       resourceDeposits: deposits,
       stockpiles,
+      adoption: nextAdoption,
     },
     report,
     tax: govRevenue,
@@ -744,6 +902,8 @@ function tickWorld(
     constructionSpend,
     corpProfit,
     serviceSubsidy,
+    serviceCostByGood,
+    serviceValueByGood,
     stockpileSpend,
   }
 }
@@ -792,20 +952,26 @@ export function tickEconomy(
     let constructionSpend = 0
     let stockpileSpend = 0
     let serviceSubsidy = 0
+    const serviceCostByGood: Partial<Record<GoodId, number>> = {}
+    const serviceValueByGood: Partial<Record<GoodId, number>> = {}
     let runningTreasury = country.treasury
-    const govHealthShare = healthcareSystemDef(country.healthcareSystem).publicFunding
+    const publicServices = country.publicServices ?? {}
     // If the state ran out of bureaucracy last tick, its own enterprises are
     // hobbled this tick.
     const stateBureaucracyMalus = country.bureaucracy > 0 ? 1 : BUREAUCRACY_SHORTAGE_MALUS
 
     for (const { w, idx } of owned) {
-      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, govHealthShare, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate)
+      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate)
       runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
       stockpileSpend += res.stockpileSpend
       govRevenue += res.tax
       adminTotal += res.admin
       serviceSubsidy += res.serviceSubsidy
+      for (const g of WELFARE_SERVICES) {
+        if (res.serviceCostByGood[g]) serviceCostByGood[g] = (serviceCostByGood[g] ?? 0) + res.serviceCostByGood[g]!
+        if (res.serviceValueByGood[g]) serviceValueByGood[g] = (serviceValueByGood[g] ?? 0) + res.serviceValueByGood[g]!
+      }
       gdpTotal += res.gdp
       population += res.population
       cpiNum += res.cpi * res.population
@@ -955,6 +1121,8 @@ export function tickEconomy(
       welfare,
       admin: adminTotal,
       services: serviceSubsidy,
+      servicesByGood: serviceCostByGood,
+      serviceValueByGood,
       interest,
       construction: constructionSpend,
       expenditure: expenditure + constructionSpend + stockpileSpend,

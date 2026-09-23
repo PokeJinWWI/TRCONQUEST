@@ -1,7 +1,7 @@
 import type { GoodId } from './goods'
 import type { NeedTier } from './species'
 import type { PopClass, DistrictType } from './recipes'
-import type { EconomicSystem, HealthcareSystem, ForeignBondPolicy, ForeignInvestmentPolicy } from './laws'
+import type { EconomicSystem, ForeignBondPolicy, ForeignInvestmentPolicy } from './laws'
 import type { CentralBank } from './centralBank'
 import type { Currency } from './fx'
 import type { MonetaryState } from './monetaryPolicy'
@@ -195,6 +195,12 @@ export interface World {
   // it buffers is itself per-world, same as `importStock`/`market`.
   stockpiles?: Partial<Record<GoodId, number>>
   stockpileTargets?: Partial<Record<GoodId, number>>
+  // Per-good ADOPTION level (0..1) for EMERGENT non-essential goods (see
+  // economyTick's EMERGENT_GOODS): how far demand for that good has taken hold on
+  // this world. Rises while the good is available/consumed, decays when it is
+  // not. Optional — a world without it treats emergent goods as fully demanded
+  // (pre-feature behavior); seeded worlds carry real values.
+  adoption?: Partial<Record<GoodId, number>>
 }
 
 // A country — the NATIONAL government layer. One treasury, one tax/welfare
@@ -209,8 +215,13 @@ export interface Country {
   // Economic-system law (laws.ts) — governs owner autonomy and the penalty for
   // the state overriding a private building's production method.
   economicSystem: EconomicSystem
-  // Healthcare law — how much of pops' healthcare the state pays for.
-  healthcareSystem: HealthcareSystem
+  // Public services (welfare): the fraction of each SERVICE good's price the
+  // state funds for pops, keyed by good (e.g. { healthcare: 1, dental: 0.5,
+  // education: 0.8 }). Generalizes the old single healthcare law into granular,
+  // per-service coverage — each a real budget cost (see `serviceSubsidy`). A
+  // good with no entry is unfunded (pops pay in full). The per-capita cash
+  // transfer (`welfarePerCapita`) is the separate Pension benefit.
+  publicServices: Partial<Record<GoodId, number>>
   // Bonds: the debt sold to finance deficits, and its coupon rate per tick.
   bonds: BondBook
   bondRate: number
@@ -416,8 +427,13 @@ export interface CountryFiscal {
   revenue: number
   welfare: number
   admin: number
-  // Government spending on subsidized services (healthcare) this tick.
+  // Government spending on subsidized services (all welfare services) this tick.
   services: number
+  // Welfare detail (Stage B): the state's spend per service good, and the gross
+  // value pops consumed of each welfare service (state + pop spending) — so the
+  // UI can show a coverage % as a real dollar figure. Optional; from tick 1 on.
+  servicesByGood?: Partial<Record<GoodId, number>>
+  serviceValueByGood?: Partial<Record<GoodId, number>>
   interest: number
   construction: number
   expenditure: number

@@ -97,6 +97,14 @@ function seedLabor(): LaborMarket {
   return { wages }
 }
 
+// Starting ADOPTION for emergent goods (see economyTick's EMERGENT_GOODS): the
+// established consumer durables are broadly adopted; luxuries have room to spread
+// as worlds get richer. A good's demand is gated by this — stop supplying one and
+// its adoption (and demand) decays; introduce a new one and it climbs from ~0.
+function seedAdoption(): Partial<Record<GoodId, number>> {
+  return { furniture: 0.8, electronics: 0.8, automobiles: 0.75, onlineServices: 0.7, luxuryGoods: 0.4, art: 0.35, aircraft: 0.3 }
+}
+
 const CLASS_SPLIT: Record<PopClass, number> = {
   subsistence: 0.15,
   labor: 0.38,
@@ -180,6 +188,7 @@ function buildWorld(spec: WorldSpec): World {
     labor: seedLabor(),
     importStock: {},
     resourceDeposits: seedDeposits(buildings),
+    adoption: seedAdoption(),
   }
 }
 
@@ -210,10 +219,14 @@ const WORLDS: World[] = [
       { recipe: 'loggingCamp', level: 2, owner: 'worker' },
       { recipe: 'sulfurMine', level: 1, owner: REDMINES },
       { recipe: 'hardwoodLogging', level: 1, owner: 'worker' },
-      // Agriculture — the Martian Restoration Administration (state corp).
+      // Agriculture — the Martian Restoration Administration (state corp). Grain
+      // (staple), hydroponics (high-yield grain for a marginal world), livestock
+      // + fishery (protein). Provisioned with headroom so food doesn't bind early.
       { recipe: 'wheatFarm', level: 4, owner: MRA },
       { recipe: 'riceFarm', level: 2, owner: MRA },
-      { recipe: 'livestockRanch', level: 2, owner: MRA },
+      { recipe: 'hydroponicsFarm', level: 2, owner: MRA },
+      { recipe: 'livestockRanch', level: 3, owner: MRA },
+      { recipe: 'fishery', level: 2, owner: MRA },
       // Industry (state unless noted).
       { recipe: 'steelMill', level: 4 },
       { recipe: 'sawmill', level: 1, owner: 'worker' },
@@ -224,9 +237,10 @@ const WORLDS: World[] = [
       { recipe: 'heavyMachineryPlant', level: 1 },
       { recipe: 'electricalMachineryPlant', level: 1 },
       { recipe: 'precisionMachineryPlant', level: 1 },
-      { recipe: 'foodProcessor', level: 3, owner: MRA },
-      { recipe: 'meatPacking', level: 1, owner: MRA },
+      { recipe: 'foodProcessor', level: 4, owner: MRA },
+      { recipe: 'meatPacking', level: 3, owner: MRA },
       { recipe: 'consumerGoodsFactory', level: 3, owner: 'worker' },
+      { recipe: 'furnitureFactory', level: 2, owner: 'worker' },
       { recipe: 'semiconductorFab', level: 1 },
       { recipe: 'electronicsFactory', level: 1 },
       { recipe: 'luxuryFactory', level: 1 },
@@ -277,6 +291,9 @@ const WORLDS: World[] = [
       { recipe: 'ironMine', level: 1, owner: 'worker' },
       { recipe: 'wheatFarm', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 1 },
       { recipe: 'toolWorkshop', level: 1 },
       { recipe: 'machineryFactory', level: 1 },
@@ -307,11 +324,15 @@ const WORLDS: World[] = [
       { recipe: 'oilWell', level: 1 },
       { recipe: 'wheatFarm', level: 3 },
       { recipe: 'foodProcessor', level: 2 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 3 },
       { recipe: 'toolWorkshop', level: 2 },
       { recipe: 'machineryFactory', level: 2 },
       { recipe: 'chemicalPlant', level: 1 },
       { recipe: 'consumerGoodsFactory', level: 2 },
+      { recipe: 'furnitureFactory', level: 1 },
       { recipe: 'clinic', level: 2 },
       { recipe: 'roadNetwork', level: 1 },
       { recipe: 'school', level: 1 },
@@ -347,6 +368,9 @@ const WORLDS: World[] = [
       { recipe: 'coffeePlantation', level: 1 },
       { recipe: 'teaPlantation', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'cementWorks', level: 1 },
       { recipe: 'constructionSector', level: 1 },
       { recipe: 'sawmill', level: 1, owner: 'worker' },
@@ -378,6 +402,9 @@ const WORLDS: World[] = [
       { recipe: 'ironMine', level: 1, owner: 'worker' },
       { recipe: 'wheatFarm', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 1 },
       { recipe: 'toolWorkshop', level: 1 },
       { recipe: 'machineryFactory', level: 1 },
@@ -407,6 +434,9 @@ const WORLDS: World[] = [
       { recipe: 'wheatFarm', level: 3 },
       { recipe: 'riceFarm', level: 1 },
       { recipe: 'foodProcessor', level: 2 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 3 },
       { recipe: 'toolWorkshop', level: 2 },
       { recipe: 'machineryFactory', level: 2 },
@@ -455,7 +485,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 2.0,
     treasury: 100000,
     economicSystem: 'interventionism',
-    healthcareSystem: 'public',
+    publicServices: { healthcare: 1, dental: 0.5, education: 0.8 },
     bonds: { pops: 60000, corporations: 30000, foreign: 20000 },
     bondRate: 0.004,
     foreignBondPolicy: 'approval',
@@ -491,7 +521,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 2.0,
     treasury: 50000,
     economicSystem: 'laissez-faire',
-    healthcareSystem: 'mixed',
+    publicServices: { healthcare: 0.5, dental: 0, education: 0.3 },
     bonds: { pops: 30000, corporations: 25000, foreign: 15000 },
     bondRate: 0.0045,
     foreignBondPolicy: 'open',
@@ -527,7 +557,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 1.7,
     treasury: 30000,
     economicSystem: 'laissez-faire',
-    healthcareSystem: 'private',
+    publicServices: { healthcare: 0, dental: 0, education: 0 },
     bonds: { pops: 18000, corporations: 12000, foreign: 8000 },
     bondRate: 0.0042,
     foreignBondPolicy: 'open',
@@ -563,7 +593,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 1.7,
     treasury: 45000,
     economicSystem: 'command',
-    healthcareSystem: 'public',
+    publicServices: { healthcare: 0.8, dental: 0.3, education: 0.6 },
     bonds: { pops: 40000, corporations: 20000, foreign: 0 },
     bondRate: 0.004,
     foreignBondPolicy: 'closed',

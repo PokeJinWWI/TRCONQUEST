@@ -338,7 +338,9 @@ interface EconomyStore {
   // A character interaction (grant funds, demand dividend, dismiss, etc.).
   characterAction: (characterId: string, action: string) => void
   // --- Laws / bonds / debt ---
-  setHealthcareSystem: (countryId: string, system: import('../economy/laws').HealthcareSystem) => void
+  // Set the fraction of a public service good's price the state funds for pops
+  // (welfare coverage), e.g. setPublicServiceCoverage(id, 'dental', 0.5).
+  setPublicServiceCoverage: (countryId: string, good: GoodId, fraction: number) => void
   // Sell bonds to a class of buyer (raises treasury cash, adds to the debt).
   // Foreign sales are gated by the foreign-bond law.
   issueBonds: (countryId: string, amount: number, buyer: 'pops' | 'corporations' | 'foreign') => void
@@ -935,8 +937,12 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       return { characters, corporations }
     }),
 
-  setHealthcareSystem: (countryId, system) =>
-    set((state) => ({ countries: state.countries.map((c) => (c.id === countryId ? { ...c, healthcareSystem: system } : c)) })),
+  setPublicServiceCoverage: (countryId, good, fraction) =>
+    set((state) => ({
+      countries: state.countries.map((c) =>
+        c.id === countryId ? { ...c, publicServices: { ...c.publicServices, [good]: Math.max(0, Math.min(1, fraction)) } } : c,
+      ),
+    })),
 
   issueBonds: (countryId, amount, buyer) =>
     set((state) => {

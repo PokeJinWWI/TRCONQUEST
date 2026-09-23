@@ -1,4 +1,4 @@
-import { ECONOMIC_SYSTEMS, economicSystemDef, HEALTHCARE_SYSTEMS, healthcareSystemDef, FOREIGN_INVESTMENT_POLICIES, foreignInvestmentPolicyDef } from '../economy/laws'
+import { ECONOMIC_SYSTEMS, economicSystemDef, FOREIGN_INVESTMENT_POLICIES, foreignInvestmentPolicyDef } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
 import { useConfirmStore } from '../state/confirmStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
@@ -11,7 +11,6 @@ import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 export function LawsPanel() {
   const { country } = usePlayerEconomy()
   const setEconomicSystem = useEconomyStore((s) => s.setEconomicSystem)
-  const setHealthcareSystem = useEconomyStore((s) => s.setHealthcareSystem)
   const setForeignInvestmentPolicy = useEconomyStore((s) => s.setForeignInvestmentPolicy)
   const setForeignInvestmentAutoApprove = useEconomyStore((s) => s.setForeignInvestmentAutoApprove)
   const approveForeignInvestment = useEconomyStore((s) => s.approveForeignInvestment)
@@ -67,52 +66,6 @@ export function LawsPanel() {
                 <span>
                   {malusPct > 0 ? `Overriding a private method: −${malusPct}% output` : 'Overriding a private method: no penalty'}
                 </span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      <div className="econ-subtitle" style={{ marginTop: 12 }}>
-        Healthcare
-      </div>
-      <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
-        Current law: <b style={{ color: '#cdeeff' }}>{healthcareSystemDef(country.healthcareSystem).name}</b>. How much of the
-        population's healthcare the state pays for.
-      </div>
-      <div className="laws-option-list">
-        {HEALTHCARE_SYSTEMS.map((id) => {
-          const def = healthcareSystemDef(id)
-          const active = id === country.healthcareSystem
-          return (
-            <div key={id} className={`laws-option${active ? ' active' : ''}`}>
-              <div className="laws-option-head">
-                <span className="laws-option-name">{def.name}</span>
-                {active ? (
-                  <span className="laws-option-current">In force</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="laws-enact-btn"
-                    onClick={() =>
-                      requestConfirm({
-                        title: `Enact ${def.name}?`,
-                        body: def.description,
-                        effects: [
-                          `The state will fund ${Math.round(def.publicFunding * 100)}% of the population's healthcare`,
-                          def.publicFunding > 0 ? 'Higher healthcare coverage, but a larger budget burden (deficit pressure)' : 'No healthcare cost to the state — the poor may go without',
-                        ],
-                        confirmLabel: 'Enact',
-                        onConfirm: () => setHealthcareSystem(country.id, id),
-                      })
-                    }
-                  >
-                    Enact
-                  </button>
-                )}
-              </div>
-              <div className="laws-option-desc">{def.description}</div>
-              <div className="laws-option-effects">
-                <span>State funds {Math.round(def.publicFunding * 100)}% of healthcare</span>
               </div>
             </div>
           )

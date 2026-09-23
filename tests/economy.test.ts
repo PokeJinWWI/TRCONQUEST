@@ -17,6 +17,8 @@ import { runCorporationAI } from '../src/economy/corporationAI'
 import { hasCentralBank, effectiveIndependence, governmentControlsPolicy, centralBankModelLabel, governorAppointmentDef, centralBankEquity } from '../src/economy/centralBank'
 import { seedBanks } from '../src/economy/economySeed'
 import { tickBanking, bankCapital, capitalRatio, monetaryAggregatesFor } from '../src/economy/banking'
+import { consumeGroup, EMERGENT_GOODS, isEmergentGood } from '../src/economy/economyTick'
+import { tierWealthFactor, SPECIES_TEMPLATES } from '../src/economy/species'
 import { convert, convertBetween, updateExchangeRates, depreciationBias } from '../src/economy/fx'
 import { tickMonetary, defaultMonetaryState } from '../src/economy/monetaryPolicy'
 import type { Bank, Building, Corporation, Country, World } from '../src/economy/economyTypes'
@@ -390,8 +392,8 @@ console.log('\n=== 18. Milestone 5: inter-world trade & logistics ===')
   }
   const luna = worlds.find((w) => w.id === 'Luna')!
   const foodSat = luna.pops.reduce((s, p) => s + p.needsSatisfaction.basic * p.populationSize, 0) / luna.pops.reduce((s, p) => s + p.populationSize, 0)
-  check('a world with no farms still gets food via imports', foodSat > 0.1, foodSat.toFixed(2))
-  check('the world shows imported food in its import stock', (luna.importStock.food ?? 0) > 0, (luna.importStock.food ?? 0).toFixed(0))
+  check('a world with no farms still gets grain via imports', foodSat > 0.1, foodSat.toFixed(2))
+  check('the world shows imported grain in its import stock', (luna.importStock.grains ?? 0) > 0, (luna.importStock.grains ?? 0).toFixed(0))
   check('the country records trade volume', reports.countries['imperial-state-of-mars'].tradeVolume > 0, reports.countries['imperial-state-of-mars'].tradeVolume.toFixed(0))
   check('logistics capacity is reported', reports.countries['imperial-state-of-mars'].logisticsCapacity > 0)
 }
@@ -534,24 +536,22 @@ console.log('\n=== 23. Needs-detail per-good reporting (needs/SoL presentation r
   const pop = mars.pops[0]
   check('a ticked pop carries needsDetail', pop.needsDetail !== undefined)
   const basic = pop.needsDetail?.basic ?? []
-  check('basic tier detail lists the food good', basic.some((e) => e.good === 'food'), JSON.stringify(basic))
-  const food = basic.find((e) => e.good === 'food')!
-  // Compared against a fresh post-growth populationSize (the tick that
-  // produced this detail also grew the pop slightly), so use a loose relative
-  // tolerance rather than exact equality.
-  const expectedWanted = 0.8 * pop.populationSize
-  check(
-    'food wanted is a sane positive number (~ amountPerPop * populationSize)',
-    food.wanted > 0 && Math.abs(food.wanted - expectedWanted) / expectedWanted < 0.01,
-    `${food.wanted} vs ~${expectedWanted}`,
-  )
-  check('food consumed is between 0 and wanted', food.consumed >= 0 && food.consumed <= food.wanted + 1e-6, `${food.consumed} <= ${food.wanted}`)
+  check('basic tier detail lists the grains good', basic.some((e) => e.good === 'grains'), JSON.stringify(basic))
+  const food = basic.find((e) => e.good === 'grains')!
+  check('food wanted is a sane positive number', food.wanted > 0, `${food.wanted}`)
+  check('food consumed is non-negative', food.consumed >= 0, `${food.consumed}`)
+  // Substitution: the basic-food group now offers meat as a premium substitute,
+  // so the detail lists it too (a good may be CONSUMED beyond its own weighted
+  // want when it substitutes for a shortfall — the invariant holds at the GROUP
+  // level below, not per good).
+  check('basic tier also lists meat (a substitutable food)', basic.some((e) => e.good === 'meat'), JSON.stringify(basic.map((e) => e.good)))
   // Healthcare must be a visible consumed GOOD in the detail, not siloed away
   // from the rest of the needs basket (the user's original complaint).
   const healthcare = pop.needsDetail?.healthcare ?? []
   check('healthcare tier detail lists the healthcare good', healthcare.some((e) => e.good === 'healthcare'), JSON.stringify(healthcare))
   const tierWant = basic.reduce((s, e) => s + e.wanted, 0)
   const tierGot = basic.reduce((s, e) => s + e.consumed, 0)
+  check('group-level: total basic consumed does not exceed total basic wanted', tierGot <= tierWant + 1e-6, `${tierGot} <= ${tierWant}`)
   const derivedSat = tierWant > 0 ? Math.min(1, tierGot / tierWant) : 1
   check(
     'the blended needsSatisfaction is consistent with the per-good detail it is derived from',
@@ -616,16 +616,16 @@ console.log('\n=== 24. Stockpiling: fills toward target on surplus, releases on 
   // that processor running and mask the shortage) so food genuinely runs
   // short, then compare a world holding a food reserve against an otherwise-
   // identical one with none — the reserve should measurably cushion it.
-  const producesFood = (recipeId: string) => (RECIPES[recipeId]?.methods ?? []).some((m) => m.outputs.some((o) => o.good === 'food'))
+  const producesFood = (recipeId: string) => (RECIPES[recipeId]?.methods ?? []).some((m) => m.outputs.some((o) => o.good === 'grains' || o.good === 'groceries'))
   const starvedMars = seedWorlds().find((w) => w.id === 'Mars')!
   const noFood = starvedMars.buildings.filter((b) => !producesFood(b.recipeId))
 
   const withReserveWorlds = seedWorlds().map((w) =>
-    w.id === 'Mars' ? { ...starvedMars, buildings: noFood, stockpiles: { food: 500 }, stockpileTargets: { food: 500 } } : w,
+    w.id === 'Mars' ? { ...starvedMars, buildings: noFood, stockpiles: { grains: 500 }, stockpileTargets: { grains: 500 } } : w,
   )
   const withReserveResult = tickEconomy(richCountries, withReserveWorlds, corporations)
   const withReserveMars = withReserveResult.worlds.find((w) => w.id === 'Mars')!
-  const released = 500 - (withReserveMars.stockpiles?.food ?? 0)
+  const released = 500 - (withReserveMars.stockpiles?.grains ?? 0)
   check('a genuine shortage releases some of the reserve', released > 0, released.toFixed(2))
 
   const noReserveWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...starvedMars, buildings: noFood } : w))
@@ -1499,6 +1499,161 @@ console.log('\n=== 41. Central banking Stage 5: AI monetary manager, banking cri
     let total = 0
     for (let i = 0; i < 60; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [marsId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks; total += r.reports.events.length }
     check('central-banking events accumulate over a 60-tick run', total > 0, `${total} events`)
+  }
+}
+
+console.log('\n=== 42. Pop consumption rework: need groups, substitution, wealth-scaled buy packages ===')
+{
+  // Wealth scaling (Engel's law): luxury demand is highly elastic to standard of
+  // living; basic food is nearly flat.
+  const luxRich = tierWealthFactor('luxury', 0.9)
+  const luxPoor = tierWealthFactor('luxury', 0.2)
+  const basicRich = tierWealthFactor('basic', 0.9)
+  const basicPoor = tierWealthFactor('basic', 0.2)
+  check('richer pops want much more luxury (elastic)', luxRich > luxPoor * 2, `${luxRich.toFixed(2)} vs ${luxPoor.toFixed(2)}`)
+  check('basic-food demand is nearly wealth-inelastic', Math.abs(basicRich - basicPoor) < 0.3, `${basicRich.toFixed(2)} vs ${basicPoor.toFixed(2)}`)
+
+  // consumeGroup: the weighted split (food weight 3, meat weight 1) with equal
+  // availability and ample budget → food consumed ≈ 3× meat.
+  const foodGroup = { id: 'basic-food', label: 'Food', base: 0.8, goods: [{ good: 'grains' as const, weight: 3 }, { good: 'meat' as const, weight: 1 }] }
+  const prices = { grains: 2, meat: 6 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+  const noGov = () => 0
+  {
+    const full = { grains: 1, meat: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const r = consumeGroup(foodGroup, 100, 1e9, prices, full, noGov)
+    check('weighted split: food ≈ 3× meat when both are available', Math.abs((r.consumed.grains ?? 0) / (r.consumed.meat ?? 1) - 3) < 0.01, `grains ${(r.consumed.grains ?? 0).toFixed(0)} meat ${(r.consumed.meat ?? 0).toFixed(0)}`)
+    check('a fully-supplied group is fully satisfied', Math.abs(r.got - 100) < 1e-6, `${r.got}`)
+  }
+
+  // Substitution: food is SHORT (40% fulfilled), meat is plentiful → the pop
+  // substitutes toward meat, and total satisfaction beats what food alone gives.
+  {
+    const shortFood = { grains: 0.4, meat: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const r = consumeGroup(foodGroup, 100, 1e9, prices, shortFood, noGov)
+    const foodOnlyGot = 75 * 0.4 // food's weighted share (75) at 40% fulfill
+    check('substitution: a food shortage shifts consumption toward meat', (r.consumed.meat ?? 0) > 25, `meat ${(r.consumed.meat ?? 0).toFixed(0)}`)
+    check('substitution lifts total satisfaction above the shorted good alone', r.got > foodOnlyGot + 25, `got ${r.got.toFixed(0)} vs food-only ${foodOnlyGot}`)
+  }
+
+  // Budget binds: a tiny budget limits what a group can buy.
+  {
+    const full = { grains: 1, meat: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const r = consumeGroup(foodGroup, 100, 50, prices, full, noGov)
+    check('a small budget throttles consumption below the target', r.got < 100 && r.spent <= 50 + 1e-6, `got ${r.got.toFixed(0)} spent ${r.spent.toFixed(0)}`)
+  }
+
+  // Furniture is a real, produced, consumed good after the rework.
+  check('furniture is a registered good', GOOD_IDS.includes('furniture'))
+  check('the human household need includes furniture as a substitute', SPECIES_TEMPLATES['baseline-organic'].needs.everyday.some((g) => g.goods.some((x) => x.good === 'furniture')))
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 12; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const mars = ws.find((w) => w.id === 'Mars')!
+    const furnConsumed = mars.pops.reduce((s, p) => s + (p.needsDetail?.everyday?.find((e) => e.good === 'furniture')?.consumed ?? 0), 0)
+    check('pops actually consume furniture in a live economy', furnConsumed > 0, `${furnConsumed.toFixed(0)}`)
+    const avgSol = mars.pops.reduce((s, p) => s + p.standardOfLiving * p.populationSize, 0) / mars.pops.reduce((s, p) => s + p.populationSize, 0)
+    check('standard of living stays healthy after the rework', avgSol > 0.5, `${avgSol.toFixed(2)}`)
+    check('all worlds finite after the consumption rework', ws.every(worldFinite))
+  }
+}
+
+console.log('\n=== 43. Per-service public welfare (Healthcare / Dental / Education coverage) ===')
+{
+  const setCov = (cs: Country[], id: string, ps: Partial<Record<import('../src/economy/goods').GoodId, number>>): Country[] =>
+    cs.map((c) => (c.id === id ? { ...c, publicServices: ps } : c))
+
+  // Run one tick and read a country's state welfare spend on services.
+  function servicesCost(ps: Partial<Record<import('../src/economy/goods').GoodId, number>>): number {
+    const cs = setCov(seedCountries(), 'orion-republic', ps)
+    const res = tickEconomy(cs, seedWorlds(), seedCorporations(), { tick: 1, enableAI: false }, seedBanks())
+    return res.reports.countries['orion-republic'].services
+  }
+
+  const none = servicesCost({})
+  const health = servicesCost({ healthcare: 1 })
+  const dentalOnly = servicesCost({ dental: 1 })
+  const all = servicesCost({ healthcare: 1, dental: 1, education: 1 })
+  check('funding healthcare costs the state more than funding nothing', health > none, `${health.toFixed(0)} vs ${none.toFixed(0)}`)
+  check('per-service works beyond healthcare: dental-only coverage has a cost', dentalOnly > none, `${dentalOnly.toFixed(0)} vs ${none.toFixed(0)}`)
+  check('funding all services costs more than one service alone', all > health, `${all.toFixed(0)} vs ${health.toFixed(0)}`)
+
+  // The welfare UI reads a per-service breakdown: the state's $ cost and the gross
+  // value pops spend on each service (so a coverage % reads against a real number).
+  {
+    const cs = setCov(seedCountries(), 'orion-republic', { healthcare: 0.5 })
+    const rep = tickEconomy(cs, seedWorlds(), seedCorporations(), { tick: 1, enableAI: false }, seedBanks()).reports.countries['orion-republic']
+    check('report breaks welfare cost out per service', (rep.servicesByGood?.healthcare ?? 0) > 0, `${(rep.servicesByGood?.healthcare ?? 0).toFixed(0)}`)
+    check('report gives gross pop spending per service (what the % is out of)', (rep.serviceValueByGood?.healthcare ?? 0) > (rep.servicesByGood?.healthcare ?? 0), `${(rep.serviceValueByGood?.healthcare ?? 0).toFixed(0)}`)
+  }
+
+  // Dental is produced (at clinics) and consumed by pops in the healthcare need.
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 8; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const mars = ws.find((w) => w.id === 'Mars')!
+    const dentalConsumed = mars.pops.reduce((s, p) => s + (p.needsDetail?.healthcare?.find((e) => e.good === 'dental')?.consumed ?? 0), 0)
+    check('pops consume dental as part of the healthcare need', dentalConsumed > 0, `${dentalConsumed.toFixed(0)}`)
+    check('dental is a registered good', GOOD_IDS.includes('dental'))
+  }
+
+  // Coverage genuinely lowers what a pop pays: a fully-funded service is free to
+  // the pop (govShareOf → effective price 0 in consumeGroup).
+  {
+    const group = { id: 'healthcare', label: 'Healthcare', base: 0.15, goods: [{ good: 'healthcare' as const, weight: 1 }] }
+    const prices = { healthcare: 12 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const full = { healthcare: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const paid = consumeGroup(group, 100, 500, prices, full, () => 0) // pop pays full
+    const funded = consumeGroup(group, 100, 500, prices, full, (g) => (g === 'healthcare' ? 1 : 0)) // state funds 100%
+    check('full public funding lets a budget-limited pop get more of a service', funded.got > paid.got, `${funded.got.toFixed(0)} vs ${paid.got.toFixed(0)}`)
+    check('a fully-funded service costs the pop nothing', funded.spent < 1e-6, `${funded.spent.toFixed(2)}`)
+  }
+}
+
+console.log('\n=== 44. Emergent/latent demand: adoption gates non-essential goods ===')
+{
+  type GId = import('../src/economy/goods').GoodId
+  check('emergent goods are the non-essentials (electronics, luxuries…) not food', isEmergentGood('electronics') && isEmergentGood('luxuryGoods') && !isEmergentGood('grains') && !isEmergentGood('healthcare'), EMERGENT_GOODS.join(','))
+
+  // consumeGroup: an UNADOPTED good creates no want (not a missed need); a fully
+  // adopted one is fully wanted.
+  {
+    const group = { id: 'durables', label: 'Durables', base: 0.03, goods: [{ good: 'electronics' as const, weight: 1 }] }
+    const prices = { electronics: 18 } as unknown as Record<GId, number>
+    const full = { electronics: 1 } as unknown as Record<GId, number>
+    const unadopted = consumeGroup(group, 100, 1e9, prices, full, () => 0, () => 0)
+    const adopted = consumeGroup(group, 100, 1e9, prices, full, () => 0, () => 1)
+    check('an unadopted good has ~zero effective want (no unmet need)', unadopted.effWant < 1e-6, `${unadopted.effWant.toFixed(1)}`)
+    check('a fully-adopted good is fully wanted', Math.abs(adopted.effWant - 100) < 1e-6, `${adopted.effWant.toFixed(1)}`)
+    check('half-adoption yields half the want', Math.abs(consumeGroup(group, 100, 1e9, prices, full, () => 0, () => 0.5).effWant - 50) < 1e-6)
+  }
+
+  // Backward-compat: a world with no adoption map demands emergent goods fully.
+  {
+    let ws = seedWorlds().map((w) => ({ ...w, adoption: undefined }))
+    const cs = seedCountries(), corps = seedCorporations(), bs = seedBanks()
+    const res = tickEconomy(cs, ws, corps, { tick: 1, enableAI: false }, bs)
+    check('a world without an adoption map still ticks fine (emergent = fully demanded)', res.worlds.every(worldFinite))
+  }
+
+  // Integration: adoption RISES for a supplied emergent good, DECAYS when its
+  // production is removed.
+  {
+    // Rise: aircraft starts at 0.3 seeded and is produced on Mars → climbs.
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    const a0 = ws.find((w) => w.id === 'Mars')!.adoption!.aircraft ?? 0
+    for (let i = 0; i < 12; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: ['imperial-state-of-mars'] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const a1 = ws.find((w) => w.id === 'Mars')!.adoption!.aircraft ?? 0
+    check('a supplied emergent good gains adoption over time', a1 > a0, `${(a0 * 100).toFixed(0)}% → ${(a1 * 100).toFixed(0)}%`)
+  }
+  {
+    // Decay: strip electronics production from Mars → its adoption falls.
+    let cs = seedCountries(), corps = seedCorporations(), bs = seedBanks()
+    let ws = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: w.buildings.filter((b) => b.recipeId !== 'electronicsFactory') } : w))
+    const e0 = ws.find((w) => w.id === 'Mars')!.adoption!.electronics ?? 0
+    for (let i = 0; i < 20; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: ['imperial-state-of-mars'] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const e1 = ws.find((w) => w.id === 'Mars')!.adoption!.electronics ?? 0
+    check('an emergent good whose supply is cut loses adoption (demand fades)', e1 < e0 - 0.1, `${(e0 * 100).toFixed(0)}% → ${(e1 * 100).toFixed(0)}%`)
+    check('adoption stays within [0,1]', EMERGENT_GOODS.every((g) => { const a = ws.find((w) => w.id === 'Mars')!.adoption![g] ?? 0; return a >= 0 && a <= 1 }))
   }
 }
 

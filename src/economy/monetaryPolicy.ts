@@ -15,7 +15,7 @@
 // inflation even as the bank tightens. Pure/headless like the rest.
 
 import type { CentralBankEvent, Country, MonetaryAggregates, TickReports } from './economyTypes'
-import { centralBankMandateDef, governmentControlsPolicy, hasCentralBank, monetaryFinancingCap } from './centralBank'
+import { centralBankMandateDef, effectiveIndependence, governmentControlsPolicy, hasCentralBank, monetaryFinancingCap } from './centralBank'
 
 // Thresholds for the political/crisis events (Stage 5).
 const INFLATION_CRISIS = 0.15 // annualized inflation above this is a crisis
@@ -55,8 +55,12 @@ const RATE_MAX = 0.25
 // grows the investment pool, tight money restrains it.
 const INVEST_FEEDBACK = 0.03
 
-// Credibility drifts toward a level set by how near inflation sits to the norm.
-const CRED_SPEED = 0.03
+// Credibility drifts SLOWLY toward a level set by the bank's independence and how
+// near inflation sits to the norm — it is earned and lost over years, not months.
+const CRED_SPEED = 0.012
+// Standing government pressure fades on its own (a temporary shove, not a
+// permanent state) so it can't only ever ratchet up.
+const PRESSURE_DECAY = 0.02
 
 // One country's monetary state — carried on Country.monetary. Evolves each tick.
 export interface MonetaryState {
@@ -133,9 +137,14 @@ export function tickMonetary(
     // 3. Expectations drift toward actual, less anchored the lower the credibility.
     const expectation = ms.expectation + (inflation - ms.expectation) * (1 - cb.credibility) * EXP_SPEED
 
-    // 4. Credibility drifts toward a level set by distance from the inflation norm.
-    const credTarget = clamp(0.9 - Math.abs(inflation - INFLATION_NORM) * 6, 0, 0.95)
+    // 4. Credibility drifts (slowly) toward a level set by the bank's INDEPENDENCE
+    //    (an insulated bank earns trust) and how near inflation is to the norm — so
+    //    enacting independence laws and holding inflation are the real levers. And
+    //    standing government pressure fades over time.
+    const indep = effectiveIndependence(cb)
+    const credTarget = clamp(0.3 + 0.55 * indep - Math.abs(inflation - INFLATION_NORM) * 4, 0, 0.97)
     const credibility = clamp(cb.credibility + (credTarget - cb.credibility) * CRED_SPEED, 0, 1)
+    const governmentPressure = Math.max(0, cb.governmentPressure * (1 - PRESSURE_DECAY))
 
     // 5. Rate setting.
     //    - An INDEPENDENT bank moves its own rate (mandate-weighted Taylor rule),
@@ -199,7 +208,7 @@ export function tickMonetary(
       ...country,
       treasury,
       investmentPool,
-      centralBank: { ...cb, policyRate, credibility, currencyInCirculation, governorName, governorTermStart },
+      centralBank: { ...cb, policyRate, credibility, governmentPressure, currencyInCirculation, governorName, governorTermStart },
       monetary: { inflation, expectation, outputGap, neutralRate: ms.neutralRate, lastBroadMoney: broadMoney, lastRate: rate },
     }
   })
