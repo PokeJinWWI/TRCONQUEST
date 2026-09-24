@@ -62,7 +62,7 @@ function SurfaceControlShell({ bodyName, radius }: { bodyName: string; radius: n
   const geometry = useMemo(() => {
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(Float32Array.from(mesh.positions, (v) => v * radius * 1.01), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(mesh.count.fine * 3), 3))
+    g.setAttribute('color', new BufferAttribute(new Float32Array(mesh.count.fine * 4), 4))
     g.setIndex(new BufferAttribute(mesh.faces, 1))
     return g
   }, [mesh, radius])
@@ -75,15 +75,14 @@ function SurfaceControlShell({ bodyName, radius }: { bodyName: string; radius: n
       const terrain = TERRAIN[TERRAIN_IDS[surface.terrain[i]]]
       const h = terrain.paintable ? holderOf(bodyName, i, owners, { [bodyName]: holders ?? {} }) : undefined
       if (h) c.set(ownerDisplay(h).color)
-      else c.setRGB(0, 0, 0)
-      colors.setXYZ(i, c.r, c.g, c.b)
+      colors.setXYZW(i, c.r, c.g, c.b, h ? 0.45 : 0)
     }
     colors.needsUpdate = true
   }, [geometry, surface, holders, owners, bodyName, mesh])
   if (!surface) return null
   return (
     <mesh geometry={geometry} raycast={() => null}>
-      <meshBasicMaterial vertexColors transparent opacity={0.45} depthWrite={false} />
+      <meshBasicMaterial vertexColors transparent depthWrite={false} />
     </mesh>
   )
 }
