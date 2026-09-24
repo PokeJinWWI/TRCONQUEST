@@ -18,9 +18,16 @@ interface PlanetProps {
    * `data.color` for the mesh and marker dot when set. Undefined (no map
    * mode active) falls back to the planet's own natural color. */
   colorOverride?: string
+  /** The owning nation's color, drawn as a border ring around the marker
+   * (see scene/territory.ts). Undefined for an unclaimed body. */
+  ownerColor?: string
+  /** An occupying nation's color, drawn as a dashed outer ring over the
+   * owner's — set only while the body is held by someone other than its
+   * owner. */
+  occupierColor?: string
 }
 
-export function Planet({ data, selected, onSelect, onOrderTo, colorOverride }: PlanetProps) {
+export function Planet({ data, selected, onSelect, onOrderTo, colorOverride, ownerColor, occupierColor }: PlanetProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
   const displayColor = colorOverride ?? data.color
@@ -65,6 +72,8 @@ export function Planet({ data, selected, onSelect, onOrderTo, colorOverride }: P
             }}
             onWheel={forwardWheelToCanvas}
           >
+            {ownerColor && <span className="owner-ring" style={{ borderColor: ownerColor }} />}
+            {occupierColor && <span className="owner-ring occupier" style={{ borderColor: occupierColor }} />}
             <span className="marker-dot" style={{ borderColor: displayColor }} />
             <span className="marker-label">{data.name}</span>
           </div>

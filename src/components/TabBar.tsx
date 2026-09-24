@@ -9,6 +9,7 @@ const LEVEL_LABELS: Record<ViewLevel, string> = {
   system: 'System',
   satellite: 'Satellite',
   combat: 'Combat',
+  ground: 'Ground',
 }
 
 // A short, cheap-to-compute label derived straight from a stored snapshot —

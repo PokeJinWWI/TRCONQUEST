@@ -4,6 +4,7 @@ import { BufferGeometry, Float32BufferAttribute, LineSegments } from 'three'
 import { useCombatStore } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
+import { usePlayerStore } from '../state/playerStore'
 import { activeEnemyContacts, participantArenaPosition, rangeContactStatus } from './combatResolution'
 
 // Generous ceiling on simultaneous pairs of ONE color category — an N-vs-N
@@ -18,10 +19,10 @@ const MAX_PAIRS = 128
 const MUTUAL_COLOR = '#ffd23f'
 // Only the hostile end of the pair can reach the friendly/player end —
 // genuinely dangerous: this ship is taking fire it cannot return. Same red
-// ALLEGIANCE_COLORS already uses for a hostile marker.
+// RELATION_COLORS already uses for a hostile marker.
 const HOSTILE_ONLY_COLOR = '#ff3b3b'
 // Only the friendly/player end can reach the hostile — a free shot, no
-// retaliation possible at this range. Same green ALLEGIANCE_COLORS already
+// retaliation possible at this range. Same green RELATION_COLORS already
 // uses for a player marker.
 const FRIENDLY_ONLY_COLOR = '#4ade80'
 
@@ -69,7 +70,7 @@ function writeSegment(writer: LineWriter, ax: number, ay: number, az: number, bx
 // can (this ship is taking fire it can't return — the situation to notice
 // fastest), green when only the friendly/player end can (a free shot, no
 // retaliation possible at this range). "Friendly/player end" is read off
-// each ship's own allegiance, not a fixed side-0/side-1 label, so this reads
+// each ship's owner vs. the player's nation, not a fixed side index, so this reads
 // correctly regardless of which side the player's fleet ended up on.
 //
 // Deliberately drawn as a straight segment between the two hulls, ignoring
@@ -124,14 +125,22 @@ export function CombatEngagementLine({ engagementId }: CombatEngagementLineProps
         const b = participantArenaPosition(other, simDays)
         const { aCanHit: selfCanHit, bCanHit: otherCanHit } = rangeContactStatus(participant, selfShip, other, otherShip, simDays)
 
-        // Neutrals never fight (see areHostile), so every pair here is
-        // exactly one friendly/player hull and one hostile one — never both,
-        // never neither.
-        const selfIsFriendly = selfShip.allegiance === 'player' || selfShip.allegiance === 'friendly'
-        const friendlyCanHit = selfIsFriendly ? selfCanHit : otherCanHit
-        const hostileCanHit = selfIsFriendly ? otherCanHit : selfCanHit
-
-        const writer = friendlyCanHit && hostileCanHit ? mutual : hostileCanHit ? hostileOnly : friendlyOnly
+        // Colors read from the PLAYER's point of view, so the "friendly" end
+        // of a pair is whichever hull the player owns. A pair between two
+        // other nations (Venus and Orion fighting beside the player's fleet)
+        // has no friendly end at all — it's drawn as a mutual exchange, "a
+        // fight you're not part of," rather than guessing a side for it.
+        const playerCountryId = usePlayerStore.getState().selectedCountryId
+        const selfIsPlayer = selfShip.ownerId === playerCountryId
+        const otherIsPlayer = otherShip.ownerId === playerCountryId
+        let writer: LineWriter
+        if (!selfIsPlayer && !otherIsPlayer) {
+          writer = mutual
+        } else {
+          const friendlyCanHit = selfIsPlayer ? selfCanHit : otherCanHit
+          const hostileCanHit = selfIsPlayer ? otherCanHit : selfCanHit
+          writer = friendlyCanHit && hostileCanHit ? mutual : hostileCanHit ? hostileOnly : friendlyOnly
+        }
         writeSegment(writer, a.x - center.x, a.y - center.y, a.z - center.z, b.x - center.x, b.y - center.y, b.z - center.z)
       }
     }

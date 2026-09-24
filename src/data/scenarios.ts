@@ -25,14 +25,20 @@
 // simplest one (destroy every hostile, keep at least one ship alive) since
 // that's what the verification harness in tests/scenarios.test.ts checks.
 
-import type { FleetAllegiance } from './shipData'
 import type { CombatStance } from './combatData'
 
 export type ScenarioDifficulty = 'easy' | 'medium' | 'hard'
 
+// Which side of the scenario's war a ship fights for. Every ship is owned by a
+// real nation (see ShipInstance.ownerId) — loading a scenario resolves
+// 'player' to the player's own nation and 'enemy' to an opposing one, and puts
+// the two at war, so the fight is an ordinary national war rather than a
+// special scenario-only kind of hostility. See scenarioNations below.
+export type ScenarioRole = 'player' | 'enemy'
+
 export interface ScenarioShip {
   classId: string
-  allegiance: FleetAllegiance
+  role: ScenarioRole
   // Omit for the game's own default (`'balanced'`) — every easy scenario
   // omits this on purpose, since "the default wins" is the whole point.
   stance?: CombatStance
@@ -60,8 +66,8 @@ export const SCENARIOS: Scenario[] = [
     description:
       'A lone raider corvette against a single cruiser. The cruiser wins on defaults every time (16/16 verified) — a straightforward class-advantage stomp with nothing to learn from the loss column.',
     ships: [
-      { classId: 'cruiser', allegiance: 'player' },
-      { classId: 'corvette', allegiance: 'hostile' },
+      { classId: 'cruiser', role: 'player' },
+      { classId: 'corvette', role: 'enemy' },
     ],
   },
   {
@@ -72,11 +78,11 @@ export const SCENARIOS: Scenario[] = [
     description:
       'Three destroyers intercept two raiding corvettes. Numbers and class both favor the player — wins on defaults every time (16/16 verified).',
     ships: [
-      { classId: 'destroyer', allegiance: 'player' },
-      { classId: 'destroyer', allegiance: 'player' },
-      { classId: 'destroyer', allegiance: 'player' },
-      { classId: 'corvette', allegiance: 'hostile' },
-      { classId: 'corvette', allegiance: 'hostile' },
+      { classId: 'destroyer', role: 'player' },
+      { classId: 'destroyer', role: 'player' },
+      { classId: 'destroyer', role: 'player' },
+      { classId: 'corvette', role: 'enemy' },
+      { classId: 'corvette', role: 'enemy' },
     ],
   },
 
@@ -89,8 +95,8 @@ export const SCENARIOS: Scenario[] = [
     description:
       "One frigate against one battleship. On Balanced (the default) this is a total loss, 0/16 verified — the frigate holds within the battleship's own gun range and gets ground down. On Kite it's a total win, 16/16 verified: Kite holds at 92% of the frigate's longest range (its missile batteries reach 11 units) versus Balanced's 70%, which is just enough to sit outside the battleship's own longest reach (9 units) while the battleship — the slowest hull in the game — can never close the gap. Loaded with Kite already set, since that's the entire lesson: same ships, one stance, opposite outcome.",
     ships: [
-      { classId: 'frigate', allegiance: 'player', stance: 'kite' },
-      { classId: 'battleship', allegiance: 'hostile' },
+      { classId: 'frigate', role: 'player', stance: 'kite' },
+      { classId: 'battleship', role: 'enemy' },
     ],
   },
   {
@@ -101,11 +107,11 @@ export const SCENARIOS: Scenario[] = [
     description:
       'Two frigates against three cruisers. Balanced loses every time, 0/16 verified. Kite wins every time, 16/16 verified — same range-outrunning logic as the battleship matchup, just against a faster but still out-ranged and out-massed pack. Loaded with Kite already set.',
     ships: [
-      { classId: 'frigate', allegiance: 'player', stance: 'kite' },
-      { classId: 'frigate', allegiance: 'player', stance: 'kite' },
-      { classId: 'cruiser', allegiance: 'hostile' },
-      { classId: 'cruiser', allegiance: 'hostile' },
-      { classId: 'cruiser', allegiance: 'hostile' },
+      { classId: 'frigate', role: 'player', stance: 'kite' },
+      { classId: 'frigate', role: 'player', stance: 'kite' },
+      { classId: 'cruiser', role: 'enemy' },
+      { classId: 'cruiser', role: 'enemy' },
+      { classId: 'cruiser', role: 'enemy' },
     ],
   },
 
@@ -125,11 +131,11 @@ export const SCENARIOS: Scenario[] = [
     description:
       'Two destroyers against a battleship escorted by two corvettes. 0/16 on Balanced, Swarm, and Kite alike — the combined hostile DPS out-damages the destroyers regardless of stance. A human focusing fire on one corvette first (to cut incoming damage before dealing with the battleship) has a real shot; no stance the AI can hold does that on its own.',
     ships: [
-      { classId: 'destroyer', allegiance: 'player' },
-      { classId: 'destroyer', allegiance: 'player' },
-      { classId: 'battleship', allegiance: 'hostile' },
-      { classId: 'corvette', allegiance: 'hostile' },
-      { classId: 'corvette', allegiance: 'hostile' },
+      { classId: 'destroyer', role: 'player' },
+      { classId: 'destroyer', role: 'player' },
+      { classId: 'battleship', role: 'enemy' },
+      { classId: 'corvette', role: 'enemy' },
+      { classId: 'corvette', role: 'enemy' },
     ],
   },
   {
@@ -150,11 +156,11 @@ export const SCENARIOS: Scenario[] = [
     description:
       'A cruiser and a corvette against a battleship escorted by two corvettes. 0/16 on Balanced, Kite, Swarm, and Stall alike. The lever is the same as Raider King’s Escort: strip an escort corvette first to cut incoming DPS before the battleship grinds you down — no stance commits to that on its own.',
     ships: [
-      { classId: 'cruiser', allegiance: 'player' },
-      { classId: 'corvette', allegiance: 'player' },
-      { classId: 'battleship', allegiance: 'hostile' },
-      { classId: 'corvette', allegiance: 'hostile' },
-      { classId: 'corvette', allegiance: 'hostile' },
+      { classId: 'cruiser', role: 'player' },
+      { classId: 'corvette', role: 'player' },
+      { classId: 'battleship', role: 'enemy' },
+      { classId: 'corvette', role: 'enemy' },
+      { classId: 'corvette', role: 'enemy' },
     ],
   },
 ]
@@ -163,4 +169,12 @@ export const SCENARIO_DIFFICULTY_LABELS: Record<ScenarioDifficulty, string> = {
   easy: 'Easy',
   medium: 'Medium',
   hard: 'Hard',
+}
+
+// The two nations a scenario's roles resolve to: the player's own, and an
+// opposing one — the first other playable nation. Both must exist, so a
+// scenario can only load once a nation has been picked.
+export function scenarioNations(playerCountryId: string, countryIds: readonly string[]): { player: string; enemy: string } | null {
+  const enemy = countryIds.find((id) => id !== playerCountryId)
+  return enemy ? { player: playerCountryId, enemy } : null
 }

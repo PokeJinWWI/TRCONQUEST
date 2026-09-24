@@ -3,6 +3,8 @@ import { DraggableWindow } from './DraggableWindow'
 import { NationEconomyPanel } from './EconomyPanel'
 import { NationTechPanel } from './TechPanel'
 import { FleetManagement } from './FleetManagement'
+import { ArmyPanel } from './ArmyViews'
+import { DiplomacyPanel } from './DiplomacyPanel'
 import { LawsPanel } from './LawsPanel'
 import { CorporationsPanel } from './CorporationsPanel'
 import { StockExchangePanel } from './StockExchangePanel'
@@ -21,6 +23,7 @@ import { getCountry } from '../data/countryData'
 const SETTINGS_CATEGORY = 'Settings'
 const MILITARY_CATEGORY = 'Military'
 const NAVY_SUBCATEGORY = 'Navy'
+const ARMY_SUBCATEGORY = 'Army'
 const MAP_MODES_CATEGORY = 'Map Modes'
 const ECONOMY_CATEGORY = 'Economy'
 const TECHNOLOGY_CATEGORY = 'Technology'
@@ -31,6 +34,7 @@ const STOCK_EXCHANGE_CATEGORY = 'Stock Exchange'
 const SOCIETY_CATEGORY = 'Society'
 const DEMOGRAPHICS_SUBCATEGORY = 'Demographics'
 const CHARACTERS_CATEGORY = 'Characters'
+const DIPLOMACY_CATEGORY = 'Diplomacy'
 
 interface CategoryDef {
   name: string
@@ -47,9 +51,9 @@ const CATEGORIES: CategoryDef[] = [
   { name: STOCK_EXCHANGE_CATEGORY },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
   { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
-  { name: 'Diplomacy' },
+  { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Events'] },
   { name: 'International Organizations' },
-  { name: MILITARY_CATEGORY, subcategories: ['Army', NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
+  { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
   { name: CHARACTERS_CATEGORY, subcategories: ['Characters', 'Families'] },
   { name: MAP_MODES_CATEGORY },
   { name: SETTINGS_CATEGORY },
@@ -81,6 +85,8 @@ function renderContent(category: CategoryDef, subcategory: string | null) {
   if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return <DemographicsPanel />
   if (category.name === CHARACTERS_CATEGORY) return <CharactersPanel subcategory={subcategory} />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
+  if (category.name === MILITARY_CATEGORY && subcategory === ARMY_SUBCATEGORY) return <ArmyPanel />
+  if (category.name === DIPLOMACY_CATEGORY) return <DiplomacyPanel subcategory={subcategory} />
   return <div className="nav-placeholder">Not yet available</div>
 }
 

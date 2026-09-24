@@ -12,11 +12,16 @@
 // tsconfig.app.json only includes `src`, so this never enters the app
 // typecheck or the production bundle.
 
-import { SHIP_CLASSES, type FleetAllegiance } from '../src/data/shipData'
+import { SHIP_CLASSES } from '../src/data/shipData'
 import type { CombatStance } from '../src/data/combatData'
 import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { syncEngagements, stepEngagements, COMBAT_STEP_DAYS, type Rng } from '../src/scene/combatResolution'
 import { SCENARIOS, type ScenarioShip } from '../src/data/scenarios'
+import { setUpTestNations, TEST_ENEMY, TEST_PLAYER } from './testNations'
+
+// Scenario roles resolve to two real nations at war — the same thing loading
+// a scenario in the Debug Console does (see scenarios.scenarioNations).
+setUpTestNations()
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -39,10 +44,11 @@ function buildShips(ships: ScenarioShip[], bodyName: string, overrideStance?: Co
   return ships.map((spec, i) => {
     const cls = SHIP_CLASSES.find((c) => c.id === spec.classId)!
     return {
-      id: `${spec.allegiance}-${i}`,
+      id: `${spec.role}-${i}`,
       classId: cls.id,
-      name: `${spec.allegiance}-${i}`,
-      allegiance: spec.allegiance,
+      name: `${spec.role}-${i}`,
+      ownerId: spec.role === 'player' ? TEST_PLAYER : TEST_ENEMY,
+      fleetId: `solo-${spec.role}-${i}`,
       location: { kind: 'orbiting', systemId: 'sol', bodyName, periodDays: 20, phaseDeg: (i * 90) % 360, inclinationDeg: 0 },
       order: null,
       hyperdriveReadySimDays: 0,
@@ -88,8 +94,8 @@ function simulate(ships: ShipInstance[], seed: number, maxSteps = 5000): { winne
       if (ship) alive.set(id, { ...ship, combat })
     }
     engagements = result.engagements
-    const playerLeft = [...alive.values()].some((s) => s.allegiance === 'player')
-    const hostileLeft = [...alive.values()].some((s) => s.allegiance === 'hostile')
+    const playerLeft = [...alive.values()].some((s) => s.ownerId === TEST_PLAYER)
+    const hostileLeft = [...alive.values()].some((s) => s.ownerId === TEST_ENEMY)
     if (!playerLeft && !hostileLeft) return { winner: 'draw', steps: i }
     if (!hostileLeft) return { winner: 'player', steps: i }
     if (!playerLeft) return { winner: 'hostile', steps: i }

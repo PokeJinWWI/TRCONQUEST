@@ -1191,8 +1191,7 @@
   color: #fff;
 }
 
-.fleet-row-class,
-.fleet-row-allegiance {
+.fleet-row-class {
   color: rgba(255, 255, 255, 0.45);
   font-size: 10px;
 }
@@ -2749,6 +2748,35 @@
   color: #fff;
 }
 
+/* Borders: an owning nation's ring around a body/star marker, in its country
+   color (see scene/territory.ts). A body occupied by another nation gets that
+   occupier's color as a dashed outer ring on top — ownership still shows,
+   occupation reads as something laid over it. A contested system (several
+   nations own bodies in it) gets a split-color ring. */
+.owner-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.owner-ring.occupier {
+  width: 22px;
+  height: 22px;
+  border-style: dashed;
+}
+
+.owner-ring.contested {
+  border-width: 2px;
+  border-style: solid;
+}
+
 /* Ship markers — a triangle instead of the celestial-body dot, so ships
    read as distinct from planets/stars at a glance. A resting ship's real
    position gets a small world-space nudge off the body/star it's orbiting
@@ -2824,7 +2852,7 @@
 /* No-text presence badge — sits next to a star's marker in interstellar
    view when a fleet is nested somewhere inside that system (e.g. orbiting a
    planet) and so has no position at interstellar scale of its own. One per
-   distinct allegiance color present, deliberately icon-only — but still
+   distinct relation color present (own/neutral/hostile), deliberately icon-only — but still
    clicking-to-select the fleet it represents, same as any other ship
    marker. */
 .fleet-presence-icon {
@@ -3118,6 +3146,26 @@
 
 .ship-panel-checkbox-row input {
   cursor: pointer;
+}
+
+/* FTL comms delay indicator (ShipPanel) — amber/warning-colored, same as
+   the debug console's own badge, since it's flagging the same kind of
+   thing: what's shown below is not live. */
+.ship-panel-comms-delay {
+  color: #ffb03b;
+  cursor: help;
+}
+
+.combat-comms-lock-notice {
+  display: block;
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  margin: 4px 0 8px;
+  background: rgba(255, 176, 59, 0.1);
+  border: 1px solid rgba(255, 176, 59, 0.35);
+  border-radius: 3px;
+  cursor: default;
 }
 
 /* Tactics get their own emphasis pair, layered over the shared
@@ -3962,4 +4010,489 @@ div.fleet-row .combat-density-row {
   color: #cdeeff;
   opacity: 0.7;
   text-align: center;
+}
+
+/* Shipyard panel (Military > Navy > Shipyard) — resource cost chips and the
+   stockpile readout. A cost the player can't currently afford turns amber,
+   same "not available right now" color the comms-delay notices use. */
+.shipyard-stockpile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  padding: 2px 0 6px;
+}
+
+.shipyard-income {
+  color: #4ade80;
+  font-size: 10px;
+}
+
+.shipyard-costs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.shipyard-cost {
+  padding: 1px 5px;
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 2px;
+}
+
+.shipyard-cost.short {
+  color: #ffb03b;
+  border-color: rgba(255, 176, 59, 0.6);
+}
+
+.shipyard-message {
+  color: #ffb03b;
+}
+
+/* Ground armies — see components/ArmyViews.tsx. */
+.detail-view-btn.danger {
+  color: #ff8a6b;
+  border-color: rgba(255, 110, 80, 0.6);
+  background: rgba(255, 110, 80, 0.1);
+}
+
+.detail-view-btn.danger:hover {
+  background: rgba(255, 110, 80, 0.25);
+}
+
+.detail-view-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.army-group {
+  margin: 4px 0 6px;
+}
+
+.army-group-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin: 4px 0 2px;
+}
+
+.army-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.army-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.army-row-status {
+  grid-column: 2 / 4;
+  text-align: right;
+  opacity: 0.7;
+}
+
+.army-row-value {
+  text-align: right;
+  min-width: 52px;
+}
+
+.army-bar-track {
+  display: block;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.army-bar-fill {
+  display: block;
+  height: 100%;
+  transition: width 0.2s linear;
+}
+
+.ground-battle {
+  border: 1px solid rgba(255, 110, 80, 0.45);
+  background: rgba(255, 110, 80, 0.06);
+  border-radius: 3px;
+  padding: 6px 8px;
+  margin: 4px 0 8px;
+}
+
+.ground-battle-title {
+  font-size: 11px;
+  color: #ff8a6b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.occupation-banner {
+  border: 1px dashed;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  margin: 4px 0 8px;
+}
+
+.army-recruit {
+  margin-top: 2px;
+}
+
+/* Planet view: army chips on the hologram, and the ground-war HUD. */
+.army-marker {
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border: 1px solid;
+  border-radius: 2px;
+  background: rgba(2, 4, 9, 0.75);
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.army-marker.attacking {
+  border-style: dashed;
+}
+
+.army-marker-glyph {
+  font-size: 9px;
+}
+
+.planet-ground-hud {
+  position: fixed;
+  top: calc(var(--hud-top-height, 52px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, calc(100% - 32px));
+  background: rgba(4, 10, 20, 0.85);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: 'Courier New', monospace;
+  color: #cfe9f5;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Diplomacy — see components/DiplomacyPanel.tsx. */
+.dip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dip-card {
+  border: 1px solid rgba(111, 227, 255, 0.2);
+  border-radius: 3px;
+  padding: 6px 8px;
+}
+
+.dip-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.dip-card-name {
+  flex: 1;
+  font-size: 12px;
+  color: #fff;
+}
+
+.dip-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  flex: none;
+}
+
+.dip-status {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.dip-status.war {
+  color: #ff6b4a;
+  opacity: 1;
+}
+
+.dip-muted {
+  opacity: 0.55;
+}
+
+.dip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dip-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 6px;
+}
+
+.dip-score-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+
+.dip-score-mid {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.dip-score-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.dip-score-fill.pos {
+  background: #4ade80;
+}
+
+.dip-score-fill.neg {
+  background: #ff6b4a;
+}
+
+.dip-score-value {
+  min-width: 34px;
+  text-align: right;
+  font-size: 11px;
+}
+
+.dip-event {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 8px;
+  font-size: 11px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.08);
+}
+
+.dip-event-date {
+  opacity: 0.55;
+}
+
+.dip-toasts {
+  position: fixed;
+  top: calc(var(--hud-top-height, 52px) + 10px);
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(320px, calc(100vw - 32px));
+  z-index: 60;
+  pointer-events: none;
+}
+
+.dip-toast {
+  background: rgba(4, 10, 20, 0.92);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-left: 3px solid;
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #e6f4fb;
+}
+
+/* Planetary map (ground war) — see scene/GroundViewScene.tsx. */
+.ground-unit-marker {
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 18px;
+  padding: 1px 3px 2px;
+  border: 1px solid;
+  border-radius: 2px;
+  background: rgba(2, 4, 9, 0.8);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.ground-unit-marker.hostile {
+  border-style: dashed;
+}
+
+.ground-unit-marker.selected {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.ground-unit-bar {
+  display: block;
+  width: 14px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ground-unit-bar-fill {
+  display: block;
+  height: 100%;
+}
+
+.ground-key-marker {
+  transform: translate(-50%, -50%);
+  padding: 0 3px;
+  border: 1px solid;
+  border-radius: 50%;
+  background: rgba(2, 4, 9, 0.7);
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.ground-hover {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--hud-bottom-height, 52px) + 10px);
+  transform: translateX(-50%);
+  background: rgba(4, 10, 20, 0.88);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #cfe9f5;
+  pointer-events: none;
+  z-index: 5;
+  max-width: calc(100vw - 32px);
+}
+
+.ground-mode-banner {
+  border: 1px dashed rgba(111, 227, 255, 0.6);
+  border-radius: 3px;
+  padding: 6px 8px;
+  margin: 6px 0;
+  font-size: 11px;
+  color: #6fe3ff;
+}
+
+.ground-army {
+  margin: 2px 0 6px;
+}
+
+.ground-army-head {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #cfe9f5;
+  font-family: inherit;
+  font-size: 11px;
+  opacity: 0.8;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.ground-unit-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 28px;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: #e6f4fb;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ground-unit-row:hover {
+  background: rgba(111, 227, 255, 0.08);
+}
+
+.ground-unit-row.selected {
+  border-color: rgba(111, 227, 255, 0.6);
+  background: rgba(111, 227, 255, 0.12);
+}
+
+.ground-unit-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ground-unit-status {
+  opacity: 0.6;
+  font-size: 10px;
+}
+
+.ground-unit-str {
+  text-align: right;
+}
+
+.ground-unit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.ground-unit-table th,
+.ground-unit-table td {
+  padding: 2px 4px;
+  text-align: right;
+}
+
+.ground-unit-table th:first-child,
+.ground-unit-table td:first-child {
+  text-align: left;
+}
+
+.planet-ground-hud-btn {
+  pointer-events: auto;
+  margin-top: 6px;
+}
+
+.debug-console-note {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 4px;
+}
+
+.ground-roster {
+  max-height: calc(100vh - var(--hud-top-height, 52px) - var(--hud-bottom-height, 52px) - 320px);
+  min-height: 80px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }

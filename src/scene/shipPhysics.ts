@@ -17,7 +17,7 @@ import type { MoonData } from './moonData'
 import { STARS, UNITS_PER_LY, starScenePosition, getSystemStars, findSystemStar, type StarComponent } from '../data/starData'
 import { DAYS_PER_YEAR, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
-import { usePlayerStore } from '../state/playerStore'
+import { isPlayerOwned } from '../state/shipRelations'
 import { useTechStore } from '../state/techStore'
 
 export const SOL_SYSTEM_ID = 'sol'
@@ -633,10 +633,10 @@ export function destinationsEqual(a: MoveDestination, b: MoveDestination): boole
 
 // Whether `ship` may be given a follow directive targeting `targetShipId` —
 // same ownership reasoning as planMove's own "not-owned" gate (only a
-// player-owned ship can be commanded at all, following included), plus the
-// obvious "can't follow itself."
+// player-owned ship can be commanded by the player at all, following
+// included), plus the obvious "can't follow itself."
 export function canFollow(ship: ShipInstance, targetShipId: string): boolean {
-  return ship.allegiance === 'player' && ship.id !== targetShipId
+  return isPlayerOwned(ship) && ship.id !== targetShipId
 }
 
 // The warpReadySimDays cooldown update to apply once a completed order that
@@ -793,8 +793,38 @@ export function planMove(
   // trigger it, even for a ship with zero core damage and no active target.
   riskContext?: { activelyEngaged: boolean },
 ): MoveResult {
-  if (ship.allegiance !== 'player') return { kind: 'not-owned' }
+  if (!isPlayerOwned(ship)) return { kind: 'not-owned' }
+  return planMoveUnchecked(ship, destination, simDays, riskContext)
+}
 
+// Whether planMove would take this ship to `destination` by hyperdrive jump
+// (instant, risky) rather than by an order over time — same test planMove
+// itself applies, without rolling the jump. Lets a fleet move (see
+// fleetMove.ts) hold a hyperdrive hull's jump until the rest of the fleet
+// arrives, instead of rolling its risk the moment the order is given.
+export function wouldHyperjump(ship: ShipInstance, destination: MoveDestination): boolean {
+  if (destination.kind !== 'star') return false
+  const shipClass = resolveShipClass(ship.classId)
+  if (!shipClass) return false
+  const researched = useTechStore.getState().stateFor(ship.ownerId).researched
+  const warp = researched.has('warp-theory') && shipClass.ftlDrives.some((d) => d.kind === 'warp')
+  const hyper = researched.has('hyperspace-theory') && shipClass.ftlDrives.some((d) => d.kind === 'hyperdrive')
+  return hyper && !warp
+}
+
+// planMove WITHOUT the player-ownership gate — for callers that act on a
+// ship on its OWN nation's behalf rather than the player's: the strategic AI
+// commanding its empire's fleets, and the simulation's own internal follow-
+// throughs (a queued jump firing, an FTL escape completing, an automatic
+// retreat). Never wire a player-facing click to this — that's what planMove's
+// gate exists to stop. Everything else (drive choice, tech, the engaged-ship
+// FTL-charge rule, hyperdrive risk) is identical.
+export function planMoveUnchecked(
+  ship: ShipInstance,
+  destination: MoveDestination,
+  simDays: number,
+  riskContext?: { activelyEngaged: boolean },
+): MoveResult {
   const shipClass = resolveShipClass(ship.classId)
   if (!shipClass) return { kind: 'unknown-class' }
 
@@ -816,14 +846,12 @@ export function planMove(
   // Warp/Hyperdrive are gated behind Relativity's Warp Theory and
   // Extradimensional's Hyperspace Theory respectively (see techData.ts) —
   // both are seeded already-researched for a fresh country (techStore.ts),
-  // so this changes nothing until/unless that seed is ever removed. Reading
-  // the player's own tech here (rather than passing it in) is safe because
-  // planMove already refused any non-player ship above, so this is always
-  // resolving the SAME player whose tech state this is.
-  const playerCountryId = usePlayerStore.getState().selectedCountryId ?? ''
-  const playerResearched = useTechStore.getState().stateFor(playerCountryId).researched
-  const warpDrive = playerResearched.has('warp-theory') ? shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp') : undefined
-  const hyperDrive = playerResearched.has('hyperspace-theory')
+  // so this changes nothing until/unless that seed is ever removed. Read
+  // from the ship's OWN nation, so an AI empire's fleets move on its tech,
+  // not the player's.
+  const ownerResearched = useTechStore.getState().stateFor(ship.ownerId).researched
+  const warpDrive = ownerResearched.has('warp-theory') ? shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp') : undefined
+  const hyperDrive = ownerResearched.has('hyperspace-theory')
     ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
     : undefined
 

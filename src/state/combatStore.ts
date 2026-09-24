@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import type { ComponentKind } from '../data/combatData'
-import type { FleetAllegiance } from '../data/shipData'
 import type { ArenaPoint, CombatObstacle, GridDensity } from '../scene/combatArena'
 import type { ShipLocation } from './shipStore'
 
@@ -56,24 +55,20 @@ export interface InFlightProjectile {
 // that disengages simply stops appearing in any engagement rather than having
 // to have a pile of arena fields reset on it.
 
-// Which side of an engagement a ship is on. Neutrals never fight at all (see
-// areHostile), so every participant resolves to one of exactly two sides —
-// which keeps the model honest for the eventual N-vs-N case without
-// pretending to support free-for-alls it doesn't.
-export type CombatSide = 0 | 1
+// Which side of an engagement a ship is on — one side per NATION present
+// (see Engagement.nations and combatResolution.syncEngagements). A fight in
+// Sol between Mars, Venus and Orion has three sides; who shoots at whom
+// between them comes from diplomacy, recorded per participant as
+// `hostileSides` rather than assumed from "different side = enemy".
+export type CombatSide = number
 
-// Who shoots at whom. Neutral is deliberately inert: it's a real allegiance a
-// fleet can hold without that fleet being dragged into every passing
-// firefight. Friendly counts as player-side, so an allied fleet parked at a
-// contested body joins the fight rather than watching it.
-export function areHostile(a: FleetAllegiance, b: FleetAllegiance): boolean {
-  const isPlayerSide = (x: FleetAllegiance) => x === 'player' || x === 'friendly'
-  const isEnemySide = (x: FleetAllegiance) => x === 'hostile'
-  return (isPlayerSide(a) && isEnemySide(b)) || (isEnemySide(a) && isPlayerSide(b))
-}
-
-export function sideFor(allegiance: FleetAllegiance): CombatSide {
-  return allegiance === 'hostile' ? 1 : 0
+// Whether `other` is an enemy of `self` inside an engagement. Uses the
+// participant's own hostileSides (set from real diplomacy on every sync);
+// a participant built without one (a hand-made test fixture) falls back to
+// the plain two-sided reading, "any other side is hostile."
+export function isEnemy(self: Pick<CombatParticipant, 'side' | 'hostileSides'>, other: Pick<CombatParticipant, 'side'>): boolean {
+  if (self.hostileSides) return self.hostileSides.includes(other.side)
+  return other.side !== self.side
 }
 
 // The identity of a place two fleets can meet. Only *resting* locations
@@ -102,6 +97,10 @@ export function combatLocationLabel(location: ShipLocation): string {
 export interface CombatParticipant {
   shipId: string
   side: CombatSide
+  // Which OTHER sides this participant's nation is at war with, as of the
+  // last sync — recomputed every sync from diplomacy, so a war declared (or
+  // a peace signed) mid-fight takes effect on the next step. See isEnemy.
+  hostileSides?: CombatSide[]
   // Where the ship ACTUALLY is, in real continuous arena units, as of
   // `positionSimDays` — not a lattice index, and never a destination.
   //
@@ -252,6 +251,10 @@ export interface Engagement {
   // combatResolution.obstaclesForLocation), not authored per engagement.
   obstacles: CombatObstacle[]
   participants: CombatParticipant[]
+  // Which nation each side index belongs to — nations[side] is a countryId.
+  // Optional/absent for an engagement built before nations were tracked (or
+  // a hand-made test fixture), which then reads as plain two-sided.
+  nations?: string[]
   // Missiles/torpedoes launched but not yet arrived — see InFlightProjectile
   // and combatResolution's projectile-flight step. Optional/absent reads as
   // "none in flight" so no existing Engagement literal (tests included) needs
@@ -279,16 +282,9 @@ export interface Engagement {
 // brand-new scenario loads into an engagement id that technically already
 // existed (see useCombatResolver.ts). Both now go through this one check
 // instead of `!!engagement`/`engagements.length > 0`.
-export function engagementIsContested(e: Pick<Engagement, 'participants'>, allegianceOf: (shipId: string) => FleetAllegiance | undefined): boolean {
-  return e.participants.some((a) => {
-    const allegianceA = allegianceOf(a.shipId)
-    if (!allegianceA) return false
-    return e.participants.some((b) => {
-      if (b.shipId === a.shipId) return false
-      const allegianceB = allegianceOf(b.shipId)
-      return !!allegianceB && areHostile(allegianceA, allegianceB)
-    })
-  })
+export function engagementIsContested(e: Pick<Engagement, 'participants'>, shipExists?: (shipId: string) => boolean): boolean {
+  const live = shipExists ? e.participants.filter((p) => shipExists(p.shipId)) : e.participants
+  return live.some((a) => live.some((b) => b.shipId !== a.shipId && isEnemy(a, b)))
 }
 
 interface CombatState {

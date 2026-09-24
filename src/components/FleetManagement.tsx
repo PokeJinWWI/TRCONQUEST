@@ -13,11 +13,13 @@ import {
   type CombatProfile,
   type DamageType,
 } from '../data/combatData'
-import { ALLEGIANCE_LABELS, SHIP_CLASSES, describeFtlDrive, type ShipClass } from '../data/shipData'
+import { SHIP_CLASSES, SHIP_ROLE_LABELS, describeFtlDrive, type ShipClass } from '../data/shipData'
+import { usePlayerStore } from '../state/playerStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { overallHealthFraction, shipCombatProfile, totalHitPoints } from '../scene/combatResolution'
 import { getShipStatusText } from '../scene/shipPhysics'
-import { useCombatStore, combatLocationKey } from '../state/combatStore'
+import { queueStance, playerCommsDelayToShip, visualShipSnapshot } from '../scene/commsVisual'
+import { useCombatStore, combatLocationKey, engagementIsContested } from '../state/combatStore'
 import { useFleetStore, type Fleet } from '../state/fleetStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
@@ -25,12 +27,14 @@ import { HULL_CHASSES, designPowerBudget, designPowerUsed, designToShipClass, ty
 import { POWER_TIER_BUDGET, POWER_TIER_LABELS, SLOT_SIZE_LABELS, modulesForSlot, powerTiersAvailable, type SlotCategory } from '../data/shipModules'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerTech } from '../hooks/usePlayerTech'
+import { ShipyardPanel } from './ShipyardPanel'
 
-export type FleetTab = 'manager' | 'designer' | 'strategizer'
+export type FleetTab = 'manager' | 'designer' | 'shipyard' | 'strategizer'
 
 export const FLEET_TABS: { id: FleetTab; label: string }[] = [
   { id: 'manager', label: 'Fleet Manager' },
   { id: 'designer', label: 'Ship Designer' },
+  { id: 'shipyard', label: 'Shipyard' },
   { id: 'strategizer', label: 'Strategizer' },
 ]
 
@@ -85,7 +89,8 @@ function FleetManager() {
   const allShips = useShipStore((s) => s.ships)
   const fleets = useFleetStore((s) => s.fleets)
   const mergeFleets = useShipStore((s) => s.mergeFleets)
-  const ships = useMemo(() => allShips.filter((ship) => ship.allegiance === 'player'), [allShips])
+  const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const ships = useMemo(() => allShips.filter((ship) => ship.ownerId === playerCountryId), [allShips, playerCountryId])
   const selectShip = useShipStore((s) => s.selectShip)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const engagements = useCombatStore((s) => s.engagements)
@@ -171,7 +176,18 @@ function FleetManager() {
               members.map((ship) => {
                 const shipClass = resolveShipClass(ship.classId)
                 const profile = shipCombatProfile(ship)
-                const health = profile ? overallHealthFraction(ship.combat, profile) : 0
+                // Comms-delay-aware — see commsVisual.ts and ShipPanel's own
+                // identical treatment for the full reasoning: a ship already
+                // being watched live in a contested fight is exempt, and only
+                // the informational readouts (health, status text) below get
+                // the stale lens, never anything a click actually acts on.
+                const engagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
+                const contested = !!engagement && engagementIsContested(engagement, (id) => allShips.some((s) => s.id === id))
+                const delay = contested ? 0 : playerCommsDelayToShip(ship, simDays)
+                const snap = delay > 0 ? visualShipSnapshot(ship, delay, simDays) : null
+                const displayShip = snap ? { ...ship, location: snap.location, order: snap.order } : ship
+                const displayCombat = snap ? snap.combat : ship.combat
+                const health = profile ? overallHealthFraction(displayCombat, profile) : 0
                 return (
                   <button
                     key={ship.id}
@@ -182,7 +198,6 @@ function FleetManager() {
                     <div className="fleet-row-head">
                       <span className="fleet-row-name">{ship.name}</span>
                       <span className="fleet-row-class">{shipClass?.name ?? 'Unknown'}</span>
-                      <span className="fleet-row-allegiance">{ALLEGIANCE_LABELS[ship.allegiance]}</span>
                       {engagedIds.has(ship.id) && <span className="combat-roster-tag">IN COMBAT</span>}
                     </div>
                     <div className="fleet-row-bar">
@@ -191,7 +206,7 @@ function FleetManager() {
                       </span>
                       <span className="combat-roster-pct">{Math.round(health * 100)}%</span>
                     </div>
-                    <div className="fleet-row-status">{getShipStatusText(ship, simDays, ships)}</div>
+                    <div className="fleet-row-status">{getShipStatusText(displayShip, simDays, ships)}</div>
                   </button>
                 )
               })}
@@ -212,7 +227,7 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
     <div className="design-detail">
       <div className="inspect-row">
         <span className="inspect-label">Role</span>
-        <span className="inspect-value">{shipClass.role === 'warship' ? 'Warship' : 'Civilian'}</span>
+        <span className="inspect-value">{SHIP_ROLE_LABELS[shipClass.role]}</span>
       </div>
       <div className="inspect-row">
         <span className="inspect-label">Drives</span>
@@ -322,7 +337,7 @@ function PresetCatalog() {
   const selected = SHIP_CLASSES.find((c) => c.id === selectedId) ?? SHIP_CLASSES[0]
 
   const warships = SHIP_CLASSES.filter((c) => c.role === 'warship')
-  const civilians = SHIP_CLASSES.filter((c) => c.role === 'civilian')
+  const civilians = SHIP_CLASSES.filter((c) => c.role !== 'warship')
 
   const renderGroup = (label: string, group: ShipClass[]) => (
     <div className="combat-side">
@@ -345,7 +360,7 @@ function PresetCatalog() {
     <div className="designer-layout">
       <div className="designer-list">
         {renderGroup('Warships', warships)}
-        {renderGroup('Civilian', civilians)}
+        {renderGroup('Support', civilians)}
         <div className="ship-panel-hint">Fixed presets — see the Custom Designs tab to build your own.</div>
       </div>
       <div className="designer-detail">
@@ -602,13 +617,11 @@ function ShipStrategyRow({
   fleet,
   selectedShipId,
   selectShip,
-  setStance,
 }: {
   ship: ShipInstance
   fleet: Fleet | undefined
   selectedShipId: string | null
   selectShip: (id: string | null) => void
-  setStance: (id: string, stance: (typeof COMBAT_STANCES)[number] | 'fleet') => void
 }) {
   const shipClass = resolveShipClass(ship.classId)
   const stanceOptions = fleet?.strategy != null ? [...COMBAT_STANCES, 'fleet' as const] : COMBAT_STANCES
@@ -626,7 +639,7 @@ function ShipStrategyRow({
             key={stance}
             type="button"
             className={`combat-density-btn${ship.stance === stance ? ' active' : ''}`}
-            onClick={() => setStance(ship.id, stance)}
+            onClick={() => queueStance(ship, stance)}
             title={STANCE_DESCRIPTIONS[stance]}
           >
             {STANCE_LABELS[stance]}
@@ -644,13 +657,13 @@ function ShipStrategyRow({
 
 function Strategizer() {
   const ships = useShipStore((s) => s.ships)
-  const setStance = useShipStore((s) => s.setStance)
   const setFleetStrategy = useShipStore((s) => s.setFleetStrategy)
   const selectShip = useShipStore((s) => s.selectShip)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const fleets = useFleetStore((s) => s.fleets)
 
-  const owned = ships.filter((s) => s.allegiance === 'player')
+  const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const owned = ships.filter((s) => s.ownerId === playerCountryId)
   if (owned.length === 0) {
     return <div className="nav-placeholder">No ships under your command.</div>
   }
@@ -715,7 +728,6 @@ function Strategizer() {
                 fleet={fleet}
                 selectedShipId={selectedShipId}
                 selectShip={selectShip}
-                setStance={setStance}
               />
             ))}
           </div>
@@ -746,6 +758,7 @@ export function FleetManagement() {
       </div>
       {tab === 'manager' && <FleetManager />}
       {tab === 'designer' && <ShipDesigner />}
+      {tab === 'shipyard' && <ShipyardPanel />}
       {tab === 'strategizer' && <Strategizer />}
     </div>
   )

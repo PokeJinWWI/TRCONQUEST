@@ -68,14 +68,15 @@ import { resolveShipClass } from '../state/shipClassResolver'
 import type { MoveDestination, ShipCombatState, ShipInstance, ShipLocation, FtlCharge } from '../state/shipStore'
 import type { Fleet } from '../state/fleetStore'
 import {
-  areHostile,
   combatLocationKey,
   combatLocationLabel,
-  sideFor,
+  isEnemy,
   type CombatParticipant,
   type Engagement,
   type InFlightProjectile,
 } from '../state/combatStore'
+import { atWar as storeAtWar, type AtWarFn } from '../state/diplomacyStore'
+import { usePlayerStore } from '../state/playerStore'
 import {
   ARENA_ORIGIN,
   ARENA_SPAN_UNITS,
@@ -730,7 +731,7 @@ export function nearestEnemy(self: CombatParticipant, participants: CombatPartic
   let best: CombatParticipant | null = null
   let bestDistance = Infinity
   for (const other of participants) {
-    if (other.side === self.side || other.shipId === self.shipId) continue
+    if (!isEnemy(self, other) || other.shipId === self.shipId) continue
     const distance = pointDistance(self.position, other.position)
     if (distance < bestDistance) {
       bestDistance = distance
@@ -1115,7 +1116,7 @@ export function stanceDestination(
 // fire behind cover, Flee's is pure distance, and folding the two together
 // would erase the reason they're separate stances.
 function fleeDestination(self: CombatParticipant, allParticipants: CombatParticipant[]): ArenaPoint | null {
-  const hostiles = allParticipants.filter((p) => p.side !== self.side)
+  const hostiles = allParticipants.filter((p) => isEnemy(self, p))
   if (hostiles.length === 0) return null
 
   const selfPos = toVector3(self.position)
@@ -1246,7 +1247,7 @@ export function divideAssignment(
   fleets: Fleet[],
   obstacles: CombatObstacle[],
 ): { point: ArenaPoint | null; targetShipId?: string } {
-  const enemies = participants.filter((p) => p.side !== self.side)
+  const enemies = participants.filter((p) => isEnemy(self, p))
   if (enemies.length === 0) return { point: null }
 
   const already = self.targetShipId ? enemies.find((e) => e.shipId === self.targetShipId) : undefined
@@ -1323,7 +1324,7 @@ export function screenDestination(
   obstacles: CombatObstacle[],
 ): ArenaPoint | null {
   const mates = fleetMatesPresent(participants, shipsById, selfShip.fleetId)
-  const enemies = participants.filter((p) => p.side !== self.side)
+  const enemies = participants.filter((p) => isEnemy(self, p))
   if (enemies.length === 0 || mates.length <= 1) return null
 
   const centroid = centroidOf(mates)
@@ -1401,16 +1402,13 @@ export function stepEngagements(
   simDays: number,
   rng: Rng = Math.random,
   fleets: Fleet[] = [],
-  // Whether the PLAYER's own country has researched Free-Flight Maneuvering
-  // (see techData.ts) — defaults to true so every existing caller/test that
-  // doesn't pass this keeps today's behavior. Only the player's ships are
-  // ever gated by this (see integrateMotion's call below): hostile/friendly/
-  // neutral ships have no country-tech link modeled at all and always keep
-  // today's free-floating behavior, matching the same scope cut the
-  // warp/hyperdrive gate already made. Deliberately a plain boolean, not a
-  // store read — stepEngagements stays a pure function; useCombatResolver.ts
-  // is what resolves the player's actual researched set into this one flag.
-  playerCanFreeFloat: boolean = true,
+  // Whether a ship's OWN nation has researched Free-Flight Maneuvering (see
+  // techData.ts). Either a single flag applied to every ship, or a per-ship
+  // lookup (each nation's own tech) — useCombatResolver passes the latter,
+  // resolved from techStore by owner. Defaults to true so every existing
+  // caller/test that doesn't pass this keeps today's behavior. Kept a plain
+  // value/function rather than a store read so stepEngagements stays pure.
+  canFreeFloat: boolean | ((ship: ShipInstance) => boolean) = true,
 ): CombatStepResult {
   const shipsById = new Map(ships.map((s) => [s.id, s]))
   // Working copy of every participant ship's combat state, mutated across the
@@ -1496,7 +1494,9 @@ export function stepEngagements(
       if (ship.combat.ftlCharge) return p
       const profile = shipCombatProfile(ship)
       if (!profile) return p
-      const explicit = p.targetShipId ? participants.find((o) => o.shipId === p.targetShipId) : undefined
+      // An explicit target only counts while it's still an enemy — a peace
+      // signed mid-fight turns yesterday's target into a bystander.
+      const explicit = p.targetShipId ? participants.find((o) => o.shipId === p.targetShipId && isEnemy(p, o)) : undefined
       const target = explicit ?? nearestEnemy(p, participants)
       const state = stateOf(p.shipId)
       const weaponsOnline = !!state && weaponsEffectiveness(state.componentHp.weapons, profile.components.weapons) > 0
@@ -1618,9 +1618,9 @@ export function stepEngagements(
       // stops responding (keeping its queued path, so repairs would resume
       // it rather than silently dropping the order).
       const utility = utilityEffectiveness(state.componentHp.utility, profile.components.utility)
-      // Only a player ship is ever gated by the player's own tech — see
-      // stepEngagements' own comment on playerCanFreeFloat.
-      const canFreeFloat = ship.allegiance !== 'player' || playerCanFreeFloat
+      // Each ship is gated by its own nation's tech — see stepEngagements'
+      // own comment on canFreeFloat.
+      const shipCanFreeFloat = typeof canFreeFloat === 'function' ? canFreeFloat(ship) : canFreeFloat
       // Thruster Boost / Shield Boost both scale this ship's own speed —
       // see combatData's Tactics section and tacticSpeedMultiplier above.
       const tacticMult = tacticSpeedMultiplier(p)
@@ -1637,7 +1637,7 @@ export function stepEngagements(
         return integrateSpinThrustDrift(p, maxSpeed, accel, COMBAT_STEP_SECONDS, simDays, rng)
       }
 
-      return integrateMotion(p, maxSpeed, accel, COMBAT_STEP_SECONDS, simDays, engagement.obstacles, canFreeFloat)
+      return integrateMotion(p, maxSpeed, accel, COMBAT_STEP_SECONDS, simDays, engagement.obstacles, shipCanFreeFloat)
     })
 
     // --- Separation: no two hulls may occupy the same point. Ships are
@@ -1794,7 +1794,7 @@ export function stepEngagements(
     const movedById = new Map(moved.map((m) => [m.shipId, m]))
     for (const p of separated) {
       if (destroyed.has(p.shipId) || !p.ramming) continue
-      const explicitTarget = p.targetShipId ? separated.find((o) => o.shipId === p.targetShipId) : undefined
+      const explicitTarget = p.targetShipId ? separated.find((o) => o.shipId === p.targetShipId && isEnemy(p, o)) : undefined
       const ramTarget = explicitTarget && !destroyed.has(explicitTarget.shipId) ? explicitTarget : nearestEnemy(p, separated)
       if (!ramTarget || destroyed.has(ramTarget.shipId)) continue
 
@@ -1841,7 +1841,7 @@ export function stepEngagements(
     // fire — the same test the "Engaged Against" readout uses), not merely
     // present in the engagement: chaff wasted while nothing can shoot you is
     // exactly the mistake a player wouldn't make, and there are only two
-    // charges. Applies to every allegiance now, gated on ShipInstance.chaffAutoDeploy
+    // charges. Applies to every nation's ships, gated on ShipInstance.chaffAutoDeploy
     // (default true — see its own comment) rather than excluding player ships
     // outright: the common case is spending chaff automatically the instant
     // it's worth it, same as the AI always did, with the panel's Deploy
@@ -2024,7 +2024,7 @@ export function stepEngagements(
       const effectiveness = weaponsEffectiveness(state.componentHp.weapons, profile.components.weapons)
       if (effectiveness <= 0) return p
 
-      const explicit = p.targetShipId ? withTactics.find((o) => o.shipId === p.targetShipId) : undefined
+      const explicit = p.targetShipId ? withTactics.find((o) => o.shipId === p.targetShipId && isEnemy(p, o)) : undefined
       // An explicitly chosen target that has died or fled falls back to
       // auto-targeting rather than leaving the ship idle.
       const target = explicit && !destroyed.has(explicit.shipId) ? explicit : nearestEnemy(p, withTactics)
@@ -2157,7 +2157,7 @@ export function stepEngagements(
       // whatever THIS engagement's own obstacles actually needed for a safe
       // spawn, so a normal small-body fight is completely unaffected.
       const disengageDistance = Math.max(DISENGAGE_DISTANCE_UNITS, 2 * spawnHalfSpan(engagement.obstacles) + DISENGAGE_DISTANCE_UNITS)
-      const enemies = nextParticipants.filter((o) => o.side !== p.side && !destroyed.has(o.shipId))
+      const enemies = nextParticipants.filter((o) => isEnemy(p, o) && !destroyed.has(o.shipId))
       if (enemies.length > 0 && enemies.every((o) => pointDistance(p.position, o.position) > disengageDistance)) {
         disengaged.add(p.shipId)
         return false
@@ -2195,46 +2195,83 @@ export function stepEngagements(
   }
 }
 
+// How a pure sync pass learns about the outside world without reaching into
+// stores itself: who is at war with whom, and whose nation should hold side 0
+// (the player's, so "your forces" keep the original -z face). Both default to
+// the live stores, so ordinary callers pass nothing.
+export interface NationContext {
+  atWar?: AtWarFn
+  playerCountryId?: string | null
+}
+
+// Side index for each nation present at a fight, extending `prior` (an open
+// engagement keeps its existing indices so nobody changes sides mid-battle).
+// A brand-new list puts the player's nation first, then everyone else in the
+// order they're first seen.
+function assignNations(ownerIds: string[], prior: string[] | undefined, playerCountryId: string | null | undefined): string[] {
+  const nations = prior ? [...prior] : []
+  if (!prior && playerCountryId && ownerIds.includes(playerCountryId)) nations.push(playerCountryId)
+  for (const id of ownerIds) if (!nations.includes(id)) nations.push(id)
+  return nations
+}
+
+// Each side's hostile sides, straight from diplomacy — recomputed on every
+// sync so a war declared or a peace signed mid-fight takes effect at once.
+function hostileSidesFor(nations: string[], atWarFn: AtWarFn): number[][] {
+  return nations.map((a) => nations.map((b, j) => (atWarFn(a, b) ? j : -1)).filter((j) => j >= 0))
+}
+
+function freshParticipant(ship: ShipInstance, side: number, hostileSides: number[], spawnIndex: number, density: GridDensity, windowSpan: number, simDays: number): CombatParticipant {
+  const profile = shipCombatProfile(ship)
+  return {
+    shipId: ship.id,
+    side,
+    hostileSides,
+    position: startingPoint(side, spawnIndex, density, windowSpan),
+    velocity: { x: 0, y: 0, z: 0 },
+    positionSimDays: simDays,
+    path: [],
+    weaponReadySimDays: (profile?.weapons ?? []).map(() => simDays),
+    targetShipId: null,
+    targetComponent: null,
+    holdPosition: false,
+  }
+}
+
 // Opens the tactical arena at a ship's current rest location with no fight
 // required — the player looking around, pre-positioning a fleet before an
 // enemy arrives, or just staying to survey the field after a battle they
 // already won. Everyone currently resting at that same location joins the
-// roster (whatever their allegiance — there may be no hostile at all), and
-// syncEngagements' own "an existing engagement persists regardless of
-// contest" rule (see its `prior` handling) is what keeps this alive on
-// later ticks without needing any special-casing there once it exists.
-// Returns null if the ship isn't anywhere a fight could happen (mid-order,
-// or a location with no obstaclesForLocation entry at all).
+// roster (whoever owns them — there may be no enemy at all), each nation on
+// its own side, and syncEngagements' own "an existing engagement persists
+// regardless of contest" rule (see its `prior` handling) is what keeps this
+// alive on later ticks without needing any special-casing there once it
+// exists. Returns null if the ship isn't anywhere a fight could happen
+// (mid-order, or a location with no obstaclesForLocation entry at all).
 export function createSoloEngagement(
   ship: ShipInstance,
   allShips: ShipInstance[],
   simDays: number,
   density: GridDensity = 'standard',
+  context: NationContext = {},
 ): Engagement | null {
   if (ship.order) return null
   const key = combatLocationKey(ship.location)
   if (!key) return null
+  const atWarFn = context.atWar ?? storeAtWar
+  const playerCountryId = context.playerCountryId !== undefined ? context.playerCountryId : usePlayerStore.getState().selectedCountryId
 
   const obstacles = obstaclesForLocation(ship.location, simDays)
   const windowSpan = arenaWindowSpan(obstacles)
   const here = allShips.filter((s) => !s.order && combatLocationKey(s.location) === key)
-  const perSideCount: Record<number, number> = { 0: 0, 1: 0 }
+  const nations = assignNations(here.map((s) => s.ownerId), undefined, playerCountryId)
+  const hostile = hostileSidesFor(nations, atWarFn)
+  const perSideCount: Record<number, number> = {}
   const participants: CombatParticipant[] = here.map((s) => {
-    const side = sideFor(s.allegiance)
-    const spawnPosition = startingPoint(side, perSideCount[side]++, density, windowSpan)
-    const profile = shipCombatProfile(s)
-    return {
-      shipId: s.id,
-      side,
-      position: spawnPosition,
-      velocity: { x: 0, y: 0, z: 0 },
-      positionSimDays: simDays,
-      path: [],
-      weaponReadySimDays: (profile?.weapons ?? []).map(() => simDays),
-      targetShipId: null,
-      targetComponent: null,
-      holdPosition: false,
-    }
+    const side = nations.indexOf(s.ownerId)
+    const index = perSideCount[side] ?? 0
+    perSideCount[side] = index + 1
+    return freshParticipant(s, side, hostile[side], index, density, windowSpan, simDays)
   })
 
   return {
@@ -2246,32 +2283,46 @@ export function createSoloEngagement(
     center: ARENA_ORIGIN,
     obstacles,
     participants,
+    nations,
     resolvedThroughSimDays: simDays,
   }
 }
 
 // Reconciles the engagement list against where every ship currently is:
-// creates engagements where mutually hostile fleets have come to rest at the
-// same place, adds latecomers to a fight already in progress, and drops
-// participants that have left. Called every tick before stepping — a ship
-// that arrives mid-battle should join it, not wait for the next one.
+// creates engagements where fleets of nations at war with each other have
+// come to rest at the same place, adds latecomers to a fight already in
+// progress, and drops participants that have left. Called every tick before
+// stepping — a ship that arrives mid-battle should join it, not wait for the
+// next one.
+//
+// Hostility is purely national (see state/shipRelations.ts): two ships fight
+// exactly when their owners are at war. Each nation present gets its own side
+// (Engagement.nations), and each participant carries the sides its nation is
+// at war with (hostileSides), recomputed here every sync from `atWar` — so
+// Mars fighting Venus and Orion, who are at peace with each other, has Venus
+// and Orion ignoring each other on the same field.
 export function syncEngagements(
   ships: ShipInstance[],
   existing: Engagement[],
   simDays: number,
   defaultDensity: GridDensity = 'standard',
+  context: NationContext = {},
 ): Engagement[] {
+  const atWarFn = context.atWar ?? storeAtWar
+  const playerCountryId = context.playerCountryId !== undefined ? context.playerCountryId : usePlayerStore.getState().selectedCountryId
+  const hostilePair = (a: ShipInstance, b: ShipInstance) => a.id !== b.id && atWarFn(a.ownerId, b.ownerId)
+
   // Only ships at rest at a real anchor can meet, so a ship mid-order can't
   // be party to a BRAND NEW encounter. But dropping an already-ordered ship
   // the instant the order is issued — rather than once it's actually gone —
   // erases a lingering/solo engagement (see createSoloEngagement's "pre-
   // position a fleet" case) before the ship has moved an inch, kicking the
   // player straight back out of a view they just opened. Only a ship
-  // leaving a genuinely two-sided hostile standoff gets pulled immediately,
-  // preserving the existing "ordering a ship away from combat extracts it
-  // now" behavior; everyone else (a lone looker, or the last ship on a
-  // fight that already resolved) keeps their seat until their location key
-  // actually changes.
+  // leaving a genuinely hostile standoff gets pulled immediately, preserving
+  // the existing "ordering a ship away from combat extracts it now"
+  // behavior; everyone else (a lone looker, or the last ship on a fight that
+  // already resolved) keeps their seat until their location key actually
+  // changes.
   const existingByKey = new Map(existing.map((e) => [e.locationKey, e]))
   const rawByLocation = new Map<string, ShipInstance[]>()
   for (const ship of ships) {
@@ -2284,7 +2335,7 @@ export function syncEngagements(
   const byLocation = new Map<string, ShipInstance[]>()
   for (const [key, raw] of rawByLocation) {
     const prior = existingByKey.get(key)
-    const hostilePairPresent = raw.some((a) => raw.some((b) => a.id !== b.id && areHostile(a.allegiance, b.allegiance)))
+    const hostilePairPresent = raw.some((a) => raw.some((b) => hostilePair(a, b)))
     const kept = raw.filter((ship) => !ship.order || (!!prior && !hostilePairPresent))
     if (kept.length > 0) byLocation.set(key, kept)
   }
@@ -2293,23 +2344,20 @@ export function syncEngagements(
 
   for (const [key, group] of byLocation) {
     const prior = existingByKey.get(key)
-    // A location is contested only if some pair in it is actually hostile —
-    // three player fleets parked together doesn't spontaneously start a
-    // battle. An engagement that already exists is exempt from this check
-    // once it's open, though — see createSoloEngagement's own comment for
-    // why (letting the player open/linger in an arena with no fight is a
-    // deliberate feature, not a bug this would otherwise be guarding
-    // against), and it's also what keeps the view from yanking the player
-    // back to system space the instant a real fight resolves in their favor.
-    const contested = group.some((a) => group.some((b) => a.id !== b.id && areHostile(a.allegiance, b.allegiance)))
+    // A location is contested only if some pair in it belongs to nations at
+    // war — three friendly fleets parked together doesn't spontaneously
+    // start a battle. An engagement that already exists is exempt from this
+    // check once it's open, though — see createSoloEngagement's own comment
+    // for why (letting the player open/linger in an arena with no fight is a
+    // deliberate feature), and it's also what keeps the view from yanking
+    // the player back to system space the instant a real fight resolves.
+    const contested = group.some((a) => group.some((b) => hostilePair(a, b)))
     if (!contested && !prior) continue
 
-    // Neutrals present at a contested location simply aren't part of it. An
-    // already-open engagement has no such filter — everyone still present
-    // belongs on its roster, hostile pairing or not.
-    const combatants = prior
-      ? group
-      : group.filter((ship) => group.some((other) => other.id !== ship.id && areHostile(ship.allegiance, other.allegiance)))
+    // A nation at peace with everyone present simply isn't part of a NEW
+    // fight. An already-open engagement has no such filter — everyone still
+    // present belongs on its roster, at war or not.
+    const combatants = prior ? group : group.filter((ship) => group.some((other) => hostilePair(ship, other)))
 
     const density = prior?.density ?? defaultDensity
     const priorById = new Map(prior?.participants.map((p) => [p.shipId, p]) ?? [])
@@ -2319,42 +2367,35 @@ export function syncEngagements(
     const obstacles = prior?.obstacles ?? obstaclesForLocation((combatants[0] ?? group[0]).location, simDays)
     const windowSpan = arenaWindowSpan(obstacles)
 
-    // Ships already in the fight keep their arena position and timers;
-    // newcomers are placed on their side's face, indexed past whoever's
-    // already there so they don't spawn on an occupied point.
-    const perSideCount: Record<number, number> = { 0: 0, 1: 0 }
-    for (const p of priorById.values()) perSideCount[p.side]++
+    const nations = assignNations(combatants.map((s) => s.ownerId), prior?.nations, playerCountryId)
+    const hostile = hostileSidesFor(nations, atWarFn)
+
+    // Ships already in the fight keep their arena position and timers (their
+    // hostile sides are refreshed — diplomacy may have changed); newcomers
+    // are placed on their nation's face, indexed past whoever's already
+    // there so they don't spawn on an occupied point.
+    const perSideCount: Record<number, number> = {}
+    for (const p of priorById.values()) perSideCount[p.side] = (perSideCount[p.side] ?? 0) + 1
 
     const participants: CombatParticipant[] = combatants.map((ship) => {
       const kept = priorById.get(ship.id)
-      if (kept) return kept
-      const side = sideFor(ship.allegiance)
-      const spawnPosition = startingPoint(side, perSideCount[side]++, density, windowSpan)
-      const profile = shipCombatProfile(ship)
-      return {
-        shipId: ship.id,
-        side,
-        position: spawnPosition,
-        velocity: { x: 0, y: 0, z: 0 },
-        positionSimDays: simDays,
-        path: [],
-        weaponReadySimDays: (profile?.weapons ?? []).map(() => simDays),
-        targetShipId: null,
-        targetComponent: null,
-        holdPosition: false,
-      }
+      if (kept) return { ...kept, hostileSides: hostile[kept.side] ?? [] }
+      const side = nations.indexOf(ship.ownerId)
+      const index = perSideCount[side] ?? 0
+      perSideCount[side] = index + 1
+      return freshParticipant(ship, side, hostile[side], index, density, windowSpan, simDays)
     })
 
-    // A brand-new engagement still needs both sides actually represented —
-    // that's what "contested" means. An already-open one doesn't: it may
-    // now hold only the victor's side (the fight it was tracking just
+    // A brand-new engagement still needs an actual hostile pair on the
+    // roster — that's what "contested" means. An already-open one doesn't:
+    // it may now hold only the victor's side (the fight it was tracking just
     // resolved) or, for a manually-opened arena, only ever had one.
-    if (!prior && new Set(participants.map((p) => p.side)).size < 2) continue
+    if (!prior && !participants.some((a) => participants.some((b) => isEnemy(a, b)))) continue
     if (participants.length === 0) continue
 
     result.push(
       prior
-        ? { ...prior, density, participants }
+        ? { ...prior, density, participants, nations }
         : {
             id: `engagement-${key}-${Math.round(simDays * 1000)}`,
             locationKey: key,
@@ -2367,6 +2408,7 @@ export function syncEngagements(
             // obstaclesForLocation — it anchors at the same origin).
             obstacles,
             participants,
+            nations,
             resolvedThroughSimDays: simDays,
           },
     )
@@ -2513,7 +2555,7 @@ export function activeEnemyContacts(
   const selfPos = participantArenaPosition(participant, simDays)
 
   return engagement.participants.filter((other) => {
-    if (other.side === participant.side) return false
+    if (!isEnemy(participant, other)) return false
     const otherShip = shipsById.get(other.shipId)
     if (!otherShip) return false
     const otherProfile = shipCombatProfile(otherShip)

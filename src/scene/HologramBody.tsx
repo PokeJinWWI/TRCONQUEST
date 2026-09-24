@@ -14,6 +14,9 @@ interface HologramBodyProps {
    * ship (if any) here. Omitted by MoonDetailScene, since a moon isn't a
    * valid move-order target yet. */
   onOrderTo?: () => void
+  /** Drawn inside the hologram's rotating frame, so it turns with the body —
+   * e.g. the ground war's control shell and army chips (PlanetArmyMarkers). */
+  children?: React.ReactNode
 }
 
 const RIM_VERTEX_SHADER = `
@@ -58,7 +61,7 @@ function useFibonacciSphere(count: number, radius: number) {
 // texture assets required, and in keeping with the game's vector-art style.
 // Used for planets (dark, reflective-looking core) and stars (bright,
 // self-luminous core) alike.
-export function HologramBody({ color, radius, variant = 'planet', onSelect, onOrderTo }: HologramBodyProps) {
+export function HologramBody({ color, radius, variant = 'planet', onSelect, onOrderTo, children }: HologramBodyProps) {
   const groupRef = useRef<Group>(null)
   const coreRef = useRef<Mesh>(null)
   const dotPositions = useFibonacciSphere(220, radius * 1.01)
@@ -107,6 +110,7 @@ export function HologramBody({ color, radius, variant = 'planet', onSelect, onOr
             depthWrite={false}
           />
         </points>
+        {children}
       </group>
 
       {/* Fresnel rim glow (atmosphere-style halo, or a corona for stars) */}

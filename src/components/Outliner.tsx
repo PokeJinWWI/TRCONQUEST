@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
+import { isAdditiveClick } from '../scene/selectionInput'
 import { useFleetStore } from '../state/fleetStore'
 import { usePlayerStore } from '../state/playerStore'
 import { getPlanetsForStar } from '../scene/planetData'
 import { getStarsForNeighborhood, getSystemStars } from '../data/starData'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
 import { getMoonsForPlanet } from '../scene/moonData'
-import { ALLEGIANCE_COLORS } from '../data/shipData'
+import { RELATION_COLORS } from '../data/shipData'
 
 type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship'
 // The filter offers a "black holes" toggle even though nothing in the game
@@ -88,8 +89,9 @@ function useInViewEntries(): OutlinerEntry[] {
 function useFleetEntries(): OutlinerEntry[] {
   const ships = useShipStore((s) => s.ships)
   const fleets = useFleetStore((s) => s.fleets)
+  const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
   return useMemo(() => {
-    const owned = ships.filter((ship) => ship.allegiance === 'player')
+    const owned = ships.filter((ship) => ship.ownerId === playerCountryId)
     const byFleet = new Map<string, typeof owned>()
     for (const ship of owned) {
       const arr = byFleet.get(ship.fleetId) ?? []
@@ -99,9 +101,9 @@ function useFleetEntries(): OutlinerEntry[] {
     return Array.from(byFleet.entries()).map(([fleetId, members]) => {
       const fleet = fleets.find((f) => f.id === fleetId)
       const name = members.length > 1 ? `${fleet?.name ?? 'Fleet'} (${members.length})` : members[0].name
-      return { key: fleetId, name, color: ALLEGIANCE_COLORS.player, kind: 'ship' as const, leadShipId: members[0].id }
+      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id }
     })
-  }, [ships, fleets])
+  }, [ships, fleets, playerCountryId])
 }
 
 // Bodies in the currently-viewed system that belong to the player's own
@@ -133,6 +135,7 @@ function OutlinerSection({
   entries,
   emptyText,
   selectedKey,
+  selectedKeys,
   onEntryClick,
 }: {
   title: string
@@ -142,9 +145,11 @@ function OutlinerSection({
    * at — compared against each entry to highlight it, same idea as a
    * marker's own `.selected` state in the viewport. */
   selectedKey?: string | null
+  // Extra highlighted keys (a multi-selection), on top of selectedKey.
+  selectedKeys?: string[]
   /** Omitted for sections with nothing real to select yet (Colonies,
    * Starbases) — entries stay inert rather than clickable-but-no-op. */
-  onEntryClick?: (entry: OutlinerEntry) => void
+  onEntryClick?: (entry: OutlinerEntry, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -167,8 +172,8 @@ function OutlinerSection({
             {entries.map((entry) => (
               <li
                 key={entry.key}
-                className={`outliner-entry${onEntryClick ? ' clickable' : ''}${entry.key === selectedKey ? ' selected' : ''}`}
-                onClick={onEntryClick ? () => onEntryClick(entry) : undefined}
+                className={`outliner-entry${onEntryClick ? ' clickable' : ''}${entry.key === selectedKey || selectedKeys?.includes(entry.key) ? ' selected' : ''}`}
+                onClick={onEntryClick ? (e) => onEntryClick(entry, e) : undefined}
               >
                 <OutlinerIcon color={entry.color} kind={entry.kind} />
                 <span className="outliner-entry-name">{entry.name}</span>
@@ -204,6 +209,11 @@ export function Outliner() {
   // one ship's id, so the row highlights whichever member is actually
   // selected — not just whichever one happens to be listed as the lead.
   const selectedFleetId = ships.find((s) => s.id === selectedShipId)?.fleetId ?? null
+  const selectedIdsKey = useShipStore((s) => s.selectedShipIds.join('|'))
+  const selectedFleetIds = useMemo(() => {
+    const ids = new Set(selectedIdsKey.split('|'))
+    return [...new Set(ships.filter((s) => ids.has(s.id)).map((s) => s.fleetId))]
+  }, [selectedIdsKey, ships])
 
   // Mirrors exactly what clicking the entry's own in-scene marker does: pick
   // it in viewStore (engaging that scene's SelectionTracker camera lock) and
@@ -213,8 +223,12 @@ export function Outliner() {
     selectShip(null)
     selectInView(entry.key)
   }
-  const handleFleetClick = (entry: OutlinerEntry) => {
-    if (entry.leadShipId) selectShip(entry.leadShipId)
+  // Shift/Ctrl/Cmd-click adds or removes the fleet from the selection, so
+  // several fleets can be ordered at once.
+  const handleFleetClick = (entry: OutlinerEntry, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
+    if (!entry.leadShipId) return
+    if (isAdditiveClick(e)) useShipStore.getState().toggleShipSelection(entry.leadShipId)
+    else selectShip(entry.leadShipId)
   }
 
   const toggleKind = (kind: FilterKind) => {
@@ -293,6 +307,7 @@ export function Outliner() {
           entries={filteredFleets}
           emptyText="No fleets deployed"
           selectedKey={selectedFleetId}
+          selectedKeys={selectedFleetIds}
           onEntryClick={handleFleetClick}
         />
         <OutlinerSection title="Starbases" entries={[]} emptyText="No starbases built" />

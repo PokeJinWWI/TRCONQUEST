@@ -227,6 +227,11 @@ interface EconomyStore {
   advance: (ticks: number) => void
   setTaxRate: (countryId: string, rate: number) => void
   setWelfare: (countryId: string, perCapita: number) => void
+  // Transfers a whole world to a new owning country — its pops, buildings and
+  // taxes now belong to that country. Called only when a peace treaty cedes
+  // the world (see src/state/territoryStore.ts's cedeBody); the one hook the
+  // diplomacy/war layer has into the economy. A no-op for an unknown world.
+  setWorldOwner: (worldId: string, countryId: string) => void
   // Queue a building. `owner` decides who pays and who owns it: state (default,
   // government pool → treasury) or a corporation (private pool → its cash).
   // Refused if the target district on the world is full.
@@ -397,6 +402,10 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       }
       return { countries, worlds, corporations, worldReports, countryReports, history, tick: newTick }
     }),
+  setWorldOwner: (worldId, countryId) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, ownerId: countryId } : w)),
+    })),
   setTaxRate: (countryId, rate) =>
     set((state) => ({
       countries: state.countries.map((c) => (c.id === countryId ? { ...c, taxRate: Math.max(0, Math.min(0.6, rate)) } : c)),

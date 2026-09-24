@@ -882,16 +882,33 @@ export function pathSeconds(
 // that's about keeping a handful of hulls from stacking on one point within
 // their own side's face, which stays at the same fine grain regardless of
 // how big the window itself has grown.
-export function startingPoint(sideIndex: 0 | 1, shipIndex: number, density: GridDensity, windowSpan: number = ARENA_SPAN_UNITS): ArenaPoint {
+//
+// One side per nation (see Engagement.nations), so a three-way fight in Sol
+// needs a third face: sides 0 and 1 keep the original -z/+z faces, sides 2
+// and 3 take +x/-x, and anything past that sits on the diagonals between —
+// every side starts the same distance out, facing the middle.
+export function startingPoint(sideIndex: number, shipIndex: number, density: GridDensity, windowSpan: number = ARENA_SPAN_UNITS): ArenaPoint {
   const spacing = gridSpacing(density)
   const half = windowSpan / 2
   // Fan ships out over a small square on their side's face, wrapping every
   // 3 columns so a large fleet spreads in two dimensions rather than a line.
   const column = shipIndex % 3
   const row = Math.floor(shipIndex / 3)
+  if (sideIndex === 0 || sideIndex === 1) {
+    return {
+      x: (column - 1) * spacing,
+      y: (row - 1) * spacing,
+      z: sideIndex === 0 ? -half : half,
+    }
+  }
+  const angleRad = sideIndex === 2 ? Math.PI / 2 : sideIndex === 3 ? -Math.PI / 2 : (sideIndex * Math.PI) / 2 + Math.PI / 4
+  const normal = { x: Math.sin(angleRad), z: Math.cos(angleRad) }
+  // The face's own horizontal axis, perpendicular to its normal.
+  const tangent = { x: Math.cos(angleRad), z: -Math.sin(angleRad) }
+  const across = (column - 1) * spacing
   return {
-    x: (column - 1) * spacing,
+    x: normal.x * half + tangent.x * across,
     y: (row - 1) * spacing,
-    z: sideIndex === 0 ? -half : half,
+    z: normal.z * half + tangent.z * across,
   }
 }

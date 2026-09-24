@@ -12,11 +12,12 @@ import { CombatPanel, combatPanelVerticalOffset } from '../components/CombatPane
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { ARENA_SPAN_UNITS, type ArenaPoint } from './combatArena'
 import { arenaWindowSpan, orderParticipantTo } from './combatResolution'
-import { useCombatStore } from '../state/combatStore'
+import { useCombatStore, isEnemy } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { useViewStore } from '../state/viewStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { ALLEGIANCE_COLORS } from '../data/shipData'
+import { RELATION_COLORS } from '../data/shipData'
+import { usePlayerStore } from '../state/playerStore'
 
 // Camera distances at the arena's own base span (ARENA_SPAN_UNITS, 12) —
 // far enough out to see the whole cage, close enough that individual nodes
@@ -62,6 +63,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
   const setCenter = useCombatStore((s) => s.setCenter)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const ships = useShipStore((s) => s.ships)
+  const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
 
   // The fight ended while we were watching it (one side wiped out, or fled).
   // There's nothing left to render, so hand back to the system view rather
@@ -76,7 +78,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
     [engagement, selectedShipId],
   )
   const selectedShip = ships.find((s) => s.id === selectedShipId)
-  const canCommand = selectedShip?.allegiance === 'player' && !!selectedParticipant
+  const canCommand = !!selectedShip && selectedShip.ownerId === playerCountryId && !!selectedParticipant
 
   // Reduced to a primitive before memoizing — engagement.obstacles is a new
   // array reference practically every tick (a moon's obstacle entry gets
@@ -100,22 +102,41 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
   // supplies the depth it can't). Latches manual control (see
   // CombatParticipant.holdPosition) so the resolver's auto-approach doesn't
   // immediately undo the order.
+  //
+  // With several ships selected (Shift/Ctrl/Cmd-click), every one the player
+  // commands moves, keeping its offset from the primary selection — a
+  // formation move, so a group doesn't collapse onto one node.
   const handlePickPoint = (point: ArenaPoint) => {
     if (!engagement || !selectedParticipant || !canCommand) return
-    // A ship spooling a drive has committed to leaving and can't maneuver.
-    if (selectedShip?.combat.ftlCharge) return
     const simDays = useGameTimeStore.getState().simDays
-    const ordered = orderParticipantTo(selectedParticipant, point, engagement.density, simDays, engagement.obstacles)
-    // orderParticipantTo returns the participant unchanged when no route
-    // exists (the point is inside a body, or walled off) — don't latch
-    // manual control off an order that was refused.
-    if (ordered === selectedParticipant) return
-    // A manual order also drops chase, ramming, and inherit-velocity (see
-    // CombatParticipant.chasing/ramming/inheritVelocityFrom) — the player is
-    // taking explicit control, so "resume auto" afterward should land back on
-    // the ship's own stance rather than silently resuming a pursuit, a
-    // charge, or a velocity lock they never re-requested.
-    setParticipant(engagement.id, { ...ordered, holdPosition: true, chasing: false, ramming: false, inheritVelocityFrom: null })
+    const anchor = selectedParticipant.position
+    for (const p of commandedParticipants()) {
+      const ship = ships.find((s) => s.id === p.shipId)
+      // A ship spooling a drive has committed to leaving and can't maneuver.
+      if (!ship || ship.combat.ftlCharge) continue
+      const dest = { x: point.x + p.position.x - anchor.x, y: point.y + p.position.y - anchor.y, z: point.z + p.position.z - anchor.z }
+      const ordered = orderParticipantTo(p, dest, engagement.density, simDays, engagement.obstacles)
+      // orderParticipantTo returns the participant unchanged when no route
+      // exists (the point is inside a body, or walled off) — don't latch
+      // manual control off an order that was refused.
+      if (ordered === p) continue
+      // A manual order also drops chase, ramming, and inherit-velocity (see
+      // CombatParticipant.chasing/ramming/inheritVelocityFrom) — the player
+      // is taking explicit control, so "resume auto" afterward should land
+      // back on the ship's own stance rather than silently resuming a
+      // pursuit, a charge, or a velocity lock they never re-requested.
+      setParticipant(engagement.id, { ...ordered, holdPosition: true, chasing: false, ramming: false, inheritVelocityFrom: null })
+    }
+  }
+
+  // Every selected participant the player commands (the primary first).
+  const commandedParticipants = () => {
+    if (!engagement) return []
+    const { selectedShipIds } = useShipStore.getState()
+    const ids = [selectedShipId, ...selectedShipIds.filter((id) => id !== selectedShipId)]
+    return ids
+      .map((id) => engagement.participants.find((p) => p.shipId === id))
+      .filter((p): p is NonNullable<typeof p> => !!p && ships.find((s) => s.id === p.shipId)?.ownerId === playerCountryId)
   }
 
   // Slides the window so it re-centers on the selected ship, putting fresh
@@ -133,9 +154,16 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
   const handleOrderTarget = (targetShipId: string) => {
     if (!engagement || !selectedParticipant || !canCommand) return
     const target = engagement.participants.find((p) => p.shipId === targetShipId)
-    if (!target || target.side === selectedParticipant.side) return
+    // Only an actual enemy — a nation at peace with ours on the same field
+    // isn't a valid target.
+    if (!target || !isEnemy(selectedParticipant, target)) return
+    // The whole selection concentrates fire; right-clicking the primary's
+    // existing target again clears it for all of them.
     const alreadyTargeted = selectedParticipant.targetShipId === targetShipId
-    setParticipantTarget(engagement.id, selectedParticipant.shipId, alreadyTargeted ? null : targetShipId)
+    for (const p of commandedParticipants()) {
+      if (!isEnemy(p, target)) continue
+      setParticipantTarget(engagement.id, p.shipId, alreadyTargeted ? null : targetShipId)
+    }
   }
 
   if (!engagement) return null
@@ -166,13 +194,13 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
         {engagement.participants.map((p) => {
           const ship = ships.find((s) => s.id === p.shipId)
           if (!ship) return null
-          if (ship.allegiance !== 'player' && ship.allegiance !== 'friendly') return null
+          if (ship.ownerId !== playerCountryId) return null
           return (
             <CombatPathLine
               key={`path-${p.shipId}`}
               engagementId={engagement.id}
               shipId={p.shipId}
-              color={ALLEGIANCE_COLORS[ship.allegiance]}
+              color={RELATION_COLORS.own}
             />
           )
         })}

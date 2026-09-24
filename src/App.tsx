@@ -11,6 +11,7 @@ import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
 import { FiscalIndicators } from './components/FiscalIndicators'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { DiplomacyToast } from './components/DiplomacyPanel'
 import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
 import { useHudBarLayout } from './hooks/useHudBarLayout'
@@ -18,8 +19,15 @@ import { useShipOrderSettler } from './hooks/useShipOrderSettler'
 import { useEscapeBehavior } from './hooks/useEscapeBehavior'
 import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
+import { useGroundCombatResolver } from './hooks/useGroundCombatResolver'
+import { useCommsResolver } from './hooks/useCommsResolver'
+import { useShipyardResolver } from './hooks/useShipyardResolver'
+import { useStrategicResources } from './hooks/useStrategicResources'
+import { useGameSetup } from './hooks/useGameSetup'
+import { useStrategicAI } from './hooks/useStrategicAI'
 import { useEconomyTick } from './hooks/useEconomyTick'
 import { CombatViewScene } from './scene/CombatViewScene'
+import { GroundViewScene } from './scene/GroundViewScene'
 import { GalacticViewScene } from './scene/GalacticViewScene'
 import { InterstellarScene } from './scene/InterstellarScene'
 import { SatelliteViewScene } from './scene/SatelliteViewScene'
@@ -42,6 +50,8 @@ function ActiveScene() {
     scene = <SatelliteViewScene bodyName={selectedBodyName} />
   } else if (level === 'combat' && combatEngagementId) {
     scene = <CombatViewScene engagementId={combatEngagementId} />
+  } else if (level === 'ground' && selectedBodyName) {
+    scene = <GroundViewScene bodyName={selectedBodyName} />
   }
 
   // Keying on the full location forces a remount on every navigation change,
@@ -65,6 +75,20 @@ function App() {
   // Resolves every active engagement independent of which view is mounted —
   // a battle in another system happens whether or not anyone is watching it.
   useCombatResolver()
+  // Ground wars: invasions, occupations, recruits, and armies lost with their
+  // transports — see scene/armyLogic.ts.
+  useGroundCombatResolver()
+  // Fires strategic orders queued behind FTL comms delay once they arrive —
+  // see commsVisual.ts / useCommsResolver's own comment.
+  useCommsResolver()
+  // The capital's shipyard, and the placeholder resource supply it builds from
+  // — see data/shipyardData.ts.
+  useShipyardResolver()
+  useStrategicResources()
+  // Every nation's starting navy and armies, once a nation is picked.
+  useGameSetup()
+  // The AI empires' strategic planning — see src/ai/coordinator.ts.
+  useStrategicAI()
   // Advances the planetary economy simulation off the game clock.
   useEconomyTick()
 
@@ -110,6 +134,7 @@ function App() {
         <LocationLabel />
       </footer>
       <ConfirmDialog />
+      <DiplomacyToast />
     </div>
   )
 }

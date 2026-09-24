@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
-import { useCombatStore, areHostile } from '../state/combatStore'
+import { useCombatStore } from '../state/combatStore'
+import { isPlayerOwned, shipsHostile } from '../state/shipRelations'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { planMove } from '../scene/shipPhysics'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -60,7 +61,7 @@ export function pickSafeStar(
     if (star.id === currentStarId) continue
     if (requireChartedFrom && !hasHyperlane(requireChartedFrom, star.id)) continue
     const hostilePresent = allShips.some(
-      (other) => other.id !== ship.id && shipCurrentStarId(other) === star.id && areHostile(ship.allegiance, other.allegiance),
+      (other) => other.id !== ship.id && shipCurrentStarId(other) === star.id && shipsHostile(ship, other),
     )
     if (hostilePresent) continue
     const distance = starDistance(origin, star)
@@ -89,10 +90,10 @@ export function useEscapeBehavior() {
       const engagedShipIds = new Set(engagements.flatMap((e) => e.participants.map((p) => p.shipId)))
 
       for (const ship of ships) {
-        // planMove only ever plans for player-owned hulls (see its own
-        // 'not-owned' guard) — this behavior is the player's own fleet
-        // quietly saving itself, not a general AI system.
-        if (ship.allegiance !== 'player') continue
+        // This behavior is the player's own fleet quietly saving itself —
+        // an AI empire's hulls retreat on its Admiral's orders instead (see
+        // src/ai/admiral.ts), so only player-owned ships are considered.
+        if (!isPlayerOwned(ship)) continue
         // Already going somewhere, or already spooling/using its drive —
         // don't second-guess an order (the player's own, or a jump already
         // queued/in flight) that's already carrying it away from danger.

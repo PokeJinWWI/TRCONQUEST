@@ -1,13 +1,14 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
-import { Vector3, type InterleavedBufferAttribute } from 'three'
+import { Vector3, type InterleavedBufferAttribute, type PerspectiveCamera } from 'three'
 import type { Line2 } from 'three-stdlib'
 import type { ShipInstance } from '../state/shipStore'
 import { getShipRenderPosition } from './shipPhysics'
+import { playerCommsDelayToShip, visualShipSnapshot } from './commsVisual'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { LINE_THICKNESS_PX, useSettingsStore } from '../state/settingsStore'
-import { arrowWings } from './routeArrow'
+import { arrowWings, pixelsToWorldSize } from './routeArrow'
 
 // Shaft (1 segment) + arrowhead (2 wing segments) = 3 disjoint segments.
 const SEGMENT_COUNT = 3
@@ -15,11 +16,13 @@ const SEGMENT_COUNT = 3
 interface NavigationLineProps {
   ship: ShipInstance
   color: string
-  /** How far the arrowhead's wings reach back from the destination point, in
-   * THIS view's own world units. Every view level has its own physical scale
-   * (system view spans ~600 units out to Neptune, interstellar spans
-   * thousands), so there's no one constant that reads right everywhere — see
-   * the caller (SolarSystemScene/InterstellarScene) for how it picked this. */
+  /** How big the arrowhead reads on screen, in CSS pixels — see
+   * routeArrow.pixelsToWorldSize. A screen-space size rather than a world
+   * one so it reads the same whether the camera is zoomed in close or all
+   * the way out (a fixed world-unit length used to look tiny far out and
+   * enormous zoomed in close — a real, reported bug). Still capped against
+   * the segment's own length below, so a short hop's chevron never dwarfs
+   * its own shaft. */
   arrowLength: number
 }
 
@@ -48,10 +51,26 @@ export function NavigationLine({ ship, color, arrowLength }: NavigationLineProps
       if (line) line.visible = false
       return
     }
+    // Comms-delay-aware — see commsVisual.ts. Both ends come from the SAME
+    // reconstructed-as-of-the-delay order, not a mix of a stale start with
+    // the ship's true live destination — otherwise the line would leak
+    // exactly the information the delay is supposed to be hiding. Falls
+    // back to the live order (and this early-returns if that's since
+    // completed and the delayed snapshot has nothing to show) — the
+    // caller's own mount condition already checks the live ship.order, so
+    // that's the one case this doesn't fully cover (see this session's plan
+    // for why membership/mounting stays on live truth).
+    const simDays = useGameTimeStore.getState().simDays
+    const delay = playerCommsDelayToShip(ship, simDays)
+    const snap = delay > 0 ? visualShipSnapshot(ship, delay, simDays) : { location: ship.location, order: ship.order, combat: ship.combat }
+    if (!snap.order) {
+      line.visible = false
+      return
+    }
     line.visible = true
 
-    const { position: start } = getShipRenderPosition(ship, useGameTimeStore.getState().simDays)
-    const end = new Vector3(...ship.order.endPosition)
+    const { position: start } = getShipRenderPosition({ ...ship, location: snap.location, order: snap.order }, simDays - delay)
+    const end = new Vector3(...snap.order.endPosition)
 
     const attribute = line.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute
     const buffer = attribute.data
@@ -70,7 +89,19 @@ export function NavigationLine({ ship, color, arrowLength }: NavigationLineProps
     }
     write(start, end)
 
-    const wings = arrowWings(start, end, state.camera.position, arrowLength)
+    // Screen-constant size (see routeArrow.pixelsToWorldSize), computed at
+    // the endpoint's own distance from the camera each frame — a long-range
+    // order doesn't get a tiny arrow just because it's viewed from far away,
+    // and zooming in close doesn't inflate it either. Still capped against
+    // the segment's own length — a short hop (say, a nudge to a nearby
+    // point) drawn with the full screen-space arrowLength would put the
+    // wings' back-offset past the START of the line, reading as an oversized
+    // chevron dwarfing the shaft it's supposed to cap.
+    const camera = state.camera as PerspectiveCamera
+    const pixelArrowLength = pixelsToWorldSize(arrowLength, camera.position.distanceTo(end), camera.fov, state.size.height)
+    const segLength = start.distanceTo(end)
+    const scaledArrowLength = Math.min(pixelArrowLength, segLength * 0.35)
+    const wings = arrowWings(start, end, state.camera.position, scaledArrowLength)
     if (wings) {
       write(end, wings.wing1)
       write(end, wings.wing2)

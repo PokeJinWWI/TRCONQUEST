@@ -5,8 +5,10 @@ import type { Group } from 'three'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
 import { useFleetStore } from '../state/fleetStore'
-import { ALLEGIANCE_COLORS } from '../data/shipData'
-import { getShipRenderPosition } from './shipPhysics'
+import { RELATION_COLORS } from '../data/shipData'
+import { useRelationTo } from '../state/shipRelations'
+import { playerVisualShipRenderPosition } from './commsVisual'
+import { isAdditiveClick } from './selectionInput'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 
@@ -49,15 +51,15 @@ interface ShipMarkerProps {
 export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 1 }: ShipMarkerProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
-  const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const fleets = useFleetStore((s) => s.fleets)
   const lead = ships[0]
-  const color = ALLEGIANCE_COLORS[lead.allegiance]
-  // Selected if ANY member is the current selection, not just the lead — the
+  const color = RELATION_COLORS[useRelationTo(lead.ownerId)]
+  // Selected if ANY member is in the selection, not just the lead — the
   // player can inspect a specific hull within a fleet (see ShipPanel's
-  // roster) without that losing the marker's own highlighted state.
-  const selected = ships.some((s) => s.id === selectedShipId)
+  // roster), or have several fleets selected at once, without losing the
+  // marker's own highlighted state.
+  const selected = useShipStore((st) => ships.some((s) => st.selectedShipIds.includes(s.id)))
   const multi = ships.length > 1
   const fleetName = multi ? fleets.find((f) => f.id === lead.fleetId)?.name : undefined
   // A single resting, orbiting cluster reads as clutter with a name label
@@ -74,7 +76,9 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
 
   useFrame(() => {
     const simDays = useGameTimeStore.getState().simDays
-    const { position } = getShipRenderPosition(lead, simDays)
+    // Comms-delay-aware — see commsVisual.ts. Collapses to the plain live
+    // position exactly as before whenever the player has instant contact.
+    const { position } = playerVisualShipRenderPosition(lead, simDays)
     groupRef.current?.position.copy(position)
   })
 
@@ -90,7 +94,7 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
           }
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
-          onClick={() => selectShip(lead.id)}
+          onClick={(e) => (isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(lead.id) : selectShip(lead.id))}
           onContextMenu={(e) => {
             e.preventDefault()
             onOrderFollow?.(lead.id)

@@ -8,6 +8,9 @@ import { PopsPanel } from './PopsPanel'
 import { PoliticsPanel } from './PoliticsPanel'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { getCountry } from '../data/countryData'
+import { ownerDisplay } from '../data/countryRoster'
+import { useTerritoryStore } from '../state/territoryStore'
+import { BodyArmies } from './ArmyViews'
 
 export interface InspectPanelAction {
   label: string
@@ -32,9 +35,10 @@ const KIND_LABEL: Record<InspectableBody['kind'], string> = {
 // one place" view: its stats, its buildings, its market, and (reserved) the
 // politics/decisions that will hang off it. Stars and moons keep the plain
 // single-pane readout.
-type InspectTab = 'overview' | 'pops' | 'buildings' | 'economy' | 'politics'
+type InspectTab = 'overview' | 'armies' | 'pops' | 'buildings' | 'economy' | 'politics'
 const PLANET_TABS: { id: InspectTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'armies', label: 'Armies' },
   { id: 'pops', label: 'Pops' },
   { id: 'buildings', label: 'Buildings' },
   { id: 'economy', label: 'Economy' },
@@ -44,9 +48,14 @@ const PLANET_TABS: { id: InspectTab; label: string }[] = [
 function OverviewRows({ body, action }: { body: InspectableBody; action?: InspectPanelAction }) {
   const size = estimateSize(body.radiusKm)
   const habitability = body.kind !== 'star' ? estimateHabitability(body.name, body.orbitAU) : null
-  const worlds = useEconomyStore((s) => s.worlds)
-  const world = worldByName(worlds, body.name)
-  const owner = world?.ownerId ? getCountry(world.ownerId)?.name : undefined
+  // Ownership and control come from the live territory map (see
+  // scene/territory.ts) — it covers every claimed body, not only the
+  // inhabited worlds the economy simulates, and it's what war and peace
+  // actually change.
+  const ownerId = useTerritoryStore((s) => s.bodyOwner[body.name])
+  const controllerId = useTerritoryStore((s) => s.bodyController[body.name])
+  const owner = ownerId ? getCountry(ownerId) : undefined
+  const occupier = controllerId && controllerId !== ownerId ? ownerDisplay(controllerId) : undefined
 
   return (
     <>
@@ -57,7 +66,17 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
       {owner && (
         <div className="inspect-row">
           <span className="inspect-label">Owner</span>
-          <span className="inspect-value">{owner}</span>
+          <span className="inspect-value" style={{ color: owner.color }}>
+            {owner.name}
+          </span>
+        </div>
+      )}
+      {occupier && (
+        <div className="inspect-row">
+          <span className="inspect-label">Controller</span>
+          <span className="inspect-value" style={{ color: occupier.color }}>
+            {occupier.name} (occupied)
+          </span>
         </div>
       )}
       <div className="inspect-row">
@@ -142,6 +161,14 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
     return (
       <DraggableWindow title={body.name} onClose={onClose}>
         <OverviewRows body={body} action={action} />
+        {/* Moons can be garrisoned and invaded too; no tab strip here, so
+            the ground forces sit under the overview. */}
+        {body.kind === 'moon' && (
+          <>
+            <div className="inspect-divider" />
+            <BodyArmies bodyName={body.name} />
+          </>
+        )}
       </DraggableWindow>
     )
   }
@@ -161,6 +188,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
         ))}
       </div>
       {tab === 'overview' && <OverviewRows body={body} action={action} />}
+      {tab === 'armies' && <BodyArmies bodyName={body.name} />}
       {tab === 'pops' && <PopsPanel worldName={body.name} world={world} />}
       {tab === 'buildings' && <BuildingsPanel subtab={null} worldName={body.name} world={world} country={country} />}
       {tab === 'economy' && <EconomyPanel subcategory="Market" worldName={body.name} world={world} country={country} />}

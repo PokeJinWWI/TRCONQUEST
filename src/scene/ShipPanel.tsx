@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useShipStore } from '../state/shipStore'
-import { ALLEGIANCE_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
+import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
+import { ownerDisplay } from '../data/countryRoster'
+import { isPlayerOwned, shipsHostile, useRelationFn, useRelationTo } from '../state/shipRelations'
 import { resolveShipClass } from '../state/shipClassResolver'
 import {
+  COMBAT_STANCES,
+  STANCE_LABELS,
   COMPONENT_KINDS,
   COMPONENT_LABELS,
   DAMAGE_TYPE_LABELS,
@@ -17,11 +21,13 @@ import {
   coreHealthFraction,
 } from './shipPhysics'
 import { activeEnemyContacts, overallHealthFraction, createSoloEngagement, rangeFavor } from './combatResolution'
-import { useCombatStore, areHostile, combatLocationKey, engagementIsContested } from '../state/combatStore'
+import { playerCommsDelayToShip, queueStance, visualShipSnapshot } from './commsVisual'
+import { useCombatStore, combatLocationKey, engagementIsContested } from '../state/combatStore'
 import { useFleetStore } from '../state/fleetStore'
 import { useViewStore } from '../state/viewStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { DraggableWindow } from '../components/DraggableWindow'
+import { TransportCargo } from '../components/ArmyViews'
 
 function formatCooldown(label: string, remainingDays: number): string {
   return remainingDays > 0 ? `${label} ${remainingDays.toFixed(1)}d` : `${label} Ready`
@@ -29,6 +35,17 @@ function formatCooldown(label: string, remainingDays: number): string {
 
 function formatPercent(chance: number): string {
   return `${Math.round(chance * 100)}%`
+}
+
+// Comms delay spans a huge range depending on tier/distance — a few hours
+// in-system on light speed up to several years crossing to another star —
+// so this picks whichever unit actually reads as a number, rather than
+// showing "0.0d" for anything under a day or "1500.3d" for anything over a
+// year.
+function formatCommsDelay(days: number): string {
+  if (days >= 365.25) return `${(days / 365.25).toFixed(1)}y`
+  if (days >= 1) return `${days.toFixed(1)}d`
+  return `${(days * 24).toFixed(1)}h`
 }
 
 // A labeled bar. `tone` drives the color band so the three component bars
@@ -95,11 +112,91 @@ interface ShipPanelProps {
 // The selected ship's info window — subscribes to simDays directly (same
 // pattern TimeControls already uses) so the "Current Action" line stays live
 // while traveling, not just at the moment it was opened. Selecting a ship
-// is always allowed regardless of allegiance (see shipStore.selectShip), so
-// this doubles as a read-only intel view for enemy/neutral/friendly fleets —
+// is always allowed regardless of owner (see shipStore.selectShip), so
+// this doubles as a read-only intel view for other nations' fleets —
 // the right-click-to-redirect hint only applies to a ship the player
 // actually owns; planMove refuses to plan a move for any other ship anyway.
-export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPanelProps) {
+export function ShipPanel(props: ShipPanelProps) {
+  const multi = useShipStore((s) => s.selectedShipIds.length > 1)
+  return multi ? <SelectionGroupPanel {...props} /> : <SingleShipPanel {...props} />
+}
+
+// Several ships selected (Shift/Ctrl/Cmd-click): what's selected, grouped by
+// fleet, with the fleet's pace and the orders that apply to all of them at
+// once. Right-clicking on the map moves every selected fleet; in the arena,
+// every selected ship. Click a row to go back to one ship.
+function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
+  const idsKey = useShipStore((s) => s.selectedShipIds.join('|'))
+  const ships = useShipStore((s) => s.ships)
+  const selectShip = useShipStore((s) => s.selectShip)
+  const fleets = useFleetStore((s) => s.fleets)
+  const relationOf = useRelationFn()
+  const selected = useMemo(() => {
+    const ids = new Set(idsKey.split('|'))
+    return ships.filter((s) => ids.has(s.id))
+  }, [idsKey, ships])
+  const byFleet = useMemo(() => {
+    const groups = new Map<string, typeof selected>()
+    for (const s of selected) groups.set(s.fleetId, [...(groups.get(s.fleetId) ?? []), s])
+    return [...groups.entries()]
+  }, [selected])
+  const mine = selected.filter((s) => isPlayerOwned(s))
+
+  return (
+    <DraggableWindow title={`${selected.length} ships selected`} onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
+      {byFleet.map(([fleetId, members]) => {
+        const fleetMembers = ships.filter((s) => s.fleetId === fleetId)
+        const relation = relationOf(members[0].ownerId)
+        return (
+          <div key={fleetId} className="army-group">
+            <div className="army-group-label" style={{ color: RELATION_COLORS[relation] }}>
+              {fleets.find((f) => f.id === fleetId)?.name ?? 'Fleet'} · {ownerDisplay(members[0].ownerId).name}
+            </div>
+            <div className="inspect-row">
+              <span className="inspect-label">Moves at</span>
+              <span className="inspect-value">{fleetPaceLabel(fleetMembers)}</span>
+            </div>
+            {members.map((m) => (
+              <button key={m.id} type="button" className="combat-roster-row" onClick={() => selectShip(m.id)}>
+                <span className="combat-roster-name">{m.name}</span>
+                <span className="combat-roster-pct">{resolveShipClass(m.classId)?.name}</span>
+              </button>
+            ))}
+          </div>
+        )
+      })}
+      {mine.length > 0 && (
+        <>
+          <div className="inspect-divider" />
+          <div className="inspect-row">
+            <span className="inspect-label">Stance (all yours)</span>
+          </div>
+          <div className="dip-actions">
+            {COMBAT_STANCES.map((stance) => (
+              <button key={stance} type="button" className="detail-view-btn" onClick={() => mine.forEach((s) => queueStance(s, stance))}>
+                {STANCE_LABELS[stance]}
+              </button>
+            ))}
+          </div>
+          <div className="ship-panel-hint">Right-click a destination to move every selected fleet, each at its slowest ship's pace.</div>
+        </>
+      )}
+    </DraggableWindow>
+  )
+}
+
+// A fleet travels at its slowest member's pace: its slowest FTL (a hull with
+// no warp holds warp ships to reaction speed in-system), shown as a label.
+function fleetPaceLabel(members: { classId: string }[]): string {
+  const warps = members.map((m) => resolveShipClass(m.classId)?.ftlDrives.find((d) => d.kind === 'warp'))
+  const hypers = members.map((m) => resolveShipClass(m.classId)?.ftlDrives.some((d) => d.kind === 'hyperdrive') ?? false)
+  const allWarp = warps.every((w) => !!w)
+  if (allWarp) return `Warp ${Math.min(...warps.map((w) => (w && w.kind === 'warp' ? w.speedC : 0)))}c`
+  if (hypers.every(Boolean)) return 'Hyperdrive jumps (in-system: reaction drive)'
+  return 'Reaction drive (mixed drives; jump ships wait for the fleet)'
+}
+
+function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPanelProps) {
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const ship = useShipStore((s) => s.ships.find((sh) => sh.id === s.selectedShipId))
   const ships = useShipStore((s) => s.ships)
@@ -120,12 +217,33 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
   // from one fleet's roster can't silently apply to a different one.
   const [splitPicks, setSplitPicks] = useState<Set<string>>(new Set())
   useEffect(() => setSplitPicks(new Set()), [ship?.fleetId])
+  // How the player relates to this ship's nation — before the early return,
+  // since hooks can't be called conditionally.
+  const relation = useRelationTo(ship?.ownerId ?? '')
 
   if (!selectedShipId || !ship) return null
 
   const shipClass = resolveShipClass(ship.classId)
-  const statusText = getShipStatusText(ship, simDays, ships)
-  const owned = ship.allegiance === 'player'
+  // Comms-delay-aware display (see commsVisual.ts) — ONLY for the
+  // informational readouts below (status text, the health bars): a ship
+  // that's actually part of a contested fight is already being watched
+  // live in the arena (engagementIsContested, computed just below), so it
+  // never gets the stale treatment regardless of comms tier. Deliberately
+  // NOT applied to anything below that feeds an actual decision (jump/warp
+  // risk, merge/split eligibility, cooldowns) — those numbers are exactly
+  // what a real order will be evaluated against once it actually arrives
+  // (see commsVisual.ts's queueMoveOrder/applyMoveDestination, which always
+  // recomputes fresh at arrival time), so showing stale versions of THOSE
+  // would mislead a player's own click rather than model anything real.
+  const engagementForDisplay = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
+  const contestedForDisplay =
+    !!engagementForDisplay && engagementIsContested(engagementForDisplay, (id) => ships.some((s) => s.id === id))
+  const displayDelayDays = contestedForDisplay ? 0 : playerCommsDelayToShip(ship, simDays)
+  const displaySnap = displayDelayDays > 0 ? visualShipSnapshot(ship, displayDelayDays, simDays) : null
+  const displayShip = displaySnap ? { ...ship, location: displaySnap.location, order: displaySnap.order } : ship
+  const displayCombat = displaySnap ? displaySnap.combat : ship.combat
+  const statusText = getShipStatusText(displayShip, simDays, ships)
+  const owned = isPlayerOwned(ship)
   const hyperDrive = shipClass?.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
   const hasHyperdrive = !!hyperDrive
   const hasWarp = shipClass?.ftlDrives.some((d) => d.kind === 'warp') ?? false
@@ -136,33 +254,29 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
   const followedShip = ship.followingShipId ? ships.find((s) => s.id === ship.followingShipId) : undefined
 
   const combatProfile = shipClass?.combat
-  const engagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
-  // Whether that engagement is an actual FIGHT right now, not just an open
-  // arena — see engagementIsContested's own comment. An engagement can
-  // persist hostile-free (a solo lookaround, or the winning side lingering
-  // after a fight resolved) or even have its whole roster silently swapped
-  // for a new one at the same location — "there's an Engagement" alone is
-  // not "In combat".
-  const engagementContested = !!engagement && engagementIsContested(engagement, (id) => ships.find((s) => s.id === id)?.allegiance)
+  // Same engagement/contested check already computed above for the display
+  // lens — reused here rather than recomputed, they're the same question.
+  const engagement = engagementForDisplay
+  const engagementContested = contestedForDisplay
   // The "no fight" Arena button and the real Engagement row are mutually
   // exclusive, but the resolver's own tick (which turns a hostile encounter
   // into an actual Engagement) can lag a frame behind a ship just having
   // arrived or spawned. Checking for a hostile here directly — the same
-  // same-location + allegiance test the resolver itself uses — means the
+  // same-location + at-war test the resolver itself uses — means the
   // button reads "Enter Combat" the instant that's true, rather than only
   // once syncEngagements has caught up.
   const locationKey = combatLocationKey(ship.location)
   const hostilePresent =
     !engagement &&
     locationKey !== null &&
-    ships.some((s) => s.id !== ship.id && combatLocationKey(s.location) === locationKey && areHostile(ship.allegiance, s.allegiance))
+    ships.some((s) => s.id !== ship.id && combatLocationKey(s.location) === locationKey && shipsHostile(ship, s))
   // Every other hull sharing this ship's fleet — see ShipInstance.fleetId.
   // Shown whenever there's more than just this ship, so the roster is
   // reachable from any member, not only whichever one happens to be "lead"
   // on the marker.
   const fleet = fleets.find((f) => f.id === ship.fleetId)
   const fleetMates = ships.filter((s) => s.fleetId === ship.fleetId)
-  // A same-allegiance fleet already resting at this exact spot — the thing
+  // A same-nation fleet already resting at this exact spot — the thing
   // Merge Fleets combines this one with. Requires this ship to itself be at
   // rest (mid-order, there's no stable "here" to compare against) and uses
   // the same combatLocationKey test as every other co-location check in this
@@ -170,7 +284,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
   const mergeableFleetId =
     !ship.order && locationKey !== null
       ? ships.find(
-          (s) => s.fleetId !== ship.fleetId && s.allegiance === ship.allegiance && !s.order && combatLocationKey(s.location) === locationKey,
+          (s) => s.fleetId !== ship.fleetId && s.ownerId === ship.ownerId && !s.order && combatLocationKey(s.location) === locationKey,
         )?.fleetId
       : undefined
   const participant = engagement?.participants.find((p) => p.shipId === ship.id)
@@ -285,8 +399,11 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
         <span className="inspect-value">{shipClass?.name ?? 'Unknown'}</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Allegiance</span>
-        <span className="inspect-value">{ALLEGIANCE_LABELS[ship.allegiance]}</span>
+        <span className="inspect-label">Owner</span>
+        <span className="inspect-value">
+          {ownerDisplay(ship.ownerId).name}{' '}
+          <span style={{ color: RELATION_COLORS[relation] }}>({RELATION_LABELS[relation]})</span>
+        </span>
       </div>
       <div className="inspect-row">
         <span className="inspect-label">Drives</span>
@@ -363,21 +480,21 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
               armor are excluded from the blend. */}
           <HealthBar
             label="Integrity"
-            value={overallHealthFraction(ship.combat, combatProfile) * 100}
+            value={overallHealthFraction(displayCombat, combatProfile) * 100}
             max={100}
             tone="overall"
           />
           {combatProfile.defenses.shieldHp > 0 && (
-            <HealthBar label="Shields" value={ship.combat.shieldHp} max={combatProfile.defenses.shieldHp} tone="shield" />
+            <HealthBar label="Shields" value={displayCombat.shieldHp} max={combatProfile.defenses.shieldHp} tone="shield" />
           )}
           {combatProfile.defenses.armorHp > 0 && (
-            <HealthBar label="Armor" value={ship.combat.armorHp} max={combatProfile.defenses.armorHp} tone="armor" />
+            <HealthBar label="Armor" value={displayCombat.armorHp} max={combatProfile.defenses.armorHp} tone="armor" />
           )}
           {COMPONENT_KINDS.map((kind) => (
             <HealthBar
               key={kind}
               label={COMPONENT_LABELS[kind]}
-              value={ship.combat.componentHp[kind]}
+              value={displayCombat.componentHp[kind]}
               max={combatProfile.components[kind]}
               tone="component"
             />
@@ -475,6 +592,14 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
         </div>
       )}
       <div className="inspect-divider" />
+      {displayDelayDays > 0 && (
+        <div className="inspect-row">
+          <span className="inspect-label">Signal Delay</span>
+          <span className="inspect-value ship-panel-comms-delay" title="FTL comms haven't caught up — status below is from that long ago, not live.">
+            {formatCommsDelay(displayDelayDays)}
+          </span>
+        </div>
+      )}
       <div className="inspect-row">
         <span className="inspect-label">Current Action</span>
       </div>
@@ -484,6 +609,7 @@ export function ShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPa
           {goToPending ? 'Going to…' : 'Go To'}
         </button>
       )}
+      {owned && <TransportCargo ship={ship} />}
       {owned ? (
         ship.order && <div className="ship-panel-hint">Right-click a new destination to redirect.</div>
       ) : (

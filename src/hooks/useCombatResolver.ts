@@ -1,8 +1,7 @@
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { useShipStore, type ShipCombatState } from '../state/shipStore'
+import { useShipStore, type ShipCombatState, type ShipInstance } from '../state/shipStore'
 import { useFleetStore } from '../state/fleetStore'
-import { usePlayerStore } from '../state/playerStore'
 import { useTechStore } from '../state/techStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { useCombatStore } from '../state/combatStore'
@@ -14,8 +13,9 @@ import {
   stepEngagements,
   syncEngagements,
 } from '../scene/combatResolution'
-import { bodyLivePosition, bodyOrbitalVelocity, getShipRenderPosition, planMove, shipSystemId, SOL_SYSTEM_ID } from '../scene/shipPhysics'
-import { shipCombatProfile } from '../scene/combatResolution'
+import { bodyLivePosition, bodyOrbitalVelocity, getShipRenderPosition, planMoveUnchecked, shipSystemId, SOL_SYSTEM_ID } from '../scene/shipPhysics'
+import { shipCombatProfile, totalHitPoints } from '../scene/combatResolution'
+import { recordLoss } from '../scene/peace'
 import { utilityEffectiveness } from '../data/combatData'
 import { combatLocationLabel, engagementIsContested } from '../state/combatStore'
 
@@ -64,12 +64,12 @@ export function useCombatResolver() {
       const combat = useCombatStore.getState()
       const { ships } = useShipStore.getState()
       const { fleets } = useFleetStore.getState()
-      // Whether the PLAYER's own country has researched Free-Flight
-      // Maneuvering (see techData.ts) — the one tech check stepEngagements
-      // needs from outside, resolved here so it stays a pure function (see
-      // its own playerCanFreeFloat param comment).
-      const playerCountryId = usePlayerStore.getState().selectedCountryId ?? ''
-      const playerCanFreeFloat = useTechStore.getState().stateFor(playerCountryId).researched.has('free-flight-maneuvering')
+      // Whether each ship's OWN nation has researched Free-Flight Maneuvering
+      // (see techData.ts) — the one tech check stepEngagements needs from
+      // outside, resolved here per owner so it stays a pure function (see
+      // its own canFreeFloat param comment).
+      const techStore = useTechStore.getState()
+      const canFreeFloat = (ship: ShipInstance) => techStore.stateFor(ship.ownerId).researched.has('free-flight-maneuvering')
 
       const synced = syncEngagements(ships, combat.engagements, simDays)
       const hadEngagements = combat.engagements.length > 0
@@ -80,9 +80,9 @@ export function useCombatResolver() {
       // existed, both look like "hadEngagements" without being a live
       // fight). The tactical-time trigger below needs the real signal, not
       // the proxy.
-      const allegianceById = new Map(ships.map((s) => [s.id, s.allegiance]))
-      const allegianceOf = (shipId: string) => allegianceById.get(shipId)
-      const wasContested = combat.engagements.some((e) => engagementIsContested(e, allegianceOf))
+      const liveShipIds = new Set(ships.map((s) => s.id))
+      const shipExists = (shipId: string) => liveShipIds.has(shipId)
+      const wasContested = combat.engagements.some((e) => engagementIsContested(e, shipExists))
 
       // Combat is unobservable at strategic pace (a real second is ~518,400
       // sim-seconds), so the clock follows whether any fight is live: pulled
@@ -111,7 +111,7 @@ export function useCombatResolver() {
         return
       }
 
-      const nowContested = synced.some((e) => engagementIsContested(e, allegianceOf))
+      const nowContested = synced.some((e) => engagementIsContested(e, shipExists))
       if (!wasContested && nowContested) followCombatWithClock(true)
 
       // Snapshot, right now, which ships have a live enemy within range and
@@ -167,7 +167,7 @@ export function useCombatResolver() {
         const shipsForStep = useShipStore.getState().ships.map((s) =>
           pendingDamage[s.id] ? { ...s, combat: pendingDamage[s.id] } : s,
         )
-        const result = stepEngagements(engagements, shipsForStep, cursor, undefined, fleets, playerCanFreeFloat)
+        const result = stepEngagements(engagements, shipsForStep, cursor, undefined, fleets, canFreeFloat)
         engagements = result.engagements
         Object.assign(pendingDamage, result.shipCombat)
         for (const id of result.destroyedShipIds) destroyed.add(id)
@@ -179,6 +179,19 @@ export function useCombatResolver() {
       for (const id of destroyed) delete damageToApply[id]
 
       if (Object.keys(damageToApply).length > 0 || destroyed.size > 0) {
+        // Charge each loss to the wars its nation was fighting there, before
+        // the hull disappears from the store (war score and exhaustion; see
+        // scene/warScore.ts).
+        for (const id of destroyed) {
+          const lost = ships.find((s) => s.id === id)
+          const where = synced.find((e) => e.participants.some((p) => p.shipId === id))
+          if (!lost || !where) continue
+          const enemies = where.participants
+            .map((p) => ships.find((s) => s.id === p.shipId)?.ownerId)
+            .filter((owner): owner is string => !!owner && owner !== lost.ownerId)
+          const profile = shipCombatProfile(lost)
+          if (profile) recordLoss(lost.ownerId, enemies, totalHitPoints(profile))
+        }
         useShipStore.getState().applyCombatDamage(damageToApply, [...destroyed])
       }
 
@@ -261,7 +274,9 @@ export function useCombatResolver() {
           if (!ship?.combat.ftlCharge) continue
           const destination = ship.combat.ftlCharge.destination
           shipStore.setFtlCharge(id, null)
-          const result = planMove(ship, destination, simDays, { activelyEngaged: activelyEngagedIds.has(id) })
+          // Any nation's ship completing its own escape charge — not a player
+          // click, so it resolves for the ship's owner regardless of who that is.
+          const result = planMoveUnchecked(ship, destination, simDays, { activelyEngaged: activelyEngagedIds.has(id) })
           if (result.kind === 'order') {
             shipStore.setShipOrder(id, result.order, result.warpReadyOverride, true)
           } else if (result.kind === 'instant') {

@@ -6,6 +6,7 @@ export function Breadcrumb() {
   const enterGalactic = useViewStore((s) => s.enterGalactic)
   const enterInterstellar = useViewStore((s) => s.enterInterstellar)
   const enterSystem = useViewStore((s) => s.enterSystem)
+  const exitGround = useViewStore((s) => s.exitGround)
 
   return (
     <nav className="breadcrumb">
@@ -16,7 +17,7 @@ export function Breadcrumb() {
       <button type="button" className="crumb" onClick={() => enterInterstellar()} disabled={level === 'interstellar'}>
         INTERSTELLAR
       </button>
-      {(level === 'system' || level === 'satellite' || level === 'combat') && (
+      {(level === 'system' || level === 'satellite' || level === 'combat' || level === 'ground') && (
         <>
           <span className="crumb-sep">›</span>
           <button
@@ -29,11 +30,19 @@ export function Breadcrumb() {
           </button>
         </>
       )}
-      {level === 'satellite' && (
+      {(level === 'satellite' || level === 'ground') && (
+        <>
+          <span className="crumb-sep">›</span>
+          <button type="button" className="crumb" disabled={level === 'satellite'} onClick={exitGround}>
+            SATELLITE
+          </button>
+        </>
+      )}
+      {level === 'ground' && (
         <>
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb" disabled>
-            SATELLITE
+            GROUND
           </button>
         </>
       )}

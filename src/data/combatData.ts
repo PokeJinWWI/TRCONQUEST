@@ -403,6 +403,19 @@ export const CIVILIAN_COMBAT_PROFILE: CombatProfile = {
   ...hullMotion(5, 4),
 }
 
+// Troop transport — unarmed like a civilian hull, but built to survive the
+// run in to an enemy world: light armor, strong evasion (torpedoes struggle to
+// track it — see combatResolution's torpedo accuracy), and the quickest
+// handling in the roster so it can slip past a line of battle. It still dies
+// fast if caught, and its embarked armies die with it (see armyLogic.ts).
+export const TRANSPORT_COMBAT_PROFILE: CombatProfile = {
+  sizeClass: 'small',
+  components: { weapons: 10, utility: 80, core: 90 },
+  defenses: { shieldHp: 50, shieldRegenPerSecond: 0.8, armorHp: 40, pointDefenseRating: 0.1, flakRating: 0, evasion: 0.45 },
+  weapons: [],
+  ...hullMotion(3, 2),
+}
+
 // Warship presets. Roles are differentiated by the damage-type matrix rather
 // than by raw stat inflation — a Frigate loses to a Destroyer's point defense
 // and beats a shield-heavy Corvette, so the counter triangle is playable

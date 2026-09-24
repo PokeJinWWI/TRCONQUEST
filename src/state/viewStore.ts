@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { bodyIndex } from '../scene/territory'
 
 // 'combat' is the "detailed view" of an engagement, the same way 'satellite'
 // is the detailed view of a body — a real view level rather than a modal
@@ -6,7 +7,12 @@ import { create } from 'zustand'
 // scene-remount transition every other level already has. It sits outside the
 // galactic→satellite zoom ladder though: you don't reach it by zooming in on
 // anything, you enter it from a ship that's in a fight.
-export type ViewLevel = 'galactic' | 'interstellar' | 'system' | 'satellite' | 'combat'
+//
+// 'ground' is a world's planetary map (the ground war — see
+// scene/GroundViewScene.tsx), entered from satellite view or a transport's
+// "Choose landing site". Like satellite view it shows `selectedBodyName`,
+// which may be a moon.
+export type ViewLevel = 'galactic' | 'interstellar' | 'system' | 'satellite' | 'combat' | 'ground'
 
 interface ViewState {
   level: ViewLevel
@@ -72,6 +78,16 @@ interface ViewState {
   // that origin.
   exitSystemToInterstellar: () => void
   enterGalactic: () => void
+  // Same idea as exitSystemToInterstellar, one level further out: returning
+  // to galactic view via zoom-out carries the neighborhood we were just
+  // looking at into `inViewSelection`, so GalacticViewScene's
+  // SelectionTracker re-engages on it immediately instead of the camera
+  // defaulting to its fixed far-out mount position — which reads as
+  // snapping away from wherever the player actually was. The breadcrumb's
+  // "Galaxy" button keeps using plain enterGalactic (no preselect), same
+  // "breadcrumb never carries continuity" split enterInterstellar/
+  // exitSystemToInterstellar already have.
+  exitInterstellarToGalactic: () => void
   // Which engagement the combat view is showing. Held here rather than in
   // combatStore's `viewedEngagementId` because it's navigation state — it has
   // to move in lockstep with `level`, and splitting "which view" from "what
@@ -83,6 +99,11 @@ interface ViewState {
   // so there's no "one level up" to return to — system view is the sensible
   // place to land, since that's where the fight is physically happening.
   exitCombat: () => void
+  // Opens a body's planetary map.
+  enterGround: (bodyName: string) => void
+  // Back to the satellite view of the body — or, for a moon, of the planet
+  // it orbits, with the moon selected.
+  exitGround: () => void
   // Which NavBar category window (and its sub-tab) is currently open — was
   // NavBar.tsx's own local useState until workspace tabs needed a single,
   // generic "everything that makes up the current tab's open windows" rule
@@ -112,6 +133,8 @@ export const useViewStore = create<ViewState>((set) => ({
   lockOnEnabled: true,
   toggleLockOn: () => set((s) => ({ lockOnEnabled: !s.lockOnEnabled })),
   enterGalactic: () => set({ level: 'galactic', selectedBodyName: null, inViewSelection: null }),
+  exitInterstellarToGalactic: () =>
+    set((s) => ({ level: 'galactic', selectedBodyName: null, inViewSelection: s.selectedNeighborhoodId })),
   enterInterstellar: (neighborhoodId) =>
     set((s) => ({
       level: 'interstellar',
@@ -131,6 +154,14 @@ export const useViewStore = create<ViewState>((set) => ({
   // view's panel wants to keep showing.
   enterCombat: (engagementId) => set({ level: 'combat', combatEngagementId: engagementId }),
   exitCombat: () => set({ level: 'system', combatEngagementId: null, inViewSelection: null }),
+  enterGround: (bodyName) => set({ level: 'ground', selectedBodyName: bodyName, inViewSelection: null }),
+  exitGround: () =>
+    set((s) => {
+      const parent = s.selectedBodyName ? bodyIndex().get(s.selectedBodyName)?.parentPlanet : undefined
+      return parent
+        ? { level: 'satellite', selectedBodyName: parent, inViewSelection: s.selectedBodyName }
+        : { level: 'satellite', inViewSelection: null }
+    }),
   activeNavCategory: null,
   activeNavSubcategory: null,
   setNavCategory: (category, subcategory) => set({ activeNavCategory: category, activeNavSubcategory: subcategory }),

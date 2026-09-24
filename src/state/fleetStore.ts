@@ -1,8 +1,7 @@
 import { create } from 'zustand'
-import type { FleetAllegiance } from '../data/shipData'
 import type { FleetStrategy } from '../data/combatData'
 
-// A fleet is purely a name, an allegiance, and (optionally) a standing
+// A fleet is purely a name, an owner nation, and (optionally) a standing
 // coordinated strategy — which ships belong to it lives on the ships
 // themselves (ShipInstance.fleetId), not here, so moving a ship between
 // fleets is a one-field write on that ship rather than a two-sided sync
@@ -14,7 +13,9 @@ import type { FleetStrategy } from '../data/combatData'
 export interface Fleet {
   id: string
   name: string
-  allegiance: FleetAllegiance
+  // The nation that owns every ship in it (see ShipInstance.ownerId) — a
+  // fleet never mixes owners.
+  ownerId: string
   // Null means no fleet-wide order is active — every member just follows
   // its own individual stance, same as before fleets could coordinate at
   // all. Set via shipStore.setFleetStrategy, which is also what keeps this
@@ -35,14 +36,14 @@ function ordinal(n: number): string {
   return `${n}th`
 }
 
-// A fresh fleet's default name — Stellaris-style, numbered per allegiance
-// (a player's 1st Fleet and a hostile's 1st Fleet are unrelated counters).
-// Based on how many fleets that allegiance currently has, so the number can
+// A fresh fleet's default name — Stellaris-style, numbered per owner nation
+// (Mars's 1st Fleet and Venus's 1st Fleet are unrelated counters).
+// Based on how many fleets that nation currently has, so the number can
 // repeat after an earlier fleet is merged away or wiped out — cosmetic, not
 // a stable identifier (id is), so that's an acceptable quirk rather than a
 // reason to keep a separate monotonic counter around.
-export function nextFleetName(existing: Fleet[], allegiance: FleetAllegiance): string {
-  const count = existing.filter((f) => f.allegiance === allegiance).length
+export function nextFleetName(existing: Fleet[], ownerId: string): string {
+  const count = existing.filter((f) => f.ownerId === ownerId).length
   return `${ordinal(count + 1)} Fleet`
 }
 

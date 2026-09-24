@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { pristineCombatState, useShipStore } from '../state/shipStore'
-import type { FleetAllegiance, ShipClass } from '../data/shipData'
-import { SHIP_CLASSES, ALLEGIANCE_LABELS, describeFtlDrive } from '../data/shipData'
+import type { ShipClass } from '../data/shipData'
+import { SHIP_CLASSES, describeFtlDrive } from '../data/shipData'
+import { COUNTRIES } from '../data/countryData'
+import { ROGUE_FACTIONS } from '../data/countryRoster'
+import { ARMY_KINDS, type ArmyKind } from '../data/armyData'
+import { useArmyStore } from '../state/armyStore'
+import { useGroundViewStore } from '../state/groundViewStore'
+import { useViewStore } from '../state/viewStore'
+import { getMoonsForPlanet } from '../scene/moonData'
+import { useDiplomacyStore } from '../state/diplomacyStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { getPlanetsForStar } from '../scene/planetData'
 import { STARS, getSystemStars } from '../data/starData'
 import { SOL_SYSTEM_ID, SOL_BODY_NAME, DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from '../scene/shipPhysics'
-import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/scenarios'
+import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, scenarioNations, type Scenario } from '../data/scenarios'
 import { usePlayerStore } from '../state/playerStore'
 import { useTechStore } from '../state/techStore'
 import type { TechCategory } from '../data/techData'
-
-const ALLEGIANCE_OPTIONS = Object.keys(ALLEGIANCE_LABELS) as FleetAllegiance[]
 
 // Only charted systems (hasSystemData) have anything to spawn near.
 const SPAWNABLE_STARS = STARS.filter((s) => s.hasSystemData)
@@ -33,8 +40,17 @@ export function DebugConsole() {
   const [classId, setClassId] = useState(SHIP_CLASSES[0].id)
   const [starId, setStarId] = useState(SOL_SYSTEM_ID)
   const [nearBody, setNearBody] = useState(SOL_BODY_NAME)
-  const [allegiance, setAllegiance] = useState<FleetAllegiance>('player')
+  // Which nation owns a spawned ship — blank means "the player's own".
+  // Whether it fights anything is then purely whether that nation is at war
+  // with whoever else is present (see state/shipRelations.ts).
+  const [ownerChoice, setOwnerChoice] = useState<string>('')
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id)
+  // Army spawning (see handleSpawnArmy).
+  const [armyOwner, setArmyOwner] = useState<string>('')
+  const [armyKind, setArmyKind] = useState<ArmyKind>('assault')
+  const [armyBody, setArmyBody] = useState<string>('')
+  const [armyPlacement, setArmyPlacement] = useState<'auto' | 'pick' | 'aboard'>('auto')
+  const [armyMessage, setArmyMessage] = useState<string | null>(null)
   const [researchCategory, setResearchCategory] = useState<TechCategory>('physics')
   const [researchAmount, setResearchAmount] = useState(100)
   const spawnCounter = useRef(0)
@@ -70,16 +86,49 @@ export function DebugConsole() {
 
   if (!open) return null
 
+  // Every planet and moon in this system — anything with ground to stand on.
+  const armyBodies = getPlanetsForStar(starId).flatMap((p) => [p.name, ...getMoonsForPlanet(p.name).moons.map((m) => m.name)])
+
+  // Puts an army of any owner (a nation or a no-nation faction) on a world:
+  // at a sensible spot, at a spot picked on the planetary map, or aboard the
+  // selected troop transport. No cost, no rules — it's the console.
+  const handleSpawnArmy = () => {
+    const ownerId = armyOwner || selectedCountryId
+    const body = armyBody || armyBodies[0]
+    if (!ownerId || !body) return
+    if (armyPlacement === 'aboard') {
+      const { ships: all, selectedShipId } = useShipStore.getState()
+      const transport = all.find((s) => s.id === selectedShipId)
+      if (!transport || !resolveShipClass(transport.classId)?.armyCapacity) {
+        setArmyMessage('Select a troop transport first')
+        return
+      }
+      useArmyStore.getState().addArmy({ ownerId, kind: armyKind, location: { kind: 'embarked', shipId: transport.id } })
+      setArmyMessage(`Loaded aboard ${transport.name}`)
+      return
+    }
+    if (armyPlacement === 'pick') {
+      useGroundViewStore.getState().setMode({ kind: 'spawn', ownerId, armyKind })
+      useViewStore.getState().enterGround(body)
+      setArmyMessage('Click the ground to place it')
+      return
+    }
+    useArmyStore.getState().addArmy({ ownerId, kind: armyKind, location: { kind: 'body', bodyName: body } })
+    setArmyMessage(`${ARMY_KINDS[armyKind].name} placed on ${body}`)
+  }
+
   const handleSpawn = () => {
     const shipClass = resolveShipClass(classId)
     if (!shipClass) return
+    const ownerId = ownerChoice || selectedCountryId
+    if (!ownerId) return
     spawnCounter.current += 1
     const phaseDeg = SPAWN_PHASE_OFFSETS_DEG[(spawnCounter.current - 1) % SPAWN_PHASE_OFFSETS_DEG.length]
     spawnShip({
       id: `ship-${Date.now()}-${spawnCounter.current}`,
       classId: shipClass.id,
       name: `${shipClass.name} ${spawnCounter.current}`,
-      allegiance,
+      ownerId,
       location: {
         kind: 'orbiting',
         systemId: starId,
@@ -109,7 +158,12 @@ export function DebugConsole() {
   // being obvious why the outcome doesn't match what was verified.
   const handleLoadScenario = () => {
     const scenario = SCENARIOS.find((sc) => sc.id === scenarioId)
-    if (!scenario) return
+    if (!scenario || !selectedCountryId) return
+    // Roles resolve to real nations, which are then put at war — a
+    // scenario's fight is an ordinary national war (see scenarios.ts).
+    const nations = scenarioNations(selectedCountryId, COUNTRIES.map((c) => c.id))
+    if (!nations) return
+    useDiplomacyStore.getState().forceWar(nations.player, nations.enemy, useGameTimeStore.getState().simDays)
     for (const ship of ships) removeShip(ship.id)
     scenario.ships.forEach((spec, i) => {
       const shipClass = resolveShipClass(spec.classId)
@@ -120,7 +174,7 @@ export function DebugConsole() {
         id: `ship-${Date.now()}-${spawnCounter.current}`,
         classId: shipClass.id,
         name: `${shipClass.name} ${spawnCounter.current}`,
-        allegiance: spec.allegiance,
+        ownerId: spec.role === 'player' ? nations.player : nations.enemy,
         location: {
           kind: 'orbiting',
           systemId: SOL_SYSTEM_ID,
@@ -204,15 +258,19 @@ export function DebugConsole() {
         </div>
 
         <div className="debug-console-row">
-          <label htmlFor="debug-allegiance">Allegiance</label>
-          <select
-            id="debug-allegiance"
-            value={allegiance}
-            onChange={(e) => setAllegiance(e.target.value as FleetAllegiance)}
-          >
-            {ALLEGIANCE_OPTIONS.map((a) => (
-              <option key={a} value={a}>
-                {ALLEGIANCE_LABELS[a]}
+          <label htmlFor="debug-owner">Owner</label>
+          <select id="debug-owner" value={ownerChoice} onChange={(e) => setOwnerChoice(e.target.value)}>
+            <option value="">Your nation</option>
+            {COUNTRIES.filter((c) => c.id !== selectedCountryId).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+            {/* No-nation factions — pirates fight everyone, friendly
+                irregulars fight only pirates (see countryRoster). */}
+            {ROGUE_FACTIONS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} (no nation)
               </option>
             ))}
           </select>
@@ -221,6 +279,59 @@ export function DebugConsole() {
         <button type="button" className="debug-console-spawn-btn" onClick={handleSpawn}>
           Spawn Ship
         </button>
+
+        <div className="debug-console-divider" />
+
+        {/* Ground armies — any owner, onto any world with ground (in the
+            system picked above), or aboard the selected transport. */}
+        <div className="debug-console-row">
+          <label htmlFor="debug-army-kind">Army</label>
+          <select id="debug-army-kind" value={armyKind} onChange={(e) => setArmyKind(e.target.value as ArmyKind)}>
+            {(Object.keys(ARMY_KINDS) as ArmyKind[]).map((k) => (
+              <option key={k} value={k}>
+                {ARMY_KINDS[k].name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="debug-console-row">
+          <label htmlFor="debug-army-body">On</label>
+          <select id="debug-army-body" value={armyBody || armyBodies[0] || ''} onChange={(e) => setArmyBody(e.target.value)}>
+            {armyBodies.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="debug-console-row">
+          <label htmlFor="debug-army-owner">Owner</label>
+          <select id="debug-army-owner" value={armyOwner} onChange={(e) => setArmyOwner(e.target.value)}>
+            <option value="">Your nation</option>
+            {COUNTRIES.filter((c) => c.id !== selectedCountryId).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+            {ROGUE_FACTIONS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} (no nation)
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="debug-console-row">
+          <label htmlFor="debug-army-placement">Place</label>
+          <select id="debug-army-placement" value={armyPlacement} onChange={(e) => setArmyPlacement(e.target.value as 'auto' | 'pick' | 'aboard')}>
+            <option value="auto">Auto (muster point, or a landing site)</option>
+            <option value="pick">Pick on the ground map</option>
+            <option value="aboard">Aboard the selected transport</option>
+          </select>
+        </div>
+        <button type="button" className="debug-console-spawn-btn" onClick={handleSpawnArmy}>
+          Spawn Army
+        </button>
+        {armyMessage && <div className="debug-console-note">{armyMessage}</div>}
 
         <div className="debug-console-divider" />
 

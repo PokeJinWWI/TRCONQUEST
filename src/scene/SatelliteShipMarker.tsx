@@ -4,8 +4,10 @@ import { Html } from '@react-three/drei'
 import type { Group } from 'three'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
+import { isAdditiveClick } from './selectionInput'
 import { useFleetStore } from '../state/fleetStore'
-import { ALLEGIANCE_COLORS } from '../data/shipData'
+import { RELATION_COLORS } from '../data/shipData'
+import { useRelationTo } from '../state/shipRelations'
 import { satelliteOrbitLocalPosition } from './shipPhysics'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
@@ -52,12 +54,11 @@ export function SatelliteShipMarker({
 }: SatelliteShipMarkerProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
-  const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const fleets = useFleetStore((s) => s.fleets)
   const lead = ships[0]
-  const selected = ships.some((s) => s.id === selectedShipId)
-  const color = ALLEGIANCE_COLORS[lead.allegiance]
+  const selected = useShipStore((st) => ships.some((s) => st.selectedShipIds.includes(s.id)))
+  const color = RELATION_COLORS[useRelationTo(lead.ownerId)]
   const multi = ships.length > 1
   const fleetName = multi ? fleets.find((f) => f.id === lead.fleetId)?.name : undefined
 
@@ -80,7 +81,7 @@ export function SatelliteShipMarker({
           }
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
-          onClick={() => selectShip(lead.id)}
+          onClick={(e) => (isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(lead.id) : selectShip(lead.id))}
           onContextMenu={(e) => {
             e.preventDefault()
             onOrderFollow?.(lead.id)

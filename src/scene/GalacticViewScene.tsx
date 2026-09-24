@@ -20,6 +20,14 @@ const FOCUS_ARRIVE_DISTANCE = 5
 // ENTER_SYSTEM_DISTANCE, same select-first-then-zoom-or-button model one
 // level up.
 const ENTER_INTERSTELLAR_DISTANCE = 6
+// The plain "just arrived, nothing selected" camera position — used both as
+// the far-view starting position AND, translated to sit next to whichever
+// neighborhood a continuity arrival is returning to (see
+// continuityNeighborhoodPosition below), as the near-view one too. Same
+// "offset either way" idea InterstellarScene's own DEFAULT_CAMERA_OFFSET
+// already uses one level down.
+const DEFAULT_CAMERA_OFFSET: [number, number, number] = [40, 60, 110]
+const FAR_START: [number, number, number] = [0, 900, 1600]
 
 interface NeighborhoodNodeProps {
   neighborhood: NeighborhoodData
@@ -63,6 +71,36 @@ export function GalacticViewScene() {
   const selected = useMemo(() => NEIGHBORHOODS.find((n) => n.id === selectedId) ?? null, [selectedId])
   const focused = useMemo(() => NEIGHBORHOODS.find((n) => n.id === focusedId) ?? null, [focusedId])
 
+  // If we're arriving here because the player zoomed out of a neighborhood's
+  // interstellar view, inViewSelection is already seeded to that
+  // neighborhood (see exitInterstellarToGalactic) — used once, at mount,
+  // purely to start the camera framed on it directly rather than snapping
+  // all the way out to the far default. Captured via a ref (not read
+  // reactively), same reasoning as InterstellarScene's own
+  // continuityStarIdRef, so a later in-scene click doesn't retroactively
+  // move where the camera STARTED.
+  const continuityNeighborhoodIdRef = useRef(useViewStore.getState().inViewSelection)
+  const continuityNeighborhoodPosition = useMemo<[number, number, number] | null>(() => {
+    const id = continuityNeighborhoodIdRef.current
+    if (!id) return null
+    const neighborhood = NEIGHBORHOODS.find((n) => n.id === id)
+    return neighborhood ? neighborhoodScenePosition(neighborhood) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const initialCameraPosition = useMemo<[number, number, number]>(() => {
+    if (!continuityNeighborhoodPosition) return FAR_START
+    return [
+      continuityNeighborhoodPosition[0] + DEFAULT_CAMERA_OFFSET[0],
+      continuityNeighborhoodPosition[1] + DEFAULT_CAMERA_OFFSET[1],
+      continuityNeighborhoodPosition[2] + DEFAULT_CAMERA_OFFSET[2],
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const initialTarget = useMemo<[number, number, number]>(
+    () => continuityNeighborhoodPosition ?? [0, 0, 0],
+    [continuityNeighborhoodPosition],
+  )
+
   // Select-first, same as every other level: clicking just locks the camera
   // on (SelectionTracker) — flying all the way in only starts once "Enter
   // Neighborhood" is pressed, or the player zooms in close enough themselves.
@@ -81,7 +119,7 @@ export function GalacticViewScene() {
 
   return (
     <div className="galactic-wrapper">
-      <Canvas camera={{ position: [0, 900, 1600], fov: 50, near: 0.5, far: 20000 }} onPointerMissed={handleUnfocus}>
+      <Canvas camera={{ position: initialCameraPosition, fov: 50, near: 0.5, far: 20000 }} onPointerMissed={handleUnfocus}>
         <color attach="background" args={['#020409']} />
         <ambientLight intensity={0.3} />
         <Stars radius={4000} depth={1000} count={6000} factor={6} fade speed={0.1} />
@@ -122,6 +160,7 @@ export function GalacticViewScene() {
 
         <OrbitControls
           ref={controlsRef}
+          target={initialTarget}
           enabled={!focused}
           enablePan
           enableDamping

@@ -48,3 +48,18 @@ export function arrowWings(start: Vector3, end: Vector3, cameraPosition: Vector3
   const wing2 = end.clone().add(backOffset).add(perp.clone().multiplyScalar(-across))
   return { wing1, wing2 }
 }
+
+// Converts a desired ON-SCREEN size (CSS pixels) into a world-space length
+// at `distance` from a perspective camera — the same "billboarded to a
+// constant apparent size" idea ShipMarker's own HTML overlay gets for free
+// (it's 2D-anchored, not real geometry), applied here so a chevron/dash
+// drawn as actual 3D line geometry doesn't get visually tiny far out and
+// enormous zoomed in close, the way a fixed WORLD-unit length otherwise
+// would. Every Canvas in this project uses a perspective camera (each
+// scene's own `fov` prop), so this doesn't handle orthographic.
+export function pixelsToWorldSize(pixels: number, distance: number, fovDeg: number, viewportHeightPx: number): number {
+  if (viewportHeightPx <= 0) return 0
+  const fovRad = (fovDeg * Math.PI) / 180
+  const visibleHeightAtDistance = 2 * Math.tan(fovRad / 2) * distance
+  return pixels * (visibleHeightAtDistance / viewportHeightPx)
+}

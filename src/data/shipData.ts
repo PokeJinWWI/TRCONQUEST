@@ -5,6 +5,7 @@ import {
   CRUISER_PROFILE,
   DESTROYER_PROFILE,
   FRIGATE_PROFILE,
+  TRANSPORT_COMBAT_PROFILE,
   type CombatProfile,
 } from './combatData'
 
@@ -69,29 +70,37 @@ export interface ShipClass {
   // mechanical keys off it (an unarmed hull is already harmless by virtue of
   // its empty weapon list); it exists so the Fleet Manager / Ship Designer
   // UI can group hulls by role without inferring intent from stat lines.
-  role: 'civilian' | 'warship'
+  // 'transport' is the exception that IS mechanical: only a transport hull
+  // carries armies (see armyCapacity and scene/armyLogic.ts).
+  role: 'civilian' | 'warship' | 'transport'
+  // How many armies this hull can carry. Absent/0 for everything but
+  // transports.
+  armyCapacity?: number
 }
 
-// Who's flying a ship, not what hull it's flying — a class doesn't imply an
-// owner (the same Swift Courier hull could be player-owned or hostile), so
-// this lives on ShipInstance (see shipStore.ts) rather than ShipClass.
-// Drives every fleet marker's color everywhere (viewport triangles, the
-// Outliner's fleet icons, interstellar presence badges) — a single source of
-// truth instead of the old per-class color that only meant "which hull."
-export type FleetAllegiance = 'player' | 'friendly' | 'neutral' | 'hostile'
+// Every ship is owned by a nation (ShipInstance.ownerId) — a class doesn't
+// imply an owner, the same Corvette hull can fly for Mars or Venus. How a
+// ship relates to whoever is LOOKING at it is never stored: it's derived from
+// the owner and the viewer's diplomacy (see state/shipRelations.ts). 'own' is
+// the viewer's nation, 'enemy' a nation at war with it, 'allied' a friendly
+// no-nation faction (see countryRoster.ROGUE_FACTIONS; alliances between
+// nations will use it too, later), 'neutral' anyone else. Drives every ship marker's
+// color everywhere — viewport triangles, Outliner fleet icons, interstellar
+// presence badges, route lines.
+export type ShipRelation = 'own' | 'allied' | 'neutral' | 'enemy'
 
-export const ALLEGIANCE_COLORS: Record<FleetAllegiance, string> = {
-  player: '#4ade80',
-  friendly: '#4da6ff',
+export const RELATION_COLORS: Record<ShipRelation, string> = {
+  own: '#4ade80',
+  allied: '#5ab0ff',
   neutral: '#ffd23f',
-  hostile: '#ff3b3b',
+  enemy: '#ff3b3b',
 }
 
-export const ALLEGIANCE_LABELS: Record<FleetAllegiance, string> = {
-  player: 'Player',
-  friendly: 'Friendly',
+export const RELATION_LABELS: Record<ShipRelation, string> = {
+  own: 'Yours',
+  allied: 'Allied',
   neutral: 'Neutral',
-  hostile: 'Hostile',
+  enemy: 'Hostile',
 }
 
 // Warp speed tiers a warp drive can be researched up to — order-of-magnitude
@@ -158,6 +167,18 @@ export const SHIP_CLASSES: ShipClass[] = [
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'civilian',
   },
+  {
+    // Carries ground armies to invade enemy worlds (see scene/armyLogic.ts).
+    // Unarmed, fast and evasive — it needs an escort to clear the target's
+    // orbit first, since invading requires orbital superiority.
+    id: 'troop-transport',
+    name: 'Troop Transport',
+    reactionDrive: true,
+    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    combat: TRANSPORT_COMBAT_PROFILE,
+    role: 'transport',
+    armyCapacity: 2,
+  },
   // Warship hulls. Named after the conventional wet-navy ladder per the
   // design brief, and deliberately differentiated by *damage type matchup*
   // rather than by raw stat inflation — a Frigate's missiles ignore a
@@ -222,4 +243,10 @@ export function describeFtlDrive(drive: FtlDrive): string {
   return drive.kind === 'warp'
     ? `Warp Drive (${drive.speedC}c, ${drive.cooldownDays}-day cooldown)`
     : `Hyperdrive (${drive.cooldownDays}-day cooldown)`
+}
+
+export const SHIP_ROLE_LABELS: Record<ShipClass['role'], string> = {
+  civilian: 'Civilian',
+  warship: 'Warship',
+  transport: 'Transport',
 }

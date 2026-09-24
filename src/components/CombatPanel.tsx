@@ -18,8 +18,11 @@ import {
   shipCombatProfile,
   totalHitPoints,
 } from '../scene/combatResolution'
-import { activeTacticIds, useCombatStore, type Engagement } from '../state/combatStore'
+import { activeTacticIds, isEnemy, useCombatStore, type Engagement } from '../state/combatStore'
+import { useRelationFn } from '../state/shipRelations'
+import { commsInstantContact, playerCommsDelayToShip } from '../scene/commsVisual'
 import { useShipStore } from '../state/shipStore'
+import { isAdditiveClick } from '../scene/selectionInput'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { DraggableWindow } from './DraggableWindow'
 
@@ -60,6 +63,7 @@ interface CombatPanelProps {
 export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
+  const selectedIds = useShipStore((s) => s.selectedShipIds.join('|')).split('|')
   const selectShip = useShipStore((s) => s.selectShip)
   const simDays = useGameTimeStore((s) => s.simDays)
   const setParticipantTarget = useCombatStore((s) => s.setParticipantTarget)
@@ -84,9 +88,24 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const orderScuttle = useCombatStore((s) => s.orderScuttle)
 
   const shipsById = new Map(ships.map((s) => [s.id, s]))
+  // How the player relates to each participant's nation — own / hostile /
+  // neutral — which is what groups the roster below. Sides are per NATION
+  // (see Engagement.nations), so a three-way fight has three sides; this
+  // panel reads them from the player's point of view instead.
+  const relationOf = useRelationFn()
   const selectedParticipant = engagement.participants.find((p) => p.shipId === selectedShipId)
   const selectedShip = selectedShipId ? shipsById.get(selectedShipId) : undefined
-  const commandable = selectedShip?.allegiance === 'player' && selectedParticipant
+  const commandable = !!selectedShip && relationOf(selectedShip.ownerId) === 'own' && selectedParticipant
+  // Manual combat micromanagement (targeting, tactic Activate/Cancel,
+  // movement holds, chaff, scuttle) needs real-time contact with the
+  // capital — see commsVisual.ts and this session's plan. Below that, the
+  // ship fights on its own stance + the auto-tactics system instead (see
+  // combatResolution's auto-tactics pass) — the SAME distance/tech-tier
+  // math the strategic order queue uses, just gating "can click" instead of
+  // "how long until it arrives". Uses the ship's own real (system/
+  // interstellar) location, not anything about the engagement's own arena
+  // bookkeeping — that's what comms delay actually depends on.
+  const manualControlLocked = !!selectedShip && !commsInstantContact(playerCommsDelayToShip(selectedShip, simDays))
   const selectedOutsideWindow =
     !!selectedParticipant && !isInsideWindow(selectedParticipant.position, engagement.center, arenaWindowSpan(engagement.obstacles))
   const chaffActive = !!selectedShip && isChaffActive(selectedShip.combat, simDays)
@@ -103,18 +122,23 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
       ? Math.max(0, simDaysToSeconds(selectedShip.combat.chaffActiveUntilSimDays - simDays))
       : 0
 
-  const sides: [typeof engagement.participants, typeof engagement.participants] = [
-    engagement.participants.filter((p) => p.side === 0),
-    engagement.participants.filter((p) => p.side === 1),
-  ]
+  const relationOfParticipant = (p: (typeof engagement.participants)[number]) => {
+    const ship = shipsById.get(p.shipId)
+    return ship ? relationOf(ship.ownerId) : 'neutral'
+  }
+  const yours = engagement.participants.filter((p) => relationOfParticipant(p) === 'own')
+  const hostiles = engagement.participants.filter((p) => relationOfParticipant(p) === 'enemy')
+  // Third parties — nations on the field that aren't at war with the
+  // player (they may well be fighting each other, or someone else).
+  const allies = engagement.participants.filter((p) => relationOfParticipant(p) === 'allied')
+  const others = engagement.participants.filter((p) => relationOfParticipant(p) === 'neutral')
 
   // Total current HP each side is fielding — every hull's own Integrity %
   // (the same figure its roster row already shows) scaled by its actual
   // capacity, so a side's total genuinely reflects both how many ships it
-  // has AND how big/healthy they are, not just a head count. `side === 0`
-  // is always "your side" by construction (see syncEngagements — the
-  // player's own fleet is placed there), so this reads directly as "you vs
-  // them" without needing to know allegiance at all.
+  // has AND how big/healthy they are, not just a head count. Read from the
+  // player's point of view: your forces against every nation at war with
+  // you, third parties left out.
   const sideTotalHp = (group: typeof engagement.participants) =>
     group.reduce((sum, p) => {
       const ship = shipsById.get(p.shipId)
@@ -122,8 +146,8 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
       if (!ship || !profile) return sum
       return sum + overallHealthFraction(ship.combat, profile) * totalHitPoints(profile)
     }, 0)
-  const yourTotalHp = sideTotalHp(sides[0])
-  const hostileTotalHp = sideTotalHp(sides[1])
+  const yourTotalHp = sideTotalHp(yours)
+  const hostileTotalHp = sideTotalHp(hostiles)
   const combinedHp = yourTotalHp + hostileTotalHp
   // Even at 0/0 (both sides already wiped, an edge case the panel can still
   // briefly render before the view exits) the bar renders as an even split
@@ -132,9 +156,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
 
   // Every ship the player may actually give orders to — the roster for
   // fleet-wide focus fire below.
-  const commandableShipIds = engagement.participants
-    .filter((p) => shipsById.get(p.shipId)?.allegiance === 'player')
-    .map((p) => p.shipId)
+  const commandableShipIds = yours.map((p) => p.shipId)
 
   // How many enemies are actually trading fire with each hull RIGHT NOW —
   // not how many are in the battle, but how many can presently shoot it (see
@@ -157,9 +179,9 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   // it, for a fleet fight where the enemy you want is easier to find by name
   // in the roster than by hunting for its marker.
   const handleRosterTarget = (targetShipId: string) => {
-    if (!commandable || !selectedParticipant) return
+    if (!commandable || !selectedParticipant || manualControlLocked) return
     const target = engagement.participants.find((p) => p.shipId === targetShipId)
-    if (!target || target.side === selectedParticipant.side) return
+    if (!target || !isEnemy(selectedParticipant, target)) return
     const alreadyTargeted = selectedParticipant.targetShipId === targetShipId
     setParticipantTarget(engagement.id, selectedParticipant.shipId, alreadyTargeted ? null : targetShipId)
   }
@@ -178,10 +200,10 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           <button
             key={p.shipId}
             type="button"
-            className={`combat-roster-row${p.shipId === selectedShipId ? ' selected' : ''}${
+            className={`combat-roster-row${selectedIds.includes(p.shipId) ? ' selected' : ''}${
               isTargetOfSelected ? ' targeted' : ''
             }`}
-            onClick={() => selectShip(p.shipId)}
+            onClick={(e) => (isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(p.shipId) : selectShip(p.shipId))}
             onContextMenu={
               targetable
                 ? (e) => {
@@ -247,8 +269,10 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
         <span>You {Math.round(yourShare * 100)}%</span>
         <span>Hostiles {Math.round((1 - yourShare) * 100)}%</span>
       </div>
-      {renderSide('Your Forces', sides[0], false)}
-      {renderSide('Hostiles', sides[1], true)}
+      {renderSide('Your Forces', yours, false)}
+      {renderSide('Hostiles', hostiles, true)}
+      {allies.length > 0 && renderSide('Allied', allies, false)}
+      {others.length > 0 && renderSide('Other Nations', others, false)}
 
       <div className="inspect-divider" />
 
@@ -302,6 +326,12 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
         <>
           <div className="inspect-divider" />
           <div className="combat-orders-title">Orders — {selectedShip?.name}</div>
+          {manualControlLocked && (
+            <div className="ship-panel-comms-delay combat-comms-lock-notice">
+              Out of real-time contact — this ship fights on its own stance and auto-tactics until Hyper Comms (or being
+              back at the capital) closes the gap. Manual orders below are disabled.
+            </div>
+          )}
 
           {/* Fleet-wide focus fire. Sits directly above the per-ship Target
               row because it's the same decision at a different scale, and
@@ -310,7 +340,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           <div className="inspect-row">
             <span className="inspect-label">Focus Fleet</span>
             <span className="inspect-value combat-density-row">
-              {sides[1].map((hostile) => {
+              {hostiles.map((hostile) => {
                 const hostileShip = shipsById.get(hostile.shipId)
                 if (!hostileShip) return null
                 const allOnIt =
@@ -323,18 +353,21 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                     key={hostile.shipId}
                     type="button"
                     className={`combat-density-btn${allOnIt ? ' active' : ''}`}
+                    disabled={manualControlLocked}
                     onClick={() => setFleetTarget(engagement.id, commandableShipIds, allOnIt ? null : hostile.shipId)}
                     title={
-                      allOnIt
-                        ? 'Release your whole fleet back to auto-targeting'
-                        : `Point every ship you command at ${hostileShip.name}`
+                      manualControlLocked
+                        ? 'Out of real-time contact'
+                        : allOnIt
+                          ? 'Release your whole fleet back to auto-targeting'
+                          : `Point every ship you command at ${hostileShip.name}`
                     }
                   >
                     {hostileShip.name}
                   </button>
                 )
               })}
-              {sides[1].length === 0 && <span className="combat-side-empty">No hostiles</span>}
+              {hostiles.length === 0 && <span className="combat-side-empty">No hostiles</span>}
             </span>
           </div>
 
@@ -348,6 +381,8 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className="ship-panel-unfollow-btn"
+                  disabled={manualControlLocked}
+                  title={manualControlLocked ? 'Out of real-time contact' : undefined}
                   onClick={() => setParticipantTarget(engagement.id, selectedParticipant.shipId, null)}
                 >
                   Auto
@@ -364,15 +399,18 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   key={kind ?? 'spread'}
                   type="button"
                   className={`combat-density-btn${selectedParticipant.targetComponent === kind ? ' active' : ''}`}
+                  disabled={manualControlLocked}
                   onClick={() => setParticipantTargetComponent(engagement.id, selectedParticipant.shipId, kind)}
                   title={
-                    kind === null
-                      ? 'Spread damage across whatever is exposed'
-                      : kind === 'weapons'
-                        ? 'Disarm — scales their firepower down'
-                        : kind === 'utility'
-                          ? 'Cripple — slows them and blocks their FTL escape'
-                          : 'Kill — the only component that actually destroys a ship'
+                    manualControlLocked
+                      ? 'Out of real-time contact'
+                      : kind === null
+                        ? 'Spread damage across whatever is exposed'
+                        : kind === 'weapons'
+                          ? 'Disarm — scales their firepower down'
+                          : kind === 'utility'
+                            ? 'Cripple — slows them and blocks their FTL escape'
+                            : 'Kill — the only component that actually destroys a ship'
                   }
                 >
                   {kind === null ? 'Spread' : COMPONENT_LABELS[kind].split(' ')[0]}
@@ -397,20 +435,25 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className="ship-panel-unfollow-btn"
+                  disabled={manualControlLocked}
+                  title={manualControlLocked ? 'Out of real-time contact' : undefined}
                   onClick={() => setHoldPosition(engagement.id, selectedParticipant.shipId, false)}
                 >
                   Resume Auto
                 </button>
               )}
-              {!selectedParticipant.holdPosition && sides[1].length > 0 && (
+              {!selectedParticipant.holdPosition && hostiles.length > 0 && (
                 <button
                   type="button"
                   className={`ship-panel-unfollow-btn${selectedParticipant.chasing ? ' active' : ''}`}
+                  disabled={manualControlLocked}
                   onClick={() => setChasing(engagement.id, selectedParticipant.shipId, !selectedParticipant.chasing)}
                   title={
-                    selectedParticipant.chasing
-                      ? 'Stop chasing and return to this stance’s normal range-holding'
-                      : 'Close on the current target continuously instead of holding the stance’s usual range — for running down a fleeing ship'
+                    manualControlLocked
+                      ? 'Out of real-time contact'
+                      : selectedParticipant.chasing
+                        ? 'Stop chasing and return to this stance’s normal range-holding'
+                        : 'Close on the current target continuously instead of holding the stance’s usual range — for running down a fleeing ship'
                   }
                 >
                   {selectedParticipant.chasing ? 'Stop Chase' : 'Chase'}
@@ -447,12 +490,14 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className={`ship-panel-unfollow-btn${selectedParticipant.thrusterBoostActive ? ' active' : ''}`}
-                  disabled={!selectedParticipant.thrusterBoostActive && selectedParticipant.spinThrustActive}
+                  disabled={manualControlLocked || (!selectedParticipant.thrusterBoostActive && selectedParticipant.spinThrustActive)}
                   onClick={() => setThrusterBoost(engagement.id, selectedParticipant.shipId, !selectedParticipant.thrusterBoostActive)}
                   title={
-                    !selectedParticipant.thrusterBoostActive && selectedParticipant.spinThrustActive
-                      ? 'Unavailable while Spin Thrust has the ship — cancel Spin Thrust first'
-                      : TACTIC_DESCRIPTIONS['thruster-boost']
+                    manualControlLocked
+                      ? 'Out of real-time contact'
+                      : !selectedParticipant.thrusterBoostActive && selectedParticipant.spinThrustActive
+                        ? 'Unavailable while Spin Thrust has the ship — cancel Spin Thrust first'
+                        : TACTIC_DESCRIPTIONS['thruster-boost']
                   }
                 >
                   {selectedParticipant.thrusterBoostActive ? 'Cancel' : 'Activate'}
@@ -479,8 +524,9 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className={`ship-panel-unfollow-btn${selectedParticipant.shieldBoostActive ? ' active' : ''}`}
+                  disabled={manualControlLocked}
                   onClick={() => setShieldBoost(engagement.id, selectedParticipant.shipId, !selectedParticipant.shieldBoostActive)}
-                  title={TACTIC_DESCRIPTIONS['shield-boost']}
+                  title={manualControlLocked ? 'Out of real-time contact' : TACTIC_DESCRIPTIONS['shield-boost']}
                 >
                   {selectedParticipant.shieldBoostActive ? 'Cancel' : 'Activate'}
                 </button>
@@ -506,8 +552,9 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className={`ship-panel-unfollow-btn${selectedParticipant.weaponsBoostActive ? ' active' : ''}`}
+                  disabled={manualControlLocked}
                   onClick={() => setWeaponsBoost(engagement.id, selectedParticipant.shipId, !selectedParticipant.weaponsBoostActive)}
-                  title={TACTIC_DESCRIPTIONS['weapons-boost']}
+                  title={manualControlLocked ? 'Out of real-time contact' : TACTIC_DESCRIPTIONS['weapons-boost']}
                 >
                   {selectedParticipant.weaponsBoostActive ? 'Cancel' : 'Activate'}
                 </button>
@@ -533,8 +580,9 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className={`ship-panel-unfollow-btn${selectedParticipant.spinThrustActive ? ' active' : ''}`}
+                  disabled={manualControlLocked}
                   onClick={() => setSpinThrust(engagement.id, selectedParticipant.shipId, !selectedParticipant.spinThrustActive)}
-                  title={TACTIC_DESCRIPTIONS['spin-thrust']}
+                  title={manualControlLocked ? 'Out of real-time contact' : TACTIC_DESCRIPTIONS['spin-thrust']}
                 >
                   {selectedParticipant.spinThrustActive ? 'Cancel' : 'Activate'}
                 </button>
@@ -554,7 +602,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
               row above), grouped here as the fourth tactic per its own
               design. Manual only; no auto heuristic (a self-destructive
               charge is not something to trigger without being asked). */}
-          {!selectedParticipant.holdPosition && sides[1].length > 0 && (
+          {!selectedParticipant.holdPosition && hostiles.length > 0 && (
             <div className="inspect-row">
               <span className="inspect-label tactic-label">{TACTIC_LABELS.ramming}</span>
               <span className="inspect-value">
@@ -564,11 +612,14 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className={`ship-panel-unfollow-btn${selectedParticipant.ramming ? ' active' : ''}`}
+                  disabled={manualControlLocked}
                   onClick={() => setRamming(engagement.id, selectedParticipant.shipId, !selectedParticipant.ramming)}
                   title={
-                    selectedParticipant.ramming
-                      ? 'Call off the ram and return to this stance’s normal range-holding'
-                      : `Charge straight at the current target and collide with it — damages both hulls, scaled by your closing speed. The rammer takes ${Math.round(RAM_SELF_DAMAGE_FRACTION * 100)}% of what it deals. Works even with no weapons.`
+                    manualControlLocked
+                      ? 'Out of real-time contact'
+                      : selectedParticipant.ramming
+                        ? 'Call off the ram and return to this stance’s normal range-holding'
+                        : `Charge straight at the current target and collide with it — damages both hulls, scaled by your closing speed. The rammer takes ${Math.round(RAM_SELF_DAMAGE_FRACTION * 100)}% of what it deals. Works even with no weapons.`
                   }
                 >
                   {selectedParticipant.ramming ? 'Stop Ram' : 'Ram'}
@@ -594,13 +645,16 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                       key={obstacle.name}
                       type="button"
                       className={`combat-density-btn${active ? ' active' : ''}`}
+                      disabled={manualControlLocked}
                       onClick={() =>
                         setInheritVelocityFrom(engagement.id, selectedParticipant.shipId, active ? null : obstacle.name)
                       }
                       title={
-                        obstacle.velocity
-                          ? `Match ${obstacle.name}'s current velocity every step`
-                          : `${obstacle.name} isn't moving in this frame — locking on holds station here`
+                        manualControlLocked
+                          ? 'Out of real-time contact'
+                          : obstacle.velocity
+                            ? `Match ${obstacle.name}'s current velocity every step`
+                            : `${obstacle.name} isn't moving in this frame — locking on holds station here`
                       }
                     >
                       {obstacle.name}
@@ -626,8 +680,9 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                 <button
                   type="button"
                   className="ship-panel-unfollow-btn"
+                  disabled={manualControlLocked}
                   onClick={() => deployChaff(selectedParticipant.shipId, simDays)}
-                  title={`Cuts incoming accuracy to 25% for ${CHAFF_DURATION_SECONDS}s`}
+                  title={manualControlLocked ? 'Out of real-time contact' : `Cuts incoming accuracy to 25% for ${CHAFF_DURATION_SECONDS}s`}
                 >
                   Deploy
                 </button>
@@ -661,11 +716,16 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   <button
                     type="button"
                     className="ship-panel-unfollow-btn scuttle-btn"
+                    disabled={manualControlLocked}
                     onClick={() => {
                       if (scuttleArmed) orderScuttle(engagement.id, selectedParticipant.shipId)
                       else setScuttleArmed(true)
                     }}
-                    title={`Destroy this ship, damaging everything — friend or foe — within ${SCUTTLE_BLAST_RADIUS_UNITS} units. Yield scales with remaining core.`}
+                    title={
+                      manualControlLocked
+                        ? 'Out of real-time contact'
+                        : `Destroy this ship, damaging everything — friend or foe — within ${SCUTTLE_BLAST_RADIUS_UNITS} units. Yield scales with remaining core.`
+                    }
                   >
                     {scuttleArmed ? 'Confirm' : 'Scuttle'}
                   </button>
@@ -691,7 +751,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
         </>
       ) : (
         <div className="ship-panel-hint">
-          {selectedShip && selectedShip.allegiance !== 'player'
+          {selectedShip && relationOf(selectedShip.ownerId) !== 'own'
             ? 'Not under your command.'
             : 'Select one of your ships to give it orders.'}
         </div>

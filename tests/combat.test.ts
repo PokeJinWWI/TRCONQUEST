@@ -13,6 +13,7 @@
 import { SHIP_CLASSES, TURING_HYPERDRIVE_COOLDOWN_DAYS, type HyperDrive } from '../src/data/shipData'
 import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, CHASE_STANDOFF_UNITS, RAM_MAX_TARGET_DAMAGE, RAM_SELF_DAMAGE_FRACTION, ramDamageAt, rangeEffectiveness, missileDamageMultiplier, torpedoAccuracy, MISSILE_FALLOFF_FLOOR, MISSILE_SPEED_UNITS_PER_SECOND, TORPEDO_SPEED_UNITS_PER_SECOND, THRUSTER_BOOST_SPEED_BONUS_FRACTION, THRUSTER_BOOST_EVASION_BONUS, THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER, THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER, SHIELD_BOOST_REGEN_MULTIPLIER, SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER, SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER, SHIELD_BOOST_EVASION_PENALTY, SHIELD_BOOST_SPEED_PENALTY_FRACTION, WEAPONS_BOOST_DAMAGE_MULTIPLIER, WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER, WEAPONS_BOOST_SPEED_PENALTY_FRACTION, WEAPONS_BOOST_AI_HEALTH_ENGAGE_THRESHOLD, WEAPONS_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD, BOOST_TACTIC_IDS, SPIN_THRUST_EVASION_BONUS, TACTIC_IDS, tacticBadge, type WeaponMount } from '../src/data/combatData'
 import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
+import { ownerFor, setUpTestNations, TEST_PLAYER } from './testNations'
 import { activeTacticIds, engagementIsContested, useCombatStore } from '../src/state/combatStore'
 import {
   applyShot,
@@ -77,7 +78,7 @@ import {
   type ArenaPoint,
   type CombatObstacle,
 } from '../src/scene/combatArena'
-import { arrowWings } from '../src/scene/routeArrow'
+import { arrowWings, pixelsToWorldSize } from '../src/scene/routeArrow'
 import {
   TACTICAL_SPEED_MULTIPLIERS,
   NORMAL_SPEED_MULTIPLIERS,
@@ -103,10 +104,14 @@ function check(label: string, cond: boolean, detail = '') {
   }
 }
 
+// Every test ship is owned by a nation — `role` is the shorthand 'player' /
+// 'hostile' (see testNations.ownerFor), or a real nation id.
+setUpTestNations()
+
 function makeShip(
   classId: string,
   id: string,
-  allegiance: ShipInstance['allegiance'],
+  role: string,
   bodyName = 'Earth',
   fleetId = `solo-${id}`,
 ): ShipInstance {
@@ -115,7 +120,7 @@ function makeShip(
     id,
     classId,
     name: `${cls.name} ${id}`,
-    allegiance,
+    ownerId: ownerFor(role),
     location: { kind: 'orbiting', systemId: 'sol', bodyName, periodDays: 20, phaseDeg: 0, inclinationDeg: 0 },
     order: null,
     hyperdriveReadySimDays: 0,
@@ -1042,6 +1047,33 @@ console.log('\n=== 29. Route-line arrowheads: pure chevron geometry ===')
   check('a camera looking straight down the segment still produces a chevron (fallback perpendicular)', dead_ahead !== null && dead_ahead.wing1.distanceTo(dead_ahead.wing2) > 1e-6)
 }
 
+console.log('\n=== 29b. pixelsToWorldSize: screen-constant route decoration (the "gigantic arrow" fix) ===')
+{
+  // Real bug: NavigationLine/PendingOrderLine used a fixed WORLD-unit arrow
+  // length, so it read as tiny from far away and enormous once the camera
+  // zoomed in close on the same segment (both are the same 3D size — it's
+  // the camera that moved). pixelsToWorldSize exists to keep the ON-SCREEN
+  // size constant instead.
+  check('zero distance is zero world size', pixelsToWorldSize(16, 0, 50, 800) === 0)
+  check('a non-positive viewport height is refused rather than dividing by zero', pixelsToWorldSize(16, 100, 50, 0) === 0)
+
+  const near = pixelsToWorldSize(16, 100, 50, 800)
+  const far = pixelsToWorldSize(16, 1000, 50, 800)
+  check('the SAME pixel size at 10x the distance needs 10x the world size — this is the actual fix', Math.abs(far / near - 10) < 1e-9, `${near.toFixed(4)} vs ${far.toFixed(4)}`)
+
+  const smallPixels = pixelsToWorldSize(8, 500, 50, 800)
+  const bigPixels = pixelsToWorldSize(16, 500, 50, 800)
+  check('doubling the requested pixel size doubles the world size at a fixed distance', Math.abs(bigPixels / smallPixels - 2) < 1e-9)
+
+  const narrowFov = pixelsToWorldSize(16, 500, 30, 800)
+  const wideFov = pixelsToWorldSize(16, 500, 90, 800)
+  check('a wider FOV needs a bigger world size for the same pixel footprint (each pixel covers more world space)', wideFov > narrowFov)
+
+  const shortViewport = pixelsToWorldSize(16, 500, 50, 400)
+  const tallViewport = pixelsToWorldSize(16, 500, 50, 1600)
+  check('a taller viewport (same FOV) needs a smaller world size per pixel', tallViewport < shortViewport)
+}
+
 const STANCE_REPLAN_TOLERANCE_TEST = 0.25
 
 console.log('\n=== 30. Overshot sub-waypoints are dropped, not treated as sub-destinations ===')
@@ -1824,7 +1856,7 @@ console.log('\n=== 45. Scuttle: a doomed hull converts itself into a trade ===')
   }
 }
 
-console.log('\n=== 46. Chaff auto-deploys by default, for every allegiance, and can be turned off ===')
+console.log('\n=== 46. Chaff auto-deploys by default, for every nation, and can be turned off ===')
 {
   const simDays = 100
   const armPlayer = (p: any) => ({ ...p, position: { x: 2, y: 5, z: 2 }, path: [], holdPosition: true, velocity: { x: 0, y: 0, z: 0 } })
@@ -2045,10 +2077,10 @@ console.log('\n=== 51. Fleets never spawn inside a body bigger than the old fixe
 console.log('\n=== 52. The "fleet" stance is a sentinel — it borrows its Fleet\'s actual strategy ===')
 {
   const ship = { ...makeShip('cruiser', 'p1', 'player'), stance: 'fleet' as const, fleetId: 'f1' }
-  const withStrategy: Fleet[] = [{ id: 'f1', name: '1st Fleet', allegiance: 'player', strategy: 'kite' }]
+  const withStrategy: Fleet[] = [{ id: 'f1', name: '1st Fleet', ownerId: TEST_PLAYER, strategy: 'kite' }]
   check("resolves to the fleet's own strategy", effectiveStrategy(ship, withStrategy) === 'kite')
 
-  const noStrategy: Fleet[] = [{ id: 'f1', name: '1st Fleet', allegiance: 'player', strategy: null }]
+  const noStrategy: Fleet[] = [{ id: 'f1', name: '1st Fleet', ownerId: TEST_PLAYER, strategy: null }]
   check('falls back to Balanced when the fleet has no strategy set', effectiveStrategy(ship, noStrategy) === 'balanced')
 
   const normalShip = { ...makeShip('cruiser', 'p2', 'player'), stance: 'kite' as const }
@@ -2063,7 +2095,7 @@ console.log('\n=== 53. Divide — spreads target assignment across the fleet, no
   const e1 = makeShip('cruiser', 'e1', 'hostile', 'Earth')
   const e2 = makeShip('cruiser', 'e2', 'hostile', 'Earth')
   const ships = [p1, p2, e1, e2]
-  const fleets: Fleet[] = [{ id: 'divide-fleet', name: 'Test', allegiance: 'player', strategy: 'divide' }]
+  const fleets: Fleet[] = [{ id: 'divide-fleet', name: 'Test', ownerId: TEST_PLAYER, strategy: 'divide' }]
   const shipsById = new Map(ships.map((s) => [s.id, s]))
   const engagements = syncEngagements(ships, [], simDays)
   check('a real fight opens', engagements.length === 1)
@@ -2427,7 +2459,9 @@ console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, but the default
   const simDays = 100
 
   // Corvette: warp only, no hyperdrive.
-  const corvette = makeShip('corvette', 'p1', 'player', 'Mars')
+  // Owned by the country whose tech this section strips — tech gates a
+  // ship by its OWN nation's research.
+  const corvette = makeShip('corvette', 'p1', countryId, 'Mars')
   const farStar = { kind: 'star' as const, starId: 'alpha-centauri' }
 
   // Default-seeded (warp-theory pre-researched) — warp is genuinely usable:
@@ -2460,7 +2494,7 @@ console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, but the default
     const current = s.stateFor(countryId)
     return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: new Set(current.researched).add('warp-theory') } } }
   })
-  const destroyer = makeShip('destroyer', 'p2', 'player', 'Mars')
+  const destroyer = makeShip('destroyer', 'p2', countryId, 'Mars')
   const starDest = { kind: 'star' as const, starId: 'sol' }
   const hyperdriveAttempt = planMove(destroyer, starDest, simDays)
   check(
@@ -2481,7 +2515,8 @@ console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, but the default
     withoutHyperdrive.kind === 'order' && withoutHyperdrive.order.usedWarp === false,
   )
 
-  usePlayerStore.setState({ selectedCountryId: null })
+  // Back to the shared test nations for every later section.
+  usePlayerStore.setState({ selectedCountryId: TEST_PLAYER })
 }
 
 console.log('\n=== 60. orbitalHoldVelocity: the physics of "holding position" defaults to a real orbit ===')
@@ -2561,7 +2596,7 @@ console.log('\n=== 61. integrateMotion: holding position defaults to orbiting un
   check('canFreeFloat defaults to true when omitted — every pre-existing caller/test is unaffected', pointDistance(integrateMotion(resting, 1, 0.5, 1, 200, [body]).position, resting.position) < 1e-9)
 }
 
-console.log('\n=== 62. stepEngagements: only the PLAYER is gated — hostiles keep free-floating regardless ===')
+console.log('\n=== 62. stepEngagements: each nation is gated by its OWN Free-Flight research ===')
 {
   useCombatStore.setState({ engagements: [], viewedEngagementId: null })
   const simDays = 100
@@ -2579,7 +2614,9 @@ console.log('\n=== 62. stepEngagements: only the PLAYER is gated — hostiles ke
   let cursor = simDays
   for (let i = 0; i < 50; i++) {
     cursor += COMBAT_STEP_DAYS
-    const result = stepEngagements(engagements, ships, cursor, () => 0.999, [], false) // playerCanFreeFloat = false
+    // The player's nation hasn't researched Free-Flight Maneuvering; the
+    // enemy's has — each ship is gated by its own owner's tech.
+    const result = stepEngagements(engagements, ships, cursor, () => 0.999, [], (ship) => ship.ownerId !== TEST_PLAYER)
     engagements = result.engagements
     ships = ships.map((s) => (result.shipCombat[s.id] ? { ...s, combat: result.shipCombat[s.id] } : s))
   }
@@ -2591,7 +2628,7 @@ console.log('\n=== 62. stepEngagements: only the PLAYER is gated — hostiles ke
     `moved ${pointDistance(playerAfter.position, startPositions['p1']).toFixed(3)} units`,
   )
   check(
-    'the hostile ship — no country-tech link modeled for it — stayed exactly where it was, unaffected',
+    "the enemy's ship — its OWN nation has the research — stayed exactly where it was, unaffected by the player's gap",
     pointDistance(hostileAfter.position, startPositions['e1']) < 1e-6,
   )
 
@@ -2608,7 +2645,7 @@ console.log('\n=== 62. stepEngagements: only the PLAYER is gated — hostiles ke
   let cursor2 = simDays
   for (let i = 0; i < 50; i++) {
     cursor2 += COMBAT_STEP_DAYS
-    const result = stepEngagements(engagements2, ships2, cursor2, () => 0.999, [], true) // playerCanFreeFloat = true
+    const result = stepEngagements(engagements2, ships2, cursor2, () => 0.999, [], true) // every nation can free-float
     engagements2 = result.engagements
     ships2 = ships2.map((s) => (result.shipCombat[s.id] ? { ...s, combat: result.shipCombat[s.id] } : s))
   }
@@ -2893,7 +2930,9 @@ console.log('\n=== 65. Shield Boost: a last resort, not a free upgrade ===')
         return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 2, y: 6, z: 0 } }
       }),
     }
-    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    // Pinned rng (every shot misses — see applyShot's `rng() < missChance`):
+    // a lucky hit could otherwise destroy this 20%-core ship inside the step.
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS, () => 0)
     const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
     check('...but a critically damaged, under-fire ship DOES (stalling/holding out)', p1After?.shieldBoostActive === true)
   }
@@ -3324,7 +3363,11 @@ console.log('\n=== 69. The three Boost tactics share one power grid: mutual excl
         return p.shipId === 'p1' ? { ...base, position: { x: 0, y: 6, z: 0 }, targetShipId: 'e1' } : { ...base, position: { x: 2, y: 6, z: 0 } }
       }),
     }
-    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS)
+    // Pinned rng (every roll 0, so every shot misses — see applyShot's
+    // `rng() < missChance`): with Math.random a lucky hit occasionally
+    // destroyed the 20%-core ship inside this one step, leaving nothing to
+    // check — a flaky failure unrelated to the tactics logic.
+    const step = stepEngagements(engs, ships, simDays + COMBAT_STEP_DAYS, () => 0)
     const p1After = step.engagements[0]?.participants.find((p) => p.shipId === 'p1')
     check('Shield Boost wins the grid for a critically damaged, under-fire ship', p1After?.shieldBoostActive === true)
     check(
@@ -3433,23 +3476,28 @@ console.log('\n=== 71. engagementIsContested: "an Engagement exists" is not "a f
   // ShipPanel showing "In combat" for a hostile-free persisted arena, and
   // the clock not re-engaging tactical time when a fresh scenario silently
   // reuses an existing engagement id at the same location.
+  // Sides as syncEngagements builds them from diplomacy: p1/p2 are one
+  // nation (side 0), e1 another at war with it (side 1).
   const p1 = {
-    shipId: 'p1', side: 0 as const, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
+    shipId: 'p1', side: 0, hostileSides: [1], position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, positionSimDays: 0,
     path: [], weaponReadySimDays: [], targetShipId: null, targetComponent: null, holdPosition: false,
   }
-  const e1 = { ...p1, shipId: 'e1', side: 1 as const }
+  const e1 = { ...p1, shipId: 'e1', side: 1, hostileSides: [0] }
   const p2 = { ...p1, shipId: 'p2' }
-  const allegiances: Record<string, 'player' | 'hostile'> = { p1: 'player', e1: 'hostile', p2: 'player' }
-  const allegianceOf = (id: string) => allegiances[id]
+  const exists = (id: string) => ['p1', 'e1', 'p2'].includes(id)
 
-  check('a two-sided hostile roster IS contested', engagementIsContested({ participants: [p1, e1] }, allegianceOf))
-  check('an all-player roster (the winning side lingering, or a solo lookaround) is NOT contested', !engagementIsContested({ participants: [p1, p2] }, allegianceOf))
-  check('a single-ship roster is NOT contested (nothing to be hostile to)', !engagementIsContested({ participants: [p1] }, allegianceOf))
-  check('an empty roster is NOT contested', !engagementIsContested({ participants: [] }, allegianceOf))
+  check('a roster with two nations at war IS contested', engagementIsContested({ participants: [p1, e1] }, exists))
+  check('a one-nation roster (the winning side lingering, or a solo lookaround) is NOT contested', !engagementIsContested({ participants: [p1, p2] }, exists))
+  check('a single-ship roster is NOT contested (nothing to be hostile to)', !engagementIsContested({ participants: [p1] }, exists))
+  check('an empty roster is NOT contested', !engagementIsContested({ participants: [] }, exists))
   check(
-    "a participant whose ship no longer exists (allegianceOf returns undefined) doesn't count toward contesting — matches a stale engagement whose old roster was already removed",
-    !engagementIsContested({ participants: [p1, e1] }, (id) => (id === 'e1' ? undefined : allegiances[id])),
+    "a participant whose ship no longer exists doesn't count toward contesting — matches a stale engagement whose old roster was already removed",
+    !engagementIsContested({ participants: [p1, e1] }, (id) => id !== 'e1'),
   )
+  // Two nations present but at PEACE — side-different is not enemy.
+  const peaceful = { ...e1, hostileSides: [] as number[] }
+  const peacefulP1 = { ...p1, hostileSides: [] as number[] }
+  check('two nations on the field at PEACE are not contested — being on different sides is not hostility', !engagementIsContested({ participants: [peacefulP1, peaceful] }, exists))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

@@ -4,9 +4,9 @@ import { Html, OrbitControls, Stars } from '@react-three/drei'
 import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { StarData } from '../data/starData'
-import { getStarsForNeighborhood, starScenePosition } from '../data/starData'
+import { getStarsForNeighborhood, starScenePosition, STARS } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
-import type { ShipInstance } from '../state/shipStore'
+import type { ShipInstance, MoveDestination } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
 import { useHyperlaneStore, laneEndpoints } from '../state/hyperlaneStore'
 import { CameraFocusRig } from './CameraFocusRig'
@@ -16,14 +16,22 @@ import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
 import { HyperlaneLine } from './HyperlaneLine'
 import { ShipMarker } from './ShipMarker'
 import { NavigationLine } from './NavigationLine'
+import { PendingOrderLine } from './PendingOrderLine'
 import { ShipPanel } from './ShipPanel'
-import { getShipRenderPosition, planMove, shipSystemId, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
+import { shipSystemId, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
+import { orderSelectedFleets, playerVisualShipRenderPosition } from './commsVisual'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 import { DraggableWindow } from '../components/DraggableWindow'
-import { ALLEGIANCE_COLORS } from '../data/shipData'
+import { RELATION_COLORS, type ShipRelation } from '../data/shipData'
+import { relationOfOwner, useRelationKey } from '../state/shipRelations'
+import { useTerritoryStore } from '../state/territoryStore'
+import { systemClaim, type SystemClaim } from './territory'
+import { getCountry } from '../data/countryData'
+import { usePlayerStore } from '../state/playerStore'
 
 const ENTER_DISTANCE = 6
+const UNCLAIMED: SystemClaim = { kind: 'unclaimed' }
 const MAX_DISTANCE = 4200
 const EXIT_DISTANCE = 3500
 // The plain "just arrived, nothing selected" camera position — used both as
@@ -41,11 +49,31 @@ const ENTER_SYSTEM_DISTANCE = 4.5
 // How close the "Go To" fly-in to a selected ship needs to get before it
 // counts as arrived.
 const SHIP_FOCUS_ARRIVE_DISTANCE = 3
-// How far a route line's arrowhead reaches back from its destination, in
-// this view's own units — interstellar hops span a much wider range than a
-// system-view leg (ENTER_DISTANCE=6 up to MAX_DISTANCE=4200), so this picks
-// its own constant rather than sharing SolarSystemScene's.
-const NAV_ARROW_LENGTH = 12
+// How big a route line's arrowhead reads on screen, in CSS pixels — see
+// SolarSystemScene's identical constant for the full reasoning
+// (routeArrow.pixelsToWorldSize). Same value works here too now that it's
+// screen-space rather than world-unit — interstellar's much wider range of
+// real distances is exactly what this was for.
+const NAV_ARROW_LENGTH = 16
+// Dash/gap for a comms-delayed command still in transit (see
+// PendingOrderLine) — same screen-space units as NAV_ARROW_LENGTH above.
+const PENDING_DASH_SIZE = 6
+const PENDING_GAP_SIZE = 4
+
+// PendingOrderLine's resolveTarget for THIS view's own frame (interstellar,
+// ly-scale scene units, Sol at origin) — a 'star' or 'interstellar-point'
+// destination is directly representable here; a same-system 'body'/'point'
+// one isn't (this view has no coordinate for anywhere inside a system), but
+// that combination can't actually arise from this UI anyway — a ship only
+// ever gets a system-local destination while already shown in system view.
+function resolveInterstellarDestinationPosition(destination: MoveDestination): Vector3 | null {
+  if (destination.kind === 'star') {
+    const star = STARS.find((s) => s.id === destination.starId)
+    return star ? new Vector3(...starScenePosition(star)) : null
+  }
+  if (destination.kind === 'interstellar-point') return new Vector3(...destination.position)
+  return null
+}
 
 interface StarNodeProps {
   star: StarData
@@ -53,7 +81,8 @@ interface StarNodeProps {
   onSelect: (star: StarData) => void
   /** Right-click — orders the currently-selected ship (if any) here. */
   onOrderTo: (star: StarData) => void
-  /** One representative ship per distinct allegiance color currently nested
+  /** One representative ship per distinct relation (yours / neutral /
+   * hostile) currently nested
    * somewhere inside this star's system (e.g. orbiting a planet) — those
    * ships have no position at interstellar scale, so this is the only trace
    * of them here. Deliberately icon-only, no name/count text, but still
@@ -61,13 +90,27 @@ interface StarNodeProps {
    * several ships share a color, clicking selects whichever one was found
    * first, same simplification the badge's own dedupe-by-color already
    * makes. */
-  fleetPresence: ShipInstance[]
+  fleetPresence: { ship: ShipInstance; relation: ShipRelation }[]
   onSelectFleet: (shipId: string) => void
+  /** The whole system's territorial claim (see scene/territory.ts) — drawn
+   * as a ring in the owner's color, or a split ring when contested. */
+  claim: SystemClaim
+}
+
+// The border ring's colors for a claim: one color all the way round for an
+// owned system, the claimants' colors split around the ring for a contested
+// one (top/right/bottom/left, cycling), nothing for an unclaimed one.
+function claimRingStyle(claim: SystemClaim): React.CSSProperties | null {
+  if (claim.kind === 'unclaimed') return null
+  if (claim.kind === 'owned') return { borderColor: getCountry(claim.countryId)?.color ?? '#888' }
+  const colors = claim.countryIds.map((id) => getCountry(id)?.color ?? '#888')
+  const at = (i: number) => colors[i % colors.length]
+  return { borderTopColor: at(0), borderRightColor: at(1), borderBottomColor: at(2), borderLeftColor: at(3) }
 }
 
 // Stars are just labels here, same as planets in system view — no 3D sphere
 // model, just a fixed-size marker anchored at the star's true position.
-function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelectFleet }: StarNodeProps) {
+function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelectFleet, claim }: StarNodeProps) {
   const [hovered, setHovered] = useState(false)
   const pos = starScenePosition(star)
 
@@ -85,13 +128,14 @@ function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelect
           }}
           onWheel={forwardWheelToCanvas}
         >
+          {claimRingStyle(claim) && <span className={`owner-ring${claim.kind === 'contested' ? ' contested' : ''}`} style={claimRingStyle(claim)!} />}
           <span className="marker-dot" style={{ borderColor: star.color }} />
           <span className="marker-label">{star.name}</span>
-          {fleetPresence.map((ship) => (
+          {fleetPresence.map(({ ship, relation }) => (
             <span
               key={ship.id}
               className="fleet-presence-icon"
-              style={{ borderBottomColor: ALLEGIANCE_COLORS[ship.allegiance] }}
+              style={{ borderBottomColor: RELATION_COLORS[relation] }}
               onClick={(e) => {
                 // Otherwise this bubbles to the marker's own onClick above,
                 // selecting the star instead of (or as well as) the fleet.
@@ -118,7 +162,7 @@ function isShipInInterstellarSpace(order: { space: 'system' | 'interstellar' } |
 export function InterstellarScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const enterSystem = useViewStore((s) => s.enterSystem)
-  const enterGalactic = useViewStore((s) => s.enterGalactic)
+  const exitInterstellarToGalactic = useViewStore((s) => s.exitInterstellarToGalactic)
   const selectedNeighborhoodId = useViewStore((s) => s.selectedNeighborhoodId)
   const selectedId = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
@@ -176,14 +220,8 @@ export function InterstellarScene() {
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const setShipOrder = useShipStore((s) => s.setShipOrder)
-  const setFtlCharge = useShipStore((s) => s.setFtlCharge)
-  const setShipLocation = useShipStore((s) => s.setShipLocation)
-  const setPendingHyperdriveJump = useShipStore((s) => s.setPendingHyperdriveJump)
   const setFollowing = useShipStore((s) => s.setFollowing)
-  const removeShip = useShipStore((s) => s.removeShip)
   const lanes = useHyperlaneStore((s) => s.lanes)
-  const addHyperlane = useHyperlaneStore((s) => s.addHyperlane)
   const interstellarShips = useMemo(
     () => ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)),
     [ships],
@@ -199,25 +237,35 @@ export function InterstellarScene() {
     () => (selectedShipId ? interstellarShips.find((s) => s.id === selectedShipId) ?? null : null),
     [selectedShipId, interstellarShips],
   )
-  // One representative ship per distinct allegiance present in each star's
-  // system, for the no-text presence badges — the complementary set to
-  // interstellarShips above (a ship is either out in interstellar space,
-  // rendered directly, or nested inside exactly one system, rendered only as
-  // a badge here).
+  // One representative ship per distinct relation to the player (yours /
+  // neutral / hostile) present in each star's system, for the no-text
+  // presence badges — the complementary set to interstellarShips above (a
+  // ship is either out in interstellar space, rendered directly, or nested
+  // inside exactly one system, rendered only as a badge here). Recomputed
+  // when any war starts or ends, since that changes who's hostile.
+  const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const relationKey = useRelationKey()
+  // Each star system's territorial claim, from live ownership — recomputed
+  // only when a body changes hands (a peace cession), not every render.
+  const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
+  const claimsByStar = useMemo(() => new Map(STARS.map((star) => [star.id, systemClaim(star.id, bodyOwner)])), [STARS, bodyOwner])
   const fleetPresenceByStar = useMemo(() => {
-    const map = new Map<string, ShipInstance[]>()
+    const map = new Map<string, { ship: ShipInstance; relation: ShipRelation }[]>()
     for (const ship of ships) {
       const systemId = shipSystemId(ship)
       if (!systemId) continue
+      const relation = relationOfOwner(ship.ownerId, playerCountryId)
       const existing = map.get(systemId)
       if (existing) {
-        if (!existing.some((s) => s.allegiance === ship.allegiance)) existing.push(ship)
+        if (!existing.some((entry) => entry.relation === relation)) existing.push({ ship, relation })
       } else {
-        map.set(systemId, [ship])
+        map.set(systemId, [{ ship, relation }])
       }
     }
     return map
-  }, [ships])
+    // relationKey stands in for the diplomacy state relationOfOwner reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ships, playerCountryId, relationKey])
 
   // Select-first, same as system view: clicking a star just locks the
   // camera onto it (SelectionTracker, smooth eased pan) — flying all the way
@@ -249,28 +297,20 @@ export function InterstellarScene() {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'star', starId: star.id }, useGameTimeStore.getState().simDays)
-    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
-    else if (result.kind === 'instant') {
-      setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays })
-      if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
-    } else if (result.kind === 'on-cooldown' || result.kind === 'paused') setPendingHyperdriveJump(ship.id, star.id)
-    else if (result.kind === 'lost-in-hyperspace') removeShip(ship.id)
-    // Pinned in a firefight: the jump becomes an FTL escape charge instead of
-    // firing immediately (see planMove's 'engaged' result).
-    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
-    // 'unknown-class'/'not-owned': silently ignored — genuinely nothing to do.
+    // Goes through orderSelectedFleets (every selected fleet, each moving
+    // together) rather than planMove/setShipOrder directly
+    // — under FTL comms delay (see commsVisual.ts), the jump doesn't even
+    // begin resolving (cooldown, risk, the works) until the signal would
+    // actually reach the ship. Instant contact behaves exactly as before,
+    // 'on-cooldown'/'lost-in-hyperspace'/etc. included.
+    orderSelectedFleets({ kind: 'star', starId: star.id })
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'interstellar-point', position: point }, useGameTimeStore.getState().simDays)
-    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
-    // Pinned in a firefight: the destination becomes an FTL escape charge
-    // instead of a move order (see planMove's 'engaged' result).
-    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+    orderSelectedFleets({ kind: 'interstellar-point', position: point })
   }
 
   // Right-clicking another ship while one is selected orders the selected
@@ -325,6 +365,7 @@ export function InterstellarScene() {
             onOrderTo={handleOrderToStar}
             fleetPresence={fleetPresenceByStar.get(star.id) ?? []}
             onSelectFleet={selectShip}
+            claim={claimsByStar.get(star.id) ?? UNCLAIMED}
           />
         ))}
 
@@ -332,14 +373,34 @@ export function InterstellarScene() {
           <ShipMarker key={cluster.key} ships={cluster.ships} onOrderFollow={handleFollowShip} />
         ))}
 
-        {/* Committed orders for the player's own and allied ships only —
-            same information-hiding rule as combat's route lines (see
-            CombatViewScene): hostiles still travel exactly as before, this
-            just doesn't hand the player a readout of where they're headed. */}
+        {/* Committed orders for the player's own ships only — same
+            information-hiding rule as combat's route lines (see
+            CombatViewScene): other nations' ships still travel exactly as
+            before, this just doesn't hand the player a readout of where
+            they're headed. */}
         {interstellarShips
-          .filter((ship) => ship.order && (ship.allegiance === 'player' || ship.allegiance === 'friendly'))
+          .filter((ship) => ship.order && ship.ownerId === playerCountryId)
           .map((ship) => (
-            <NavigationLine key={`nav-${ship.id}`} ship={ship} color={ALLEGIANCE_COLORS[ship.allegiance]} arrowLength={NAV_ARROW_LENGTH} />
+            <NavigationLine key={`nav-${ship.id}`} ship={ship} color={RELATION_COLORS.own} arrowLength={NAV_ARROW_LENGTH} />
+          ))}
+
+        {/* Commands still queued behind FTL comms delay (see
+            commsVisual.ts) — dashed, distinct from the solid committed-order
+            line above, which the ship may well still be flying while this
+            one waits to arrive (see PendingOrderLine's own comment). Same
+            own-ships-only visibility rule. */}
+        {interstellarShips
+          .filter((ship) => ship.pendingMoveOrder && ship.ownerId === playerCountryId)
+          .map((ship) => (
+            <PendingOrderLine
+              key={`pending-${ship.id}`}
+              ship={ship}
+              color={RELATION_COLORS.own}
+              arrowLength={NAV_ARROW_LENGTH}
+              dashSize={PENDING_DASH_SIZE}
+              gapSize={PENDING_GAP_SIZE}
+              resolveTarget={resolveInterstellarDestinationPosition}
+            />
           ))}
 
         {focusedStar && (
@@ -361,7 +422,7 @@ export function InterstellarScene() {
             key={trackedShip.id}
             controlsRef={controlsRef}
             arriveDistance={SHIP_FOCUS_ARRIVE_DISTANCE}
-            getTargetPosition={() => getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
+            getTargetPosition={() => playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
             onArrive={() => setFlyingToShip(false)}
           />
         )}
@@ -371,7 +432,7 @@ export function InterstellarScene() {
             controlsRef={controlsRef}
             getPosition={() =>
               trackedShip
-                ? getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
+                ? playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
                 : new Vector3(...starScenePosition(selectedStar!))
             }
           />
@@ -406,7 +467,7 @@ export function InterstellarScene() {
             {selectedNeighborhoodId === 'solar-neighborhood' && (
               <DistanceThresholdWatcher mode="min" threshold={ENTER_DISTANCE} onTrigger={() => enterSystem('sol', 'Sol')} />
             )}
-            <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={enterGalactic} controlsRef={controlsRef} />
+            <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitInterstellarToGalactic} controlsRef={controlsRef} />
           </>
         )}
 
@@ -431,6 +492,41 @@ export function InterstellarScene() {
               <span className="inspect-label">Distance</span>
               <span className="inspect-value">{selectedStar.distanceLy.toFixed(2)} ly from Sol</span>
             </div>
+            {(() => {
+              const claim = claimsByStar.get(selectedStar.id) ?? UNCLAIMED
+              if (claim.kind === 'unclaimed') {
+                return (
+                  <div className="inspect-row">
+                    <span className="inspect-label">Owner</span>
+                    <span className="inspect-value">Unclaimed</span>
+                  </div>
+                )
+              }
+              if (claim.kind === 'owned') {
+                const country = getCountry(claim.countryId)
+                return (
+                  <div className="inspect-row">
+                    <span className="inspect-label">Owner</span>
+                    <span className="inspect-value" style={{ color: country?.color }}>
+                      {country?.name ?? claim.countryId}
+                    </span>
+                  </div>
+                )
+              }
+              return (
+                <div className="inspect-row">
+                  <span className="inspect-label">Contested by</span>
+                  <span className="inspect-value">
+                    {claim.countryIds.map((id, i) => (
+                      <span key={id} style={{ color: getCountry(id)?.color }}>
+                        {i > 0 ? ', ' : ''}
+                        {getCountry(id)?.name ?? id}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              )
+            })()}
             <div className="inspect-divider" />
             {selectedStar.hasSystemData ? (
               focusedStar ? (

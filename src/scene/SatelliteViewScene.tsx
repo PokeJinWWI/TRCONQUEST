@@ -19,11 +19,13 @@ import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
 import { OrbitRing } from './OrbitRing'
 import { getSystemStars } from '../data/starData'
-import { planMove, satelliteOrbitLocalPosition, canFollow, oppositeMoonSyncOrbit, clusterRestingShipsByFleet } from './shipPhysics'
+import { satelliteOrbitLocalPosition, canFollow, oppositeMoonSyncOrbit, clusterRestingShipsByFleet } from './shipPhysics'
+import { orderSelectedFleets } from './commsVisual'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { InspectPanel } from '../components/InspectPanel'
+import { PlanetArmyMarkers, PlanetGroundHud } from './PlanetArmyMarkers'
 
 interface SatelliteViewSceneProps {
   bodyName: string
@@ -85,8 +87,6 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const setShipOrder = useShipStore((s) => s.setShipOrder)
-  const setFtlCharge = useShipStore((s) => s.setFtlCharge)
   const setFollowing = useShipStore((s) => s.setFollowing)
   // Ships resting in orbit around this exact body — the "correct
   // corresponding view" a move order here should actually be visible in, not
@@ -221,11 +221,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'body', systemId: selectedStarId, bodyName }, useGameTimeStore.getState().simDays)
-    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
-    // Pinned in a firefight: the destination becomes an FTL escape charge
-    // instead of a move order (see planMove's 'engaged' result).
-    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+    orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
   }
 
   // Right-clicking a moon orders the currently-selected ship into orbit
@@ -240,15 +236,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(
-      ship,
-      { kind: 'body', systemId: selectedStarId, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) },
-      useGameTimeStore.getState().simDays,
-    )
-    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
-    // Pinned in a firefight: the destination becomes an FTL escape charge
-    // instead of a move order (see planMove's 'engaged' result).
-    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+    orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) })
   }
 
   // Right-clicking another ship while one is selected orders the selected
@@ -309,7 +297,11 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
             variant={isStar ? 'star' : 'planet'}
             onSelect={handleSelectPrimary}
             onOrderTo={handleOrderToPrimary}
-          />
+          >
+            {/* The ground war — control shell and army chips, turning with
+                the world. */}
+            {!isStar && <PlanetArmyMarkers bodyName={primaryBody.name} radius={primaryVisualRadius} />}
+          </HologramBody>
           <FocusableMarker
             name={primaryBody.name}
             radius={primaryVisualRadius}
@@ -436,6 +428,8 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
             maxDistance={MAX_DISTANCE}
           />
         </Canvas>
+
+        {!isStar && <PlanetGroundHud bodyName={primaryBody.name} />}
 
         {selectedShipId ? (
           <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />

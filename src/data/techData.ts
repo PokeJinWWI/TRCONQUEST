@@ -223,6 +223,20 @@ export const PHYSICS_TECHS: TechNode[] = [
     cost: 110,
     prerequisites: [['relativity']],
   },
+  // Signal relays riding the same exotic-matter warp field a warp drive
+  // does — see commsData.ts's WARP_COMMS_SPEED_C for the actual speed this
+  // buys (a balance pick, not derived). The first of two comms tiers gating
+  // FTL communications (see commsData.ts's own top-of-file comment) —
+  // before either is researched, every command to a distant fleet and
+  // everything the player sees of it travels at light speed instead.
+  {
+    id: 'warp-comms',
+    name: 'Warp Comms',
+    category: 'physics',
+    description: 'FTL signal relays, riding the same exotic-matter warp field a warp drive does — order and report transit times measured in days rather than years.',
+    cost: 90,
+    prerequisites: [['warp-theory']],
+  },
   // --- Quantum ------------------------------------------------------
   {
     id: 'quantum-mechanics',
@@ -317,6 +331,20 @@ export const PHYSICS_TECHS: TechNode[] = [
     description: 'Manufacturing hyperium directly from exotic matter, rather than relying on rare natural deposits.',
     cost: 300,
     prerequisites: [['hyperspace-theory', 'exotic-matter-theory']],
+  },
+  // The second, capstone comms tier — needs BOTH Hyperspace Theory AND
+  // Quantum Communications (whose own description already reads as a proto
+  // instant-comms tech) actually landed, the same "converges from two
+  // branches" shape hyperium-synthesis above uses. Removes the light-speed
+  // command lag entirely, at any distance, for whichever country researches
+  // it — see commsData.ts.
+  {
+    id: 'hyper-comms',
+    name: 'Hyper Comms',
+    category: 'physics',
+    description: 'Entangled hyperspace relays — a message departs and arrives in the same instant, anywhere. The end of the light-speed leash on command.',
+    cost: 260,
+    prerequisites: [['hyperspace-theory', 'quantum-communications']],
   },
 
   // --- Anomalous (locked) ------------------------------------------------------

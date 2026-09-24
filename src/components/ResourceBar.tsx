@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RESOURCE_TYPES, HUD_RESOURCE_IDS, type ResourceId } from '../data/resourceData'
-import { useResourceStore } from '../state/resourceStore'
+import { usePlayerResources } from '../hooks/usePlayerResources'
 import { ResourceIcon } from './ResourceIcons'
 import { DraggableWindow } from './DraggableWindow'
 
@@ -22,8 +22,7 @@ function formatDelta(delta: number): string {
 // pattern this project already follows for Society/Engineering's tech
 // trees and the Outliner's Colonies/Starbases sections.
 export function ResourceBar() {
-  const amounts = useResourceStore((s) => s.amounts)
-  const monthlyDelta = useResourceStore((s) => s.monthlyDelta)
+  const { amounts, monthlyDelta } = usePlayerResources()
   const [openId, setOpenId] = useState<ResourceId | null>(null)
   const openResource = RESOURCE_TYPES.find((r) => r.id === openId) ?? null
   const visibleResources = HUD_RESOURCE_IDS.map((id) => RESOURCE_TYPES.find((r) => r.id === id)!)

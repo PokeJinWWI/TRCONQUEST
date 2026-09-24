@@ -38,6 +38,9 @@ import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { syncEngagements, stepEngagements, shipCombatProfile, COMBAT_STEP_DAYS } from '../src/scene/combatResolution'
 import { useCombatStore } from '../src/state/combatStore'
 import { pointDistance } from '../src/scene/combatArena'
+import { setUpTestNations, TEST_ENEMY, TEST_PLAYER } from './testNations'
+
+setUpTestNations()
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -196,7 +199,7 @@ console.log('\n=== 7. A spawned custom design actually fights, through the real 
     id: 'custom-1',
     classId,
     name: 'Armed Test Skiff 1',
-    allegiance: 'player',
+    ownerId: TEST_PLAYER,
     location: { kind: 'orbiting', systemId: 'sol', bodyName: 'Earth', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 },
     order: null,
     hyperdriveReadySimDays: 0,
@@ -215,7 +218,7 @@ console.log('\n=== 7. A spawned custom design actually fights, through the real 
     id: 'hostile-1',
     classId: hostileClass.id,
     name: 'Hostile Corvette',
-    allegiance: 'hostile',
+    ownerId: TEST_ENEMY,
     location: { kind: 'orbiting', systemId: 'sol', bodyName: 'Earth', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 },
     order: null,
     hyperdriveReadySimDays: 0,

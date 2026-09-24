@@ -8,6 +8,7 @@ import { Planet } from './Planet'
 import { AsteroidBelt } from './AsteroidBelt'
 import { ShipMarker } from './ShipMarker'
 import { NavigationLine } from './NavigationLine'
+import { PendingOrderLine } from './PendingOrderLine'
 import { ShipOrbitRing } from './ShipOrbitRing'
 import { ShipPanel } from './ShipPanel'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
@@ -22,19 +23,16 @@ import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { getPlanetPosition } from './orbitMath'
-import {
-  getShipRenderPosition,
-  planMove,
-  shipSystemId,
-  canFollow,
-  bodyLivePosition,
-  clusterRestingShipsByFleet,
-  SYSTEM_SHIP_ORBIT_RADIUS,
-} from './shipPhysics'
+import { shipSystemId, canFollow, bodyLivePosition, clusterRestingShipsByFleet, SYSTEM_SHIP_ORBIT_RADIUS } from './shipPhysics'
+import { orderSelectedFleets, playerVisualShipRenderPosition } from './commsVisual'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
-import { useShipStore } from '../state/shipStore'
-import { ALLEGIANCE_COLORS } from '../data/shipData'
+import { useShipStore, type MoveDestination } from '../state/shipStore'
+import { RELATION_COLORS } from '../data/shipData'
+import { getCountry } from '../data/countryData'
+import { ownerDisplay } from '../data/countryRoster'
+import { useTerritoryStore } from '../state/territoryStore'
+import { usePlayerStore } from '../state/playerStore'
 import { InspectPanel } from '../components/InspectPanel'
 
 const MAX_DISTANCE = 32000
@@ -47,12 +45,30 @@ const ENTER_SATELLITE_DISTANCE = 3
 // How close the "Go To" fly-in to a selected ship needs to get before it
 // counts as arrived.
 const SHIP_FOCUS_ARRIVE_DISTANCE = 1.2
-// How far a route line's arrowhead reaches back from its destination, in
-// this view's own units (UNITS_PER_AU = 20, so this is ~1.25 AU) — sized
-// against typical in-system hop lengths (tens to hundreds of units), not
-// against the arena-scale constant CombatPathLine uses, which is meters by
-// comparison at this view's zoom.
-const NAV_ARROW_LENGTH = 25
+// How big a route line's arrowhead reads on screen, in CSS pixels — see
+// routeArrow.pixelsToWorldSize. Screen-space rather than a world-unit
+// length so it looks the same size whether the camera is all the way out at
+// Neptune or zoomed in close on a short hop (a fixed world-unit length used
+// to look tiny far out and enormous zoomed in close — a real, reported bug).
+const NAV_ARROW_LENGTH = 16
+// Dash/gap for a comms-delayed command still in transit (see
+// PendingOrderLine) — same screen-space units, just finer since a dash
+// pattern reads as noise if the dashes themselves are as big as the
+// arrowhead.
+const PENDING_DASH_SIZE = 6
+const PENDING_GAP_SIZE = 4
+
+// PendingOrderLine's resolveTarget for THIS view's own frame (system-local,
+// star-at-origin scene units) — a 'body' or 'point' destination is directly
+// representable here; a 'star'/'interstellar-point' one (a hyperdrive jump
+// ordered while resting in-system) isn't, since this view has no coordinate
+// for anywhere outside its own system, so it's left undrawn rather than
+// drawing something meaningless.
+function resolveSystemDestinationPosition(destination: MoveDestination, simDays: number): Vector3 | null {
+  if (destination.kind === 'body') return bodyLivePosition(destination.bodyName, simDays)
+  if (destination.kind === 'point') return new Vector3(...destination.position)
+  return null
+}
 
 // Default starting camera direction/distance for a fresh arrival (fly-in
 // from interstellar, breadcrumb) — close enough that the outer planets
@@ -117,12 +133,15 @@ export function SolarSystemScene() {
   // Modes selector) — null when no mode is active, in which case every
   // planet just renders its own natural color.
   const mapMode = useMapModeStore((s) => s.mode)
-  const mapModeColors = useMemo(() => mapModeColorsFor(mapMode, PLANETS), [mapMode, PLANETS])
+  // Live borders (see scene/territory.ts) — who owns and who currently holds
+  // each body, drawn as rings on the planet markers.
+  const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
+  const bodyController = useTerritoryStore((s) => s.bodyController)
+  const mapModeColors = useMemo(() => mapModeColorsFor(mapMode, PLANETS, bodyOwner), [mapMode, PLANETS, bodyOwner])
   const ships = useShipStore((s) => s.ships)
+  const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const setShipOrder = useShipStore((s) => s.setShipOrder)
-  const setFtlCharge = useShipStore((s) => s.setFtlCharge)
   const setFollowing = useShipStore((s) => s.setFollowing)
   const systemShips = useMemo(() => ships.filter((ship) => shipSystemId(ship) === selectedStarId), [ships, selectedStarId])
   // One marker per fleet resting together, not per ship — see
@@ -258,29 +277,23 @@ export function SolarSystemScene() {
     setFlyingToName(selectedName)
   }
 
-  // Right-clicking a body orders the currently-selected ship (if any) to go
-  // orbit it — reaction drive or warp, whichever the ship has (hyperdrive
-  // doesn't apply within a system, see shipPhysics.planMove).
+  // Right-clicking a body sends every selected fleet (see
+  // shipStore.selectedShipIds) to orbit it, each fleet together at its
+  // slowest ship's pace (commsVisual.orderSelectedFleets / fleetMove.ts).
+  // Still under FTL comms delay: the order applies when the signal reaches
+  // the fleet.
   const handleOrderToBody = (bodyName: string) => {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'body', systemId: selectedStarId, bodyName }, useGameTimeStore.getState().simDays)
-    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
-    // Pinned in a firefight: the destination becomes an FTL escape charge
-    // instead of a move order (see planMove's 'engaged' result).
-    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+    orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const result = planMove(ship, { kind: 'point', systemId: selectedStarId, position: point }, useGameTimeStore.getState().simDays)
-    if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride)
-    // Pinned in a firefight: the destination becomes an FTL escape charge
-    // instead of a move order (see planMove's 'engaged' result).
-    else if (result.kind === 'engaged' && result.charge) setFtlCharge(ship.id, result.charge)
+    orderSelectedFleets({ kind: 'point', systemId: selectedStarId, position: point })
   }
 
   // Right-clicking another ship while one is selected orders the selected
@@ -324,6 +337,12 @@ export function SolarSystemScene() {
             onSelect={handleSelect}
             onOrderTo={handleOrderToBody}
             colorOverride={mapModeColors?.get(planet.name)}
+            ownerColor={getCountry(bodyOwner[planet.name] ?? '')?.color}
+            occupierColor={
+              bodyController[planet.name] && bodyController[planet.name] !== bodyOwner[planet.name]
+                ? ownerDisplay(bodyController[planet.name]).color
+                : undefined
+            }
           />
         ))}
         {BELTS.map((belt) => (
@@ -353,14 +372,34 @@ export function SolarSystemScene() {
           />
         ))}
 
-        {/* Committed orders for the player's own and allied ships only —
-            same information-hiding rule as combat's route lines (see
-            CombatViewScene): hostiles still travel exactly as before, this
-            just doesn't hand the player a readout of where they're headed. */}
+        {/* Committed orders for the player's own ships only — same
+            information-hiding rule as combat's route lines (see
+            CombatViewScene): other nations' ships still travel exactly as
+            before, this just doesn't hand the player a readout of where
+            they're headed. */}
         {systemShips
-          .filter((ship) => ship.order && (ship.allegiance === 'player' || ship.allegiance === 'friendly'))
+          .filter((ship) => ship.order && ship.ownerId === playerCountryId)
           .map((ship) => (
-            <NavigationLine key={`nav-${ship.id}`} ship={ship} color={ALLEGIANCE_COLORS[ship.allegiance]} arrowLength={NAV_ARROW_LENGTH} />
+            <NavigationLine key={`nav-${ship.id}`} ship={ship} color={RELATION_COLORS.own} arrowLength={NAV_ARROW_LENGTH} />
+          ))}
+
+        {/* Commands still queued behind FTL comms delay (see
+            commsVisual.ts) — dashed, distinct from the solid committed-order
+            line above, which the ship may well still be flying while this
+            one waits to arrive (see PendingOrderLine's own comment). Same
+            own-ships-only visibility rule. */}
+        {systemShips
+          .filter((ship) => ship.pendingMoveOrder && ship.ownerId === playerCountryId)
+          .map((ship) => (
+            <PendingOrderLine
+              key={`pending-${ship.id}`}
+              ship={ship}
+              color={RELATION_COLORS.own}
+              arrowLength={NAV_ARROW_LENGTH}
+              dashSize={PENDING_DASH_SIZE}
+              gapSize={PENDING_GAP_SIZE}
+              resolveTarget={resolveSystemDestinationPosition}
+            />
           ))}
 
         {flyingToName && (
@@ -386,7 +425,7 @@ export function SolarSystemScene() {
             key={trackedShip.id}
             controlsRef={controlsRef}
             arriveDistance={SHIP_FOCUS_ARRIVE_DISTANCE}
-            getTargetPosition={() => getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
+            getTargetPosition={() => playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
             onArrive={() => setFlyingToShip(false)}
           />
         )}
@@ -403,7 +442,7 @@ export function SolarSystemScene() {
             controlsRef={controlsRef}
             getPosition={() => {
               if (lockOnEnabled) {
-                if (trackedShip) return getShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
+                if (trackedShip) return playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
                 if (selectedPlanetData) return getPlanetPosition(selectedPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
                 if (selectedStar) return new Vector3(...selectedStar.position)
               }

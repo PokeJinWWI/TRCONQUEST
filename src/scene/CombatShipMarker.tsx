@@ -2,9 +2,11 @@ import { useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import type { Group } from 'three'
-import { ALLEGIANCE_COLORS } from '../data/shipData'
+import { RELATION_COLORS } from '../data/shipData'
+import { useRelationTo } from '../state/shipRelations'
 import { tacticBadge } from '../data/combatData'
 import { useShipStore } from '../state/shipStore'
+import { isAdditiveClick } from './selectionInput'
 import { activeTacticIds, useCombatStore } from '../state/combatStore'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { isChaffActive, overallHealthFraction, participantArenaPosition, shipCombatProfile } from './combatResolution'
@@ -32,7 +34,6 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
   const ship = useShipStore((s) => s.ships.find((sh) => sh.id === shipId))
-  const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   // Re-rendered only when the *health* actually moves enough to matter — the
   // bar is rounded to whole percent, so this subscription is far quieter than
@@ -67,10 +68,13 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
     groupRef.current?.position.copy(pos)
   })
 
+  // Before the early return below — a hook can't be called conditionally.
+  const relation = useRelationTo(ship?.ownerId ?? '')
+
   if (!ship) return null
 
-  const selected = ship.id === selectedShipId
-  const color = ALLEGIANCE_COLORS[ship.allegiance]
+  const selected = useShipStore((s) => s.selectedShipIds.includes(shipId))
+  const color = RELATION_COLORS[relation]
   const charging = !!ship.combat.ftlCharge
   const chaffed = isChaffActive(ship.combat, simDays)
 
@@ -81,7 +85,7 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
           className={`ship-marker combat-ship-marker${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
-          onClick={() => selectShip(ship.id)}
+          onClick={(e) => (isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(ship.id) : selectShip(ship.id))}
           onContextMenu={(e) => {
             e.preventDefault()
             onOrderTarget?.(ship.id)

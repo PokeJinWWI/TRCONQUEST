@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore } from '../state/shipStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
-import { planMove, resolveArrivalLocation, restingDestinationOf, destinationsEqual, warpCooldownAfterArrival } from '../scene/shipPhysics'
+import { planMoveUnchecked, resolveArrivalLocation, restingDestinationOf, destinationsEqual, warpCooldownAfterArrival } from '../scene/shipPhysics'
 
 // Settles any ship whose order has completed (simDays past arrivalSimDays)
 // into its resting location, fires any queued "jump when ready" hyperdrive
@@ -55,9 +55,20 @@ export function useShipOrderSettler() {
         // cooldown, or while paused, queues here (see InterstellarScene's
         // handleOrderToStar) instead of being refused outright; fire it the
         // instant both conditions clear, regardless of which view is
-        // mounted.
-        if (ship.pendingHyperdriveJump && simDays >= ship.hyperdriveReadySimDays && !paused) {
-          const result = planMove(ship, { kind: 'star', starId: ship.pendingHyperdriveJump }, simDays)
+        // mounted. The optional third condition is FTL comms delay (see
+        // ShipInstance.pendingHyperdriveJumpArrivesSimDays and
+        // commsVisual.ts's queueMoveOrder) — absent for a plain
+        // cooldown-only queue, in which case `?? 0` makes it a no-op check,
+        // exactly as if this clause weren't here at all.
+        if (
+          ship.pendingHyperdriveJump &&
+          simDays >= ship.hyperdriveReadySimDays &&
+          simDays >= (ship.pendingHyperdriveJumpArrivesSimDays ?? 0) &&
+          !paused
+        ) {
+          // The ship's own queued jump firing — acting for its owner nation, not
+          // a fresh player click, so the ownership gate doesn't apply.
+          const result = planMoveUnchecked(ship, { kind: 'star', starId: ship.pendingHyperdriveJump }, simDays)
           if (result.kind === 'instant') {
             setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
             if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
@@ -88,7 +99,7 @@ export function useShipOrderSettler() {
             const alreadyChasing = ship.order && destinationsEqual(ship.order.destination, targetDestination)
             const alreadyThere = !ship.order && destinationsEqual(restingDestinationOf(ship.location), targetDestination)
             if (!alreadyChasing && !alreadyThere) {
-              const result = planMove(ship, targetDestination, simDays)
+              const result = planMoveUnchecked(ship, targetDestination, simDays)
               if (result.kind === 'order') {
                 setShipOrder(ship.id, result.order, result.warpReadyOverride, true)
               } else if (result.kind === 'instant') {

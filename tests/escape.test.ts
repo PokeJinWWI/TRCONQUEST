@@ -15,6 +15,9 @@ import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { pickSafeStar, shipCurrentStarId } from '../src/hooks/useEscapeBehavior'
 import { useHyperlaneStore } from '../src/state/hyperlaneStore'
 import { STARS } from '../src/data/starData'
+import { ownerFor, setUpTestNations } from './testNations'
+
+setUpTestNations()
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -25,13 +28,16 @@ function check(label: string, cond: boolean, detail = '') {
   }
 }
 
-function makeShip(classId: string, id: string, allegiance: ShipInstance['allegiance'], starId: string): ShipInstance {
+// `role` is testNations shorthand ('player' / 'hostile' / 'neutral') or a
+// real nation id — every ship is owned by a nation.
+function makeShip(classId: string, id: string, role: string, starId: string): Omit<ShipInstance, 'fleetId'> & { fleetId: string } {
   const cls = SHIP_CLASSES.find((c) => c.id === classId)!
   return {
     id,
+    fleetId: `solo-${id}`,
     classId,
     name: `${cls.name} ${id}`,
-    allegiance,
+    ownerId: ownerFor(role),
     location: { kind: 'star', starId, offset: [0, 0, 0] },
     order: null,
     hyperdriveReadySimDays: 0,
@@ -62,10 +68,13 @@ console.log('\n=== Escape behavior: pickSafeStar ===')
   check('skips a star with hostile presence', avoided?.id !== 'alpha-centauri', avoided?.id)
   check('...and still lands on some other real star', !!avoided && STARS.some((s) => s.id === avoided.id), avoided?.id)
 
-  // Friendly presence at a star should NOT disqualify it — only hostiles do.
-  const friendlyThere = makeShip('cruiser', 'f1', 'friendly', 'alpha-centauri')
-  const stillGoes = pickSafeStar(fleeingShip, 'sol', [fleeingShip, friendlyThere])
-  check('a friendly (non-hostile) presence does not disqualify a star', stillGoes?.id === 'alpha-centauri', stillGoes?.id)
+  // Another nation's ships at a star should NOT disqualify it unless that
+  // nation is actually at war with ours — only hostiles do.
+  const neutralThere = makeShip('cruiser', 'n1', 'neutral', 'alpha-centauri')
+  const stillGoes = pickSafeStar(fleeingShip, 'sol', [fleeingShip, neutralThere])
+  check("a nation at peace with ours being there does not disqualify a star", stillGoes?.id === 'alpha-centauri', stillGoes?.id)
+  const ownThere = makeShip('cruiser', 'o1', 'player', 'alpha-centauri')
+  check('neither does our own fleet being there', pickSafeStar(fleeingShip, 'sol', [fleeingShip, ownThere])?.id === 'alpha-centauri')
 
   // If every other star is hostile-occupied, there's genuinely nowhere safe.
   const everyoneElse = STARS.filter((s) => s.id !== 'sol').map((s, i) => makeShip('cruiser', `h${i}`, 'hostile', s.id))

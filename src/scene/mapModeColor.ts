@@ -37,19 +37,23 @@ function gdpColors(planets: PlanetData[]): Map<string, string> {
 // color (see countryData.ts).
 const UNCLAIMED_COLOR = '#4a4a52'
 
-function politicalColors(planets: PlanetData[]): Map<string, string> {
+// Colored by the LIVE owner (state/territoryStore.ts), so a world ceded in a
+// peace treaty recolors immediately. Falls back to the authored planet data
+// only when no live ownership map is passed (a caller outside a game).
+function politicalColors(planets: PlanetData[], owners?: Record<string, string>): Map<string, string> {
   const colors = new Map<string, string>()
   for (const p of planets) {
-    colors.set(p.name, (p.ownerId && getCountry(p.ownerId)?.color) || UNCLAIMED_COLOR)
+    const owner = owners ? owners[p.name] : p.ownerId
+    colors.set(p.name, (owner && getCountry(owner)?.color) || UNCLAIMED_COLOR)
   }
   return colors
 }
 
 // Per-planet color overrides for the active map mode, keyed by planet name —
 // null when no mode is active, meaning every planet renders its own natural
-// color (see planetData's `color`).
-export function mapModeColorsFor(mode: MapMode, planets: PlanetData[]): Map<string, string> | null {
+// color (see planetData's `color`). `owners` is the live territory map.
+export function mapModeColorsFor(mode: MapMode, planets: PlanetData[], owners?: Record<string, string>): Map<string, string> | null {
   if (mode === 'gdp') return gdpColors(planets)
-  if (mode === 'political') return politicalColors(planets)
+  if (mode === 'political') return politicalColors(planets, owners)
   return null
 }

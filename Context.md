@@ -706,3 +706,66 @@ Update this file with relevant, useful information as you go.
 - Wants to interact with buildings/employment, not just read them (→ construction done, PMs next).
 - Appreciates honest feasibility assessments over hype.
 - Git commit conventions: branch off main if needed; end commit messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`; only commit/push when asked.
+
+
+---
+
+# Project Context — Combat/Navy track handoff (diplomacy, armies, fleets, ground war)
+
+(Appended by /newchat. `Context.md` == `CONTEXT.md` on this case-insensitive FS — append, never overwrite. Standing rules live in `CLAUDE.md`; its Architecture notes already cover ownership, N-sided combat, territory, armies, war/peace and the AI, but NOT yet the items marked NEW below.)
+
+## Objective
+Demo-quality build built around the navy/navigation: nations own ships, diplomacy + borders + war, army invasions, a multi-agent strategic AI (`src/ai/`) — and now (in progress) a **spatial ground war** on planetary maps, fleets that travel together, multi-select, and no-nation "rogue" ships. User owns combat/tech/ships; a collaborator owns economy/politics (only sanctioned edit there: `economyStore.setWorldOwner`).
+
+## Current State
+**Done and verified (tsc clean, 17 test suites pass, build ok, live-checked):**
+- Phases 1–6 of the original plan: `ownerId` on ships, N-sided combat (`isEnemy`/`hostileSides`), per-country resources/shipyard, territory (`bodyOwner`/`bodyController`, system claims), troop transports, war score/peace (`scene/warScore.ts`, `scene/peace.ts`), `src/ai/` (Diplomat→Strategist→Shipwright→Admiral→Marshal + executor), Diplomacy panel + toasts.
+- **Phase A (rogues):** `countryRoster.ts` has `PIRATES_ID`/`FRIENDLY_ROGUE_ID`, `ownerDisplay(id)`; `diplomacyStore.rogueHostility` (pirates at war with everyone; friendlies only with pirates; nothing stored in wars); `ShipRelation` gained `'allied'`; console owner dropdown lists both; CombatPanel has an "Allied" group. Tests in `factions.test.ts` §6.
+- **Phase B (fleets/selection):** fleets travel as one at slowest ship's pace (`scene/fleetMove.ts` `planFleetMove`/`synchroniseOrders`; `commsVisual.applyFleetMove/queueFleetMoveOrder/orderSelectedFleets`; `useCommsResolver` groups by fleet); **no auto-merge on arrival** (merge/split explicit; `setShipLocation` keeps `fleetId`); multi-select (`shipStore.selectedShipIds/toggleShipSelection/selectShips`, `scene/selectionInput.isAdditiveClick`, Shift/Ctrl/Cmd everywhere; `SelectionGroupPanel` in ShipPanel; arena formation-move + group targeting); AI executor moves whole fleets, Marshal splits transports off, Admiral merges idle warship fleets. `tests/fleet.test.ts`.
+- **Phase C (surface/terrain):** `data/groundData.ts` (terrain, unit types, surface classes, sim constants), `scene/surfaceMesh.ts` (nested icosphere 162/642/2562 nodes, Float64, atan2 `arc`), `scene/planetTerrain.ts` (seeded procedural terrain per body; mainland guarantee; key slots; giants get aerostat belt). `tests/surface.test.ts`, `tests/terrain.test.ts`.
+- **Phase D (unit model + sim):** armies are formations of units (`data/armyData.ts`: assault/marine/garrison; `scene/armyLogic.ts` `Army`/`GroundUnit`/`makeUnits`/`armyStrength`), `scene/groundLogic.ts` (findPath A* on fine grid, dropCheck, defaultDropNode, placeUnits, musterNode, armyInContact), `scene/groundResolution.ts` `stepGroundWar` (integer step clock, 16/day; range-gated fighting; painting nodes; key-node capture rule), `scene/groundAI.ts`, `state/armyStore.ts` (recruit/embark/`land(shipId, dropNode?)`/addArmy/`orderUnits`/`targetUnit`/`haltUnits`), `territoryStore.nodeHolders/paintNodes/clearPaintBetween`, `useGroundCombatResolver.resolveGroundWar`. `tests/ground.test.ts`, rewritten `army.test.ts`, updated `ai.test.ts` (Marshal now uses instant Lanchester estimate `wouldTakeBody`, `AI_INVASION_POWER_RATIO=0.9`; headless campaign: Mars declares d93, occupies Venus d296, cedes d298), `diplomacy/territory` tests.
+- **Phase E (AI on ground model):** done as part of D (marshal `chooseDropNode`, `land` intent carries `dropNode`).
+- **Phase F (ground view UI) — code written, live-verified partly:** `viewStore` level `'ground'` (`enterGround/exitGround`, reuses `selectedBodyName`), `scene/GroundViewScene.tsx` (globe w/ vertex colours, grid per density, front lines, key-node chips, unit chips with fan-out, path/fire lines, hover tooltip), `components/GroundPanel.tsx` (roster + grid selector + drop/spawn banners) and `UnitCard` (capabilities in real km), `state/groundViewStore.ts`, entry points (`ArmyViews`: "Choose landing site…", "Open ground map", marine recruit; `PlanetGroundHud` button), satellite view: `HologramBody` children slot + `PlanetArmyMarkers` (control shell + per-army chips). Breadcrumb/LocationLabel/TabBar handle `'ground'`.
+- **Phase G (console spawn army) — code written, NOT yet live-tested:** `DebugConsole.tsx` "Spawn Army" (owner incl. rogues, formation, body, placement Auto / Pick on ground map / Aboard selected transport).
+
+**Live browser findings so far (Venus ground map):** landing at a clicked site works; chips fan out; card/roster show correct data; Shift/Cmd multi-select works (via dispatched clicks); right-click ordering works when the pane is fronted and the page freshly loaded (real `contextmenu` on canvas → path set, `orderedMove` true); a 60-day fight resolved with Mars taking the city key node while capital+spaceport stayed Venus's (world not yet flipped — expected under key-node rule; garrisons still standing).
+The working tree has NO probe in `main.tsx` (reverted). Nothing is committed (user rule).
+
+## Decisions
+- Ground war runs on the strategic clock; leave the clock alone when viewing the ground map (space battle → tactical time effectively pauses it).
+- Capture rule: hold ALL key nodes (capital/cities/spaceport, or outpost) with no enemy on them; other nodes only recolour.
+- Armies = formations of typed units; transports carry whole armies; player commands individual units (multi-select). Units stand for many people (`UnitTypeSpec.personnel`).
+- Hostile rogue ships = pirates, at war with everyone; friendly rogues fight only pirates, show as "Allied"; nobody commands either.
+- Fleets merge only on request; new spawns still join a fleet resting at the spawn point.
+- Gas/ice giants: aerostat belt is the only walkable ground. Ranges/speeds authored in km on an Earth-sized reference body and converted to angles (small moons get a mild speed factor); UI shows real km per body.
+- `CONTACT_RANGE_KM_REF=480` (~1 fine cell), artillery 900; drop exclusion 2.5 cells.
+
+## Constraints
+- Never commit unless asked. Verification sweep after any change: `npx tsc -b`, every `tests/*.test.ts` via `npx tsx`, `npm run build` (all must be clean). macOS: no `timeout`; `sed -i ''`.
+- Store-probe convention: temporarily expose stores on `window` in `src/main.tsx`, ALWAYS revert (`git checkout src/main.tsx`) before ending a turn. Browser pane is often "hidden" (rAF suspended, 1 frame/500ms): call `tabs_select` to front it before screenshots/clicks; HMR reloads leave stale console errors — do a full `navigate` reload and redo setup.
+- Don't read `Context.md` whole; don't touch collaborator economy code beyond `setWorldOwner`.
+- Two pre-existing flaky checks in `combat.test.ts` were fixed by pinning rng to `() => 0` (applyShot misses when `rng() < missChance`).
+
+## Important Details
+- Ground step clock: `simDaysToGroundStep`; `armyStore.resolvedThroughStep`; a call stops short of a partial step. Occupations returned by `stepGroundWar` are applied by the resolver (`occupyBody` + event). Losses feed `recordLoss` (war score).
+- Player's own units never move on their own; AI (`isAutonomous = id !== player`) units are driven by `groundAI`. Militia hold posts.
+- `groundSurface(body, owners)` → `surfaceOf(body, tier)`; tier from `settlementTierOf` (capital/world/outpost/wild). ~30 ms per body generation.
+- Venus has a small mainland; default landing may land near enemy; island landings warn (only marines reach the mainland).
+- Test helpers: `tests/testNations.ts` (TEST_PLAYER/TEST_ENEMY), AI tests use `freshWorld()`.
+
+## Open Questions
+- Balance is untuned (assault vs garrison capital needs ~3+ armies; user has not reviewed numbers in `groundData.ts`/`armyData.ts`).
+- Known gaps: shipyard keeps building while capital occupied; nation losing capital gives AI nothing to do; moon close-up view (MoonDetailScene) has no army markers; declined AI peace offer not logged.
+- Should ground view force normal time? (User chose: leave clock alone.)
+
+## Next Steps
+1. Finish live verification in the browser: (a) full capture of Venus (all 3 key nodes) → occupation event + Inspect/satellite reflect it; (b) `Choose landing site` from a transport's Ship panel via real clicks; (c) grid density switching (nothing moves); (d) UnitCard on Venus vs Phobos km figures; (e) debug console "Spawn Army" (Auto, Pick on ground map, Aboard transport; owners incl. pirates/friendly); (f) satellite-view control shell recolouring + army chips; (g) fleet/multi-select map behaviour with real Shift-click on Outliner rows and right-click orders (Phase B was only unit-tested + arena roster checked live). Use store-probe; revert `main.tsx`.
+2. Run full sweep (tsc, all 17 tests, build) — last full sweep was green before Phase F/G UI edits; only tsc has been rerun since.
+3. Update `CLAUDE.md` Architecture notes for NEW items: rogue factions, fleets-travel-together/explicit merge, multi-select, ground model (surfaceMesh/planetTerrain/groundLogic/groundResolution/groundAI, `nodeHolders`, `'ground'` view level).
+4. Optional polish: tune balance; MoonDetailScene army chips; screen-space chip fan-out edge cases; consider adding a `ground` test for `ArmyViews`-free UI logic.
+
+## User Preferences
+- Real-time steering; short corrections are authoritative. Ask (AskUserQuestion) before big architectural commitments; plan mode for big features (used this session; plan at `/Users/pikaj/.claude/plans/shimmying-conjuring-dahl.md`).
+- No invented mechanics for systems that don't exist; report test/balance findings honestly incl. "no bug found".
+- Live browser verification for anything UI-observable; ships have owners and hostility is national (no allegiance field).
+- Wants to be able to spawn hostile/friendly no-nation ships and armies from the console, multi-select with Shift/Ctrl/Cmd, fleets moving at slowest ship's speed.
