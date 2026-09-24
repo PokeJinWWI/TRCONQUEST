@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { fightPace, paceAfterSpaceFight } from './fightPace'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipCombatState, type ShipInstance } from '../state/shipStore'
 import { useFleetStore } from '../state/fleetStore'
@@ -97,10 +98,19 @@ export function useCombatResolver() {
       // handled the sync path, so a fight that ended in a kill — the normal
       // case — left the player stranded in tactical time afterwards.
       const followCombatWithClock = (hasEngagements: boolean) => {
+        fightPace.spaceLive = hasEngagements
         if (!combat.autoTacticalOnEngage) return
         const time = useGameTimeStore.getState()
+        // Down to tactical from strategic OR operational; back up only as far
+        // as a ground fight still going on needs (see hooks/fightPace.ts).
         if (hasEngagements && time.mode !== 'tactical') time.setMode('tactical')
-        else if (!hasEngagements && time.mode === 'tactical') time.setMode('normal')
+        else if (!hasEngagements) {
+          // Back to strategic if nothing is left to fight; to operational if
+          // only a ground battle is. (Operational is only reached from
+          // tactical — a space fight never speeds a slower clock up.)
+          const next = paceAfterSpaceFight()
+          if (next === 'normal' ? time.mode !== 'normal' : time.mode === 'tactical') time.setMode(next)
+        }
       }
 
       if (synced.length === 0) {

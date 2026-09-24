@@ -5,16 +5,45 @@ import { useShipStore } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { usePlayerStore } from '../state/playerStore'
 import { atWar, useDiplomacyStore } from '../state/diplomacyStore'
-import { reapLostCargo } from '../scene/armyLogic'
+import { playerFightLive, reapLostCargo } from '../scene/armyLogic'
 import { groundSurface } from '../scene/groundLogic'
 import { simDaysToGroundStep, stepGroundWar } from '../scene/groundResolution'
 import { controllerOf } from '../scene/territory'
 import { recordLoss } from '../scene/peace'
 import { ARMY_LOSS_VALUE_PER_STRENGTH } from '../data/diplomacyData'
 import { ownerDisplay } from '../data/countryRoster'
+import { useCombatStore } from '../state/combatStore'
+import { fightPace } from './fightPace'
 
 function nameOf(countryId: string): string {
   return ownerDisplay(countryId).name
+}
+
+// A fight the player is in pulls the clock down from strategic to operational
+// pace (a ground battle is unwatchable at six days a second), and once the
+// last fight — ground or space — is over, a couple of days after the final
+// shot, the clock goes back to strategic. It pulls down only when a fight
+// STARTS (or starts again after a lull), never while one is going on, so the
+// player can always switch pace mid-battle and it stays put. Never touches
+// `paused`. Same preference as the space-combat switch to tactical time
+// (combatStore.autoTacticalOnEngage).
+export const GROUND_FIGHT_COOLDOWN_DAYS = 2
+let lastPlayerFightSimDays = -Infinity
+
+export function followGroundFightWithClock(fighting: boolean, simDays: number): void {
+  const wasLive = fightPace.groundLive
+  const newFight = fighting && simDays - lastPlayerFightSimDays >= GROUND_FIGHT_COOLDOWN_DAYS
+  if (fighting) {
+    fightPace.groundLive = true
+    lastPlayerFightSimDays = simDays
+  } else if (wasLive && simDays - lastPlayerFightSimDays >= GROUND_FIGHT_COOLDOWN_DAYS) {
+    fightPace.groundLive = false
+  }
+  if (!useCombatStore.getState().autoTacticalOnEngage) return
+  const time = useGameTimeStore.getState()
+  if (newFight && time.mode === 'normal') time.setMode('operational')
+  const ended = wasLive && !fightPace.groundLive
+  if (ended && !fightPace.spaceLive && time.mode !== 'normal') time.setMode('normal')
 }
 
 // One step of the ground war up to `simDays` — the hook's body, exported so a
@@ -44,6 +73,7 @@ export function resolveGroundWar(simDays: number): void {
     from,
     simDays,
   )
+  followGroundFightWithClock(playerFightLive(step.armies, player), simDays)
   if (step.armies !== armyState.armies || step.resolvedThroughStep !== armyState.resolvedThroughStep) {
     useArmyStore.getState().setArmies(step.armies, step.resolvedThroughStep)
   }

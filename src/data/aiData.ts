@@ -12,6 +12,13 @@ export const AI_NEIGHBOUR_FRICTION = -0.5
 export const AI_OPINION_RECOVERY = 0.25
 // Minimum sim-days between peace offers in one war.
 export const AI_PEACE_OFFER_COOLDOWN_DAYS = 60
+// Offers made to the PLAYER are throttled harder, since each one stops the
+// game for a decision. Minimum sim-days between offers to the player in one
+// war — doubling each time the player declines, up to the cap...
+export const AI_PLAYER_OFFER_COOLDOWN_DAYS = 180
+export const AI_PLAYER_OFFER_MAX_COOLDOWN_DAYS = 1440
+// ...and between any two offers to the player, from any empire.
+export const AI_PLAYER_OFFER_MIN_GAP_DAYS = 60
 // An AI empire looks for a white peace when losing by this much...
 export const AI_WHITE_PEACE_WHEN_SCORE_BELOW = -30
 // ...or this exhausted...

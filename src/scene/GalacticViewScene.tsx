@@ -1,3 +1,4 @@
+import { BattleBadge } from '../components/BattleBadge'
 import { useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Html, OrbitControls, Stars } from '@react-three/drei'
@@ -54,6 +55,7 @@ function NeighborhoodNode({ neighborhood, selected, onSelect }: NeighborhoodNode
         >
           <span className="marker-dot" style={{ borderColor: neighborhood.color }} />
           {(hovered || selected) && <span className="marker-label">{neighborhood.name}</span>}
+          <BattleBadge scope={{ neighborhood: neighborhood.id }} />
         </div>
       </Html>
     </group>

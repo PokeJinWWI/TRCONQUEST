@@ -4,16 +4,24 @@ export const START_YEAR = 2600
 export const DAYS_PER_YEAR = 365.25
 export const SECONDS_PER_DAY = 86_400
 
-// Two rates on ONE clock, not two clocks. Everything positional in this
+// Three rates on ONE clock, not three clocks. Everything positional in this
 // project (planet orbits, moon orbits, ship travel, cooldowns) is already a
 // pure function of `simDays`, so "tactical time" costs nothing structurally —
 // it's just a wildly different number of sim-days added per real second. No
 // existing physics needed changing to support it, and there's no second
 // timeline that could desync from the first.
-export type TimeMode = 'normal' | 'tactical'
+//   normal       strategic pace — economy, fleets crossing systems
+//   operational  ground-war pace — a battle between armies plays out over
+//                days, far too fast to command at strategic pace
+//   tactical     ship-combat pace — see TACTICAL_DAYS_PER_SECOND
+export type TimeMode = 'normal' | 'operational' | 'tactical'
 
 // Strategic pace: a real second buys six simulated days.
 export const NORMAL_DAYS_PER_SECOND = 6
+// Operational pace: a real second buys one simulated day — a sixth of
+// strategic, slow enough to watch a ground battle (a couple of dozen ground
+// steps a second) and give orders in it. Ground battles last weeks to months.
+export const OPERATIONAL_DAYS_PER_SECOND = 1
 // Tactical pace: a real second buys one simulated *second* — the pace combat
 // is authored in (weapon cooldowns, FTL charge times, lattice traversal are
 // all specified in sim-seconds). ~518,400x slower than normal 1x, which is
@@ -33,13 +41,16 @@ export const TACTICAL_DAYS_PER_SECOND = 1 / SECONDS_PER_DAY
 // combat is actually authored at (1 sim-second per real second).
 export const NORMAL_SPEED_MULTIPLIERS = [1, 2, 3, 4, 5]
 export const TACTICAL_SPEED_MULTIPLIERS = [1, 2, 3, 4, 5]
+export const OPERATIONAL_SPEED_MULTIPLIERS = [1, 2, 3, 4, 5]
 
 export function speedMultipliersFor(mode: TimeMode): number[] {
-  return mode === 'tactical' ? TACTICAL_SPEED_MULTIPLIERS : NORMAL_SPEED_MULTIPLIERS
+  if (mode === 'tactical') return TACTICAL_SPEED_MULTIPLIERS
+  return mode === 'operational' ? OPERATIONAL_SPEED_MULTIPLIERS : NORMAL_SPEED_MULTIPLIERS
 }
 
 export function daysPerSecondFor(mode: TimeMode): number {
-  return mode === 'tactical' ? TACTICAL_DAYS_PER_SECOND : NORMAL_DAYS_PER_SECOND
+  if (mode === 'tactical') return TACTICAL_DAYS_PER_SECOND
+  return mode === 'operational' ? OPERATIONAL_DAYS_PER_SECOND : NORMAL_DAYS_PER_SECOND
 }
 
 // Combat is authored in seconds (a 5-second hyperdrive charge, a 2-second

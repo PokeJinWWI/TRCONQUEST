@@ -19,11 +19,13 @@ import { TradePanel } from './TradePanel'
 import { StockpilePanel } from './StockpilePanel'
 import { MapModeSelector } from './MapModeSelector'
 import { SettingsPanel } from './SettingsPanel'
+import { SandboxPanel } from './SandboxPanel'
 import { usePlayerStore } from '../state/playerStore'
 import { useViewStore } from '../state/viewStore'
 import { getCountry } from '../data/countryData'
 
 const SETTINGS_CATEGORY = 'Settings'
+const SANDBOX_CATEGORY = 'Sandbox'
 const MILITARY_CATEGORY = 'Military'
 const NAVY_SUBCATEGORY = 'Navy'
 const ARMY_SUBCATEGORY = 'Army'
@@ -64,6 +66,15 @@ const CATEGORIES: CategoryDef[] = [
   { name: SETTINGS_CATEGORY },
 ]
 
+// The sandbox has no nation behind it, so no government, economy, markets or
+// diplomacy to open — just what a fight needs, and the sandbox's own controls.
+const SANDBOX_CATEGORIES: CategoryDef[] = [
+  { name: SANDBOX_CATEGORY },
+  { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY] },
+  { name: MAP_MODES_CATEGORY },
+  { name: SETTINGS_CATEGORY },
+]
+
 // Central Bank sub-tab label → the panel's internal section id.
 const CB_SECTIONS: Record<string, CentralBankSection> = {
   Overview: 'overview',
@@ -84,6 +95,7 @@ const CB_SECTIONS: Record<string, CentralBankSection> = {
 // the Outliner's empty Starbases section — there's no
 // government/economy/society/characters simulation behind these yet.
 function renderContent(category: CategoryDef, subcategory: string | null) {
+  if (category.name === SANDBOX_CATEGORY) return <SandboxPanel />
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />
@@ -124,9 +136,11 @@ export function NavBar() {
   const setNavCategory = useViewStore((s) => s.setNavCategory)
   const techTreeOpen = useViewStore((s) => s.techTreeOpen)
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
-  const nationName = (selectedCountryId && getCountry(selectedCountryId)?.name) ?? ''
+  const sandbox = usePlayerStore((s) => s.sandbox)
+  const nationName = sandbox ? 'Sandbox' : (selectedCountryId && getCountry(selectedCountryId)?.name) ?? ''
+  const categories = sandbox ? SANDBOX_CATEGORIES : CATEGORIES
 
-  const activeCategory = CATEGORIES.find((c) => c.name === activeCategoryName) ?? null
+  const activeCategory = categories.find((c) => c.name === activeCategoryName) ?? null
 
   const handleCategoryClick = (category: CategoryDef) => {
     if (activeCategoryName === category.name) {
@@ -146,7 +160,7 @@ export function NavBar() {
         <div className="nav-sidebar-content">
           <div className="nav-nation-name">{nationName}</div>
           <div className="nav-category-list">
-            {CATEGORIES.map((category) => (
+            {categories.map((category) => (
               <button
                 key={category.name}
                 type="button"

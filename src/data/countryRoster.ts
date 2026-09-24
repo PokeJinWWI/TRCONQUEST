@@ -26,15 +26,19 @@ export function isValidAiWarTarget(countryId: string, playerCountryId: string | 
 // --- No-nation factions ------------------------------------------------------
 //
 // Owners that aren't nations: spawnable from the debug console for testing
-// fights without starting a war. They own ships and armies like anyone else,
-// but have no territory, economy, diplomacy or AI, and nobody commands them.
-// Their hostility is fixed (see diplomacyStore.rogueHostility) rather than
-// stored as wars, so they never show up in the Diplomacy panel, war score or
-// peace terms:
-//   Pirates              at war with everyone (every nation and the friendlies)
+// fights without starting a war, and the whole cast of the sandbox (see
+// SANDBOX_FACTIONS). They own ships and armies like anyone else, but have no
+// territory, economy, diplomacy or AI, and nobody commands them. Their
+// hostility is fixed (see diplomacyStore.rogueHostility) rather than stored as
+// wars, so they never show up in the Diplomacy panel, war score or peace terms:
+//   Pirates              at war with everyone (every nation and every faction)
 //   Friendly Irregulars  at war only with pirates; shown to the player as Allied
+//   Neutral Traders      at war only with pirates; shown to the player as Neutral
+//   Sandbox Commander    the sandbox player — at war only with pirates
 export const PIRATES_ID = 'rogue-pirates'
 export const FRIENDLY_ROGUE_ID = 'rogue-friendly'
+export const NEUTRAL_ROGUE_ID = 'rogue-neutral'
+export const SANDBOX_PLAYER_ID = 'rogue-sandbox-player'
 
 export interface RogueFaction {
   id: string
@@ -42,20 +46,52 @@ export interface RogueFaction {
   color: string
 }
 
+// Colours match the ship relation colours (shipData.RELATION_COLORS), so an
+// army reads as hostile/allied/neutral/yours the same way a ship does.
 export const ROGUE_FACTIONS: readonly RogueFaction[] = [
-  { id: PIRATES_ID, name: 'Pirates', color: '#ff7a3d' },
+  { id: PIRATES_ID, name: 'Pirates', color: '#ff3b3b' },
   { id: FRIENDLY_ROGUE_ID, name: 'Friendly Irregulars', color: '#5ab0ff' },
+  { id: NEUTRAL_ROGUE_ID, name: 'Neutral Traders', color: '#ffd23f' },
 ]
 
+// The sandbox's player: a faction like the others, so everything that already
+// handles "an owner that isn't a nation" handles the player too.
+export const SANDBOX_PLAYER: RogueFaction = { id: SANDBOX_PLAYER_ID, name: 'Sandbox Commander', color: '#4ade80' }
+
+const ALL_FACTIONS: readonly RogueFaction[] = [...ROGUE_FACTIONS, SANDBOX_PLAYER]
+
 export function isRogueFaction(id: string): boolean {
-  return id === PIRATES_ID || id === FRIENDLY_ROGUE_ID
+  return ALL_FACTIONS.some((f) => f.id === id)
 }
 
 // Display name and colour for any owner — a nation or a no-nation faction.
 export function ownerDisplay(id: string): { name: string; color: string } {
   const country = getCountry(id)
   if (country) return { name: country.name, color: country.color }
-  const rogue = ROGUE_FACTIONS.find((r) => r.id === id)
-  if (rogue) return { name: rogue.name, color: rogue.color }
+  const faction = ALL_FACTIONS.find((f) => f.id === id)
+  if (faction) return { name: faction.name, color: faction.color }
   return { name: id, color: '#9aa4b2' }
+}
+
+// --- Sandbox -----------------------------------------------------------------
+//
+// How the player relates to each sandbox faction is just diplomacy: hostile
+// ships are pirates, friendly ones friendly irregulars, neutral ones neutral
+// traders, and 'own' is the player's own faction.
+export type SandboxRelation = 'own' | 'friendly' | 'neutral' | 'hostile'
+
+export const SANDBOX_RELATIONS: readonly SandboxRelation[] = ['own', 'friendly', 'neutral', 'hostile']
+
+export const SANDBOX_RELATION_LABELS: Record<SandboxRelation, string> = {
+  own: 'Yours',
+  friendly: 'Friendly',
+  neutral: 'Neutral',
+  hostile: 'Hostile',
+}
+
+export const SANDBOX_OWNER_BY_RELATION: Record<SandboxRelation, string> = {
+  own: SANDBOX_PLAYER_ID,
+  friendly: FRIENDLY_ROGUE_ID,
+  neutral: NEUTRAL_ROGUE_ID,
+  hostile: PIRATES_ID,
 }

@@ -1,15 +1,31 @@
 import { create } from 'zustand'
+import { SANDBOX_PLAYER_ID } from '../data/countryRoster'
 
 // Which country the player picked at the main menu (see MainMenu.tsx) — the
 // single piece of session state that gates the whole game shell (see
 // App.tsx). Plain in-memory store, no persistence, same as every other store
 // here: a fresh page load always returns to the menu.
+//
+// Sandbox mode picks no country at all: the player is a no-nation faction
+// (SANDBOX_PLAYER_ID), so `selectedCountryId` is still set — that's what
+// gates the shell and marks which ships and armies are the player's — but it
+// names no entry in COUNTRIES, and `sandbox` tells the rest of the game to
+// leave nations, territory, economy and AI switched off.
 interface PlayerState {
   selectedCountryId: string | null
+  sandbox: boolean
   selectCountry: (id: string) => void
+  startSandbox: () => void
 }
 
 export const usePlayerStore = create<PlayerState>((set) => ({
   selectedCountryId: null,
-  selectCountry: (id) => set({ selectedCountryId: id }),
+  sandbox: false,
+  selectCountry: (id) => set({ selectedCountryId: id, sandbox: false }),
+  startSandbox: () => set({ selectedCountryId: SANDBOX_PLAYER_ID, sandbox: true }),
 }))
+
+// Whether this session is the sandbox (no nations, no economy, no AI).
+export function isSandbox(): boolean {
+  return usePlayerStore.getState().sandbox
+}

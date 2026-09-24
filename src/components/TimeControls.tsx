@@ -9,7 +9,16 @@ import {
 
 const MODE_LABELS: Record<TimeMode, string> = {
   normal: 'STRAT',
+  operational: 'OPS',
   tactical: 'TAC',
+}
+
+const MODES: TimeMode[] = ['normal', 'operational', 'tactical']
+
+const MODE_TITLES: Record<TimeMode, string> = {
+  normal: 'Strategic time — 6 days per second. For the economy and fleets crossing space.',
+  operational: 'Operational time — 1 day per second. For ground battles.',
+  tactical: 'Tactical time — 1 second per second. For ship combat.',
 }
 
 export function TimeControls() {
@@ -35,18 +44,22 @@ export function TimeControls() {
         {formatDate(date)}
         {mode === 'tactical' && <span className="time-clock">{formatClockTime(simDays)}</span>}
       </span>
-      <button
-        type="button"
-        className={`time-mode-btn${mode === 'tactical' ? ' tactical' : ''}`}
-        onClick={() => setMode(mode === 'tactical' ? 'normal' : 'tactical')}
-        title={
-          mode === 'tactical'
-            ? 'Tactical time — 1 second per second. Switch to strategic pace.'
-            : 'Strategic time — 6 days per second. Switch to tactical pace for combat.'
-        }
-      >
-        {MODE_LABELS[mode]}
-      </button>
+      {/* Pick the pace directly — a click on a mode goes straight to it, so
+          strategic is always one click away, whatever the game switched to. */}
+      <span className="time-modes" role="group" aria-label="Time pace">
+        {MODES.map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={`time-mode-btn${m === 'tactical' ? ' tactical' : ''}${m === 'operational' ? ' operational' : ''}${mode === m ? ' active' : ''}`}
+            onClick={() => setMode(m)}
+            aria-pressed={mode === m}
+            title={MODE_TITLES[m]}
+          >
+            {MODE_LABELS[m]}
+          </button>
+        ))}
+      </span>
       {/* Both speed buttons stay live while paused — only the ends of the
           ladder disable them. See gameTimeStore.speedUp/slowDown. */}
       <button

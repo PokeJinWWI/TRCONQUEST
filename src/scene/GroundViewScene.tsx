@@ -12,12 +12,12 @@ import { useViewStore } from '../state/viewStore'
 import { usePlayerStore } from '../state/playerStore'
 import { atWar } from '../state/diplomacyStore'
 import { useRelationKey } from '../state/shipRelations'
-import { groundSurface, holderOf } from './groundLogic'
+import { groundSurface, holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
 import { TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { isAdditiveClick } from './selectionInput'
-import { GroundPanel, UnitCard, handleGroundClick, orderSelectedUnitsTo, targetWithSelection } from '../components/GroundPanel'
+import { GroundPanel, UnitCard, describeDefense, describeMoveCost, handleGroundClick, orderSelectedUnitsTo, targetWithSelection } from '../components/GroundPanel'
 
 // The planetary map: a world's surface as a globe of terrain, its front lines
 // (who holds each node, painted as the fighting moves), its key nodes, and
@@ -273,7 +273,7 @@ function FacingHtml({ point, radius, children }: { point: SurfacePoint; radius: 
   })
   return (
     <group ref={groupRef}>
-      <Html zIndexRange={[5, 0]}>
+      <Html zIndexRange={[5, 0]} pointerEvents="none">
         <div ref={wrapRef}>{children}</div>
       </Html>
     </group>
@@ -320,6 +320,10 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
   useRelationKey()
   const color = ownerDisplay(ownerId).color
   const hostile = !!player && atWar(ownerId, player)
+  const select = (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
+    if (isAdditiveClick(e)) useGroundViewStore.getState().toggleUnit(unitId)
+    else useGroundViewStore.getState().selectUnit(unitId)
+  }
   useFrame(({ camera }) => {
     const found = findUnit(unitId)
     const g = groupRef.current
@@ -352,17 +356,30 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
   })
   return (
     <group ref={groupRef}>
-      <Html zIndexRange={[10, 0]}>
-        <div ref={wrapRef}>
+      {/* The Html root and the fan wrapper must not take clicks themselves:
+          the chip is shifted by a CSS translate(-50%, -50%), which moves it on
+          screen but not its layout box, so these boxes sit half a chip off the
+          visible square and would swallow clicks meant for the chip (or a
+          neighbour's) beneath them. Only the button is clickable. */}
+      <Html zIndexRange={[10, 0]} pointerEvents="none">
+        <div ref={wrapRef} style={{ pointerEvents: 'none' }}>
           <button
             type="button"
             className={`ground-unit-marker${selected ? ' selected' : ''}${hostile ? ' hostile' : ''}`}
             style={{ borderColor: color, color }}
             title={`${ownerDisplay(ownerId).name} — ${UNIT_TYPES[type].name}`}
+            // Select on press, not on click: a click needs the chip to still
+            // be under the pointer on release, and a moving unit (or a
+            // rotating globe) slides out from under it. Keyboard activation
+            // (no pointer) still arrives as a click with detail 0.
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              e.stopPropagation()
+              select(e)
+            }}
             onClick={(e) => {
               e.stopPropagation()
-              if (isAdditiveClick(e)) useGroundViewStore.getState().toggleUnit(unitId)
-              else useGroundViewStore.getState().selectUnit(unitId)
+              if (e.detail === 0) select(e)
             }}
             onContextMenu={(e) => {
               e.preventDefault()
@@ -456,8 +473,29 @@ function HoverTooltip({ bodyName, surface }: { bodyName: string; surface: BodySu
   const node = useGroundViewStore((s) => s.hoverNode)
   const holders = useTerritoryStore((s) => s.nodeHolders[bodyName])
   const owners = useTerritoryStore((s) => s.bodyOwner)
+  const selectedIds = useGroundViewStore((s) => s.selectedUnitIds)
+  const armies = useArmyStore((s) => s.armies)
   if (node === null) return null
-  const terrain = TERRAIN[TERRAIN_IDS[surface.terrain[node]]]
+  const terrainId = TERRAIN_IDS[surface.terrain[node]]
+  const terrain = TERRAIN[terrainId]
+  // What this ground does to the selected units' pace, in their real km/day
+  // here (slowest of them — a group moves at its slowest member's speed by
+  // order, though each unit walks its own path).
+  const speeds: number[] = []
+  let blocked = 0
+  for (const army of armies) {
+    for (const u of army.units) {
+      if (!selectedIds.includes(u.id) || UNIT_TYPES[u.type].holdsPosition) continue
+      if (terrain.passable === 'none' || (terrain.passable === 'amphibious' && !UNIT_TYPES[u.type].amphibious) || UNIT_TYPES[u.type].terrain[terrainId]?.impassable) blocked++
+      else speeds.push(radToKm(unitSpeedRadPerDay(u.type, surface.radiusKm, terrainId), surface.radiusKm))
+    }
+  }
+  const pace =
+    speeds.length > 0
+      ? `your selection moves ${blocked > 0 ? `(${blocked} can't enter) ` : ''}${Math.round(Math.min(...speeds))} km/day here`
+      : blocked > 0
+        ? `your selection can't enter`
+        : describeMoveCost(terrain.moveCost)
   const holder = terrain.paintable ? holderOf(bodyName, node, owners, { [bodyName]: holders ?? {} }) : undefined
   const key = surface.keySlots.find((k) => k.node === node)
   return (
@@ -466,8 +504,8 @@ function HoverTooltip({ bodyName, surface }: { bodyName: string; surface: BodySu
       {key && <span> · {key.kind}</span>}
       <span>
         {' '}
-        · move ×{terrain.moveCost < 90 ? terrain.moveCost : '—'} · defense ×{terrain.defense}
-        {terrain.passable === 'amphibious' ? ' · amphibious only' : terrain.passable === 'none' ? ' · impassable' : ''}
+        · movement: {pace} · cover: {describeDefense(terrain.defense)}
+        {terrain.passable === 'amphibious' ? ' · amphibious units only' : terrain.passable === 'none' ? ' · impassable' : ''}
       </span>
       {holder && <span style={{ color: ownerDisplay(holder).color }}> · {ownerDisplay(holder).name}</span>}
     </div>

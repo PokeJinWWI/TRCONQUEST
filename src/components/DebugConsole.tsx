@@ -3,21 +3,22 @@ import { pristineCombatState, useShipStore } from '../state/shipStore'
 import type { ShipClass } from '../data/shipData'
 import { SHIP_CLASSES, describeFtlDrive } from '../data/shipData'
 import { COUNTRIES } from '../data/countryData'
-import { ROGUE_FACTIONS } from '../data/countryRoster'
+import { ROGUE_FACTIONS, SANDBOX_OWNER_BY_RELATION, SANDBOX_RELATIONS, SANDBOX_RELATION_LABELS } from '../data/countryRoster'
 import { ARMY_KINDS, type ArmyKind } from '../data/armyData'
 import { useArmyStore } from '../state/armyStore'
 import { useGroundViewStore } from '../state/groundViewStore'
 import { useViewStore } from '../state/viewStore'
 import { getMoonsForPlanet } from '../scene/moonData'
-import { useDiplomacyStore } from '../state/diplomacyStore'
-import { useGameTimeStore } from '../state/gameTimeStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { getPlanetsForStar } from '../scene/planetData'
 import { STARS, getSystemStars } from '../data/starData'
 import { SOL_SYSTEM_ID, SOL_BODY_NAME, DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from '../scene/shipPhysics'
-import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, scenarioNations, type Scenario } from '../data/scenarios'
+import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/scenarios'
+import { ARMY_SCENARIOS, type ArmyScenario } from '../data/armyScenarios'
+import { currentScenarioOwners, loadArmyScenario, loadShipScenario } from '../scene/scenarioLoader'
 import { usePlayerStore } from '../state/playerStore'
+import { useDebugConsoleStore } from '../state/debugConsoleStore'
 import { useTechStore } from '../state/techStore'
 import type { TechCategory } from '../data/techData'
 
@@ -29,14 +30,51 @@ const SPAWNABLE_STARS = STARS.filter((s) => s.hasSystemData)
 // cosmetic, not physically meaningful.
 const SPAWN_PHASE_OFFSETS_DEG = [0, 90, 180, 270]
 
-// Dev-only ship-spawning tool — toggled with the backtick key. Gated at the
-// call site (App.tsx) behind `import.meta.env.DEV`, which Vite replaces
-// with a literal `false` in production builds; dead-code elimination then
-// strips this whole module (and everything it imports) out of what ships
-// to players, not just hides it in the running page. Toggling it open
-// doesn't need to be a secret since it can't exist in a production bundle.
+// The owner choices for spawning: in a normal game your nation, the other
+// nations and the no-nation factions; in the sandbox there are no nations, so
+// just the four sandbox relations (blank = yours, like "Your nation").
+function OwnerOptions({ sandbox, selectedCountryId }: { sandbox: boolean; selectedCountryId: string | null }) {
+  if (sandbox) {
+    return (
+      <>
+        <option value="">{SANDBOX_RELATION_LABELS.own}</option>
+        {SANDBOX_RELATIONS.filter((r) => r !== 'own').map((r) => (
+          <option key={r} value={SANDBOX_OWNER_BY_RELATION[r]}>
+            {SANDBOX_RELATION_LABELS[r]}
+          </option>
+        ))}
+      </>
+    )
+  }
+  return (
+    <>
+      <option value="">Your nation</option>
+      {COUNTRIES.filter((c) => c.id !== selectedCountryId).map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+        </option>
+      ))}
+      {/* No-nation factions — pirates fight everyone, friendly irregulars
+          fight only pirates (see countryRoster). */}
+      {ROGUE_FACTIONS.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.name} (no nation)
+        </option>
+      ))}
+    </>
+  )
+}
+
+// The spawn / scenario / research cheat console — toggled with the backtick
+// key. Mounted at the call site (App.tsx) in dev builds, and in the SANDBOX in
+// any build (cheats are the point of the sandbox). In a normal game it's gated
+// behind `import.meta.env.DEV`, which Vite replaces with a literal `false` in
+// production builds; the `sandbox` half is a runtime value, so this module
+// ships in production, but it only ever renders once the sandbox is started.
 export function DebugConsole() {
-  const [open, setOpen] = useState(false)
+  const open = useDebugConsoleStore((s) => s.open)
+  const setOpen = useDebugConsoleStore((s) => s.setOpen)
+  const sandbox = usePlayerStore((s) => s.sandbox)
   const [classId, setClassId] = useState(SHIP_CLASSES[0].id)
   const [starId, setStarId] = useState(SOL_SYSTEM_ID)
   const [nearBody, setNearBody] = useState(SOL_BODY_NAME)
@@ -45,6 +83,7 @@ export function DebugConsole() {
   // with whoever else is present (see state/shipRelations.ts).
   const [ownerChoice, setOwnerChoice] = useState<string>('')
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id)
+  const [armyScenarioId, setArmyScenarioId] = useState(ARMY_SCENARIOS[0]?.id ?? '')
   // Army spawning (see handleSpawnArmy).
   const [armyOwner, setArmyOwner] = useState<string>('')
   const [armyKind, setArmyKind] = useState<ArmyKind>('assault')
@@ -78,7 +117,7 @@ export function DebugConsole() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === '`') setOpen((o) => !o)
+      if (e.key === '`') useDebugConsoleStore.getState().toggle()
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
@@ -150,64 +189,33 @@ export function DebugConsole() {
     })
   }
 
-  // Loads a pre-built fight — see src/data/scenarios.ts for what each
-  // difficulty tier actually means and how it was verified. Clears every
-  // ship currently on the board first: a scenario is meant to be a clean,
-  // reproducible test bed, and a leftover ship from an earlier manual spawn
-  // (or a previous scenario) would silently change the fight without it
-  // being obvious why the outcome doesn't match what was verified.
+  // Loads a pre-built ship fight — see src/data/scenarios.ts for what each
+  // difficulty tier actually means and how it was verified, and
+  // scene/scenarioLoader.ts for what loading one does.
   const handleLoadScenario = () => {
     const scenario = SCENARIOS.find((sc) => sc.id === scenarioId)
-    if (!scenario || !selectedCountryId) return
-    // Roles resolve to real nations, which are then put at war — a
-    // scenario's fight is an ordinary national war (see scenarios.ts).
-    const nations = scenarioNations(selectedCountryId, COUNTRIES.map((c) => c.id))
-    if (!nations) return
-    useDiplomacyStore.getState().forceWar(nations.player, nations.enemy, useGameTimeStore.getState().simDays)
-    for (const ship of ships) removeShip(ship.id)
-    scenario.ships.forEach((spec, i) => {
-      const shipClass = resolveShipClass(spec.classId)
-      if (!shipClass) return
-      spawnCounter.current += 1
-      const phaseDeg = SPAWN_PHASE_OFFSETS_DEG[i % SPAWN_PHASE_OFFSETS_DEG.length]
-      spawnShip({
-        id: `ship-${Date.now()}-${spawnCounter.current}`,
-        classId: shipClass.id,
-        name: `${shipClass.name} ${spawnCounter.current}`,
-        ownerId: spec.role === 'player' ? nations.player : nations.enemy,
-        location: {
-          kind: 'orbiting',
-          systemId: SOL_SYSTEM_ID,
-          bodyName: scenario.bodyName,
-          periodDays: DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
-          phaseDeg,
-          inclinationDeg: 0,
-        },
-        order: null,
-        hyperdriveReadySimDays: 0,
-        warpReadySimDays: 0,
-        warpEnabled: true,
-        warpWhenReady: false,
-        chaffAutoDeploy: true,
-        pendingHyperdriveJump: null,
-        followingShipId: null,
-        combat: pristineCombatState(shipClass.combat),
-        // Medium scenarios bake the WINNING stance in here directly (see
-        // scenarios.ts) — loading one starts already-tuned, since the point
-        // is showing that one stance change flips the outcome, not making
-        // the player rediscover which one from a cold default.
-        stance: spec.stance ?? 'balanced',
-      })
-    })
+    const owners = currentScenarioOwners()
+    if (!scenario || !owners) return
+    loadShipScenario(scenario, owners)
+  }
+
+  // Loads a pre-built ground battle and opens the world's planetary map.
+  const handleLoadArmyScenario = () => {
+    const scenario = ARMY_SCENARIOS.find((sc) => sc.id === armyScenarioId)
+    const owners = currentScenarioOwners()
+    if (!scenario || !owners) return
+    const r = loadArmyScenario(scenario, owners)
+    setArmyMessage(r.ok ? `Loaded ${scenario.name} on ${r.bodyName}` : r.reason)
   }
 
   const selectedScenario: Scenario | undefined = SCENARIOS.find((sc) => sc.id === scenarioId)
+  const selectedArmyScenario: ArmyScenario | undefined = ARMY_SCENARIOS.find((sc) => sc.id === armyScenarioId)
 
   return (
     <div className="debug-console">
       <div className="debug-console-header">
-        DEBUG CONSOLE
-        <span className="debug-console-badge">DEV BUILD ONLY</span>
+        {import.meta.env.DEV ? 'DEBUG CONSOLE' : 'CHEATS'}
+        <span className="debug-console-badge">{import.meta.env.DEV ? 'DEV BUILD ONLY' : 'SANDBOX'}</span>
         <button type="button" className="debug-console-close" onClick={() => setOpen(false)} aria-label="Close">
           ×
         </button>
@@ -260,19 +268,7 @@ export function DebugConsole() {
         <div className="debug-console-row">
           <label htmlFor="debug-owner">Owner</label>
           <select id="debug-owner" value={ownerChoice} onChange={(e) => setOwnerChoice(e.target.value)}>
-            <option value="">Your nation</option>
-            {COUNTRIES.filter((c) => c.id !== selectedCountryId).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-            {/* No-nation factions — pirates fight everyone, friendly
-                irregulars fight only pirates (see countryRoster). */}
-            {ROGUE_FACTIONS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name} (no nation)
-              </option>
-            ))}
+            <OwnerOptions sandbox={sandbox} selectedCountryId={selectedCountryId} />
           </select>
         </div>
 
@@ -307,17 +303,7 @@ export function DebugConsole() {
         <div className="debug-console-row">
           <label htmlFor="debug-army-owner">Owner</label>
           <select id="debug-army-owner" value={armyOwner} onChange={(e) => setArmyOwner(e.target.value)}>
-            <option value="">Your nation</option>
-            {COUNTRIES.filter((c) => c.id !== selectedCountryId).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-            {ROGUE_FACTIONS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name} (no nation)
-              </option>
-            ))}
+            <OwnerOptions sandbox={sandbox} selectedCountryId={selectedCountryId} />
           </select>
         </div>
         <div className="debug-console-row">
@@ -357,6 +343,29 @@ export function DebugConsole() {
 
         <button type="button" className="debug-console-spawn-btn" onClick={handleLoadScenario}>
           Load Scenario
+        </button>
+
+        {/* Ground battles on Earth's unowned ground, same tiers — see
+            armyScenarios.ts. Replaces every army on the board. */}
+        <div className="debug-console-row">
+          <label htmlFor="debug-army-scenario">Army scenario</label>
+          <select id="debug-army-scenario" value={armyScenarioId} onChange={(e) => setArmyScenarioId(e.target.value)}>
+            {(['easy', 'medium', 'hard'] as const).map((tier) => (
+              <optgroup key={tier} label={SCENARIO_DIFFICULTY_LABELS[tier]}>
+                {ARMY_SCENARIOS.filter((sc) => sc.difficulty === tier).map((sc) => (
+                  <option key={sc.id} value={sc.id}>
+                    {sc.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
+        {selectedArmyScenario && <div className="debug-console-scenario-desc">{selectedArmyScenario.description}</div>}
+
+        <button type="button" className="debug-console-spawn-btn" onClick={handleLoadArmyScenario}>
+          Load Army Scenario
         </button>
 
         <div className="debug-console-divider" />

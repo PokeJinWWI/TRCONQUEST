@@ -21,6 +21,7 @@ import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
 import { useGroundCombatResolver } from './hooks/useGroundCombatResolver'
 import { useCommsResolver } from './hooks/useCommsResolver'
+import { useBattleTracker } from './hooks/useBattleTracker'
 import { useShipyardResolver } from './hooks/useShipyardResolver'
 import { useStrategicResources } from './hooks/useStrategicResources'
 import { useGameSetup } from './hooks/useGameSetup'
@@ -81,6 +82,9 @@ function App() {
   // Fires strategic orders queued behind FTL comms delay once they arrive —
   // see commsVisual.ts / useCommsResolver's own comment.
   useCommsResolver()
+  // Which battles the player is in — the Outliner's list and the combat
+  // indicators on every map level.
+  useBattleTracker()
   // The capital's shipyard, and the placeholder resource supply it builds from
   // — see data/shipyardData.ts.
   useShipyardResolver()
@@ -101,6 +105,7 @@ function App() {
   useHudBarLayout(topBarRef, bottomBarRef)
 
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const sandbox = usePlayerStore((s) => s.sandbox)
   if (!selectedCountryId) return <MainMenu />
 
   return (
@@ -119,11 +124,11 @@ function App() {
 
       <NavBar />
       <Outliner />
-      {/* Dev-only spawn tool — import.meta.env.DEV is a compile-time
-          constant Vite replaces with `false` in production builds, so this
-          branch (and the whole DebugConsole module) is dead-code-eliminated
-          out of what ships to players, not just hidden at runtime. */}
-      {import.meta.env.DEV && <DebugConsole />}
+      {/* The cheat console: dev builds always (import.meta.env.DEV is a
+          compile-time constant Vite replaces with `false` in production, so
+          that half is dead-code-eliminated there), and the sandbox in any
+          build — cheats are what the sandbox is for. */}
+      {(import.meta.env.DEV || sandbox) && <DebugConsole />}
 
       <footer ref={bottomBarRef} className="hud-bar hud-bottom">
         <div className="hud-bottom-left">

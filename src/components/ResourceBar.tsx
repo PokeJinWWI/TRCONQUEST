@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { RESOURCE_TYPES, HUD_RESOURCE_IDS, type ResourceId } from '../data/resourceData'
 import { usePlayerResources } from '../hooks/usePlayerResources'
+import { usePlayerStore } from '../state/playerStore'
 import { ResourceIcon } from './ResourceIcons'
 import { DraggableWindow } from './DraggableWindow'
 
@@ -23,9 +24,12 @@ function formatDelta(delta: number): string {
 // trees and the Outliner's Colonies/Starbases sections.
 export function ResourceBar() {
   const { amounts, monthlyDelta } = usePlayerResources()
+  const sandbox = usePlayerStore((s) => s.sandbox)
   const [openId, setOpenId] = useState<ResourceId | null>(null)
   const openResource = RESOURCE_TYPES.find((r) => r.id === openId) ?? null
   const visibleResources = HUD_RESOURCE_IDS.map((id) => RESOURCE_TYPES.find((r) => r.id === id)!)
+  // The sandbox has no economy, so no stockpiles to show.
+  if (sandbox) return null
 
   return (
     <div className="resource-bar">

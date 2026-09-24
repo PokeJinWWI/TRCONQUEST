@@ -4,6 +4,7 @@
 // dropped — the agents will reassess next pass.
 import { ownerDisplay } from '../data/countryRoster'
 import type { PeaceTerms } from '../data/diplomacyData'
+import { AI_PLAYER_OFFER_COOLDOWN_DAYS, AI_PLAYER_OFFER_MAX_COOLDOWN_DAYS, AI_PLAYER_OFFER_MIN_GAP_DAYS } from '../data/aiData'
 import { useDiplomacyStore } from '../state/diplomacyStore'
 import { useShipyardStore } from '../state/shipyardStore'
 import { useArmyStore } from '../state/armyStore'
@@ -13,6 +14,7 @@ import { useGameTimeStore } from '../state/gameTimeStore'
 import { applyFleetMove, fleetMembersOf } from '../scene/commsVisual'
 import { planMoveUnchecked } from '../scene/shipPhysics'
 import { declareWarOn, makePeace, proposePeace } from '../scene/peace'
+import { useAiStore } from './aiStore'
 import type { Intent } from './types'
 
 function nameOf(id: string): string {
@@ -25,12 +27,30 @@ function describeTerms(terms: PeaceTerms, fromId: string): string {
     : `You cede ${terms.bodies.join(', ')} to ${nameOf(fromId)}.`
 }
 
+// Whether the player may be offered peace in this war right now: not soon
+// after any earlier offer, and less and less often the more they've declined.
+// Pure, so it can be tested without the stores.
+export function mayOfferPeaceToPlayer(
+  simDays: number,
+  record: { lastOfferSimDays: number; declines: number } | undefined,
+  lastAnyOfferSimDays: number | null,
+): boolean {
+  if (lastAnyOfferSimDays !== null && simDays - lastAnyOfferSimDays < AI_PLAYER_OFFER_MIN_GAP_DAYS) return false
+  if (!record) return true
+  const cooldown = Math.min(AI_PLAYER_OFFER_MAX_COOLDOWN_DAYS, AI_PLAYER_OFFER_COOLDOWN_DAYS * 2 ** record.declines)
+  return simDays - record.lastOfferSimDays >= cooldown
+}
+
 // An AI empire offering the player peace: the player decides, through the
-// usual confirmation dialog. Skipped if another decision is already on screen
-// (the Diplomat will offer again after its cooldown).
+// usual confirmation dialog, and the game holds still until they do. Skipped
+// if another decision is already on screen or the throttle says it's too soon
+// (see mayOfferPeaceToPlayer) — the Diplomat will offer again later.
 function offerPeaceToPlayer(fromId: string, warId: string, terms: PeaceTerms, simDays: number): void {
   const confirm = useConfirmStore.getState()
   if (confirm.pending) return
+  const ai = useAiStore.getState()
+  if (!mayOfferPeaceToPlayer(simDays, ai.playerOffers[warId], ai.lastPlayerOfferSimDays)) return
+  ai.recordPlayerOffer(warId, simDays)
   const diplomacy = useDiplomacyStore.getState()
   diplomacy.pushEvent('peace-offered', [fromId], `${nameOf(fromId)} offers peace`, simDays)
   confirm.requestConfirm({
@@ -38,6 +58,8 @@ function offerPeaceToPlayer(fromId: string, warId: string, terms: PeaceTerms, si
     body: 'Decline to fight on.',
     effects: [describeTerms(terms, fromId), 'Every other occupation between you ends, and a two-year truce begins.'],
     confirmLabel: 'Accept peace',
+    pausesGame: true,
+    onCancel: () => useAiStore.getState().recordPlayerDecline(warId),
     onConfirm: () => {
       if (useDiplomacyStore.getState().wars.some((w) => w.id === warId)) {
         makePeace(warId, terms, fromId, useGameTimeStore.getState().simDays)

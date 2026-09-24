@@ -1,3 +1,4 @@
+import { BattleBadge } from '../components/BattleBadge'
 import { useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
@@ -62,6 +63,7 @@ export function Moon({ moon, selected, onSelect, onOrderTo }: MoonProps) {
           >
             <span className="marker-dot" style={{ borderColor: moon.color }} />
             <span className="marker-label">{moon.name}</span>
+            <BattleBadge scope={{ body: moon.name }} />
           </div>
         </Html>
       </group>

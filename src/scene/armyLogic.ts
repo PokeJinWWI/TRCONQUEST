@@ -241,3 +241,17 @@ export function reapLostCargo(armies: Army[], liveShipIds: Set<string>): Army[] 
   const kept = armies.filter((a) => a.location.kind !== 'embarked' || liveShipIds.has(a.location.shipId))
   return kept.length === armies.length ? armies : kept
 }
+
+// Whether a fight involving `playerId`'s ground units is going on right now:
+// one of them is firing, or an enemy is firing at one of them.
+export function playerFightLive(armies: Army[], playerId: string | null): boolean {
+  if (!playerId) return false
+  const mine = new Set<string>()
+  for (const a of armies) if (a.ownerId === playerId && a.location.kind === 'body') for (const u of a.units) mine.add(u.id)
+  if (mine.size === 0) return false
+  for (const a of armies) {
+    if (a.location.kind !== 'body') continue
+    for (const u of a.units) if (u.firingAtId && (a.ownerId === playerId || mine.has(u.firingAtId))) return true
+  }
+  return false
+}

@@ -17,8 +17,10 @@ export function FiscalIndicators() {
   const countryId = usePlayerStore((s) => s.selectedCountryId)
   const reports = useEconomyStore((s) => s.countryReports)
   const countries = useEconomyStore((s) => s.countries)
+  const sandbox = usePlayerStore((s) => s.sandbox)
   const [openId, setOpenId] = useState<FiscalIndicatorId | null>(null)
-  if (!countryId) return null
+  // The sandbox has no nation, so no treasury to show.
+  if (!countryId || sandbox) return null
   const f = reports[countryId]
   const country = countries.find((c) => c.id === countryId)
   const treasury = f?.treasury ?? country?.treasury ?? 0

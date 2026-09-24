@@ -16,9 +16,13 @@ export function useStrategicResources() {
     const seedAll = () => {
       for (const country of COUNTRIES) seedStrategicResources(country.id)
     }
-    if (usePlayerStore.getState().selectedCountryId) seedAll()
+    const started = () => {
+      const { selectedCountryId, sandbox } = usePlayerStore.getState()
+      return !!selectedCountryId && !sandbox
+    }
+    if (started()) seedAll()
     const unsubPlayer = usePlayerStore.subscribe((state, prev) => {
-      if (state.selectedCountryId && state.selectedCountryId !== prev.selectedCountryId) seedAll()
+      if (state.selectedCountryId && !state.sandbox && state.selectedCountryId !== prev.selectedCountryId) seedAll()
     })
 
     let lastTickSimDays = useGameTimeStore.getState().simDays
@@ -32,7 +36,7 @@ export function useStrategicResources() {
       if (elapsed < SIM_DAYS_PER_INCOME_TICK) return
       const ticks = Math.floor(elapsed / SIM_DAYS_PER_INCOME_TICK)
       lastTickSimDays += ticks * SIM_DAYS_PER_INCOME_TICK
-      if (!usePlayerStore.getState().selectedCountryId) return
+      if (!started()) return
       for (const country of COUNTRIES) applyStrategicIncome(country.id, ticks)
     })
     return () => {

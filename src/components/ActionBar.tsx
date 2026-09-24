@@ -52,6 +52,7 @@ export function ActionBar() {
   const worlds = useEconomyStore((s) => s.worlds)
   const countries = useEconomyStore((s) => s.countries)
   const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const sandbox = usePlayerStore((s) => s.sandbox)
   // Every inhabited world the player's nation owns — the switcher's options.
   const ownedWorlds = worlds.filter((w) => w.ownerId === playerCountryId)
 
@@ -63,6 +64,9 @@ export function ActionBar() {
   const scopeCountry = overrideWorld ? countries.find((c) => c.id === overrideWorld.ownerId) : context.country
 
   const activePanel = PANELS.find((p) => p.id === activePanelId) ?? null
+
+  // The sandbox has no economy, politics or diplomacy to open.
+  if (sandbox) return null
 
   const handleClick = (panel: PanelDef) => {
     if (activePanelId === panel.id) {

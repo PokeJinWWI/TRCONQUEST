@@ -1,3 +1,4 @@
+import { BattleBadge } from '../components/BattleBadge'
 import { Html } from '@react-three/drei'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 
@@ -29,6 +30,7 @@ export function FocusableMarker({ name, radius, onSelect, onOrderTo }: Focusable
         onWheel={forwardWheelToCanvas}
       >
         {name}
+        <BattleBadge scope={{ body: name }} />
       </div>
     </Html>
   )

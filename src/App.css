@@ -644,11 +644,33 @@
   background: rgba(111, 227, 255, 0.2);
 }
 
+.time-modes {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* Not the current pace: dimmed, still clickable. */
+.time-mode-btn:not(.active) {
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.time-mode-btn.active {
+  background: rgba(111, 227, 255, 0.22);
+}
+
 .time-mode-btn.tactical {
   border-color: #ff6b4a;
   color: #ff6b4a;
   background: rgba(255, 107, 74, 0.12);
   box-shadow: 0 0 6px rgba(255, 107, 74, 0.35);
+}
+
+.time-mode-btn.operational {
+  border-color: #ffb03b;
+  color: #ffb03b;
+  background: rgba(255, 176, 59, 0.12);
+  box-shadow: 0 0 6px rgba(255, 176, 59, 0.3);
 }
 
 /* Wall-clock readout, shown only in tactical mode where the date is
@@ -4226,6 +4248,119 @@ div.fleet-row .combat-density-row {
   text-align: center;
 }
 
+.main-menu-sandbox {
+  margin-top: 12px;
+  padding: 0 12px;
+}
+
+.main-menu-sandbox-card {
+  width: 260px;
+}
+
+/* Combat indicator on a map marker (BattleBadge): one small pulsing tag per
+   kind of battle at or below it — space cyan, ground amber, matching the
+   Outliner's Battles tags. */
+.battle-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 14px;
+  cursor: pointer;
+  vertical-align: middle;
+  animation: battle-badge-pulse 1.2s ease-in-out infinite;
+}
+
+.battle-badge.space {
+  color: #6fe3ff;
+  border-color: #6fe3ff;
+  background: rgba(111, 227, 255, 0.15);
+}
+
+.battle-badge.ground {
+  color: #ffb03b;
+  border-color: #ffb03b;
+  background: rgba(255, 176, 59, 0.15);
+}
+
+@keyframes battle-badge-pulse {
+  0%, 100% { box-shadow: 0 0 2px currentColor; }
+  50% { box-shadow: 0 0 9px currentColor; }
+}
+
+/* Outliner > Battles: a kind tag (space / ground) then place and live state. */
+.outliner-battle {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.outliner-battle-tag {
+  flex: 0 0 auto;
+  min-width: 46px;
+  text-align: center;
+  padding: 1px 4px;
+  border: 1px solid;
+  border-radius: 2px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.outliner-battle-tag.space {
+  color: #6fe3ff;
+  border-color: rgba(111, 227, 255, 0.6);
+}
+
+.outliner-battle-tag.ground {
+  color: #ffb03b;
+  border-color: rgba(255, 176, 59, 0.6);
+}
+
+.outliner-battle-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.outliner-battle-detail {
+  font-size: 10px;
+  opacity: 0.65;
+}
+
+/* Sandbox panel (Sandbox in the nav bar) — reuses .slot-select/.inspect-*;
+   this is only the relation switch and the full-width buttons. */
+.sandbox-relations {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0 4px;
+}
+
+.sandbox-relation-btn {
+  flex: 1 1 0;
+  padding: 4px 0;
+}
+
+.sandbox-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.sandbox-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sandbox-gap {
+  margin-top: 12px;
+}
+
+.sandbox-clear {
+  display: flex;
+  gap: 6px;
+}
+
 /* Shipyard panel (Military > Navy > Shipyard) — resource cost chips and the
    stockpile readout. A cost the player can't currently afford turns amber,
    same "not available right now" color the comms-delay notices use. */
@@ -4542,7 +4677,14 @@ div.fleet-row .combat-density-row {
 }
 
 /* Planetary map (ground war) — see scene/GroundViewScene.tsx. */
+/* Absolutely positioned (and centred on its anchor by the translate) so the
+   chip adds nothing to the layout of drei's Html wrapper: otherwise that
+   wrapper is a chip-sized box half a chip off from the visible chip, which
+   catches clicks meant for the chip itself and its neighbours. */
 .ground-unit-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
@@ -4581,6 +4723,9 @@ div.fleet-row .combat-density-row {
 }
 
 .ground-key-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
   transform: translate(-50%, -50%);
   padding: 0 3px;
   border: 1px solid;

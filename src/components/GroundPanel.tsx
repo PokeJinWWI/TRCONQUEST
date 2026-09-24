@@ -233,14 +233,32 @@ function fmt(n: number): string {
   return n >= 100 ? Math.round(n).toLocaleString() : n >= 10 ? n.toFixed(0) : n.toFixed(1)
 }
 
+// Plain-language readings of the numbers the ground rules use, so a panel
+// says what a terrain or unit trait DOES rather than showing a bare "×2.5".
+const pct = (x: number) => `${Math.round(x * 100)}%`
+
+// A terrain's move cost multiplies travel time (groundData.TerrainSpec.moveCost).
+export function describeMoveCost(moveCost: number): string {
+  if (moveCost >= 90) return "can't be crossed"
+  if (moveCost === 1) return 'open-ground speed'
+  return `${pct(1 / moveCost)} of open-ground speed`
+}
+
+// A defense figure divides the damage a unit takes.
+export function describeDefense(defense: number): string {
+  if (defense === 1) return 'no cover'
+  const change = Math.round((1 / defense - 1) * 100)
+  return change < 0 ? `${-change}% less damage taken` : `${change}% more damage taken`
+}
+
 function modsFor(type: GroundUnit['type']): string[] {
   const out: string[] = []
   for (const [t, m] of Object.entries(UNIT_TYPES[type].terrain) as [TerrainId, NonNullable<(typeof UNIT_TYPES)['infantry']['terrain'][TerrainId]>][]) {
     const parts: string[] = []
     if (m.impassable) parts.push("can't enter")
-    if (m.speed !== undefined) parts.push(`speed ×${m.speed}`)
-    if (m.attack !== undefined) parts.push(`attack ×${m.attack}`)
-    if (m.defense !== undefined) parts.push(`defense ×${m.defense}`)
+    if (m.speed !== undefined) parts.push(`moves at ${pct(m.speed)} speed`)
+    if (m.attack !== undefined) parts.push(`deals ${pct(m.attack)} damage`)
+    if (m.defense !== undefined) parts.push(describeDefense(m.defense).replace('no cover', 'no extra cover'))
     out.push(`${TERRAIN[t].name}: ${parts.join(', ')}`)
   }
   return out
@@ -348,7 +366,7 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
         <div className="inspect-row">
           <span className="inspect-label">Standing on</span>
           <span className="inspect-value">
-            {here.name} (defense ×{here.defense})
+            {here.name} ({describeDefense(here.defense)})
           </span>
         </div>
       )}

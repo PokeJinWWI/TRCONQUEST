@@ -2,6 +2,8 @@ import { COUNTRIES } from '../data/countryData'
 import { STARS } from '../data/starData'
 import { usePlayerStore } from '../state/playerStore'
 import { useViewStore } from '../state/viewStore'
+import { startSandbox } from '../scene/sandboxSetup'
+import { SANDBOX_PLAYER } from '../data/countryRoster'
 
 // The game's entry screen — picking a country is picking who you play as
 // (see countryData.ts). Session-only (playerStore has no persistence), so a
@@ -41,6 +43,19 @@ export function MainMenu() {
             </button>
           )
         })}
+      </div>
+      {/* No nation at all: you against whatever you put on the board. */}
+      <div className="main-menu-sandbox">
+        <button
+          type="button"
+          className="main-menu-country-card main-menu-sandbox-card"
+          style={{ borderColor: SANDBOX_PLAYER.color }}
+          onClick={startSandbox}
+        >
+          <span className="main-menu-country-swatch" style={{ backgroundColor: SANDBOX_PLAYER.color }} />
+          <span className="main-menu-country-name">Sandbox</span>
+          <span className="main-menu-country-capital">No nations, no economy. Place your own, friendly, neutral and hostile ships and armies.</span>
+        </button>
       </div>
     </div>
   )

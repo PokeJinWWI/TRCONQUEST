@@ -11,6 +11,8 @@ import { getCountry } from '../data/countryData'
 import { ownerDisplay } from '../data/countryRoster'
 import { useTerritoryStore } from '../state/territoryStore'
 import { BodyArmies } from './ArmyViews'
+import { useViewStore } from '../state/viewStore'
+import { groundSurface } from '../scene/groundLogic'
 
 export interface InspectPanelAction {
   label: string
@@ -132,6 +134,15 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
         </>
       )}
 
+      {/* The way to the planetary map, for anything with ground to stand on —
+          planets and moons alike (see BodyArmies for the same button under the
+          Armies tab). */}
+      {body.kind !== 'star' && groundSurface(body.name, useTerritoryStore.getState().bodyOwner) && (
+        <button type="button" className="detail-view-btn" onClick={() => useViewStore.getState().enterGround(body.name)}>
+          Ground Map
+        </button>
+      )}
+
       {action && (
         <>
           <div className="inspect-divider" />
@@ -155,28 +166,23 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   const world = worldByName(worlds, body.name)
   const country = world ? countries.find((c) => c.id === world.ownerId) : undefined
 
-  // Stars and moons stay a simple single-pane readout — the tabbed
-  // planet-management view only makes sense for a planet.
-  if (body.kind !== 'planet') {
+  // A star stays a simple single-pane readout. Planets and moons get the
+  // tabbed view: a moon can be settled, garrisoned and invaded just like a
+  // planet, so it gets the same tabs — Overview and Armies always, and Pops,
+  // Buildings, Economy and Politics once it's a colonised world.
+  if (body.kind === 'star') {
     return (
       <DraggableWindow title={body.name} onClose={onClose}>
         <OverviewRows body={body} action={action} />
-        {/* Moons can be garrisoned and invaded too; no tab strip here, so
-            the ground forces sit under the overview. */}
-        {body.kind === 'moon' && (
-          <>
-            <div className="inspect-divider" />
-            <BodyArmies bodyName={body.name} />
-          </>
-        )}
       </DraggableWindow>
     )
   }
+  const tabs = body.kind === 'planet' || world ? PLANET_TABS : PLANET_TABS.filter((t) => t.id === 'overview' || t.id === 'armies')
 
   return (
     <DraggableWindow title={body.name} onClose={onClose}>
       <div className="nav-subtabs">
-        {PLANET_TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"

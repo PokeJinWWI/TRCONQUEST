@@ -1,3 +1,4 @@
+import { BattleBadge } from '../components/BattleBadge'
 import { useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
@@ -76,6 +77,7 @@ export function Planet({ data, selected, onSelect, onOrderTo, colorOverride, own
             {occupierColor && <span className="owner-ring occupier" style={{ borderColor: occupierColor }} />}
             <span className="marker-dot" style={{ borderColor: displayColor }} />
             <span className="marker-label">{data.name}</span>
+            <BattleBadge scope={{ body: data.name }} />
           </div>
         </Html>
       </group>

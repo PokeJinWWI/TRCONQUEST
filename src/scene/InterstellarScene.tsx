@@ -1,3 +1,4 @@
+import { BattleBadge } from '../components/BattleBadge'
 import { useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Html, OrbitControls, Stars } from '@react-three/drei'
@@ -131,6 +132,7 @@ function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelect
           {claimRingStyle(claim) && <span className={`owner-ring${claim.kind === 'contested' ? ' contested' : ''}`} style={claimRingStyle(claim)!} />}
           <span className="marker-dot" style={{ borderColor: star.color }} />
           <span className="marker-label">{star.name}</span>
+          <BattleBadge scope={{ star: star.id }} />
           {fleetPresence.map(({ ship, relation }) => (
             <span
               key={ship.id}
