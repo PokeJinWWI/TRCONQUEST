@@ -6,6 +6,7 @@
 // dividends then repatriate (handled by distributeDividends). Pure/headless.
 
 import type { Corporation, Country, World } from './economyTypes'
+import { convertBetween } from './fx'
 
 const FI_REVIEW_PERIOD = 12 // yearly, staggered per investor
 const STATE_TREASURY_BUFFER = 60000 // a state invests abroad only when this flush
@@ -94,7 +95,8 @@ export function runForeignInvestmentAI(
     if (country.treasury < STATE_TREASURY_BUFFER) continue
     const target = bestForeignTarget(country.id, nextCorps, nextCountries)
     if (!target) continue
-    const cost = STAKE_BLOCK * sharePrice(target)
+    // Cost is set in the host company's currency; convert to the investor's.
+    const cost = convertBetween(STAKE_BLOCK * sharePrice(target), target.countryId, country.id, nextCountries)
     if (cost > country.treasury) continue
     if (needsApproval(target.countryId)) {
       queueOffer(target, 'state', country.id, country.id)
@@ -111,7 +113,8 @@ export function runForeignInvestmentAI(
     if (corp.cash < CORP_CASH_BUFFER) continue
     const target = bestForeignTarget(corp.countryId, nextCorps, nextCountries)
     if (!target || target.id === corp.id) continue
-    const cost = STAKE_BLOCK * sharePrice(target)
+    // Cost is set in the host company's currency; convert to the firm's own.
+    const cost = convertBetween(STAKE_BLOCK * sharePrice(target), target.countryId, corp.countryId, nextCountries)
     if (cost > corp.cash) continue
     if (needsApproval(target.countryId)) {
       queueOffer(target, 'corporation', corp.id, corp.name)

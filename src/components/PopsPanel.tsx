@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { CULTURES, RELIGIONS } from '../economy/demographics'
 import { SPECIES_TEMPLATES, NEED_TIERS, type NeedTier } from '../economy/species'
 import { GOODS, type GoodId } from '../economy/goods'
+import { isEmergentGood } from '../economy/economyTick'
 import { formatPop } from '../economy/format'
 import type { Pop, World } from '../economy/economyTypes'
 
@@ -64,16 +65,58 @@ function tierConsumption(world: World, tier: NeedTier): GoodConsumption[] {
     for (const [speciesId, size] of bySpecies) {
       const species = SPECIES_TEMPLATES[speciesId]
       if (!species) continue
-      for (const need of species.needs[tier]) {
-        const wanted = need.amountPerPop * size
-        const cur = totals.get(need.good) ?? { wanted: 0, consumed: 0 }
-        cur.wanted += wanted
-        cur.consumed += wanted * met
-        totals.set(need.good, cur)
+      for (const group of species.needs[tier]) {
+        const totalW = group.goods.reduce((s, g) => s + g.weight, 0) || 1
+        for (const g of group.goods) {
+          const wanted = group.base * (g.weight / totalW) * size
+          const cur = totals.get(g.good) ?? { wanted: 0, consumed: 0 }
+          cur.wanted += wanted
+          cur.consumed += wanted * met
+          totals.set(g.good, cur)
+        }
       }
     }
   }
   return [...totals.entries()].map(([good, v]) => ({ good, ...v }))
+}
+
+// One cohort's own consumption breakdown — the literal amounts of each good it
+// wanted vs. actually bought this tick (its per-pop `needsDetail`), plus a
+// per-person figure so the numbers are legible. This is the "what does THIS pop
+// consume" drill-down.
+function CohortConsumption({ pop }: { pop: Pop }) {
+  const detail = pop.needsDetail
+  if (!detail) return <div className="ship-panel-hint">Advance time to see this cohort's consumption.</div>
+  const size = pop.populationSize
+  return (
+    <div className="cohort-consumption">
+      {NEED_TIERS.map((tier) => {
+        const entries = (detail[tier] ?? []).filter((e) => e.wanted > 0)
+        if (entries.length === 0) return null
+        return (
+          <div className="cohort-tier" key={tier}>
+            <div className="cohort-tier-name">{tier}</div>
+            {entries.map((e) => {
+              const pct = e.wanted > 0 ? Math.min(1, e.consumed / e.wanted) : 1
+              const pcWant = size > 0 ? e.wanted / size : 0
+              const pcGot = size > 0 ? e.consumed / size : 0
+              return (
+                <div className="demo-bar-row pops-good-row" key={e.good} title={`${GOODS[e.good].label}: ${pcGot.toFixed(2)} of ${pcWant.toFixed(2)} per person`}>
+                  <span className="demo-bar-label">{GOODS[e.good].label}</span>
+                  <span className="demo-bar-track">
+                    <span className="demo-bar-fill" style={{ width: `${pct * 100}%`, background: pct >= 0.6 ? '#4ade80' : pct >= 0.3 ? '#ffd23f' : '#ff6b4a' }} />
+                  </span>
+                  <span className="demo-bar-val">
+                    {pcGot.toFixed(2)}/{pcWant.toFixed(2)} pp
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 // The actual pop cohorts on a world — the four-axis population (species +
@@ -93,6 +136,8 @@ export function PopsPanel({ worldName, world }: PopsPanelProps) {
       else next.add(tier)
       return next
     })
+  // Which cohort's per-good consumption is expanded (click a row to drill in).
+  const [openCohort, setOpenCohort] = useState<string | null>(null)
 
   if (!world) {
     return <div className="nav-placeholder">{worldName ? `${worldName} is uninhabited — no population.` : 'No world in focus.'}</div>
@@ -147,9 +192,13 @@ export function PopsPanel({ worldName, world }: PopsPanelProps) {
                       const perCapitaWanted = totalPop > 0 ? wanted / totalPop : 0
                       const perCapitaConsumed = totalPop > 0 ? consumed / totalPop : 0
                       const pct = wanted > 0 ? Math.min(1, consumed / wanted) : 1
+                      const adoption = isEmergentGood(good) && world.adoption ? (world.adoption[good] ?? 0) : undefined
                       return (
-                        <div className="demo-bar-row pops-good-row" key={good} title={`${GOODS[good].label}: ${perCapitaConsumed.toFixed(2)} of ${perCapitaWanted.toFixed(2)} per capita needed`}>
-                          <span className="demo-bar-label">{GOODS[good].label}</span>
+                        <div className="demo-bar-row pops-good-row" key={good} title={`${GOODS[good].label}: ${perCapitaConsumed.toFixed(2)} of ${perCapitaWanted.toFixed(2)} per capita needed${adoption !== undefined ? ` · ${Math.round(adoption * 100)}% adopted (a non-essential good — demand grows as it's supplied, fades if it isn't)` : ''}`}>
+                          <span className="demo-bar-label">
+                            {GOODS[good].label}
+                            {adoption !== undefined && adoption < 0.95 && <span className="pops-adoption-tag"> ▲{Math.round(adoption * 100)}%</span>}
+                          </span>
                           <span className="demo-bar-track">
                             <span
                               className="demo-bar-fill"
@@ -193,22 +242,34 @@ export function PopsPanel({ worldName, world }: PopsPanelProps) {
               const sol = Math.round(p.standardOfLiving * 100)
               const religion = RELIGIONS[p.religionId]
               const cult = CULTURES[p.cultureId]
+              const open = openCohort === p.id
               return (
-                <tr key={p.id}>
-                  <td>{CLASS_LABEL[p.class] ?? p.class}</td>
-                  <td>{cult?.name ?? p.cultureId}</td>
-                  <td>
-                    <span className="pops-faith-dot" style={{ background: religion?.color ?? '#8a8f96' }} />
-                    {religion?.name ?? p.religionId}
-                  </td>
-                  <td>{formatPop(p.populationSize)}</td>
-                  <td className={sol >= 60 ? 'econ-pos' : sol >= 35 ? '' : 'econ-neg'} title="Standard of Living — the meaningful measure of how well this cohort lives">
-                    {sol}%
-                  </td>
-                  <td className={met >= 60 ? 'econ-pos' : met >= 30 ? '' : 'econ-neg'} title="Share of needs met">
-                    {met}%
-                  </td>
-                </tr>
+                <Fragment key={p.id}>
+                  <tr className="pops-cohort-row" onClick={() => setOpenCohort(open ? null : p.id)} title="Click to see exactly what this cohort consumes">
+                    <td>
+                      <span className="pops-tier-chevron">{open ? '▾' : '▸'}</span> {CLASS_LABEL[p.class] ?? p.class}
+                    </td>
+                    <td>{cult?.name ?? p.cultureId}</td>
+                    <td>
+                      <span className="pops-faith-dot" style={{ background: religion?.color ?? '#8a8f96' }} />
+                      {religion?.name ?? p.religionId}
+                    </td>
+                    <td>{formatPop(p.populationSize)}</td>
+                    <td className={sol >= 60 ? 'econ-pos' : sol >= 35 ? '' : 'econ-neg'} title="Standard of Living — the meaningful measure of how well this cohort lives">
+                      {sol}%
+                    </td>
+                    <td className={met >= 60 ? 'econ-pos' : met >= 30 ? '' : 'econ-neg'} title="Share of needs met">
+                      {met}%
+                    </td>
+                  </tr>
+                  {open && (
+                    <tr className="pops-cohort-detail-row">
+                      <td colSpan={6}>
+                        <CohortConsumption pop={p} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               )
             })}
           </tbody>

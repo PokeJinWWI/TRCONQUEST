@@ -14,7 +14,14 @@ import { NEED_TIERS } from '../src/economy/species'
 import { interestGroupStrengths } from '../src/economy/politics'
 import { useEconomyStore } from '../src/state/economyStore'
 import { runCorporationAI } from '../src/economy/corporationAI'
-import type { Building, Corporation, Country, World } from '../src/economy/economyTypes'
+import { hasCentralBank, effectiveIndependence, governmentControlsPolicy, centralBankModelLabel, governorAppointmentDef, centralBankEquity } from '../src/economy/centralBank'
+import { seedBanks } from '../src/economy/economySeed'
+import { tickBanking, bankCapital, capitalRatio, monetaryAggregatesFor } from '../src/economy/banking'
+import { consumeGroup, EMERGENT_GOODS, isEmergentGood } from '../src/economy/economyTick'
+import { tierWealthFactor, SPECIES_TEMPLATES } from '../src/economy/species'
+import { convert, convertBetween, updateExchangeRates, depreciationBias } from '../src/economy/fx'
+import { tickMonetary, defaultMonetaryState } from '../src/economy/monetaryPolicy'
+import type { Bank, Building, Corporation, Country, World } from '../src/economy/economyTypes'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -385,8 +392,8 @@ console.log('\n=== 18. Milestone 5: inter-world trade & logistics ===')
   }
   const luna = worlds.find((w) => w.id === 'Luna')!
   const foodSat = luna.pops.reduce((s, p) => s + p.needsSatisfaction.basic * p.populationSize, 0) / luna.pops.reduce((s, p) => s + p.populationSize, 0)
-  check('a world with no farms still gets food via imports', foodSat > 0.1, foodSat.toFixed(2))
-  check('the world shows imported food in its import stock', (luna.importStock.food ?? 0) > 0, (luna.importStock.food ?? 0).toFixed(0))
+  check('a world with no farms still gets grain via imports', foodSat > 0.1, foodSat.toFixed(2))
+  check('the world shows imported grain in its import stock', (luna.importStock.grains ?? 0) > 0, (luna.importStock.grains ?? 0).toFixed(0))
   check('the country records trade volume', reports.countries['imperial-state-of-mars'].tradeVolume > 0, reports.countries['imperial-state-of-mars'].tradeVolume.toFixed(0))
   check('logistics capacity is reported', reports.countries['imperial-state-of-mars'].logisticsCapacity > 0)
 }
@@ -529,24 +536,22 @@ console.log('\n=== 23. Needs-detail per-good reporting (needs/SoL presentation r
   const pop = mars.pops[0]
   check('a ticked pop carries needsDetail', pop.needsDetail !== undefined)
   const basic = pop.needsDetail?.basic ?? []
-  check('basic tier detail lists the food good', basic.some((e) => e.good === 'food'), JSON.stringify(basic))
-  const food = basic.find((e) => e.good === 'food')!
-  // Compared against a fresh post-growth populationSize (the tick that
-  // produced this detail also grew the pop slightly), so use a loose relative
-  // tolerance rather than exact equality.
-  const expectedWanted = 0.8 * pop.populationSize
-  check(
-    'food wanted is a sane positive number (~ amountPerPop * populationSize)',
-    food.wanted > 0 && Math.abs(food.wanted - expectedWanted) / expectedWanted < 0.01,
-    `${food.wanted} vs ~${expectedWanted}`,
-  )
-  check('food consumed is between 0 and wanted', food.consumed >= 0 && food.consumed <= food.wanted + 1e-6, `${food.consumed} <= ${food.wanted}`)
+  check('basic tier detail lists the grains good', basic.some((e) => e.good === 'grains'), JSON.stringify(basic))
+  const food = basic.find((e) => e.good === 'grains')!
+  check('food wanted is a sane positive number', food.wanted > 0, `${food.wanted}`)
+  check('food consumed is non-negative', food.consumed >= 0, `${food.consumed}`)
+  // Substitution: the basic-food group now offers meat as a premium substitute,
+  // so the detail lists it too (a good may be CONSUMED beyond its own weighted
+  // want when it substitutes for a shortfall — the invariant holds at the GROUP
+  // level below, not per good).
+  check('basic tier also lists meat (a substitutable food)', basic.some((e) => e.good === 'meat'), JSON.stringify(basic.map((e) => e.good)))
   // Healthcare must be a visible consumed GOOD in the detail, not siloed away
   // from the rest of the needs basket (the user's original complaint).
   const healthcare = pop.needsDetail?.healthcare ?? []
   check('healthcare tier detail lists the healthcare good', healthcare.some((e) => e.good === 'healthcare'), JSON.stringify(healthcare))
   const tierWant = basic.reduce((s, e) => s + e.wanted, 0)
   const tierGot = basic.reduce((s, e) => s + e.consumed, 0)
+  check('group-level: total basic consumed does not exceed total basic wanted', tierGot <= tierWant + 1e-6, `${tierGot} <= ${tierWant}`)
   const derivedSat = tierWant > 0 ? Math.min(1, tierGot / tierWant) : 1
   check(
     'the blended needsSatisfaction is consistent with the per-good detail it is derived from',
@@ -611,16 +616,16 @@ console.log('\n=== 24. Stockpiling: fills toward target on surplus, releases on 
   // that processor running and mask the shortage) so food genuinely runs
   // short, then compare a world holding a food reserve against an otherwise-
   // identical one with none — the reserve should measurably cushion it.
-  const producesFood = (recipeId: string) => (RECIPES[recipeId]?.methods ?? []).some((m) => m.outputs.some((o) => o.good === 'food'))
+  const producesFood = (recipeId: string) => (RECIPES[recipeId]?.methods ?? []).some((m) => m.outputs.some((o) => o.good === 'grains' || o.good === 'groceries'))
   const starvedMars = seedWorlds().find((w) => w.id === 'Mars')!
   const noFood = starvedMars.buildings.filter((b) => !producesFood(b.recipeId))
 
   const withReserveWorlds = seedWorlds().map((w) =>
-    w.id === 'Mars' ? { ...starvedMars, buildings: noFood, stockpiles: { food: 500 }, stockpileTargets: { food: 500 } } : w,
+    w.id === 'Mars' ? { ...starvedMars, buildings: noFood, stockpiles: { grains: 500 }, stockpileTargets: { grains: 500 } } : w,
   )
   const withReserveResult = tickEconomy(richCountries, withReserveWorlds, corporations)
   const withReserveMars = withReserveResult.worlds.find((w) => w.id === 'Mars')!
-  const released = 500 - (withReserveMars.stockpiles?.food ?? 0)
+  const released = 500 - (withReserveMars.stockpiles?.grains ?? 0)
   check('a genuine shortage releases some of the reserve', released > 0, released.toFixed(2))
 
   const noReserveWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...starvedMars, buildings: noFood } : w))
@@ -1108,6 +1113,548 @@ console.log('\n=== 36. Foreign-investment approval queue + auto-approve toggle =
   }))
   store.rejectForeignInvestment(hostId, 'offer2')
   check('rejecting a pending foreign investment discards it', useEconomyStore.getState().countries.find((c) => c.id === hostId)!.pendingForeignInvestment.length === 0)
+}
+
+console.log('\n=== 37. Central banking Stage 1: institution, laws, governance gate ===')
+{
+  const store = useEconomyStore.getState()
+  useEconomyStore.setState({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), tick: 0 })
+
+  // Every seeded country carries a central bank, and the models read differently.
+  const seeded = useEconomyStore.getState().countries
+  check('every seeded country has a central bank', seeded.every((c) => hasCentralBank(c.centralBank)))
+  const venus = seeded.find((c) => c.id === 'republic-of-venus')!
+  const lalande = seeded.find((c) => c.id === 'kingdom-of-lalande')!
+  check('Venus runs a Federal Reserve System', centralBankModelLabel(venus.centralBank!) === 'Federal Reserve System', centralBankModelLabel(venus.centralBank!))
+  check('Lalande runs a Treasury Banking System', centralBankModelLabel(lalande.centralBank!) === 'Treasury Banking System', centralBankModelLabel(lalande.centralBank!))
+
+  // Effective independence: the independent MPC bank beats the government-run one.
+  check('an independent bank is more independent than a treasury bank', effectiveIndependence(venus.centralBank!) > effectiveIndependence(lalande.centralBank!), `${effectiveIndependence(venus.centralBank!).toFixed(2)} vs ${effectiveIndependence(lalande.centralBank!).toFixed(2)}`)
+
+  // Governance gate: the government controls Lalande's bank but NOT Venus's.
+  check('government controls the treasury bank', governmentControlsPolicy(lalande.centralBank!))
+  check('government does NOT control the independent bank', !governmentControlsPolicy(venus.centralBank!))
+
+  // setPolicyRate: takes effect on the government-run bank, no-op on the independent one.
+  const lalandeRate0 = lalande.centralBank!.policyRate
+  store.setPolicyRate('kingdom-of-lalande', lalandeRate0 + 0.02)
+  check('government CAN set its own bank’s rate', Math.abs(useEconomyStore.getState().countries.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!.policyRate - (lalandeRate0 + 0.02)) < 1e-9)
+  const venusRate0 = venus.centralBank!.policyRate
+  store.setPolicyRate('republic-of-venus', venusRate0 + 0.02)
+  check('government CANNOT set an independent bank’s rate directly', useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!.policyRate === venusRate0)
+
+  // Pressure erodes independence & credibility, and can eventually break independence.
+  const cred0 = useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!.credibility
+  const indep0 = effectiveIndependence(useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!)
+  store.pressureCentralBank('republic-of-venus', 0.3)
+  const afterPressure = useEconomyStore.getState().countries.find((c) => c.id === 'republic-of-venus')!.centralBank!
+  check('pressure lowers credibility', afterPressure.credibility < cred0, `${cred0.toFixed(2)} -> ${afterPressure.credibility.toFixed(2)}`)
+  check('pressure lowers effective independence', effectiveIndependence(afterPressure) < indep0, `${indep0.toFixed(2)} -> ${effectiveIndependence(afterPressure).toFixed(2)}`)
+
+  // Changing the appointment law resets the governor's term length.
+  store.setGovernorAppointment('kingdom-of-lalande', 'staggered')
+  const relawed = useEconomyStore.getState().countries.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!
+  check('changing appointment law resets term length', relawed.governorTermLength === governorAppointmentDef('staggered').termTicks)
+
+  // Abolish then re-establish.
+  store.setCentralBankStatus('orion-republic', 'no-bank')
+  check('setting status to no-bank abolishes the bank', !hasCentralBank(useEconomyStore.getState().countries.find((c) => c.id === 'orion-republic')!.centralBank))
+  store.establishCentralBank('orion-republic')
+  check('establishing gives a functioning bank again', hasCentralBank(useEconomyStore.getState().countries.find((c) => c.id === 'orion-republic')!.centralBank))
+
+  // A central bank must never break the tick (finiteness).
+  let cbCountries = seedCountries()
+  let cbWorlds = seedWorlds()
+  let cbCorps = seedCorporations()
+  for (let i = 0; i < 6; i++) {
+    const res = tickEconomy(cbCountries, cbWorlds, cbCorps, { tick: i + 1, enableAI: true })
+    cbCountries = res.countries
+    cbWorlds = res.worlds
+    cbCorps = res.corporations
+  }
+  check('central bank survives ticking (records preserved)', cbCountries.every((c) => hasCentralBank(c.centralBank)))
+  check('all worlds finite after ticks with central banks', cbWorlds.every(worldFinite))
+}
+
+console.log('\n=== 38. Central banking Stage 2: commercial banks, money supply, reserve requirement bites ===')
+{
+  const raiseRR = (cs: Country[], id: string, rr: number): Country[] =>
+    cs.map((c) => (c.id === id && c.centralBank ? { ...c, centralBank: { ...c.centralBank, reserveRequirement: rr } } : c))
+  const setPolicy = (cs: Country[], id: string, rate: number): Country[] =>
+    cs.map((c) => (c.id === id && c.centralBank ? { ...c, centralBank: { ...c.centralBank, policyRate: rate } } : c))
+
+  // Seed banks exist and are well-capitalized with a coherent balance sheet.
+  const banks0 = seedBanks()
+  check('banks are seeded', banks0.length > 0)
+  check('every seeded bank is solvent (capital > 0)', banks0.every((b) => bankCapital(b) > 0))
+  check('every seeded bank meets the 8% capital target', banks0.every((b) => capitalRatio(b) >= 0.08), banks0.map((b) => capitalRatio(b).toFixed(2)).join(','))
+
+  // Aggregate identities hold.
+  const cid = 'imperial-state-of-mars'
+  const cs0 = seedCountries()
+  const cb0 = cs0.find((c) => c.id === cid)!.centralBank!
+  const m0 = monetaryAggregatesFor(cid, banks0, cb0)
+  check('broad money = currency + deposits', Math.abs(m0.broadMoney - (m0.currency + m0.deposits)) < 1e-6)
+  check('base money = currency + bank reserves', Math.abs(m0.baseMoney - (m0.currency + m0.bankReserves)) < 1e-6)
+  check('all aggregates finite', Object.values(m0).every((v) => Number.isFinite(v)))
+
+  // Reserve requirement BITES: raising it shrinks broad money over the following
+  // ticks (vs. leaving it alone). This is the core Stage-2 monetary transmission.
+  function runFor(ticks: number, rrOverride?: number): number {
+    let cs = seedCountries()
+    let bs = seedBanks()
+    if (rrOverride !== undefined) cs = raiseRR(cs, cid, rrOverride)
+    let money = monetaryAggregatesFor(cid, bs, cs.find((c) => c.id === cid)!.centralBank)
+    for (let i = 0; i < ticks; i++) {
+      const r = tickBanking(cs, bs)
+      cs = r.countries
+      bs = r.banks
+      money = r.money[cid]
+    }
+    return money.broadMoney
+  }
+  const baseline = runFor(25)
+  const tightened = runFor(25, 0.25)
+  check('raising the reserve requirement shrinks broad money', tightened < baseline, `${tightened.toFixed(0)} < ${baseline.toFixed(0)}`)
+
+  // A reserve-SHORT bank draws on the central-bank discount window.
+  {
+    let cs = raiseRR(seedCountries(), cid, 0.4) // force required reserves above holdings
+    const short: Bank = { ...seedBanks().find((b) => b.countryId === cid)! }
+    const r = tickBanking(cs, [short])
+    check('a reserve-short bank borrows from the discount window', r.banks[0].cbBorrowings > 0, r.banks[0].cbBorrowings.toFixed(0))
+    // The CB's loans-to-banks asset mirrors that borrowing.
+    check('CB loans-to-banks mirrors bank discount borrowing', Math.abs(r.countries.find((c) => c.id === cid)!.centralBank!.loansToBanks - r.banks[0].cbBorrowings) < 1e-6)
+  }
+
+  // A higher policy rate widens bank net interest margins → more profit.
+  {
+    const lowCs = setPolicy(seedCountries(), cid, 0.02)
+    const highCs = setPolicy(seedCountries(), cid, 0.08)
+    const bs = seedBanks().filter((b) => b.countryId === cid)
+    const lowProfit = tickBanking(lowCs, bs.map((b) => ({ ...b }))).banks.reduce((s, b) => s + b.lastProfit, 0)
+    const highProfit = tickBanking(highCs, bs.map((b) => ({ ...b }))).banks.reduce((s, b) => s + b.lastProfit, 0)
+    check('a higher policy rate widens bank margins (more profit)', highProfit > lowProfit, `${highProfit.toFixed(0)} > ${lowProfit.toFixed(0)}`)
+  }
+
+  // CB balance-sheet equity is finite and the identity computes.
+  check('central-bank equity is finite', Number.isFinite(centralBankEquity(cb0, m0.bankReserves)))
+
+  // Full tickEconomy wires banking through and stays finite over many ticks.
+  {
+    let cs = seedCountries()
+    let ws = seedWorlds()
+    let corps = seedCorporations()
+    let bs = seedBanks()
+    let lastMoney: Record<string, import('../src/economy/economyTypes').MonetaryAggregates> = {}
+    for (let i = 0; i < 12; i++) {
+      const res = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs)
+      cs = res.countries
+      ws = res.worlds
+      corps = res.corporations
+      bs = res.banks
+      lastMoney = res.reports.money
+    }
+    check('tickEconomy returns banks', bs.length > 0)
+    check('tickEconomy produces a money report per country', cs.every((c) => !!lastMoney[c.id]))
+    check('banks stay finite through full ticks', bs.every((b) => Number.isFinite(bankCapital(b)) && Number.isFinite(b.deposits) && Number.isFinite(b.loans)))
+    check('money aggregates stay finite through full ticks', Object.values(lastMoney).every((m) => Object.values(m).every((v) => Number.isFinite(v))))
+  }
+}
+
+console.log('\n=== 39. Central banking Stage 3: multi-currency + FX (rates, peg defense, cross-border conversion) ===')
+{
+  // Every country issues a currency.
+  const cs0 = seedCountries()
+  check('every country has a currency', cs0.every((c) => !!c.currency && c.currency.rate > 0))
+
+  // convert() obeys the rate convention (stronger currency buys more of a weaker one).
+  check('convert: 100 of a rate-1.15 currency → ~131 of a rate-0.7 currency', Math.abs(convert(100, 1.15, 0.7) - (100 * 1.15) / 0.7) < 1e-6)
+  check('convertBetween same country is a 1:1 passthrough', convertBetween(500, 'imperial-state-of-mars', 'imperial-state-of-mars', cs0) === 500)
+
+  // Depreciation bias: a low-credibility, money-financing bank (Lalande) wants to
+  // depreciate; a high-credibility independent bank (Venus) wants to appreciate.
+  const venus = cs0.find((c) => c.id === 'republic-of-venus')!
+  const lalande = cs0.find((c) => c.id === 'kingdom-of-lalande')!
+  check('a weak-institution currency has depreciation pressure', depreciationBias(lalande) > 0, depreciationBias(lalande).toFixed(3))
+  check('a strong-institution currency has appreciation pressure', depreciationBias(venus) < 0, depreciationBias(venus).toFixed(3))
+
+  // Float: over time the strong currency appreciates and Lalande weakens.
+  {
+    let cs = seedCountries()
+    for (let i = 0; i < 30; i++) cs = updateExchangeRates(cs)
+    const v1 = cs.find((c) => c.id === 'republic-of-venus')!.currency!.rate
+    const l1 = cs.find((c) => c.id === 'kingdom-of-lalande')!.currency!.rate
+    check('the strong currency appreciates over 30 ticks', v1 > venus.currency!.rate, `${venus.currency!.rate} → ${v1.toFixed(3)}`)
+    check('the weak currency depreciates over 30 ticks', l1 < lalande.currency!.rate, `${lalande.currency!.rate} → ${l1.toFixed(3)}`)
+  }
+
+  // Peg defense: Lalande (fixed regime) spends FX reserves to hold its peg, then —
+  // when reserves run out — the peg breaks (devaluation + credibility hit).
+  {
+    let cs = seedCountries()
+    const startFx = cs.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!.fxReserves
+    const startCred = cs.find((c) => c.id === 'kingdom-of-lalande')!.centralBank!.credibility
+    let brokeTick = -1
+    for (let i = 0; i < 60; i++) {
+      cs = updateExchangeRates(cs)
+      const ll = cs.find((c) => c.id === 'kingdom-of-lalande')!
+      if (brokeTick < 0 && ll.centralBank!.fxReserves <= 0 && ll.centralBank!.credibility < startCred) brokeTick = i
+    }
+    const ll = cs.find((c) => c.id === 'kingdom-of-lalande')!
+    check('defending the peg drains FX reserves to zero', ll.centralBank!.fxReserves === 0, `from ${startFx}`)
+    check('the peg eventually breaks (credibility falls)', ll.centralBank!.credibility < startCred, `${startCred} → ${ll.centralBank!.credibility.toFixed(2)}`)
+    check('after the break the currency has devalued below its peg', ll.currency!.rate < ll.currency!.target, `${ll.currency!.rate.toFixed(3)} < ${ll.currency!.target}`)
+  }
+
+  // Cross-border dividends REPATRIATE through the exchange rate. Build a foreign
+  // state stake in a home corp and confirm the repatriated amount is FX-converted.
+  {
+    // Give a Venus corp a stake held by the Mars government, then distribute a
+    // known profit and check the Mars treasury delta equals the FX-converted share.
+    // (distributeDividends is exercised indirectly via §33/§34; here we assert the
+    // conversion arithmetic the repatriation relies on.)
+    const home = cs0.find((c) => c.id === 'republic-of-venus')!.currency! // corp earns in VNC
+    const inv = cs0.find((c) => c.id === 'imperial-state-of-mars')!.currency! // Mars repatriates in MSV
+    const earned = 1000
+    const repatriated = convert(earned, home.rate, inv.rate)
+    check('a dividend earned abroad repatriates at the exchange rate', Math.abs(repatriated - (earned * home.rate) / inv.rate) < 1e-6 && repatriated !== earned)
+  }
+
+  // Foreign equity costs MORE in a weak currency: buying a strong-currency (VNC)
+  // company from a weak-currency (LLD) treasury converts the price upward.
+  {
+    const costHostVNC = 1000
+    const inLLD = convertBetween(costHostVNC, 'republic-of-venus', 'kingdom-of-lalande', cs0)
+    check('buying a strong-currency company costs more in a weak currency', inLLD > costHostVNC, `${costHostVNC} VNC → ${inLLD.toFixed(0)} LLD`)
+  }
+
+  // Full tickEconomy keeps currencies finite and positive over many ticks.
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 24; i++) {
+      const res = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs)
+      cs = res.countries; ws = res.worlds; corps = res.corporations; bs = res.banks
+    }
+    check('all currency rates stay finite and positive through ticks', cs.every((c) => Number.isFinite(c.currency!.rate) && c.currency!.rate > 0))
+    check('all FX reserves stay finite and non-negative', cs.every((c) => !c.centralBank || (Number.isFinite(c.centralBank.fxReserves) && c.centralBank.fxReserves >= 0)))
+  }
+}
+
+console.log('\n=== 40. Central banking Stage 4: transmission with lags, inflation, reaction, financing, OMO ===')
+{
+  const marsId = 'imperial-state-of-mars'
+  const lalandeId = 'kingdom-of-lalande'
+  const setRate = (cs: Country[], id: string, r: number): Country[] =>
+    cs.map((c) => (c.id === id && c.centralBank ? { ...c, centralBank: { ...c.centralBank, policyRate: r } } : c))
+
+  // Run the full economy N ticks, returning the modeled inflation of a country.
+  function runInflation(id: string, ticks: number, mutate: (cs: Country[]) => Country[] = (x) => x): { infl: number; rate: number } {
+    let cs = mutate(seedCountries()), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    let last = { infl: 0.02, rate: 0.03 }
+    for (let i = 0; i < ticks; i++) {
+      const res = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs)
+      cs = res.countries; ws = res.worlds; corps = res.corporations; bs = res.banks
+      const f = res.reports.countries[id]
+      last = { infl: f.inflation, rate: f.policyRate ?? 0 }
+    }
+    return last
+  }
+
+  // LAG: inflation does not jump the tick a rate change is made.
+  {
+    let cs = setRate(seedCountries(), marsId, 0.005), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    const res = tickEconomy(cs, ws, corps, { tick: 1, enableAI: true }, bs)
+    const infl1 = res.reports.countries[marsId].inflation
+    check('inflation does not jump on the first tick of a rate cut (lagged)', Math.abs(infl1 - 0.02) < 0.02, `${(infl1 * 100).toFixed(2)}%`)
+  }
+
+  // LOOSE vs TIGHT: after many ticks, a forced-loose bank has higher inflation
+  // than a forced-tight one.
+  const loose = runInflation(marsId, 12, (cs) => setRate(cs, marsId, 0.005))
+  const tight = runInflation(marsId, 12, (cs) => setRate(cs, marsId, 0.14))
+  check('loose policy yields higher inflation than tight policy (with lag)', loose.infl > tight.infl, `${(loose.infl * 100).toFixed(2)}% vs ${(tight.infl * 100).toFixed(2)}%`)
+
+  // REACTION: an independent bank (Mars) raises its policy rate as inflation runs
+  // above target; a government-controlled bank (Lalande) does not move.
+  const marsAfter = runInflation(marsId, 20)
+  check('an independent bank raises its rate against inflation (Taylor rule)', marsAfter.rate > 0.03, `${(marsAfter.rate * 100).toFixed(2)}%`)
+  {
+    // The PLAYER's government-controlled bank keeps the rate the player set (the
+    // AI monetary manager only steers NON-player government banks — see §41).
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 20; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [lalandeId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const lalandeRate = cs.find((c) => c.id === lalandeId)!.centralBank!.policyRate
+    check('the PLAYER’s government-controlled bank keeps its rate (no auto-reaction)', Math.abs(lalandeRate - 0.02) < 1e-9, `${(lalandeRate * 100).toFixed(2)}%`)
+  }
+
+  // FINANCING: direct monetary financing lifts inflation above an otherwise
+  // identical country that may not finance the deficit. Craft two countries with a
+  // deficit and compare one tick of tickMonetary.
+  {
+    const base = seedCountries().find((c) => c.id === lalandeId)!
+    const money = { [lalandeId]: { baseMoney: 0, currency: 30000, bankReserves: 0, deposits: 0, broadMoney: 100000, loans: 0, bankCapital: 0, reserveRatio: 0, loanToDeposit: 0, cbBorrowings: 0 } }
+    const mkReports = (): import('../src/economy/economyTypes').TickReports => ({ worlds: {}, countries: { [lalandeId]: { gdp: 5000, priceLevel: 1, inflation: 0.02, revenue: 100, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: -2000, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A' as const, population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] })
+    const direct = { ...base, monetary: defaultMonetaryState() }
+    const prohibited = { ...base, monetary: defaultMonetaryState(), centralBank: { ...base.centralBank!, debtFinancing: 'prohibited' as const } }
+    const r1 = mkReports(); const outDirect = tickMonetary([direct], money, r1)[0]
+    const r2 = mkReports(); const outProhib = tickMonetary([prohibited], money, r2)[0]
+    check('direct monetary financing credits the treasury', outDirect.treasury > outProhib.treasury, `${outDirect.treasury.toFixed(0)} vs ${outProhib.treasury.toFixed(0)}`)
+    check('direct monetary financing yields higher inflation than no financing', r1.countries[lalandeId].inflation > r2.countries[lalandeId].inflation, `${(r1.countries[lalandeId].inflation * 100).toFixed(2)}% vs ${(r2.countries[lalandeId].inflation * 100).toFixed(2)}%`)
+  }
+
+  // IMPORTED INFLATION: a currency that has depreciated since last tick imports
+  // inflation. Craft a monetary state whose lastRate is above the current rate.
+  {
+    const c = seedCountries().find((c) => c.id === marsId)!
+    const depreciated = { ...c, currency: { ...c.currency!, rate: 0.8 }, monetary: { ...defaultMonetaryState(), lastRate: 1.0 } }
+    const stable = { ...c, currency: { ...c.currency!, rate: 1.0 }, monetary: { ...defaultMonetaryState(), lastRate: 1.0 } }
+    const money = { [marsId]: { baseMoney: 0, currency: 0, bankReserves: 0, deposits: 0, broadMoney: 0, loans: 0, bankCapital: 0, reserveRatio: 0, loanToDeposit: 0, cbBorrowings: 0 } }
+    const mk = (): import('../src/economy/economyTypes').TickReports => ({ worlds: {}, countries: { [marsId]: { gdp: 5000, priceLevel: 1, inflation: 0.02, revenue: 0, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: 0, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A' as const, population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] })
+    const rd = mk(); tickMonetary([depreciated], money, rd)
+    const rs = mk(); tickMonetary([stable], money, rs)
+    check('currency depreciation imports inflation', rd.countries[marsId].inflation > rs.countries[marsId].inflation, `${(rd.countries[marsId].inflation * 100).toFixed(2)}% vs ${(rs.countries[marsId].inflation * 100).toFixed(2)}%`)
+  }
+
+  // OMO: buying securities injects bank reserves and grows the CB's holdings;
+  // selling drains them. Selling is gated when the regime forbids the secondary
+  // market (Orion runs 'prohibited').
+  {
+    const store = useEconomyStore.getState()
+    useEconomyStore.setState({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), banks: seedBanks(), tick: 0 })
+    const before = useEconomyStore.getState()
+    const marsReserves0 = before.banks.filter((b) => b.countryId === marsId).reduce((s, b) => s + b.reserves, 0)
+    const marsSec0 = before.countries.find((c) => c.id === marsId)!.centralBank!.govSecurities
+    store.openMarketOperation(marsId, 5000) // buy
+    const after = useEconomyStore.getState()
+    const marsReserves1 = after.banks.filter((b) => b.countryId === marsId).reduce((s, b) => s + b.reserves, 0)
+    const marsSec1 = after.countries.find((c) => c.id === marsId)!.centralBank!.govSecurities
+    check('OMO purchase injects bank reserves', marsReserves1 > marsReserves0, `${marsReserves0.toFixed(0)} → ${marsReserves1.toFixed(0)}`)
+    check('OMO purchase grows CB securities holdings', Math.abs(marsSec1 - (marsSec0 + 5000)) < 1e-6)
+
+    // Orion's bank forbids OMO (debtFinancing 'prohibited') — a no-op.
+    const orionSec0 = after.countries.find((c) => c.id === 'orion-republic')!.centralBank!.govSecurities
+    store.openMarketOperation('orion-republic', 5000)
+    const orionSec1 = useEconomyStore.getState().countries.find((c) => c.id === 'orion-republic')!.centralBank!.govSecurities
+    check('OMO is refused when the regime forbids the secondary market', orionSec1 === orionSec0)
+  }
+}
+
+console.log('\n=== 41. Central banking Stage 5: AI monetary manager, banking crisis + LOLR, events ===')
+{
+  const lalandeId = 'kingdom-of-lalande'
+  const marsId = 'imperial-state-of-mars'
+
+  // AI MONETARY MANAGER: a NON-player government-controlled bank (Lalande) with
+  // rising inflation eventually leans against it (raises its rate) — even a
+  // development-minded government won't let a runaway go forever. (Contrast §40,
+  // where the PLAYER's government bank stays put.)
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 40; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [marsId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const rate = cs.find((c) => c.id === lalandeId)!.centralBank!.policyRate
+    check('the AI steers a non-player government bank’s rate up against inflation', rate > 0.02, `${(rate * 100).toFixed(2)}%`)
+  }
+
+  // LOAN LOSSES: a deep downturn (very negative output gap) writes off loans, so
+  // a bank loses capital versus the same bank in calm conditions.
+  {
+    const country = seedCountries().find((c) => c.id === marsId)!
+    const bank = seedBanks().find((b) => b.countryId === marsId)!
+    const calm = { ...country, monetary: { ...defaultMonetaryState(), outputGap: 0 } }
+    const bust = { ...country, monetary: { ...defaultMonetaryState(), outputGap: -0.3 } }
+    const capCalm = bankCapital(tickBanking([calm], [{ ...bank }], 1).banks[0])
+    const capBust = bankCapital(tickBanking([bust], [{ ...bank }], 1).banks[0])
+    check('a deep downturn inflicts loan losses (lower bank capital)', capBust < capCalm, `${capBust.toFixed(0)} < ${capCalm.toFixed(0)}`)
+  }
+
+  // BANKING CRISIS + LENDER OF LAST RESORT: an insolvent bank is recapitalized by
+  // the state, restoring positive capital, debiting the treasury, and logging an
+  // event.
+  {
+    const country = seedCountries().find((c) => c.id === marsId)!
+    const treasury0 = country.treasury
+    const insolvent: Bank = { id: 'bank-x', name: 'Failing Bank', countryId: marsId, reserves: 50, loans: 900, securities: 0, deposits: 1000, cbBorrowings: 200, riskAppetite: 0.5, lastProfit: 0 }
+    check('the test bank starts insolvent', bankCapital(insolvent) < 0, `${bankCapital(insolvent).toFixed(0)}`)
+    const res = tickBanking([country], [insolvent], 7)
+    check('LOLR recapitalizes the insolvent bank to solvency', bankCapital(res.banks[0]) >= 0, `${bankCapital(res.banks[0]).toFixed(0)}`)
+    check('the bailout is paid from the treasury', res.countries[0].treasury < treasury0, `${res.countries[0].treasury.toFixed(0)} < ${treasury0}`)
+    check('a banking-crisis event is logged', res.events.some((e) => e.kind === 'bank-recapitalized'), res.events.map((e) => e.kind).join(','))
+  }
+
+  // GOVERNOR TERM: past the term length, a new governor is appointed with an event.
+  {
+    const country = seedCountries().find((c) => c.id === marsId)!
+    const oldGov = country.centralBank!.governorName
+    const reports: import('../src/economy/economyTypes').TickReports = { worlds: {}, countries: { [marsId]: { gdp: 5000, priceLevel: 1, inflation: 0.02, revenue: 0, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: 0, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A', population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] }
+    const termLen = country.centralBank!.governorTermLength
+    const out = tickMonetary([{ ...country, monetary: defaultMonetaryState() }], {}, reports, termLen + 1, [])[0]
+    check('a governor is replaced when the term expires', out.centralBank!.governorName !== oldGov, `${oldGov} → ${out.centralBank!.governorName}`)
+    check('a governor-appointment event is logged', reports.events.some((e) => e.kind === 'governor-appointed'))
+  }
+
+  // EVENTS accumulate over a real run.
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    let total = 0
+    for (let i = 0; i < 60; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [marsId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks; total += r.reports.events.length }
+    check('central-banking events accumulate over a 60-tick run', total > 0, `${total} events`)
+  }
+}
+
+console.log('\n=== 42. Pop consumption rework: need groups, substitution, wealth-scaled buy packages ===')
+{
+  // Wealth scaling (Engel's law): luxury demand is highly elastic to standard of
+  // living; basic food is nearly flat.
+  const luxRich = tierWealthFactor('luxury', 0.9)
+  const luxPoor = tierWealthFactor('luxury', 0.2)
+  const basicRich = tierWealthFactor('basic', 0.9)
+  const basicPoor = tierWealthFactor('basic', 0.2)
+  check('richer pops want much more luxury (elastic)', luxRich > luxPoor * 2, `${luxRich.toFixed(2)} vs ${luxPoor.toFixed(2)}`)
+  check('basic-food demand is nearly wealth-inelastic', Math.abs(basicRich - basicPoor) < 0.3, `${basicRich.toFixed(2)} vs ${basicPoor.toFixed(2)}`)
+
+  // consumeGroup: the weighted split (food weight 3, meat weight 1) with equal
+  // availability and ample budget → food consumed ≈ 3× meat.
+  const foodGroup = { id: 'basic-food', label: 'Food', base: 0.8, goods: [{ good: 'grains' as const, weight: 3 }, { good: 'meat' as const, weight: 1 }] }
+  const prices = { grains: 2, meat: 6 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+  const noGov = () => 0
+  {
+    const full = { grains: 1, meat: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const r = consumeGroup(foodGroup, 100, 1e9, prices, full, noGov)
+    check('weighted split: food ≈ 3× meat when both are available', Math.abs((r.consumed.grains ?? 0) / (r.consumed.meat ?? 1) - 3) < 0.01, `grains ${(r.consumed.grains ?? 0).toFixed(0)} meat ${(r.consumed.meat ?? 0).toFixed(0)}`)
+    check('a fully-supplied group is fully satisfied', Math.abs(r.got - 100) < 1e-6, `${r.got}`)
+  }
+
+  // Substitution: food is SHORT (40% fulfilled), meat is plentiful → the pop
+  // substitutes toward meat, and total satisfaction beats what food alone gives.
+  {
+    const shortFood = { grains: 0.4, meat: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const r = consumeGroup(foodGroup, 100, 1e9, prices, shortFood, noGov)
+    const foodOnlyGot = 75 * 0.4 // food's weighted share (75) at 40% fulfill
+    check('substitution: a food shortage shifts consumption toward meat', (r.consumed.meat ?? 0) > 25, `meat ${(r.consumed.meat ?? 0).toFixed(0)}`)
+    check('substitution lifts total satisfaction above the shorted good alone', r.got > foodOnlyGot + 25, `got ${r.got.toFixed(0)} vs food-only ${foodOnlyGot}`)
+  }
+
+  // Budget binds: a tiny budget limits what a group can buy.
+  {
+    const full = { grains: 1, meat: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const r = consumeGroup(foodGroup, 100, 50, prices, full, noGov)
+    check('a small budget throttles consumption below the target', r.got < 100 && r.spent <= 50 + 1e-6, `got ${r.got.toFixed(0)} spent ${r.spent.toFixed(0)}`)
+  }
+
+  // Furniture is a real, produced, consumed good after the rework.
+  check('furniture is a registered good', GOOD_IDS.includes('furniture'))
+  check('the human household need includes furniture as a substitute', SPECIES_TEMPLATES['baseline-organic'].needs.everyday.some((g) => g.goods.some((x) => x.good === 'furniture')))
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 12; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const mars = ws.find((w) => w.id === 'Mars')!
+    const furnConsumed = mars.pops.reduce((s, p) => s + (p.needsDetail?.everyday?.find((e) => e.good === 'furniture')?.consumed ?? 0), 0)
+    check('pops actually consume furniture in a live economy', furnConsumed > 0, `${furnConsumed.toFixed(0)}`)
+    const avgSol = mars.pops.reduce((s, p) => s + p.standardOfLiving * p.populationSize, 0) / mars.pops.reduce((s, p) => s + p.populationSize, 0)
+    check('standard of living stays healthy after the rework', avgSol > 0.5, `${avgSol.toFixed(2)}`)
+    check('all worlds finite after the consumption rework', ws.every(worldFinite))
+  }
+}
+
+console.log('\n=== 43. Per-service public welfare (Healthcare / Dental / Education coverage) ===')
+{
+  const setCov = (cs: Country[], id: string, ps: Partial<Record<import('../src/economy/goods').GoodId, number>>): Country[] =>
+    cs.map((c) => (c.id === id ? { ...c, publicServices: ps } : c))
+
+  // Run one tick and read a country's state welfare spend on services.
+  function servicesCost(ps: Partial<Record<import('../src/economy/goods').GoodId, number>>): number {
+    const cs = setCov(seedCountries(), 'orion-republic', ps)
+    const res = tickEconomy(cs, seedWorlds(), seedCorporations(), { tick: 1, enableAI: false }, seedBanks())
+    return res.reports.countries['orion-republic'].services
+  }
+
+  const none = servicesCost({})
+  const health = servicesCost({ healthcare: 1 })
+  const dentalOnly = servicesCost({ dental: 1 })
+  const all = servicesCost({ healthcare: 1, dental: 1, education: 1 })
+  check('funding healthcare costs the state more than funding nothing', health > none, `${health.toFixed(0)} vs ${none.toFixed(0)}`)
+  check('per-service works beyond healthcare: dental-only coverage has a cost', dentalOnly > none, `${dentalOnly.toFixed(0)} vs ${none.toFixed(0)}`)
+  check('funding all services costs more than one service alone', all > health, `${all.toFixed(0)} vs ${health.toFixed(0)}`)
+
+  // The welfare UI reads a per-service breakdown: the state's $ cost and the gross
+  // value pops spend on each service (so a coverage % reads against a real number).
+  {
+    const cs = setCov(seedCountries(), 'orion-republic', { healthcare: 0.5 })
+    const rep = tickEconomy(cs, seedWorlds(), seedCorporations(), { tick: 1, enableAI: false }, seedBanks()).reports.countries['orion-republic']
+    check('report breaks welfare cost out per service', (rep.servicesByGood?.healthcare ?? 0) > 0, `${(rep.servicesByGood?.healthcare ?? 0).toFixed(0)}`)
+    check('report gives gross pop spending per service (what the % is out of)', (rep.serviceValueByGood?.healthcare ?? 0) > (rep.servicesByGood?.healthcare ?? 0), `${(rep.serviceValueByGood?.healthcare ?? 0).toFixed(0)}`)
+  }
+
+  // Dental is produced (at clinics) and consumed by pops in the healthcare need.
+  {
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    for (let i = 0; i < 8; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const mars = ws.find((w) => w.id === 'Mars')!
+    const dentalConsumed = mars.pops.reduce((s, p) => s + (p.needsDetail?.healthcare?.find((e) => e.good === 'dental')?.consumed ?? 0), 0)
+    check('pops consume dental as part of the healthcare need', dentalConsumed > 0, `${dentalConsumed.toFixed(0)}`)
+    check('dental is a registered good', GOOD_IDS.includes('dental'))
+  }
+
+  // Coverage genuinely lowers what a pop pays: a fully-funded service is free to
+  // the pop (govShareOf → effective price 0 in consumeGroup).
+  {
+    const group = { id: 'healthcare', label: 'Healthcare', base: 0.15, goods: [{ good: 'healthcare' as const, weight: 1 }] }
+    const prices = { healthcare: 12 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const full = { healthcare: 1 } as unknown as Record<import('../src/economy/goods').GoodId, number>
+    const paid = consumeGroup(group, 100, 500, prices, full, () => 0) // pop pays full
+    const funded = consumeGroup(group, 100, 500, prices, full, (g) => (g === 'healthcare' ? 1 : 0)) // state funds 100%
+    check('full public funding lets a budget-limited pop get more of a service', funded.got > paid.got, `${funded.got.toFixed(0)} vs ${paid.got.toFixed(0)}`)
+    check('a fully-funded service costs the pop nothing', funded.spent < 1e-6, `${funded.spent.toFixed(2)}`)
+  }
+}
+
+console.log('\n=== 44. Emergent/latent demand: adoption gates non-essential goods ===')
+{
+  type GId = import('../src/economy/goods').GoodId
+  check('emergent goods are the non-essentials (electronics, luxuries…) not food', isEmergentGood('electronics') && isEmergentGood('luxuryGoods') && !isEmergentGood('grains') && !isEmergentGood('healthcare'), EMERGENT_GOODS.join(','))
+
+  // consumeGroup: an UNADOPTED good creates no want (not a missed need); a fully
+  // adopted one is fully wanted.
+  {
+    const group = { id: 'durables', label: 'Durables', base: 0.03, goods: [{ good: 'electronics' as const, weight: 1 }] }
+    const prices = { electronics: 18 } as unknown as Record<GId, number>
+    const full = { electronics: 1 } as unknown as Record<GId, number>
+    const unadopted = consumeGroup(group, 100, 1e9, prices, full, () => 0, () => 0)
+    const adopted = consumeGroup(group, 100, 1e9, prices, full, () => 0, () => 1)
+    check('an unadopted good has ~zero effective want (no unmet need)', unadopted.effWant < 1e-6, `${unadopted.effWant.toFixed(1)}`)
+    check('a fully-adopted good is fully wanted', Math.abs(adopted.effWant - 100) < 1e-6, `${adopted.effWant.toFixed(1)}`)
+    check('half-adoption yields half the want', Math.abs(consumeGroup(group, 100, 1e9, prices, full, () => 0, () => 0.5).effWant - 50) < 1e-6)
+  }
+
+  // Backward-compat: a world with no adoption map demands emergent goods fully.
+  {
+    let ws = seedWorlds().map((w) => ({ ...w, adoption: undefined }))
+    const cs = seedCountries(), corps = seedCorporations(), bs = seedBanks()
+    const res = tickEconomy(cs, ws, corps, { tick: 1, enableAI: false }, bs)
+    check('a world without an adoption map still ticks fine (emergent = fully demanded)', res.worlds.every(worldFinite))
+  }
+
+  // Integration: adoption RISES for a supplied emergent good, DECAYS when its
+  // production is removed.
+  {
+    // Rise: aircraft starts at 0.3 seeded and is produced on Mars → climbs.
+    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+    const a0 = ws.find((w) => w.id === 'Mars')!.adoption!.aircraft ?? 0
+    for (let i = 0; i < 12; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: ['imperial-state-of-mars'] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const a1 = ws.find((w) => w.id === 'Mars')!.adoption!.aircraft ?? 0
+    check('a supplied emergent good gains adoption over time', a1 > a0, `${(a0 * 100).toFixed(0)}% → ${(a1 * 100).toFixed(0)}%`)
+  }
+  {
+    // Decay: strip electronics production from Mars → its adoption falls.
+    let cs = seedCountries(), corps = seedCorporations(), bs = seedBanks()
+    let ws = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: w.buildings.filter((b) => b.recipeId !== 'electronicsFactory') } : w))
+    const e0 = ws.find((w) => w.id === 'Mars')!.adoption!.electronics ?? 0
+    for (let i = 0; i < 20; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: ['imperial-state-of-mars'] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    const e1 = ws.find((w) => w.id === 'Mars')!.adoption!.electronics ?? 0
+    check('an emergent good whose supply is cut loses adoption (demand fades)', e1 < e0 - 0.1, `${(e0 * 100).toFixed(0)}% → ${(e1 * 100).toFixed(0)}%`)
+    check('adoption stays within [0,1]', EMERGENT_GOODS.every((g) => { const a = ws.find((w) => w.id === 'Mars')!.adoption![g] ?? 0; return a >= 0 && a <= 1 }))
+  }
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

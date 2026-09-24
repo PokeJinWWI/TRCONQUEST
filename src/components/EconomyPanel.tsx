@@ -35,7 +35,7 @@ function marketParticipants(world: World, good: GoodId) {
   const speciesIds = [...new Set(world.pops.map((p) => p.speciesTemplateId))]
   const householdNeeds = speciesIds.some((id) => {
     const sp = SPECIES_TEMPLATES[id]
-    return sp && NEED_TIERS.some((t) => sp.needs[t].some((n) => n.good === good))
+    return sp && NEED_TIERS.some((t) => sp.needs[t].some((group) => group.goods.some((g) => g.good === good)))
   })
   if (householdNeeds) buyers.push('Households')
   return { sellers, buyers }
@@ -70,6 +70,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
   const allWorlds = useEconomyStore((s) => s.worlds)
   const setTaxRate = useEconomyStore((s) => s.setTaxRate)
   const setWelfare = useEconomyStore((s) => s.setWelfare)
+  const setPublicServiceCoverage = useEconomyStore((s) => s.setPublicServiceCoverage)
 
   // Market is per-world; the fiscal tabs are national (per country).
   if (subcategory === 'Market') {
@@ -167,8 +168,8 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             </button>
           </span>
         </div>
-        <div className="econ-control-row" title="A social benefit paid to every person each month (like a pension/UBI) — so total welfare spending scales with population. This sets the per-person amount; the total is the Welfare line above.">
-          <span className="inspect-label">Welfare — {welfareTier(country.welfarePerCapita)}</span>
+        <div className="econ-control-row" title="A social benefit paid to every person each month (like a pension/UBI) — so total spending scales with population. This sets the per-person amount; the total is the Welfare line above.">
+          <span className="inspect-label">Pension — {welfareTier(country.welfarePerCapita)}</span>
           <span className="econ-control">
             <button type="button" onClick={() => setWelfare(country.id, country.welfarePerCapita - 0.5)}>
               −
@@ -179,8 +180,60 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             </button>
           </span>
         </div>
+
+        <div className="econ-subtitle" style={{ marginTop: 10 }}>Public services</div>
+        <div className="ship-panel-hint" style={{ marginBottom: 6 }}>
+          Each slider is the share of what pops <b>actually spend</b> on that service that the state covers for them. The
+          live dollar cost is shown below each — that's the real amount coming out of the budget. <b>Rec</b> sets a
+          recommended level.
+        </div>
+        {([
+          { good: 'healthcare' as const, label: 'Healthcare', rec: 1 },
+          { good: 'dental' as const, label: 'Dental care', rec: 0.5 },
+          { good: 'education' as const, label: 'Education', rec: 0.75 },
+        ]).map(({ good, label, rec }) => {
+          const cov = country.publicServices?.[good] ?? 0
+          const gross = fiscal?.serviceValueByGood?.[good] ?? 0
+          const cost = fiscal?.servicesByGood?.[good] ?? 0
+          const atRec = cov === rec
+          return (
+            <div key={good} className="welfare-service">
+              <label className="econ-control-row" style={{ marginBottom: 2 }}>
+                <span className="inspect-label">{label}</span>
+                <span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={cov}
+                    onChange={(e) => setPublicServiceCoverage(country.id, good, Number(e.target.value))}
+                  />
+                  <b style={{ marginLeft: 8, color: '#cdeeff' }}>{Math.round(cov * 100)}%</b>
+                </span>
+              </label>
+              <div className="welfare-service-detail">
+                <span>
+                  State pays <b className="econ-neg">{formatMoney(cost)}/mo</b>
+                  {gross > 0 ? <span style={{ opacity: 0.6 }}> of {formatMoney(gross)} pops spend</span> : <span style={{ opacity: 0.6 }}> (advance time for live cost)</span>}
+                </span>
+                <button
+                  type="button"
+                  className="laws-enact-btn"
+                  disabled={atRec}
+                  title={`Recommended coverage for ${label}: ${Math.round(rec * 100)}%`}
+                  onClick={() => setPublicServiceCoverage(country.id, good, rec)}
+                >
+                  {atRec ? `Rec ✓` : `Rec ${Math.round(rec * 100)}%`}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+
         <div className="ship-panel-hint">
-          Welfare is a <b>per-person</b> benefit → total = per-person × population ({fiscal ? formatPop(fiscal.population) : '—'}). Two more budget levers live elsewhere: <b>healthcare funding</b> (Government → Laws) and <b>subsidies</b> (Corporations, and each building's detail). Spend past tax revenue and the deficit piles up as debt and downgrades your credit rating.
+          Pension is a flat <b>per-person</b> cash benefit; public services fund a <b>share</b> of pops' spending on that
+          service. Both are real budget costs — the totals feed the Welfare line above.
         </div>
       </div>
     )

@@ -1,8 +1,24 @@
 import { create } from 'zustand'
 import { usePlayerStore } from './playerStore'
-import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies } from '../economy/economySeed'
+import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies, seedBanks } from '../economy/economySeed'
 import { tickEconomy, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
+import {
+  defaultCentralBank,
+  debtFinancingRegimeDef,
+  governmentControlsPolicy,
+  governorAppointmentDef,
+  hasCentralBank,
+  type CentralBank,
+  type CentralBankStatus,
+  type BankStructure,
+  type PolicyAuthority,
+  type GovernorAppointment,
+  type CentralBankMandate,
+  type DebtFinancingRegime,
+  type ExchangeRateRegime,
+} from '../economy/centralBank'
+import { convertBetween } from '../economy/fx'
 import { RECIPES, constructionWork } from '../economy/recipes'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
 import type { GoodId } from '../economy/goods'
@@ -43,7 +59,12 @@ function executeForeignBuy(
   const publicHolding = target.shares.find((s) => s.holder.kind === 'public')?.shares ?? 0
   const delta = Math.max(-held, Math.min(publicHolding, Math.round(shares)))
   if (delta === 0) return null
-  const cost = delta * sharePrice(target, worlds)
+  // The share price is in the HOST company's currency; the investor pays in its
+  // OWN currency, so convert across the exchange rate (Stage 3 FX). A domestic
+  // buy (same country) converts 1:1.
+  const investorCountryId = investorKind === 'state' ? investorId : corporations.find((c) => c.id === investorId)?.countryId ?? investorId
+  const costHost = delta * sharePrice(target, worlds)
+  const cost = convertBetween(costHost, target.countryId, investorCountryId, countries)
   if (investorKind === 'state') {
     const inv = countries.find((c) => c.id === investorId)
     if (!inv || (delta > 0 && cost > inv.treasury)) return null
@@ -219,9 +240,15 @@ interface EconomyStore {
   corporations: Corporation[]
   characters: Character[]
   families: import('../economy/economyTypes').Family[]
+  // Commercial banks (Stage 2 central banking). Ticked alongside the economy.
+  banks: import('../economy/economyTypes').Bank[]
   tick: number
   worldReports: Record<string, WorldReport>
   countryReports: Record<string, CountryFiscal>
+  // Per-country monetary aggregates from the last tick (money supply readout).
+  moneyReports: Record<string, import('../economy/economyTypes').MonetaryAggregates>
+  // Rolling log of central-banking events (Stage 5), newest last.
+  centralBankEvents: import('../economy/economyTypes').CentralBankEvent[]
   // Per-country fiscal history, oldest first.
   history: Record<string, FiscalSample[]>
   advance: (ticks: number) => void
@@ -316,7 +343,9 @@ interface EconomyStore {
   // A character interaction (grant funds, demand dividend, dismiss, etc.).
   characterAction: (characterId: string, action: string) => void
   // --- Laws / bonds / debt ---
-  setHealthcareSystem: (countryId: string, system: import('../economy/laws').HealthcareSystem) => void
+  // Set the fraction of a public service good's price the state funds for pops
+  // (welfare coverage), e.g. setPublicServiceCoverage(id, 'dental', 0.5).
+  setPublicServiceCoverage: (countryId: string, good: GoodId, fraction: number) => void
   // Sell bonds to a class of buyer (raises treasury cash, adds to the debt).
   // Foreign sales are gated by the foreign-bond law.
   issueBonds: (countryId: string, amount: number, buyer: 'pops' | 'corporations' | 'foreign') => void
@@ -326,6 +355,36 @@ interface EconomyStore {
   setForeignApproval: (countryId: string, require: boolean) => void
   approveForeignOffer: (countryId: string, offerId: string) => void
   rejectForeignOffer: (countryId: string, offerId: string) => void
+  // --- Central bank (monetary institution) ---
+  // Found a central bank in a country that has none (status 'no-bank' → a basic
+  // state bank). No-op if one already exists.
+  establishCentralBank: (countryId: string) => void
+  // Enact the central bank's institutional laws. Setting the status to 'no-bank'
+  // abolishes it. Changing the appointment law resets the governor's term length.
+  setCentralBankStatus: (countryId: string, status: CentralBankStatus) => void
+  setBankStructure: (countryId: string, structure: BankStructure) => void
+  setPolicyAuthority: (countryId: string, authority: PolicyAuthority) => void
+  setGovernorAppointment: (countryId: string, appointment: GovernorAppointment) => void
+  setCentralBankMandate: (countryId: string, mandate: CentralBankMandate) => void
+  setDebtFinancingRegime: (countryId: string, regime: DebtFinancingRegime) => void
+  setExchangeRateRegime: (countryId: string, regime: ExchangeRateRegime) => void
+  // Set the policy interest rate / reserve requirement DIRECTLY. Only takes
+  // effect when the government controls policy (a dependent bank); on an
+  // independent bank it is a no-op — the player must pressure or reform instead.
+  setPolicyRate: (countryId: string, rate: number) => void
+  setReserveRequirement: (countryId: string, requirement: number) => void
+  // Lean on an independent central bank for easier money — raises standing
+  // government pressure (eroding effective independence and credibility). The
+  // political lever a government has over a bank it cannot command directly.
+  pressureCentralBank: (countryId: string, amount: number) => void
+  // Appoint a new governor, resetting their term from the current tick.
+  appointGovernor: (countryId: string, name: string) => void
+  // Open-market operations (Stage 4): the central bank buys (amount > 0) or sells
+  // (amount < 0) government securities, injecting or draining commercial-bank
+  // reserves — the day-to-day lever for loosening/tightening. Requires a regime
+  // that permits the secondary market; a buy creates base money, a sell is capped
+  // by securities held and bank reserves available.
+  openMarketOperation: (countryId: string, amount: number) => void
 }
 
 let constructionCounter = 0
@@ -348,9 +407,12 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
   corporations: seedCorporations(),
   characters: seedCharacters(),
   families: seedFamilies(),
+  banks: seedBanks(),
   tick: 0,
   worldReports: {},
   countryReports: {},
+  moneyReports: {},
+  centralBankEvents: [],
   history: {},
   advance: (ticks) =>
     set((state) => {
@@ -359,8 +421,11 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       let countries = state.countries
       let worlds = state.worlds
       let corporations = state.corporations
+      let banks = state.banks
       let worldReports = state.worldReports
       let countryReports = state.countryReports
+      let moneyReports = state.moneyReports
+      let cbEvents = state.centralBankEvents
       const history: Record<string, FiscalSample[]> = { ...state.history }
       // Nations NOT controlled by a human player are run by the country AI (see
       // countryAI.ts). This is multiplayer-ready: humanCountryIds is a set, so a
@@ -370,12 +435,15 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const localPlayer = usePlayerStore.getState().selectedCountryId
       const humanCountryIds = localPlayer ? [localPlayer] : []
       for (let i = 0; i < steps; i++) {
-        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true })
+        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true }, banks)
         countries = res.countries
         worlds = res.worlds
         corporations = res.corporations
+        banks = res.banks
         worldReports = res.reports.worlds
         countryReports = res.reports.countries
+        moneyReports = res.reports.money
+        if (res.reports.events.length > 0) cbEvents = [...cbEvents, ...res.reports.events].slice(-60)
         for (const c of countries) {
           const series = history[c.id] ? [...history[c.id]] : []
           series.push(sampleOf(countryReports[c.id]))
@@ -400,7 +468,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
           return { ...c, bonds: { ...c.bonds, foreign: c.bonds.foreign + amount }, treasury: c.treasury + amount }
         })
       }
-      return { countries, worlds, corporations, worldReports, countryReports, history, tick: newTick }
+      return { countries, worlds, corporations, banks, worldReports, countryReports, moneyReports, centralBankEvents: cbEvents, history, tick: newTick }
     }),
   setWorldOwner: (worldId, countryId) =>
     set((state) => ({
@@ -792,7 +860,8 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       // Buy from the public float (positive) or sell back to it (negative).
       const delta = Math.max(-held, Math.min(publicHolding, Math.round(shares)))
       if (delta === 0) return state
-      const cost = delta * price
+      // Convert the host-currency price into the investing government's currency.
+      const cost = convertBetween(delta * price, corp.countryId, investorCountryId, state.countries)
       if (delta > 0 && cost > investor.treasury) return state
       const newHeld = held + delta
       const newPublic = publicHolding - delta
@@ -825,7 +894,8 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const publicHolding = target.shares.find((s) => s.holder.kind === 'public')?.shares ?? 0
       const delta = Math.max(-held, Math.min(publicHolding, Math.round(shares)))
       if (delta === 0) return state
-      const cost = delta * price
+      // Convert the host-currency price into the holding company's currency.
+      const cost = convertBetween(delta * price, target.countryId, holder.countryId, state.countries)
       if (delta > 0 && cost > holder.cash) return state // must afford it from its own cash
       const newHeld = held + delta
       const newPublic = publicHolding - delta
@@ -876,8 +946,12 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       return { characters, corporations }
     }),
 
-  setHealthcareSystem: (countryId, system) =>
-    set((state) => ({ countries: state.countries.map((c) => (c.id === countryId ? { ...c, healthcareSystem: system } : c)) })),
+  setPublicServiceCoverage: (countryId, good, fraction) =>
+    set((state) => ({
+      countries: state.countries.map((c) =>
+        c.id === countryId ? { ...c, publicServices: { ...c.publicServices, [good]: Math.max(0, Math.min(1, fraction)) } } : c,
+      ),
+    })),
 
   issueBonds: (countryId, amount, buyer) =>
     set((state) => {
@@ -931,7 +1005,123 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
     set((state) => ({
       countries: state.countries.map((c) => (c.id === countryId ? { ...c, pendingForeign: c.pendingForeign.filter((o) => o.id !== offerId) } : c)),
     })),
+
+  // --- Central bank ---
+  establishCentralBank: (countryId) =>
+    set((state) => ({
+      countries: state.countries.map((c) => {
+        if (c.id !== countryId) return c
+        const existing = c.centralBank
+        if (hasCentralBank(existing)) return c // already has one
+        const name = existing ? existing.name : 'Central Bank'
+        return { ...c, centralBank: { ...defaultCentralBank(countryId, state.tick), name } }
+      }),
+    })),
+
+  setCentralBankStatus: (countryId, status) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, status })) })),
+  setBankStructure: (countryId, structure) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, structure })) })),
+  setPolicyAuthority: (countryId, authority) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, policyAuthority: authority })) })),
+  setGovernorAppointment: (countryId, appointment) =>
+    set((state) => ({
+      // Changing how the governor is appointed resets their term length (and
+      // restarts the clock) per the new law.
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({
+        ...cb,
+        appointment,
+        governorTermLength: governorAppointmentDef(appointment).termTicks,
+        governorTermStart: state.tick,
+      })),
+    })),
+  setCentralBankMandate: (countryId, mandate) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, mandate })) })),
+  setDebtFinancingRegime: (countryId, regime) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, debtFinancing: regime })) })),
+  setExchangeRateRegime: (countryId, regime) =>
+    set((state) => ({ countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({ ...cb, exchangeRegime: regime })) })),
+
+  setPolicyRate: (countryId, rate) =>
+    set((state) => ({
+      // The government may set the rate directly ONLY on a bank it controls. On
+      // an independent bank this is a no-op — the whole point of independence.
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) =>
+        governmentControlsPolicy(cb) ? { ...cb, policyRate: clampRate(rate) } : cb,
+      ),
+    })),
+  setReserveRequirement: (countryId, requirement) =>
+    set((state) => ({
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) =>
+        governmentControlsPolicy(cb) ? { ...cb, reserveRequirement: clamp01(requirement) } : cb,
+      ),
+    })),
+
+  pressureCentralBank: (countryId, amount) =>
+    set((state) => ({
+      // Leaning on the bank raises standing pressure (capped) and chips at its
+      // credibility — the cost of politicizing monetary policy.
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({
+        ...cb,
+        governmentPressure: clamp01(cb.governmentPressure + amount),
+        credibility: clamp01(cb.credibility - amount * 0.15),
+      })),
+    })),
+
+  appointGovernor: (countryId, name) =>
+    set((state) => ({
+      countries: mapCentralBank(state.countries, countryId, state.tick, (cb) => ({
+        ...cb,
+        governorName: name,
+        governorTermStart: state.tick,
+        governorTermLength: governorAppointmentDef(cb.appointment).termTicks,
+      })),
+    })),
+
+  openMarketOperation: (countryId, amount) =>
+    set((state) => {
+      const country = state.countries.find((c) => c.id === countryId)
+      const cb = country?.centralBank
+      if (!country || !cb || !hasCentralBank(cb)) return state
+      // OMO needs a regime that permits secondary-market operations at all.
+      if (!debtFinancingRegimeDef(cb.debtFinancing).secondaryMarket) return state
+      const mine = state.banks.filter((b) => b.countryId === countryId)
+      const totalDeposits = mine.reduce((s, b) => s + b.deposits, 0)
+      if (mine.length === 0 || totalDeposits <= 0) return state
+      // A buy injects reserves (creates base money). A sell drains reserves, capped
+      // by securities the CB holds and reserves the banks actually have.
+      let inject = amount
+      if (amount < 0) {
+        const availReserves = mine.reduce((s, b) => s + b.reserves, 0)
+        inject = -Math.min(-amount, cb.govSecurities, availReserves)
+      }
+      const banks = state.banks.map((b) =>
+        b.countryId === countryId ? { ...b, reserves: Math.max(0, b.reserves + inject * (b.deposits / totalDeposits)) } : b,
+      )
+      const countries = state.countries.map((c) =>
+        c.id === countryId ? { ...c, centralBank: { ...cb, govSecurities: Math.max(0, cb.govSecurities + inject) } } : c,
+      )
+      return { banks, countries }
+    }),
 }))
+
+// Apply `fn` to a country's central bank if it has one. A country with no
+// central bank (undefined or status 'no-bank') is left untouched — callers use
+// establishCentralBank first. `tick` is threaded for actions that need it.
+function mapCentralBank(countries: Country[], countryId: string, _tick: number, fn: (cb: CentralBank) => CentralBank): Country[] {
+  return countries.map((c) => {
+    if (c.id !== countryId || !c.centralBank) return c
+    return { ...c, centralBank: fn(c.centralBank) }
+  })
+}
+
+function clamp01(x: number): number {
+  return Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0
+}
+// Policy rate is an annual fraction; clamp to a sane 0..50% band.
+function clampRate(x: number): number {
+  return Number.isFinite(x) ? Math.max(0, Math.min(0.5, x)) : 0
+}
 
 let corpCounter = 0
 let charCounter = 100

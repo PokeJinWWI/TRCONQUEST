@@ -1,8 +1,10 @@
 import { GOODS, GOOD_IDS, type GoodId } from './goods'
 import { POP_CLASSES, RECIPES, getMethod, type PopClass } from './recipes'
 import { DEPLETABLE_GOODS } from './economyTick'
+import { governorAppointmentDef, type CentralBank } from './centralBank'
 import type { ReligionMix } from './demographics'
 import type {
+  Bank,
   Building,
   BuildingOwner,
   Character,
@@ -95,6 +97,14 @@ function seedLabor(): LaborMarket {
   return { wages }
 }
 
+// Starting ADOPTION for emergent goods (see economyTick's EMERGENT_GOODS): the
+// established consumer durables are broadly adopted; luxuries have room to spread
+// as worlds get richer. A good's demand is gated by this — stop supplying one and
+// its adoption (and demand) decays; introduce a new one and it climbs from ~0.
+function seedAdoption(): Partial<Record<GoodId, number>> {
+  return { furniture: 0.8, electronics: 0.8, automobiles: 0.75, onlineServices: 0.7, luxuryGoods: 0.4, art: 0.35, aircraft: 0.3 }
+}
+
 const CLASS_SPLIT: Record<PopClass, number> = {
   subsistence: 0.15,
   labor: 0.38,
@@ -178,6 +188,7 @@ function buildWorld(spec: WorldSpec): World {
     labor: seedLabor(),
     importStock: {},
     resourceDeposits: seedDeposits(buildings),
+    adoption: seedAdoption(),
   }
 }
 
@@ -208,10 +219,14 @@ const WORLDS: World[] = [
       { recipe: 'loggingCamp', level: 2, owner: 'worker' },
       { recipe: 'sulfurMine', level: 1, owner: REDMINES },
       { recipe: 'hardwoodLogging', level: 1, owner: 'worker' },
-      // Agriculture — the Martian Restoration Administration (state corp).
+      // Agriculture — the Martian Restoration Administration (state corp). Grain
+      // (staple), hydroponics (high-yield grain for a marginal world), livestock
+      // + fishery (protein). Provisioned with headroom so food doesn't bind early.
       { recipe: 'wheatFarm', level: 4, owner: MRA },
       { recipe: 'riceFarm', level: 2, owner: MRA },
-      { recipe: 'livestockRanch', level: 2, owner: MRA },
+      { recipe: 'hydroponicsFarm', level: 2, owner: MRA },
+      { recipe: 'livestockRanch', level: 3, owner: MRA },
+      { recipe: 'fishery', level: 2, owner: MRA },
       // Industry (state unless noted).
       { recipe: 'steelMill', level: 4 },
       { recipe: 'sawmill', level: 1, owner: 'worker' },
@@ -222,9 +237,10 @@ const WORLDS: World[] = [
       { recipe: 'heavyMachineryPlant', level: 1 },
       { recipe: 'electricalMachineryPlant', level: 1 },
       { recipe: 'precisionMachineryPlant', level: 1 },
-      { recipe: 'foodProcessor', level: 3, owner: MRA },
-      { recipe: 'meatPacking', level: 1, owner: MRA },
+      { recipe: 'foodProcessor', level: 4, owner: MRA },
+      { recipe: 'meatPacking', level: 3, owner: MRA },
       { recipe: 'consumerGoodsFactory', level: 3, owner: 'worker' },
+      { recipe: 'furnitureFactory', level: 2, owner: 'worker' },
       { recipe: 'semiconductorFab', level: 1 },
       { recipe: 'electronicsFactory', level: 1 },
       { recipe: 'luxuryFactory', level: 1 },
@@ -275,6 +291,9 @@ const WORLDS: World[] = [
       { recipe: 'ironMine', level: 1, owner: 'worker' },
       { recipe: 'wheatFarm', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 1 },
       { recipe: 'toolWorkshop', level: 1 },
       { recipe: 'machineryFactory', level: 1 },
@@ -305,11 +324,15 @@ const WORLDS: World[] = [
       { recipe: 'oilWell', level: 1 },
       { recipe: 'wheatFarm', level: 3 },
       { recipe: 'foodProcessor', level: 2 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 3 },
       { recipe: 'toolWorkshop', level: 2 },
       { recipe: 'machineryFactory', level: 2 },
       { recipe: 'chemicalPlant', level: 1 },
       { recipe: 'consumerGoodsFactory', level: 2 },
+      { recipe: 'furnitureFactory', level: 1 },
       { recipe: 'clinic', level: 2 },
       { recipe: 'roadNetwork', level: 1 },
       { recipe: 'school', level: 1 },
@@ -345,6 +368,9 @@ const WORLDS: World[] = [
       { recipe: 'coffeePlantation', level: 1 },
       { recipe: 'teaPlantation', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'cementWorks', level: 1 },
       { recipe: 'constructionSector', level: 1 },
       { recipe: 'sawmill', level: 1, owner: 'worker' },
@@ -376,6 +402,9 @@ const WORLDS: World[] = [
       { recipe: 'ironMine', level: 1, owner: 'worker' },
       { recipe: 'wheatFarm', level: 1 },
       { recipe: 'foodProcessor', level: 1 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 1 },
       { recipe: 'toolWorkshop', level: 1 },
       { recipe: 'machineryFactory', level: 1 },
@@ -405,6 +434,9 @@ const WORLDS: World[] = [
       { recipe: 'wheatFarm', level: 3 },
       { recipe: 'riceFarm', level: 1 },
       { recipe: 'foodProcessor', level: 2 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
       { recipe: 'steelMill', level: 3 },
       { recipe: 'toolWorkshop', level: 2 },
       { recipe: 'machineryFactory', level: 2 },
@@ -421,6 +453,29 @@ const WORLDS: World[] = [
   }),
 ]
 
+// Seed a central bank for a country. Each of the four powers runs a distinct
+// monetary institution so the models read differently from the start — a
+// government-directed development bank, an independent price-stability bank, a
+// federal reserve system, etc. `governorTermLength` follows the appointment law.
+type SeedCentralBank = Omit<CentralBank, 'countryId' | 'name' | 'governorTermStart' | 'governorTermLength' | 'fxReserves' | 'govSecurities' | 'currencyInCirculation' | 'loansToBanks'> &
+  Partial<Pick<CentralBank, 'fxReserves' | 'govSecurities' | 'currencyInCirculation' | 'loansToBanks'>>
+function seedCentralBank(countryId: string, name: string, cb: SeedCentralBank): CentralBank {
+  return {
+    countryId,
+    name,
+    governorTermStart: 0,
+    governorTermLength: governorAppointmentDef(cb.appointment).termTicks,
+    // Balance-sheet defaults (Stage 2) — seeded so the CB sheet balances at the
+    // start; per-country overrides (e.g. a fixed-rate regime holds more FX
+    // reserves) are passed in explicitly.
+    fxReserves: 20000,
+    govSecurities: 15000,
+    currencyInCirculation: 30000,
+    loansToBanks: 0,
+    ...cb,
+  }
+}
+
 // Every state starts with existing national debt (bonds outstanding) — no one
 // runs a balanced budget from a standing start.
 const COUNTRIES: Country[] = [
@@ -430,7 +485,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 2.0,
     treasury: 100000,
     economicSystem: 'interventionism',
-    healthcareSystem: 'public',
+    publicServices: { healthcare: 1, dental: 0.5, education: 0.8 },
     bonds: { pops: 60000, corporations: 30000, foreign: 20000 },
     bondRate: 0.004,
     foreignBondPolicy: 'approval',
@@ -444,6 +499,21 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Imperial Standard Credit', code: 'ISC', rate: 1.0, target: 1.0 },
+    centralBank: seedCentralBank('imperial-state-of-mars', 'Imperial Reserve of Mars', {
+      status: 'state-bank',
+      structure: 'regional-branches',
+      policyAuthority: 'governor',
+      appointment: 'head-of-state',
+      mandate: 'multiple',
+      debtFinancing: 'supported',
+      exchangeRegime: 'managed',
+      credibility: 0.6,
+      governmentPressure: 0.1,
+      governorName: 'Gov. Adaeze Okonkwo',
+      policyRate: 0.03,
+      reserveRequirement: 0.1,
+    }),
   },
   {
     id: 'republic-of-venus',
@@ -451,7 +521,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 2.0,
     treasury: 50000,
     economicSystem: 'laissez-faire',
-    healthcareSystem: 'mixed',
+    publicServices: { healthcare: 0.5, dental: 0, education: 0.3 },
     bonds: { pops: 30000, corporations: 25000, foreign: 15000 },
     bondRate: 0.0045,
     foreignBondPolicy: 'open',
@@ -465,6 +535,21 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Venusian National Credit', code: 'VNC', rate: 1.15, target: 1.15 },
+    centralBank: seedCentralBank('republic-of-venus', 'Venusian Federal Reserve', {
+      status: 'highly-independent',
+      structure: 'federal-reserve',
+      policyAuthority: 'mpc',
+      appointment: 'staggered',
+      mandate: 'price',
+      debtFinancing: 'secondary-only',
+      exchangeRegime: 'float',
+      credibility: 0.85,
+      governmentPressure: 0,
+      governorName: 'Chair Lena Vasquez',
+      policyRate: 0.025,
+      reserveRequirement: 0.08,
+    }),
   },
   {
     id: 'orion-republic',
@@ -472,7 +557,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 1.7,
     treasury: 30000,
     economicSystem: 'laissez-faire',
-    healthcareSystem: 'private',
+    publicServices: { healthcare: 0, dental: 0, education: 0 },
     bonds: { pops: 18000, corporations: 12000, foreign: 8000 },
     bondRate: 0.0042,
     foreignBondPolicy: 'open',
@@ -486,6 +571,21 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Orion Republic Dollar', code: 'ORD', rate: 0.95, target: 0.95 },
+    centralBank: seedCentralBank('orion-republic', 'Bank of Orion', {
+      status: 'independent',
+      structure: 'single',
+      policyAuthority: 'board',
+      appointment: 'fixed-term',
+      mandate: 'currency',
+      debtFinancing: 'prohibited',
+      exchangeRegime: 'float',
+      credibility: 0.75,
+      governmentPressure: 0,
+      governorName: 'Gov. Toma Ilyich',
+      policyRate: 0.035,
+      reserveRequirement: 0.12,
+    }),
   },
   {
     id: 'kingdom-of-lalande',
@@ -493,7 +593,7 @@ const COUNTRIES: Country[] = [
     welfarePerCapita: 1.7,
     treasury: 45000,
     economicSystem: 'command',
-    healthcareSystem: 'public',
+    publicServices: { healthcare: 0.8, dental: 0.3, education: 0.6 },
     bonds: { pops: 40000, corporations: 20000, foreign: 0 },
     bondRate: 0.004,
     foreignBondPolicy: 'closed',
@@ -507,6 +607,23 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 6000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 40000,
+    currency: { name: 'Lalande Royal Dinar', code: 'LRD', rate: 0.70, target: 0.70 },
+    centralBank: seedCentralBank('kingdom-of-lalande', 'Lalande State Monetary Directorate', {
+      status: 'treasury-office',
+      structure: 'single',
+      policyAuthority: 'finance-ministry',
+      appointment: 'government',
+      mandate: 'development',
+      debtFinancing: 'direct',
+      exchangeRegime: 'fixed',
+      credibility: 0.35,
+      governmentPressure: 0.5,
+      governorName: 'Minister Hal Renner',
+      policyRate: 0.02,
+      reserveRequirement: 0.06,
+      // A fixed exchange rate must be defended with reserves — Lalande holds more.
+      fxReserves: 45000,
+    }),
   },
 ]
 
@@ -692,6 +809,39 @@ export function seedWorlds(): World[] {
 }
 export function seedCountries(): Country[] {
   return COUNTRIES.map((c) => ({ ...c }))
+}
+
+// Commercial banks (Stage 2). Each bank starts near a balanced sheet: reserves
+// 15% + loans 80% + securities 15% of its deposit base, so capital ≈ 10% of
+// deposits (≈12.5% of loans — comfortably above the 8% target) and reserves sit
+// above any seeded reserve requirement, leaving a little room to lend. Larger
+// economies carry more/bigger banks.
+function makeBank(id: string, name: string, countryId: string, deposits: number, riskAppetite: number): Bank {
+  return {
+    id,
+    name,
+    countryId,
+    reserves: Math.round(deposits * 0.15),
+    loans: Math.round(deposits * 0.8),
+    securities: Math.round(deposits * 0.15),
+    deposits,
+    cbBorrowings: 0,
+    riskAppetite,
+    lastProfit: 0,
+  }
+}
+
+const BANKS: Bank[] = [
+  makeBank('bank-mars-1', 'First Bank of Mars', 'imperial-state-of-mars', 70000, 0.55),
+  makeBank('bank-mars-2', 'Tharsis Mercantile', 'imperial-state-of-mars', 50000, 0.6),
+  makeBank('bank-venus-1', 'Aphrodite Savings', 'republic-of-venus', 52000, 0.5),
+  makeBank('bank-venus-2', 'Cytherean Trust', 'republic-of-venus', 40000, 0.55),
+  makeBank('bank-orion-1', 'Arcadia Commercial Bank', 'orion-republic', 42000, 0.6),
+  makeBank('bank-lalande-1', 'Lalande People’s Bank', 'kingdom-of-lalande', 48000, 0.7),
+]
+
+export function seedBanks(): Bank[] {
+  return BANKS.map((b) => ({ ...b }))
 }
 export function seedCorporations(): Corporation[] {
   // Base corporations, with private ones giving their country's capital
