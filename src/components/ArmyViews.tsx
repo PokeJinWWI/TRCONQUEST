@@ -5,7 +5,7 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { atWar } from '../state/diplomacyStore'
-import { useRelationKey } from '../state/shipRelations'
+import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { usePlayerStore } from '../state/playerStore'
 import { usePlayerResources } from '../hooks/usePlayerResources'
 import { COUNTRIES } from '../data/countryData'
@@ -45,8 +45,17 @@ function countryName(id: string): string {
   return ownerDisplay(id).name
 }
 
+// Nation colour — for territory (who owns or occupies a world). Armies are
+// coloured by their relation to the player instead: see armyColor.
 function countryColor(id: string): string {
   return ownerDisplay(id).color
+}
+
+// An army's colour: green if the player's, blue if allied, yellow if neutral,
+// red if hostile (the same as their ships). Components using it call
+// useRelationKey() so a war starting or ending recolours them.
+function armyColor(ownerId: string): string {
+  return relationColorOf(ownerId)
 }
 
 // Every ground battle going on, recomputed when armies, territory or wars
@@ -74,6 +83,7 @@ export function StrengthBar({ value, max, color }: { value: number; max: number;
 }
 
 function ArmyRow({ army }: { army: ArmyUnit }) {
+  useRelationKey()
   const spec = ARMY_KINDS[army.kind]
   const training = army.location.kind === 'recruiting'
   const readyIn = training && army.location.kind === 'recruiting' ? army.location.readySimDays : 0
@@ -81,14 +91,14 @@ function ArmyRow({ army }: { army: ArmyUnit }) {
   const strength = armyStrength(army)
   return (
     <div className="army-row">
-      <span className="army-row-name" style={{ color: countryColor(army.ownerId) }}>
+      <span className="army-row-name" style={{ color: armyColor(army.ownerId) }}>
         {spec.name}
       </span>
       {training ? (
         <span className="army-row-status">Training · {Math.max(0, Math.ceil(readyIn - simDays))}d</span>
       ) : (
         <>
-          <StrengthBar value={strength.strength} max={strength.max} color={countryColor(army.ownerId)} />
+          <StrengthBar value={strength.strength} max={strength.max} color={armyColor(army.ownerId)} />
           <span className="army-row-value" title={army.units.map((u) => `${UNIT_TYPES[u.type].name} ${Math.ceil(u.strength)}/${u.maxStrength}`).join('\n')}>
             {army.units.length}u · {Math.ceil(strength.strength)}/{strength.max}
           </span>
@@ -99,15 +109,16 @@ function ArmyRow({ army }: { army: ArmyUnit }) {
 }
 
 export function GroundBattleSummary({ battle }: { battle: GroundBattle }) {
-  const attackerColor = countryColor(battle.attackerIds[0])
+  useRelationKey()
+  const attackerColor = armyColor(battle.attackerIds[0])
   return (
     <div className="ground-battle">
       <div className="ground-battle-title">Ground battle on {battle.bodyName}</div>
       <div className="army-row">
-        <span className="army-row-name" style={{ color: countryColor(battle.defenderId) }}>
+        <span className="army-row-name" style={{ color: armyColor(battle.defenderId) }}>
           {countryName(battle.defenderId)} (holding)
         </span>
-        <StrengthBar value={battle.defenderStrength} max={battle.defenderMaxStrength} color={countryColor(battle.defenderId)} />
+        <StrengthBar value={battle.defenderStrength} max={battle.defenderMaxStrength} color={armyColor(battle.defenderId)} />
         <span className="army-row-value">{Math.ceil(battle.defenderStrength)}</span>
       </div>
       <div className="army-row">
@@ -188,7 +199,7 @@ export function BodyArmies({ bodyName }: { bodyName: string }) {
       {byOwner.length === 0 && <div className="inspect-status">No armies here.</div>}
       {byOwner.map(([owner, list]) => (
         <div key={owner} className="army-group">
-          <div className="army-group-label" style={{ color: countryColor(owner) }}>
+          <div className="army-group-label" style={{ color: armyColor(owner) }}>
             {countryName(owner)}
           </div>
           {list.map((a) => (

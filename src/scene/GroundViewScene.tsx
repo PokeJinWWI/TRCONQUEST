@@ -11,7 +11,7 @@ import { useGroundViewStore } from '../state/groundViewStore'
 import { useViewStore } from '../state/viewStore'
 import { usePlayerStore } from '../state/playerStore'
 import { atWar } from '../state/diplomacyStore'
-import { useRelationKey } from '../state/shipRelations'
+import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { groundSurface, holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
 import { TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
@@ -318,7 +318,8 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
   const selected = useGroundViewStore((s) => s.selectedUnitIds.includes(unitId))
   const player = usePlayerStore((s) => s.selectedCountryId)
   useRelationKey()
-  const color = ownerDisplay(ownerId).color
+  // Coloured by how the owner relates to the player, not by nation.
+  const color = relationColorOf(ownerId, player)
   const hostile = !!player && atWar(ownerId, player)
   const select = (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
     if (isAdditiveClick(e)) useGroundViewStore.getState().toggleUnit(unitId)

@@ -17,6 +17,7 @@ import { useShipStore } from '../state/shipStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { usePlayerStore } from '../state/playerStore'
 import { useTechStore } from '../state/techStore'
+import { useViewStore } from '../state/viewStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { getCountry } from '../data/countryData'
 import { STARS, UNITS_PER_LY } from '../data/starData'
@@ -141,12 +142,26 @@ export function shipCommsDelayDays(
   return commsDelayDaysForDistanceKm(distanceKm, tier)
 }
 
+// Whether the player is looking at the combat arena this ship is fighting in.
+// That is direct, real-time contact: comms delay only governs orders given from
+// OUTSIDE the arena (a strategic order, or a stance change made from the map),
+// and needs the proper comm tech to close the gap there.
+export function inDirectContact(ship: Pick<ShipInstance, 'id'>): boolean {
+  const view = useViewStore.getState()
+  if (view.level !== 'combat' || !view.combatEngagementId) return false
+  const engagement = useCombatStore.getState().engagements.find((e) => e.id === view.combatEngagementId)
+  return !!engagement && engagement.participants.some((p) => p.shipId === ship.id)
+}
+
 // Convenience wrapping the above with "whichever country the player is
 // currently playing" — the only viewer that matters for either the order
 // queue or the visual layer: it's the player's OWN comms network that's
 // stale, for both their own and any other visible fleet, not a per-faction
 // thing modeled separately for each country.
 export function playerCommsDelayToShip(ship: ShipInstance, simDays: number): number {
+  // In the combat arena the player is in direct contact with the ships
+  // fighting there — no lag on anything they do from inside it.
+  if (inDirectContact(ship)) return 0
   const countryId = usePlayerStore.getState().selectedCountryId
   if (!countryId) return 0
   const country = getCountry(countryId)

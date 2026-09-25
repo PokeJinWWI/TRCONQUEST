@@ -624,6 +624,7 @@ function ShipStrategyRow({
   selectShip: (id: string | null) => void
 }) {
   const shipClass = resolveShipClass(ship.classId)
+  const simDays = useGameTimeStore((s) => s.simDays)
   const stanceOptions = fleet?.strategy != null ? [...COMBAT_STANCES, 'fleet' as const] : COMBAT_STANCES
   return (
     <div className={`fleet-row${ship.id === selectedShipId ? ' selected' : ''}`}>
@@ -646,6 +647,13 @@ function ShipStrategyRow({
           </button>
         ))}
       </div>
+      {ship.pendingStance && (
+        <div className="fleet-row-status ship-panel-comms-delay">
+          Order in transit: {STANCE_LABELS[ship.pendingStance.stance]} — takes effect in{' '}
+          {Math.max(0, ship.pendingStance.arrivesSimDays - simDays).toFixed(1)} days (out of real-time contact; enter the combat
+          arena for direct control).
+        </div>
+      )}
       <div className="fleet-row-status">
         {ship.stance === 'fleet' && fleet?.strategy
           ? `Following ${fleet.name}: ${FLEET_STRATEGY_DESCRIPTIONS[fleet.strategy]}`

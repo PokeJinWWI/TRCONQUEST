@@ -13,7 +13,7 @@ import { useGroundViewStore } from '../state/groundViewStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { usePlayerStore } from '../state/playerStore'
 import { atWar } from '../state/diplomacyStore'
-import { useRelationKey } from '../state/shipRelations'
+import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { DraggableWindow } from './DraggableWindow'
 
 // The planetary map's panels: the roster/controls window (left) and the
@@ -171,7 +171,7 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
       {byOwner.size === 0 && <div className="inspect-status">No units on the ground.</div>}
       {[...byOwner.entries()].map(([ownerId, list]) => (
         <div key={ownerId} className="army-group">
-          <div className="army-group-label" style={{ color: ownerDisplay(ownerId).color }}>
+          <div className="army-group-label" style={{ color: relationColorOf(ownerId) }}>
             {ownerDisplay(ownerId).name}
             {ownerId === player ? ' (yours)' : player && atWar(ownerId, player) ? ' (hostile)' : ''}
           </div>
@@ -198,7 +198,7 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                     className={`ground-unit-row${selectedIds.includes(u.id) ? ' selected' : ''}`}
                     onClick={(e) => (isAdditiveClick(e) ? view.toggleUnit(u.id) : view.selectUnit(u.id))}
                   >
-                    <span className="ground-unit-glyph" style={{ color: ownerDisplay(ownerId).color }}>{UNIT_TYPES[u.type].glyph}</span>
+                    <span className="ground-unit-glyph" style={{ color: relationColorOf(ownerId) }}>{UNIT_TYPES[u.type].glyph}</span>
                     <span className="ground-unit-name">{UNIT_TYPES[u.type].name}</span>
                     <span className="ground-unit-status">{unitStatus(u)}</span>
                     <span className="ground-unit-str">{Math.ceil(u.strength)}</span>
@@ -291,7 +291,7 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
           <tbody>
             {selected.map(({ army, unit }) => (
               <tr key={unit.id}>
-                <td style={{ color: ownerDisplay(army.ownerId).color }}>
+                <td style={{ color: relationColorOf(army.ownerId) }}>
                   {UNIT_TYPES[unit.type].glyph} {UNIT_TYPES[unit.type].name}
                 </td>
                 <td>{Math.ceil(unit.strength)}</td>
@@ -317,7 +317,7 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
     <DraggableWindow title={spec.name} anchor="right" maximizable={false} onClose={() => useGroundViewStore.getState().selectUnits([])}>
       <div className="inspect-row">
         <span className="inspect-label">Army</span>
-        <span className="inspect-value" style={{ color: ownerDisplay(army.ownerId).color }}>
+        <span className="inspect-value" style={{ color: relationColorOf(army.ownerId) }}>
           {ownerDisplay(army.ownerId).name} · {ARMY_KINDS[army.kind].name}
         </span>
       </div>

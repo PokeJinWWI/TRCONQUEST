@@ -68,12 +68,16 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
     groupRef.current?.position.copy(pos)
   })
 
-  // Before the early return below — a hook can't be called conditionally.
+  // Every hook stays above the early return below — a hook can't be called
+  // conditionally, and this marker's ship DOES disappear mid-render (it's
+  // destroyed while the marker is still mounted). A hook after the return made
+  // React throw "rendered fewer hooks than expected" the moment a ship died,
+  // which blanked the whole combat view.
   const relation = useRelationTo(ship?.ownerId ?? '')
+  const selected = useShipStore((s) => s.selectedShipIds.includes(shipId))
 
   if (!ship) return null
 
-  const selected = useShipStore((s) => s.selectedShipIds.includes(shipId))
   const color = RELATION_COLORS[relation]
   const charging = !!ship.combat.ftlCharge
   const chaffed = isChaffActive(ship.combat, simDays)

@@ -4,7 +4,7 @@
 // hostility between their owners (see shipsHostile).
 import { useDiplomacyStore, atWar, warsKeyOf, type AtWarFn } from './diplomacyStore'
 import { usePlayerStore } from './playerStore'
-import type { ShipRelation } from '../data/shipData'
+import { RELATION_COLORS, type ShipRelation } from '../data/shipData'
 import { FRIENDLY_ROGUE_ID } from '../data/countryRoster'
 
 export function relationOfOwner(ownerId: string, viewerId: string | null, atWarFn: AtWarFn = atWar): ShipRelation {
@@ -12,6 +12,14 @@ export function relationOfOwner(ownerId: string, viewerId: string | null, atWarF
   if (viewerId && atWarFn(ownerId, viewerId)) return 'enemy'
   if (ownerId === FRIENDLY_ROGUE_ID) return 'allied'
   return 'neutral'
+}
+
+// The colour an owner's ships AND armies are drawn in for the viewer: green for
+// their own, blue for allies, yellow for neutrals, red for hostile — by how
+// they relate to the player, never by which nation they belong to. Callers
+// re-render on wars via useRelationKey().
+export function relationColorOf(ownerId: string, viewerId: string | null = playerCountryId(), atWarFn: AtWarFn = atWar): string {
+  return RELATION_COLORS[relationOfOwner(ownerId, viewerId, atWarFn)]
 }
 
 // Whether two ships would fight — exactly whether their nations are at war.

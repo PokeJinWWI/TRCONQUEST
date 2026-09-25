@@ -107,6 +107,10 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   // needed to reverse the compensation below on the way back out, since the
   // body isn't in the DOM to re-measure while collapsed.
   const collapsedBodyHeightRef = useRef(0)
+  // The window's last measured height, and whether a handler has already
+  // re-centred `pos` for the size change about to be observed (collapse).
+  const lastHeightRef = useRef<number | null>(null)
+  const selfCompensatedRef = useRef(false)
 
   const handleResizePointerDown = (axis: ResizeAxis) => (e: React.PointerEvent) => {
     const rect = windowRef.current?.getBoundingClientRect()
@@ -180,7 +184,9 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
       const left = rect.left + dx
       const top = rect.top + dy
       x += Math.max(0, -left) - Math.max(0, left + rect.width - window.innerWidth)
-      y += Math.max(0, -top) - Math.max(0, top + rect.height - window.innerHeight)
+      // The title bar must stay below the top HUD bar (which sits above every
+      // window), or the window's controls become unreachable.
+      y += Math.max(0, cssVarPx('--hud-top-height', 52) - top) - Math.max(0, top + rect.height - window.innerHeight)
     }
 
     setPos({ x, y })
@@ -205,7 +211,7 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     if (!rect) return
     const overflowLeft = Math.max(0, -rect.left)
     const overflowRight = Math.max(0, rect.left + rect.width - window.innerWidth)
-    const overflowTop = Math.max(0, -rect.top)
+    const overflowTop = Math.max(0, cssVarPx('--hud-top-height', 52) - rect.top)
     const overflowBottom = Math.max(0, rect.top + rect.height - window.innerHeight)
     if (overflowLeft || overflowRight || overflowTop || overflowBottom) {
       setPos((p) => ({ x: p.x + overflowLeft - overflowRight, y: p.y + overflowTop - overflowBottom }))
@@ -213,6 +219,44 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     // Intentionally mount-only: this corrects the INITIAL open position, not
     // an ongoing constraint — the drag handler already keeps it on-screen
     // for every move after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // A window's height changes under it whenever its content does — switching
+  // to a taller tab, a list gaining rows. Because the box is centre-hung (see
+  // the transform below), the extra height would spread up AND down from the
+  // middle and push the title bar up behind the top HUD bar. So when the
+  // height changes for any reason other than the player's own drag/resize, a
+  // collapse, or a maximize, shift `pos` by half the change: the top edge
+  // stays where it was and the window grows downward instead, then keep the
+  // whole box between the HUD bars (the top edge wins if it can't fit).
+  useEffect(() => {
+    const el = windowRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      const rect = el.getBoundingClientRect()
+      const previous = lastHeightRef.current
+      lastHeightRef.current = rect.height
+      if (previous === null || Math.abs(rect.height - previous) < 0.5) return
+      if (selfCompensatedRef.current) {
+        selfCompensatedRef.current = false
+        return
+      }
+      if (resizeRef.current || dragRef.current) return
+      if (el.classList.contains('maximized') || el.classList.contains('animating')) return
+      const delta = rect.height - previous
+      const hudTop = cssVarPx('--hud-top-height', 52)
+      const hudBottom = cssVarPx('--hud-bottom-height', 58)
+      // Where the top edge was before the content changed.
+      const wantTop = rect.top + delta / 2
+      const lowestTop = Math.max(hudTop, window.innerHeight - hudBottom - rect.height)
+      const top = Math.min(Math.max(wantTop, hudTop), lowestTop)
+      const shift = top - rect.top
+      if (Math.abs(shift) >= 0.5) setPos((p) => ({ ...p, y: p.y + shift }))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+    // cssVarPx only reads the DOM; the observer itself is set up once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -237,6 +281,8 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   // bar sitting on it — doesn't move at all. Reversed symmetrically on the
   // way back out.
   const handleToggleCollapse = () => {
+    // This handler moves `pos` itself; the size observer below must not also.
+    selfCompensatedRef.current = true
     if (!collapsed) {
       const bodyHeight = windowRef.current?.querySelector<HTMLElement>('.draggable-window-body')?.getBoundingClientRect().height ?? 0
       collapsedBodyHeightRef.current = bodyHeight

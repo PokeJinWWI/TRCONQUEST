@@ -12,6 +12,7 @@ import { groundSurface, holderOf } from './groundLogic'
 import { TERRAIN_IDS } from './planetTerrain'
 import { normalize, surfaceMesh } from './surfaceMesh'
 import { GroundBattleSummary, useGroundBattles } from '../components/ArmyViews'
+import { relationColorOf, useRelationKey } from '../state/shipRelations'
 
 // Satellite view's picture of the ground war, drawn inside the hologram's
 // rotating frame (HologramBody's children) so it turns with the world:
@@ -27,6 +28,8 @@ export function PlanetArmyMarkers({ bodyName, radius }: { bodyName: string; radi
       .join('|'),
   )
   const painted = useTerritoryStore((s) => !!s.nodeHolders[bodyName])
+  // A war starting or ending recolours the chips (they show relation, not nation).
+  useRelationKey()
   const armies = useMemo(() => armiesOnBody(useArmyStore.getState().armies, bodyName), [idsKey, bodyName]) // eslint-disable-line react-hooks/exhaustive-deps
   const showShell = painted || armies.length > 0
 
@@ -38,7 +41,8 @@ export function PlanetArmyMarkers({ bodyName, radius }: { bodyName: string; radi
         if (placed.length === 0) return null
         const c = normalize(placed.reduce((acc, u) => ({ x: acc.x + u.position!.x, y: acc.y + u.position!.y, z: acc.z + u.position!.z }), { x: 0, y: 0, z: 0 }))
         const r = radius * 1.04
-        const { name, color } = ownerDisplay(a.ownerId)
+        const { name } = ownerDisplay(a.ownerId)
+        const color = relationColorOf(a.ownerId)
         return (
           <group key={a.id} position={[c.x * r, c.y * r, c.z * r]}>
             <Html zIndexRange={[0, 0]}>
