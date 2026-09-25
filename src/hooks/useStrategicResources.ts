@@ -37,6 +37,9 @@ export function useStrategicResources() {
       const ticks = Math.floor(elapsed / SIM_DAYS_PER_INCOME_TICK)
       lastTickSimDays += ticks * SIM_DAYS_PER_INCOME_TICK
       if (!started()) return
+      // In the abstract-economy game the resources come from the abstract
+      // economy's production (see useEconomyTick), not this flat placeholder.
+      if (usePlayerStore.getState().economyModel === 'abstract') return
       for (const country of COUNTRIES) applyStrategicIncome(country.id, ticks)
     })
     return () => {

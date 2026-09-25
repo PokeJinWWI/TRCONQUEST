@@ -12,6 +12,8 @@ import { SANDBOX_PLAYER } from '../data/countryRoster'
 // Sol.
 export function MainMenu() {
   const selectCountry = usePlayerStore((s) => s.selectCountry)
+  const economyModel = usePlayerStore((s) => s.economyModel)
+  const setEconomyModel = usePlayerStore((s) => s.setEconomyModel)
   const enterSystem = useViewStore((s) => s.enterSystem)
 
   const handleSelect = (countryId: string) => {
@@ -23,6 +25,28 @@ export function MainMenu() {
   return (
     <div className="main-menu">
       <div className="main-menu-title">TERRA RELICTA: CONQUEST</div>
+
+      {/* Economic model — chosen before the nation, fixed for the game. */}
+      <div className="main-menu-subtitle">Economic model</div>
+      <div className="main-menu-econ-toggle">
+        <button
+          type="button"
+          className={`main-menu-econ-option${economyModel === 'complex' ? ' active' : ''}`}
+          onClick={() => setEconomyModel('complex')}
+        >
+          <span className="main-menu-econ-name">mr1noobfatfish’s attempt at economic modeling</span>
+          <span className="main-menu-econ-desc">The deep simulation — pops, goods markets, banking, currencies. Detailed and emergent.</span>
+        </button>
+        <button
+          type="button"
+          className={`main-menu-econ-option${economyModel === 'abstract' ? ' active' : ''}`}
+          onClick={() => setEconomyModel('abstract')}
+        >
+          <span className="main-menu-econ-name">Abstract-Simplistic</span>
+          <span className="main-menu-econ-desc">A macro national economy (Stellaris/HOI4/TNO-inspired) — budgets, production, resources. Legible and fast.</span>
+        </button>
+      </div>
+
       <div className="main-menu-subtitle">Choose your nation</div>
       <div className="main-menu-countries">
         {COUNTRIES.map((country) => {

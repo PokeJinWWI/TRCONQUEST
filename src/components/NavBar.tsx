@@ -9,6 +9,7 @@ import { LawsPanel } from './LawsPanel'
 import { CentralBankPanel, type CentralBankSection } from './CentralBankPanel'
 import { BanksPanel } from './BanksPanel'
 import { ForexPanel } from './ForexPanel'
+import { AbstractEconomyPanel } from './AbstractEconomyPanel'
 import { CorporationsPanel } from './CorporationsPanel'
 import { StockExchangePanel } from './StockExchangePanel'
 import { DemographicsPanel } from './DemographicsPanel'
@@ -66,6 +67,23 @@ const CATEGORIES: CategoryDef[] = [
   { name: SETTINGS_CATEGORY },
 ]
 
+// The Abstract-Simplistic economy replaces the deep simulation: no goods
+// Markets, Central Bank or Corporations, and Economy is one macro panel. The
+// rest of the game (government, tech, society, diplomacy, military…) is unchanged.
+const ABSTRACT_CATEGORIES: CategoryDef[] = [
+  { name: 'Situations' },
+  { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
+  { name: 'Economy' },
+  { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
+  { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
+  { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Events'] },
+  { name: 'International Organizations' },
+  { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
+  { name: CHARACTERS_CATEGORY, subcategories: ['Characters', 'Families'] },
+  { name: MAP_MODES_CATEGORY },
+  { name: SETTINGS_CATEGORY },
+]
+
 // The sandbox has no nation behind it, so no government, economy, markets or
 // diplomacy to open — just what a fight needs, and the sandbox's own controls.
 const SANDBOX_CATEGORIES: CategoryDef[] = [
@@ -94,7 +112,9 @@ const CB_SECTIONS: Record<string, CentralBankSection> = {
 // else stays a reserved placeholder, same "don't invent content" spirit as
 // the Outliner's empty Starbases section — there's no
 // government/economy/society/characters simulation behind these yet.
-function renderContent(category: CategoryDef, subcategory: string | null) {
+function renderContent(category: CategoryDef, subcategory: string | null, abstractEconomy: boolean) {
+  // Abstract economy: the whole Economy category is one macro panel.
+  if (abstractEconomy && category.name === ECONOMY_CATEGORY) return <AbstractEconomyPanel />
   if (category.name === SANDBOX_CATEGORY) return <SandboxPanel />
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
@@ -137,8 +157,9 @@ export function NavBar() {
   const techTreeOpen = useViewStore((s) => s.techTreeOpen)
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
   const sandbox = usePlayerStore((s) => s.sandbox)
+  const abstractEconomy = usePlayerStore((s) => s.economyModel === 'abstract')
   const nationName = sandbox ? 'Sandbox' : (selectedCountryId && getCountry(selectedCountryId)?.name) ?? ''
-  const categories = sandbox ? SANDBOX_CATEGORIES : CATEGORIES
+  const categories = sandbox ? SANDBOX_CATEGORIES : abstractEconomy ? ABSTRACT_CATEGORIES : CATEGORIES
 
   const activeCategory = categories.find((c) => c.name === activeCategoryName) ?? null
 
@@ -199,6 +220,14 @@ export function NavBar() {
             title={activeCategory.name}
             onClose={handleClose}
             wide={(activeCategory.name === MILITARY_CATEGORY && activeSubcategory === NAVY_SUBCATEGORY) || activeCategory.name === TECHNOLOGY_CATEGORY}
+            // Open at a sensible preset size (Stellaris-style) rather than cramped
+            // and content-height; still fully draggable/resizable from there. A
+            // roomier width for the wide (table) categories.
+            defaultSize={
+              (activeCategory.name === MILITARY_CATEGORY && activeSubcategory === NAVY_SUBCATEGORY) || activeCategory.name === TECHNOLOGY_CATEGORY
+                ? { width: 620, height: 620 }
+                : { width: 380, height: 620 }
+            }
           >
             {activeCategory.subcategories && (
               <div className="nav-subtabs">
@@ -214,7 +243,7 @@ export function NavBar() {
                 ))}
               </div>
             )}
-            {renderContent(activeCategory, activeSubcategory)}
+            {renderContent(activeCategory, activeSubcategory, abstractEconomy)}
           </DraggableWindow>
         </div>
       )}

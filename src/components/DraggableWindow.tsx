@@ -30,6 +30,11 @@ interface DraggableWindowProps {
    * true; already unavailable for an anchored window regardless (see
    * `anchor`). */
   maximizable?: boolean
+  /** Opens the window at this preset size (Stellaris-style — a sensible size on
+   * open) instead of the CSS-default width and content-driven height. The player
+   * can still drag it larger/smaller from there; nav category windows use this so
+   * a tall panel doesn't open cramped or need resizing every time. */
+  defaultSize?: { width: number; height: number }
   children: ReactNode
 }
 
@@ -56,7 +61,7 @@ function bringToFrontZIndex(): number {
 // the satellite-view inspection panel and the nav sidebar's category
 // windows — re-centers on whichever body is selected but stays wherever the
 // player last dragged/resized it until they select something else.
-export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, maximizable = true, children }: DraggableWindowProps) {
+export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, maximizable = true, defaultSize, children }: DraggableWindowProps) {
   const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   // Collapsed to just its title bar — independent of `onClose`: a window
   // with no close button (the combat order panel, which *is* the view it
@@ -66,7 +71,7 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   // Explicit size once the player has dragged an edge/corner — null means
   // "still whatever the CSS default (or `wide`) is," so a window that's
   // never been resized keeps behaving exactly as before.
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
+  const [size, setSize] = useState<{ width: number; height: number } | null>(defaultSize ?? null)
   // Starts already on top of anything opened before it — a freshly opened
   // window shouldn't appear to open BEHIND an existing one until clicked.
   const [zIndex, setZIndex] = useState(bringToFrontZIndex)

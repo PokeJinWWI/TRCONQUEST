@@ -1,6 +1,11 @@
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useEconomyStore } from '../state/economyStore'
+import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { useResourceStore } from '../state/resourceStore'
+import { economyModel } from '../state/playerStore'
+import { abstractResourceFlows } from '../economy-abstract/abstractResources'
+import type { ResourceId } from '../data/resourceData'
 
 // How many sim-days pass per economy tick. The economy moves at a coarse,
 // strategic cadence — ONE TICK PER IN-GAME MONTH — rather than every frame. It's
@@ -21,7 +26,25 @@ export function useEconomyTick() {
       if (elapsed < SIM_DAYS_PER_ECONOMY_TICK) return
       const ticks = Math.floor(elapsed / SIM_DAYS_PER_ECONOMY_TICK)
       lastTickSimDays += ticks * SIM_DAYS_PER_ECONOMY_TICK
-      useEconomyStore.getState().advance(ticks)
+      // Advance whichever economic model this game runs (chosen at the menu).
+      if (economyModel() === 'abstract') {
+        const store = useAbstractEconomyStore.getState()
+        store.advance(ticks)
+        // Payment link: turn each nation's production into the strategic
+        // resources ships/armies are paid for with (useStrategicResources'
+        // flat placeholder is gated off in this mode). setMonthlyDelta powers
+        // the HUD "/mo" read; addAmount credits the whole elapsed span.
+        const res = useResourceStore.getState()
+        const reports = useAbstractEconomyStore.getState().reports
+        const byCountry = useAbstractEconomyStore.getState().byCountry
+        for (const id of Object.keys(reports)) {
+          const flows = abstractResourceFlows(reports[id], byCountry[id]?.gdp ?? 0)
+          for (const [rid, perMonth] of Object.entries(flows) as [ResourceId, number][]) {
+            res.setMonthlyDelta(id, rid, perMonth)
+            res.addAmount(id, rid, perMonth * ticks)
+          }
+        }
+      } else useEconomyStore.getState().advance(ticks)
     })
   }, [])
 }

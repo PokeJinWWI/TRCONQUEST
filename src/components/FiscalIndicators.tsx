@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
+import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { formatMoney } from '../economy/format'
 import { DraggableWindow } from './DraggableWindow'
@@ -15,20 +16,25 @@ type FiscalIndicatorId = 'treasury' | 'balance'
 // HUD resources already use.
 export function FiscalIndicators() {
   const countryId = usePlayerStore((s) => s.selectedCountryId)
+  const abstractMode = usePlayerStore((s) => s.economyModel === 'abstract')
   const reports = useEconomyStore((s) => s.countryReports)
   const countries = useEconomyStore((s) => s.countries)
+  const absState = useAbstractEconomyStore((s) => (countryId ? s.byCountry[countryId] : undefined))
+  const absReport = useAbstractEconomyStore((s) => (countryId ? s.reports[countryId] : undefined))
   const sandbox = usePlayerStore((s) => s.sandbox)
   const [openId, setOpenId] = useState<FiscalIndicatorId | null>(null)
   // The sandbox has no nation, so no treasury to show.
   if (!countryId || sandbox) return null
   const f = reports[countryId]
   const country = countries.find((c) => c.id === countryId)
-  const treasury = f?.treasury ?? country?.treasury ?? 0
-  const balance = f?.balance ?? 0
-  const debt = f?.debt ?? 0
-  const revenue = f?.revenue ?? 0
-  const expenditure = f?.expenditure ?? 0
-  const rating = f?.rating
+  // In abstract mode the top bar reads the abstract national economy; the
+  // deep economy is idle. Balance is shown per-month there (its budget is annual).
+  const treasury = abstractMode ? absState?.treasury ?? 0 : f?.treasury ?? country?.treasury ?? 0
+  const balance = abstractMode ? (absReport?.balance ?? 0) / 12 : f?.balance ?? 0
+  const debt = abstractMode ? absState?.debt ?? 0 : f?.debt ?? 0
+  const revenue = abstractMode ? absReport?.revenue ?? 0 : f?.revenue ?? 0
+  const expenditure = abstractMode ? absReport?.spending ?? 0 : f?.expenditure ?? 0
+  const rating = abstractMode ? absReport?.rating : f?.rating
 
   return (
     <div className="fiscal-indicators">
