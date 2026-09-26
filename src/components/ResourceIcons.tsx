@@ -11,6 +11,7 @@ const ICON_PATHS: Record<ResourceId, ReactElement> = {
   food: <path d="M8 15V6M8 6C8 3 6 1 4 1c0 3 1 5 4 5zM8 6c0-3 2-5 4-5 0 3-1 5-4 5z" fill="none" />,
   consumerGoods: <path d="M2 5l6-3 6 3-6 3-6-3zM2 5v6l6 3 6-3V5M8 8v6" fill="none" />,
   alloys: <path d="M2 11h5v3H2zM9 11h5v3H9zM4 6h5v3H4z" />,
+  electronics: <path d="M4 4h8v8H4zM6 1v3M10 1v3M6 12v3M10 12v3M1 6h3M1 10h3M12 6h3M12 10h3" fill="none" />,
   exoticMatter: (
     <>
       <circle cx="8" cy="8" r="1.6" />

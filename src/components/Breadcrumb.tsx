@@ -11,11 +11,11 @@ export function Breadcrumb() {
 
   return (
     <nav className="breadcrumb">
-      <button type="button" className="crumb" onClick={enterGalactic} disabled={level === 'galactic'}>
+      <button type="button" className="crumb" onClick={enterGalactic} disabled={level === 'galactic'} title="Zoom out to the whole galaxy">
         GALAXY
       </button>
       <span className="crumb-sep">›</span>
-      <button type="button" className="crumb" onClick={() => enterInterstellar()} disabled={level === 'interstellar'}>
+      <button type="button" className="crumb" onClick={() => enterInterstellar()} disabled={level === 'interstellar'} title="Zoom out to the local neighbourhood of stars">
         INTERSTELLAR
       </button>
       {(level === 'system' || level === 'satellite' || level === 'combat' || level === 'ground' || level === 'terrain') && (
@@ -26,6 +26,7 @@ export function Breadcrumb() {
             className="crumb"
             onClick={() => enterSystem(selectedStarId)}
             disabled={level === 'system'}
+            title="Back to this star system"
           >
             SYSTEM
           </button>
@@ -34,7 +35,7 @@ export function Breadcrumb() {
       {(level === 'satellite' || level === 'ground' || level === 'terrain') && (
         <>
           <span className="crumb-sep">›</span>
-          <button type="button" className="crumb" disabled={level === 'satellite'} onClick={exitGround}>
+          <button type="button" className="crumb" disabled={level === 'satellite'} onClick={exitGround} title="Back to the planet from orbit">
             SATELLITE
           </button>
         </>

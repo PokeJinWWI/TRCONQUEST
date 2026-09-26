@@ -12,6 +12,8 @@ import { SANDBOX_PLAYER } from '../data/countryRoster'
 // Sol.
 export function MainMenu() {
   const selectCountry = usePlayerStore((s) => s.selectCountry)
+  const economyModel = usePlayerStore((s) => s.economyModel)
+  const setEconomyModel = usePlayerStore((s) => s.setEconomyModel)
   const enterSystem = useViewStore((s) => s.enterSystem)
 
   const handleSelect = (countryId: string) => {
@@ -23,6 +25,30 @@ export function MainMenu() {
   return (
     <div className="main-menu">
       <div className="main-menu-title">TERRA RELICTA: CONQUEST</div>
+
+      {/* Economic model — chosen before the nation, fixed for the game. */}
+      <div className="main-menu-subtitle">Economic model</div>
+      <div className="main-menu-econ-toggle">
+        <button
+          type="button"
+          className={`main-menu-econ-option${economyModel === 'complex' ? ' active' : ''}`}
+          onClick={() => setEconomyModel('complex')}
+          title="A detailed economy: individual pops, markets with prices for dozens of goods, banks, a central bank, corporations and currencies. Deep but demanding."
+        >
+          <span className="main-menu-econ-name">Complex mode (mr1noobfatfish’s attempt at economic modeling)</span>
+          <span className="main-menu-econ-desc">The deep simulation — pops, goods markets, banking, currencies. Detailed and emergent.</span>
+        </button>
+        <button
+          type="button"
+          className={`main-menu-econ-option${economyModel === 'abstract' ? ' active' : ''}`}
+          onClick={() => setEconomyModel('abstract')}
+          title="A streamlined economy: eight goods, six kinds of building, factories as production units, Stellaris-style pops and happiness, and a simple budget. Easy to read and manage."
+        >
+          <span className="main-menu-econ-name">Simple mode</span>
+          <span className="main-menu-econ-desc">A macro national economy (Stellaris/HOI4/TNO-inspired) — a few goods, factories and buildings on your worlds, a budget and a currency. Legible and fast.</span>
+        </button>
+      </div>
+
       <div className="main-menu-subtitle">Choose your nation</div>
       <div className="main-menu-countries">
         {COUNTRIES.map((country) => {
@@ -34,6 +60,7 @@ export function MainMenu() {
               className="main-menu-country-card"
               style={{ borderColor: country.color }}
               onClick={() => handleSelect(country.id)}
+              title={`Play as ${country.name}`}
             >
               <span className="main-menu-country-swatch" style={{ backgroundColor: country.color }} />
               <span className="main-menu-country-name">{country.name}</span>
@@ -51,6 +78,7 @@ export function MainMenu() {
           className="main-menu-country-card main-menu-sandbox-card"
           style={{ borderColor: SANDBOX_PLAYER.color }}
           onClick={startSandbox}
+          title="No nations and no economy — set up fights and test ships and armies freely"
         >
           <span className="main-menu-country-swatch" style={{ backgroundColor: SANDBOX_PLAYER.color }} />
           <span className="main-menu-country-name">Sandbox</span>

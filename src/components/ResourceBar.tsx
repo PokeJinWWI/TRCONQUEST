@@ -44,7 +44,7 @@ export function ResourceBar() {
             onClick={() => setOpenId(resource.id)}
           >
             <ResourceIcon id={resource.id} className="resource-icon" />
-            <span className="resource-value">{amounts[resource.id].toLocaleString()}</span>
+            <span className="resource-value">{Math.floor(amounts[resource.id]).toLocaleString()}</span>
             <span className={`resource-delta${delta > 0 ? ' econ-pos' : delta < 0 ? ' econ-neg' : ''}`}>
               {formatDelta(delta)}/mo
             </span>
@@ -56,7 +56,7 @@ export function ResourceBar() {
         <DraggableWindow title={openResource.name} onClose={() => setOpenId(null)} maximizable={false}>
           <div className="inspect-row">
             <span className="inspect-label">Stockpile</span>
-            <span className="inspect-value">{amounts[openResource.id].toLocaleString()}</span>
+            <span className="inspect-value">{Math.floor(amounts[openResource.id]).toLocaleString()}</span>
           </div>
           <div className="inspect-row">
             <span className="inspect-label">Monthly</span>

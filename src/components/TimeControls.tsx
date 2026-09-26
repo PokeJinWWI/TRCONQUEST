@@ -68,6 +68,7 @@ export function TimeControls() {
         onClick={slowDown}
         disabled={speedIndex === 0}
         aria-label="Slow down"
+        title="Slow down the game"
       >
         «
       </button>
@@ -76,6 +77,7 @@ export function TimeControls() {
         className={`time-btn time-pause${paused ? ' active' : ''}`}
         onClick={togglePause}
         aria-label={paused ? 'Play' : 'Pause'}
+        title={paused ? 'Resume time' : 'Pause time — you can still give orders while paused'}
       >
         {paused ? '▶' : '❚❚'}
       </button>
@@ -85,6 +87,7 @@ export function TimeControls() {
         onClick={speedUp}
         disabled={speedIndex === multipliers.length - 1}
         aria-label="Speed up"
+        title="Speed up the game"
       >
         »
       </button>
