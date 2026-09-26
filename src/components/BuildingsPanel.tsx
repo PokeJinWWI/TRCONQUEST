@@ -350,7 +350,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
     <div className="econ-panel">
       <div className="econ-summary">
         <span>
-          <span className="econ-summary-label">{world.name}</span> · Pop {formatPop(totalPop)} · GDP {formatMoney(estimateWorldGdp(world))}
+          <span className="econ-summary-label">{world.name}</span> · Pop {formatPop(totalPop)} · GDP {formatMoney(estimateWorldGdp(world) * TICKS_PER_YEAR)}/yr
           {owned && <> · Treasury {formatMoney(treasury)}</>}
         </span>
         {country && (

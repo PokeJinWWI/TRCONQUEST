@@ -20,7 +20,7 @@ import {
 } from '../economy/centralBank'
 import { convertBetween } from '../economy/fx'
 import { RECIPES, constructionWork } from '../economy/recipes'
-import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
+import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, MonetaryAggregates, World, WorldReport } from '../economy/economyTypes'
 import type { GoodId } from '../economy/goods'
 
 // Shares held by the corporation's OWN (home) government — foreign-state stakes
@@ -226,6 +226,24 @@ export interface FiscalSample {
   expenditure: number
   debtToGdp: number
   treasury: number
+  // More headline series for the Economy Overview and Central Bank graphs.
+  // Optional so older samples (and anything building one by hand) still fit.
+  balance?: number
+  debt?: number
+  population?: number // millions — for GDP per capita
+  unemployment?: number // share of the labour force without a job, across the country's worlds
+  policyRate?: number
+  realRate?: number
+  inflationExpectation?: number
+  outputGap?: number
+  baseMoney?: number
+  broadMoney?: number
+  loans?: number
+  deposits?: number
+  exchangeRate?: number
+  pegTarget?: number
+  fxReserves?: number
+  credibility?: number
 }
 
 const HISTORY_LENGTH = 104
@@ -389,7 +407,24 @@ interface EconomyStore {
 
 let constructionCounter = 0
 
-function sampleOf(f: CountryFiscal): FiscalSample {
+// Unemployment across a country's worlds: 1 − employed / labour force.
+export function unemploymentOf(countryId: string, worlds: World[], worldReports: Record<string, WorldReport>): number {
+  let workers = 0
+  let employed = 0
+  for (const w of worlds) {
+    if (w.ownerId !== countryId) continue
+    const labor = worldReports[w.id]?.labor
+    if (!labor) continue
+    for (const cls of Object.values(labor)) {
+      workers += cls.workers
+      employed += cls.workers * cls.employmentRate
+    }
+  }
+  return workers > 0 ? Math.max(0, 1 - employed / workers) : 0
+}
+
+function sampleOf(f: CountryFiscal, country?: Country, money?: MonetaryAggregates, unemployment?: number): FiscalSample {
+  const cb = country?.centralBank
   return {
     gdp: f.gdp,
     priceLevel: f.priceLevel,
@@ -398,6 +433,22 @@ function sampleOf(f: CountryFiscal): FiscalSample {
     expenditure: f.expenditure,
     debtToGdp: f.debtToGdp,
     treasury: f.treasury,
+    balance: f.balance,
+    debt: f.debt,
+    population: f.population,
+    unemployment,
+    policyRate: f.policyRate,
+    realRate: f.realRate,
+    inflationExpectation: f.inflationExpectation,
+    outputGap: f.outputGap,
+    baseMoney: money?.baseMoney,
+    broadMoney: money?.broadMoney,
+    loans: money?.loans,
+    deposits: money?.deposits,
+    exchangeRate: country?.currency?.rate,
+    pegTarget: cb && cb.exchangeRegime !== 'float' ? country?.currency?.target : undefined,
+    fxReserves: cb?.fxReserves,
+    credibility: cb?.credibility,
   }
 }
 
@@ -446,7 +497,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         if (res.reports.events.length > 0) cbEvents = [...cbEvents, ...res.reports.events].slice(-60)
         for (const c of countries) {
           const series = history[c.id] ? [...history[c.id]] : []
-          series.push(sampleOf(countryReports[c.id]))
+          series.push(sampleOf(countryReports[c.id], c, moneyReports[c.id], unemploymentOf(c.id, worlds, worldReports)))
           if (series.length > HISTORY_LENGTH) series.splice(0, series.length - HISTORY_LENGTH)
           history[c.id] = series
         }

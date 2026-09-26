@@ -1,4 +1,5 @@
 import { useEconomyStore } from '../state/economyStore'
+import { CredibilityChart, ExchangeRateChart, FxReservesChart, InterestRatesChart, MoneySupplyChart, OutputGapChart } from './complexCharts'
 import { useConfirmStore } from '../state/confirmStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { formatMoney, formatPop } from '../economy/format'
@@ -111,6 +112,8 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
   const allWorlds = useEconomyStore((s) => s.worlds)
   const worldReports = useEconomyStore((s) => s.worldReports)
   const requestConfirm = useConfirmStore((s) => s.requestConfirm)
+  const history = useEconomyStore((s) => (country ? s.history[country.id] : undefined))
+  const tick = useEconomyStore((s) => s.tick)
 
   if (!country) return <div className="nav-placeholder">No national government in context.</div>
 
@@ -131,6 +134,7 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
     )
   }
 
+  const h = history ?? []
   const govControls = governmentControlsPolicy(cb)
   const indep = effectiveIndependence(cb)
 
@@ -168,6 +172,8 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
           <b> Credibility</b> is earned slowly — by a more independent bank and by holding inflation near target — and lost by
           money-printing and pressure. Both move over years, not months.
         </div>
+
+        <CredibilityChart h={h} tick={tick} />
 
         {recent.length > 0 && (
           <div className="cb-events">
@@ -236,6 +242,7 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
     return (
       <div className="econ-panel">
         <div className="econ-subtitle">Balance sheet & money</div>
+        <MoneySupplyChart h={h} tick={tick} />
         {money ? (
           <>
             <div className="cb-facts">
@@ -268,6 +275,8 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
     return (
       <div className="econ-panel">
         <div className="econ-subtitle">Currency & exchange rate</div>
+        <ExchangeRateChart h={h} tick={tick} code={country.currency?.code ?? 'Rate'} showPeg={cb.exchangeRegime !== 'float'} />
+        <FxReservesChart h={h} tick={tick} />
         {country.currency ? (
           <>
             <div className="cb-facts">
@@ -322,6 +331,9 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
           The government cannot order it: reform its status, appoint a friendlier board, or apply pressure.
         </div>
       )}
+
+      <InterestRatesChart h={h} tick={tick} />
+      <OutputGapChart h={h} tick={tick} />
 
       {/* Monetary conditions (Stage 4 transmission readout) */}
       {fiscal && fiscal.policyRate !== undefined && (

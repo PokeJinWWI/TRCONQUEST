@@ -1,11 +1,11 @@
 import { Fragment, useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
-import { LineGraph } from './LineGraph'
+import { BudgetFlowChart, DebtToGdpChart, GdpChart, GdpPerCapitaChart, PriceLevelChart, gdpPerCapita } from './complexCharts'
 import { GOOD_IDS, GOODS, type GoodId } from '../economy/goods'
 import { RECIPES, getMethod } from '../economy/recipes'
 import { NEED_TIERS, SPECIES_TEMPLATES } from '../economy/species'
-import { formatPop, formatMoney, formatPrice } from '../economy/format'
+import { MONTHS_PER_YEAR, formatPop, formatMoney, formatPrice } from '../economy/format'
 import type { Country, World } from '../economy/economyTypes'
 
 // For a good on a world: which buildings produce it (sellers) and which
@@ -49,11 +49,8 @@ interface EconomyPanelProps {
   country?: Country
 }
 
-const GDP_COLOR = '#6fe3ff'
-const REVENUE_COLOR = '#4ade80'
-const EXPENDITURE_COLOR = '#ff6b4a'
-const PRICE_COLOR = '#ffd23f'
-const DEBT_COLOR = '#c77dff'
+// Per-tick (monthly) simulation flows shown per year, like the Overview.
+const perYear = (perTick: number | undefined) => (perTick === undefined ? undefined : perTick * MONTHS_PER_YEAR)
 
 // The nation-level Economy category reports on the player's own country + its
 // capital world.
@@ -138,19 +135,22 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
   if (subcategory === 'Budget') {
     return (
       <div className="econ-panel">
-        <div className="econ-subtitle">Revenue</div>
-        <FiscalRow label="Tax revenue / tick" value={fiscal?.revenue} tone="pos" />
+        <div className="ship-panel-hint" style={{ marginBottom: 6 }}>All flows are per year (the Overview and Finance use the same figures).</div>
+        <div className="econ-subtitle">Revenue (per year)</div>
+        <FiscalRow label="Tax revenue" value={perYear(fiscal?.revenue)} tone="pos" />
         <div className="econ-subtitle" style={{ marginTop: 8 }}>
-          Expenditure
+          Expenditure (per year)
         </div>
-        <FiscalRow label="Welfare" value={fiscal?.welfare} tone="neg" />
-        <FiscalRow label="Public services (healthcare)" value={fiscal?.services} tone="neg" />
-        <FiscalRow label="Administration & defense" value={fiscal?.admin} tone="neg" />
-        <FiscalRow label="Subsidies" value={fiscal?.subsidiesSpent} tone="neg" />
-        <FiscalRow label="Construction" value={fiscal?.construction} tone="neg" />
-        <FiscalRow label="Debt interest" value={fiscal?.interest} tone="neg" />
+        <FiscalRow label="Welfare (pensions)" value={perYear(fiscal?.welfare)} tone="neg" />
+        <FiscalRow label="Public services" value={perYear(fiscal?.services)} tone="neg" />
+        <FiscalRow label="Admin & defense" value={perYear(fiscal?.admin)} tone="neg" />
+        <FiscalRow label="Subsidies" value={perYear(fiscal?.subsidiesSpent)} tone="neg" />
+        <FiscalRow label="Construction" value={perYear(fiscal?.construction)} tone="neg" />
+        <FiscalRow label="Stockpile purchases" value={perYear(fiscal?.stockpileSpend)} tone="neg" />
+        <FiscalRow label="Debt interest" value={perYear(fiscal?.interest)} tone="neg" />
+        <FiscalRow label="Total spending" value={perYear(fiscal?.expenditure)} tone="neg" />
         <div className="inspect-divider" />
-        <FiscalRow label="Balance / tick" value={fiscal?.balance} tone="signed" />
+        <FiscalRow label="Balance (per year)" value={perYear(fiscal?.balance)} tone="signed" />
         <FiscalRow label="Treasury" value={fiscal?.treasury} tone="signed" />
         <FiscalRow label="National debt" value={fiscal?.debt} tone="neg" />
         <FiscalRow label="Private investment pool" value={country.investmentPool} tone="pos" />
@@ -245,7 +245,10 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
       <div className="econ-panel">
         <div className="econ-fiscal-headline">
           <span>
-            GDP <b>{fiscal ? formatMoney(fiscal.gdp) : '—'}</b>
+            GDP/yr <b>{fiscal ? formatMoney(fiscal.gdp * MONTHS_PER_YEAR) : '—'}</b>
+          </span>
+          <span>
+            GDP/capita <b>{fiscal && gdpPerCapita(fiscal.gdp * MONTHS_PER_YEAR, fiscal.population) !== undefined ? formatMoney(gdpPerCapita(fiscal.gdp * MONTHS_PER_YEAR, fiscal.population)!) : '—'}</b>
           </span>
           <span>
             Pop <b>{fiscal ? formatPop(fiscal.population) : '—'}</b>
@@ -260,20 +263,11 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             Rating <b className={`rating-${fiscal?.rating ?? 'AAA'}`}>{fiscal?.rating ?? '—'}</b>
           </span>
         </div>
-        <LineGraph endTick={economyTick} tip="Gross domestic product: the value of everything the nation produces in a year." title="GDP (USD)" series={[{ values: series.map((s) => s.gdp), color: GDP_COLOR, label: 'GDP' }]} format={formatMoney} />
-        <LineGraph endTick={economyTick} tip="Consumer price index: how expensive a typical basket of goods is compared to the start of the game. Rising = inflation." title="Price level (CPI, 1.00 = base)" series={[{ values: series.map((s) => s.priceLevel), color: PRICE_COLOR, label: 'CPI' }]} format={(v) => v.toFixed(2)} />
-        <LineGraph
-          endTick={economyTick}
-          tip="Money the state takes in (taxes etc.) vs money it spends, each month. Spending above revenue is a deficit."
-          title="Revenue vs Expenditure / month (USD)"
-          includeZero
-          series={[
-            { values: series.map((s) => s.revenue), color: REVENUE_COLOR, label: 'Rev' },
-            { values: series.map((s) => s.expenditure), color: EXPENDITURE_COLOR, label: 'Exp' },
-          ]}
-          format={formatMoney}
-        />
-        <LineGraph endTick={economyTick} tip="National debt as a share of a year's GDP — the usual yardstick for how heavy a debt is." title="Debt-to-GDP" includeZero series={[{ values: series.map((s) => s.debtToGdp), color: DEBT_COLOR, label: 'Debt/GDP' }]} format={(v) => `${(v * 100).toFixed(0)}%`} />
+        <GdpChart h={series} tick={economyTick} />
+        <GdpPerCapitaChart h={series} tick={economyTick} />
+        <PriceLevelChart h={series} tick={economyTick} />
+        <BudgetFlowChart h={series} tick={economyTick} />
+        <DebtToGdpChart h={series} tick={economyTick} />
       </div>
     )
   }

@@ -32,8 +32,10 @@ export function FiscalIndicators() {
   const treasury = abstractMode ? absState?.treasury ?? 0 : f?.treasury ?? country?.treasury ?? 0
   const balance = abstractMode ? (absReport?.balance ?? 0) / 12 : f?.balance ?? 0
   const debt = abstractMode ? absState?.debt ?? 0 : f?.debt ?? 0
-  const revenue = abstractMode ? absReport?.revenue ?? 0 : f?.revenue ?? 0
-  const expenditure = abstractMode ? absReport?.spending ?? 0 : f?.expenditure ?? 0
+  // Shown per month like the balance: Simple mode's budget is annual, Complex
+  // mode's flows are already per tick (month).
+  const revenue = abstractMode ? (absReport?.revenue ?? 0) / 12 : f?.revenue ?? 0
+  const expenditure = abstractMode ? (absReport?.spending ?? 0) / 12 : f?.expenditure ?? 0
   const rating = abstractMode ? absReport?.rating : f?.rating
 
   return (

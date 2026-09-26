@@ -1,3 +1,7 @@
+// The simulation's flows (GDP, revenue, spending…) are per tick = per month;
+// the economy screens show them per year, the way nations report them.
+export const MONTHS_PER_YEAR = 12
+
 // Population is stored in MILLIONS of people. Show it as a real, legible
 // figure with a suffix (never a bare "2.3"): 4000 → "4.00B", 400 → "400M",
 // 2.5 → "2.5M".

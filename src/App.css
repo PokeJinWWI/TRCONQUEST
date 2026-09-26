@@ -5411,3 +5411,29 @@ div.fleet-row .combat-density-row {
   padding-top: 5px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
+
+/* Complex mode Economy > Overview */
+.eco-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+.eco-details {
+  background: none;
+  border: none;
+  color: #6fe3ff;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+.eco-details:hover {
+  text-decoration: underline;
+}
+.abs-budget-col > .eco-tax-row {
+  align-items: center;
+  margin-top: 4px;
+}

@@ -10,6 +10,7 @@ import { CentralBankPanel, type CentralBankSection } from './CentralBankPanel'
 import { BanksPanel } from './BanksPanel'
 import { ForexPanel } from './ForexPanel'
 import { AbstractEconomyPanel, SimplisticDemographics } from './AbstractEconomyPanel'
+import { EconomyOverview } from './EconomyOverview'
 import { CorporationsPanel } from './CorporationsPanel'
 import { StockExchangePanel } from './StockExchangePanel'
 import { DemographicsPanel } from './DemographicsPanel'
@@ -51,7 +52,7 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
-  { name: 'Economy', subcategories: ['Budget', 'Finance', 'Construction', 'Trade', 'Stockpiles', 'Welfare'] },
+  { name: 'Economy', subcategories: ['Overview', 'Budget', 'Finance', 'Construction', 'Trade', 'Stockpiles', 'Welfare'] },
   { name: MARKETS_CATEGORY, subcategories: ['Market', 'Stock Exchange', 'Bond Market', 'Forex'] },
   { name: CENTRAL_BANK_CATEGORY, subcategories: ['Overview', 'Monetary Policy', 'Balance Sheet', 'Commercial Banks', 'Currency'] },
   { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private', 'Financial Districts'] },
@@ -111,6 +112,8 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   if (abstractEconomy && category.name === ECONOMY_CATEGORY) return <AbstractEconomyPanel />
   if (category.name === SANDBOX_CATEGORY) return <SandboxPanel />
   if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
+  // Complex mode: the whole economy on one scrollable page (the other tabs keep the detail).
+  if (category.name === ECONOMY_CATEGORY && subcategory === 'Overview') return <EconomyOverview />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Trade') return <TradePanel />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Stockpiles') return <StockpilePanel />
