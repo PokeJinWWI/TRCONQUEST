@@ -10,6 +10,12 @@
 // what "close enough on the map" has to mean — and the UI converts back to
 // real km for the body being looked at. Speeds get a mild size factor on top
 // (GROUND_SPEED_SIZE_EXPONENT) so a small moon still falls faster.
+//
+// Pace: speeds are near real marching rates on the reference body (infantry
+// ~37 km/day, armour ~75) and the fight rates (damage, regen, digging in, the
+// AI's rethink interval) run at a quarter of their old values so a march and a
+// battle keep their old proportion — a retreat under fire still works. A world
+// campaign therefore takes months, not weeks.
 import type { PlanetClass } from '../scene/planetData'
 
 // --- Terrain -----------------------------------------------------------------
@@ -104,7 +110,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
     maxStrength: 25,
     attack: 1.0,
     defense: 1.0,
-    speedKmPerDayRef: 150,
+    speedKmPerDayRef: 37.5,
     rangeKmRef: CONTACT_RANGE_KM_REF,
     amphibious: false,
     holdsPosition: false,
@@ -119,7 +125,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
     maxStrength: 25,
     attack: 1.4,
     defense: 1.1,
-    speedKmPerDayRef: 300,
+    speedKmPerDayRef: 75,
     rangeKmRef: CONTACT_RANGE_KM_REF,
     amphibious: false,
     holdsPosition: false,
@@ -140,7 +146,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
     maxStrength: 25,
     attack: 1.2,
     defense: 0.6,
-    speedKmPerDayRef: 120,
+    speedKmPerDayRef: 30,
     rangeKmRef: 900,
     amphibious: false,
     holdsPosition: false,
@@ -155,7 +161,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
     maxStrength: 25,
     attack: 1.0,
     defense: 1.0,
-    speedKmPerDayRef: 150,
+    speedKmPerDayRef: 37.5,
     rangeKmRef: CONTACT_RANGE_KM_REF,
     amphibious: true,
     holdsPosition: false,
@@ -170,7 +176,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
     maxStrength: 40,
     attack: 0.6,
     defense: 1.25,
-    speedKmPerDayRef: 100,
+    speedKmPerDayRef: 25,
     rangeKmRef: CONTACT_RANGE_KM_REF,
     amphibious: false,
     holdsPosition: true,
@@ -240,19 +246,19 @@ export const GROUND_SPEED_FACTOR_MIN = 0.6
 export const GROUND_SPEED_FACTOR_MAX = 2.5
 // The ground clock: an integer step count, 16 per sim-day.
 export const GROUND_STEPS_PER_DAY = 16
-// Autonomous (AI) units rethink once per sim-day.
-export const GROUND_AI_INTERVAL_STEPS = 16
+// Autonomous (AI) units rethink every four sim-days.
+export const GROUND_AI_INTERVAL_STEPS = 64
 // Most steps one resolver call will run (a huge clock jump catches up over
 // several frames rather than stalling one).
 export const MAX_GROUND_STEPS_PER_CALL = 4096
 
 // Fraction of attack power that lands as damage per day.
-export const GROUND_DAMAGE_RATE = 0.08
+export const GROUND_DAMAGE_RATE = 0.02
 export const UNIT_DESTROYED_BELOW = 0.5
 // Strength recovered per day (share of max) resting on own-held ground.
-export const UNIT_REGEN_PER_DAY = 0.02
+export const UNIT_REGEN_PER_DAY = 0.005
 // A unit standing still this long (days) is dug in.
-export const ENTRENCH_AFTER_DAYS = 2
+export const ENTRENCH_AFTER_DAYS = 8
 export const ENTRENCHMENT_DEFENSE = 1.15
 // Defending a key node its nation holds.
 export const KEY_NODE_FORTIFICATION = 1.25
@@ -265,3 +271,44 @@ export const KEY_HOLD_RADIUS_CELLS = 0.75
 export const DROP_EXCLUSION_CELLS = 2.5
 // Landed units spread around the drop node within this many cells.
 export const DROP_SPREAD_CELLS = 1
+
+// --- Terrain battles ---------------------------------------------------------
+//
+// When hostile line units come this close (fine cells) the fight moves onto a
+// terrain map (scene/terrainBattle.ts): the same war at finer resolution, on
+// real relief. Just outside the coarse map's 1.0-cell contact range, so line
+// units never trade fire on the planetary map.
+export const TERRAIN_TRIGGER_CELLS = 1.5
+// Units within this of the fight (and of each other) are drawn into it.
+export const TERRAIN_GROUP_CELLS = 2.5
+// A battle ends once no hostile pair is within this many cells for
+// TERRAIN_RELEASE_DAYS.
+export const TERRAIN_RELEASE_CELLS = 3.0
+export const TERRAIN_RELEASE_DAYS = 2
+// The patch is TERRAIN_HALF_CELLS each side of its centre, TERRAIN_GRID_PER_CELL
+// relief points to a cell.
+export const TERRAIN_HALF_CELLS = 3.5
+export const TERRAIN_GRID_PER_CELL = 8
+// Relief per terrain, in metres: the typical height and how far the ground
+// rises and falls around it.
+export const TERRAIN_RELIEF: Record<TerrainId, { base: number; amp: number }> = {
+  ocean: { base: 0, amp: 0 },
+  plains: { base: 150, amp: 120 },
+  forest: { base: 350, amp: 200 },
+  desert: { base: 250, amp: 180 },
+  tundra: { base: 200, amp: 120 },
+  mountains: { base: 2600, amp: 1400 },
+  urban: { base: 120, amp: 60 },
+  rock: { base: 700, amp: 400 },
+  lava: { base: 0, amp: 0 },
+  cloud: { base: 0, amp: 0 },
+  aerostat: { base: 0, amp: 0 },
+}
+// Shooting downhill: damage x (1 + HIGH_GROUND_BONUS x the height advantage as
+// a share of HIGH_GROUND_SPAN_M, from -1 to 1).
+export const HIGH_GROUND_BONUS = 0.3
+export const HIGH_GROUND_SPAN_M = 1000
+// A step that climbs or drops this much (metres) is slowed by the full
+// SLOPE_PENALTY (speed / (1 + SLOPE_PENALTY)); smaller ones by their share.
+export const SLOPE_FULL_M = 500
+export const SLOPE_PENALTY = 0.6

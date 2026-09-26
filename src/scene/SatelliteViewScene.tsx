@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { KeyboardPan } from './KeyboardPan'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import { Vector3 } from 'three'
@@ -295,6 +296,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
             color={color}
             radius={primaryVisualRadius}
             variant={isStar ? 'star' : 'planet'}
+            bodyName={isStar ? undefined : primaryBody.name}
             onSelect={handleSelectPrimary}
             onOrderTo={handleOrderToPrimary}
           >
@@ -427,6 +429,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
             minDistance={primaryVisualRadius + 1}
             maxDistance={MAX_DISTANCE}
           />
+          <KeyboardPan controlsRef={controlsRef} mode="orbit" />
         </Canvas>
 
         {!isStar && <PlanetGroundHud bodyName={primaryBody.name} />}

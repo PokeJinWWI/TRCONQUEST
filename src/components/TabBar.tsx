@@ -10,6 +10,7 @@ const LEVEL_LABELS: Record<ViewLevel, string> = {
   satellite: 'Satellite',
   combat: 'Combat',
   ground: 'Ground',
+  terrain: 'Terrain',
 }
 
 // A short, cheap-to-compute label derived straight from a stored snapshot —

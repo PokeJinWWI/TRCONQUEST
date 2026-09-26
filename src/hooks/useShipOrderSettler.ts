@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore } from '../state/shipStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
+import { dispatchQueuedLegs } from '../scene/orderQueue'
 import { planMoveUnchecked, resolveArrivalLocation, restingDestinationOf, destinationsEqual, warpCooldownAfterArrival } from '../scene/shipPhysics'
 
 // Settles any ship whose order has completed (simDays past arrivalSimDays)
@@ -117,6 +118,10 @@ export function useShipOrderSettler() {
           }
         }
       }
+
+      // Fleets that have arrived (or are idle) and have a queued order move on
+      // to the next one — see scene/orderQueue.ts.
+      dispatchQueuedLegs(simDays)
     }
 
     settle(useGameTimeStore.getState().simDays)

@@ -1,4 +1,5 @@
 import { BattleBadge } from '../components/BattleBadge'
+import { KeyboardPan } from './KeyboardPan'
 import { useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Html, OrbitControls, Stars } from '@react-three/drei'
@@ -123,6 +124,7 @@ export function GalacticViewScene() {
     <div className="galactic-wrapper">
       <Canvas camera={{ position: initialCameraPosition, fov: 50, near: 0.5, far: 20000 }} onPointerMissed={handleUnfocus}>
         <color attach="background" args={['#020409']} />
+        <KeyboardPan controlsRef={controlsRef} />
         <ambientLight intensity={0.3} />
         <Stars radius={4000} depth={1000} count={6000} factor={6} fade speed={0.1} />
 

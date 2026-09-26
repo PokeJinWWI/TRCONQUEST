@@ -152,7 +152,7 @@ export function findPath(surface: BodySurface, from: SurfacePoint, toNode: numbe
   return nodes.reverse().map(nodePoint)
 }
 
-class MinHeap {
+export class MinHeap {
   private items: number[] = []
   private keys: number[] = []
   get size(): number {

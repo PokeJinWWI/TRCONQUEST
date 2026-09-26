@@ -24,7 +24,7 @@ export const AI_WHITE_PEACE_WHEN_SCORE_BELOW = -30
 // ...or this exhausted...
 export const AI_WHITE_PEACE_WHEN_EXHAUSTION = 50
 // ...or after this long in a stalemate (|score| under AI_STALEMATE_SCORE).
-export const AI_STALEMATE_DAYS = 365
+export const AI_STALEMATE_DAYS = 730
 export const AI_STALEMATE_SCORE = 10
 // Holding enemy ground its score could already claim, it keeps fighting for
 // more while under this exhaustion and this many days into the war — as long

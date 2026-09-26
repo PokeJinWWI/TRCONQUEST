@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { applyFleetMove } from '../scene/commsVisual'
+import { resolveQueueAdds } from '../scene/orderQueue'
 
 // Fires every strategic order queued behind FTL comms delay (see
 // commsVisual.ts's queueMoveOrder/queueStance, and ShipInstance.
@@ -40,6 +41,9 @@ export function useCommsResolver() {
           setStance(ship.id, ship.pendingStance.stance)
         }
       }
+
+      // Shift-orders whose signal has arrived join their ship's queue.
+      resolveQueueAdds(simDays)
     }
 
     resolve(useGameTimeStore.getState().simDays)

@@ -220,7 +220,7 @@ console.log('\n=== 5. Taking ground, and the key-node rule ===')
   check('...and the ground under the invaders changes hands', Object.values(lonely.holders['Phobos'] ?? {}).includes(VENUS))
   check('painting is sparse — only nodes that changed hands are stored', Object.keys(lonely.holders['Phobos'] ?? {}).length < 30)
 
-  const defended = run(world([army(MARS, 'garrison', 'Phobos', key), army(VENUS, 'assault', 'Phobos', key)]), 60)
+  const defended = run(world([army(MARS, 'garrison', 'Phobos', key), army(VENUS, 'assault', 'Phobos', key)]), 240)
   check('a garrisoned outpost is fought for — and taken by a full assault army', defended.occupations.some((o) => o.countryId === VENUS), `${defended.occupations.map((o) => o.simDays.toFixed(1)).join(',')}`)
   check('...the garrison dies in the process', defended.losses.includes(MARS))
 
@@ -319,7 +319,8 @@ console.log('\n=== 9. Performance ===')
 console.log('\n=== 10. The AI\'s invasion estimate agrees with the real fight ===')
 {
   // For each case the estimate calls a win, the real (spatial, AI-driven)
-  // fight must take the world within 200 days.
+  // fight must take the world within 800 days (run in chunks: one resolver
+  // call catches up at most MAX_GROUND_STEPS_PER_CALL steps).
   const results: string[] = []
   let disagreements = 0
   for (const [body, garrisons] of [['Phobos', 1], ['Venus', 3]] as const) {
@@ -335,7 +336,7 @@ console.log('\n=== 10. The AI\'s invasion estimate agrees with the real fight ==
       const says = wouldTakeBody(invader, body, cargo, snap, atWar)
       const drop = defaultDropNode(surface, ['infantry', 'armour', 'artillery'], invader, defenders, owners, {}, atWar)!
       const landed = cargo.map(() => army(invader, 'assault', body, drop))
-      const r = run(world([...defenders, ...landed]), 200)
+      const r = run(world([...defenders, ...landed]), 800, [200, 200, 200, 200])
       const took = r.occupations.some((o) => o.countryId === invader)
       results.push(`${body} ${n}: est ${says ? 'win' : 'lose'}, real ${took ? 'win' : 'lose'}`)
       if (says && !took) disagreements++

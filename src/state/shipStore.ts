@@ -240,11 +240,19 @@ export interface ShipInstance {
   // actually arrives and planMove sees the ship's true state then, not
   // whatever was true back when the player clicked. Cleared (set to null)
   // once applied, or superseded by a fresh manual order.
-  pendingMoveOrder?: { destination: MoveDestination; arrivesSimDays: number } | null
+  pendingMoveOrder?: { destination: MoveDestination; arrivesSimDays: number; sentSimDays?: number } | null
+  // Destinations to fly to, in order, after the current order finishes — what
+  // Shift + right-click adds (see commsVisual.orderSelectedFleets and
+  // useShipOrderSettler, which sends the ship on to the next when it arrives).
+  // A fresh, un-shifted order replaces the whole queue.
+  orderQueue?: MoveDestination[]
+  // Shift-orders still travelling behind FTL comms delay: each is its own
+  // signal, joining `orderQueue` when it arrives (useCommsResolver).
+  pendingQueueAdds?: { destination: MoveDestination; arrivesSimDays: number; sentSimDays: number }[]
   // Same idea as pendingMoveOrder, for a stance change ordered under comms
   // delay — trivial enough (a single enum value) to just carry directly
   // rather than needing planMove-style re-resolution at arrival.
-  pendingStance?: { stance: CombatStance; arrivesSimDays: number } | null
+  pendingStance?: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null
   // A short trailing log of this ship's own order/location/combat state,
   // appended once each time any of those actually changes (see
   // setShipOrder/setShipLocation/applyCombatDamage below) — never read by
@@ -367,8 +375,11 @@ interface ShipState {
   // queue, exactly as before this parameter existed.
   setPendingHyperdriveJump: (id: string, starId: string | null, arrivesSimDays?: number) => void
   // See ShipInstance.pendingMoveOrder / pendingStance.
-  setPendingMoveOrder: (id: string, pending: { destination: MoveDestination; arrivesSimDays: number } | null) => void
-  setPendingStance: (id: string, pending: { stance: CombatStance; arrivesSimDays: number } | null) => void
+  setPendingMoveOrder: (id: string, pending: { destination: MoveDestination; arrivesSimDays: number; sentSimDays?: number } | null) => void
+  setPendingStance: (id: string, pending: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null) => void
+  // See ShipInstance.orderQueue / pendingQueueAdds.
+  setOrderQueue: (id: string, queue: MoveDestination[]) => void
+  setPendingQueueAdds: (id: string, adds: NonNullable<ShipInstance['pendingQueueAdds']>) => void
   // See ShipInstance.safeSinceSimDays.
   setSafeSince: (id: string, simDays: number | null) => void
   // Sets or clears (pass null) this ship's standing follow directive — see
@@ -533,6 +544,10 @@ export const useShipStore = create<ShipState>((set) => ({
                   // or simply changing their mind) would find the stale one
                   // silently re-fires later and stomps the new order.
                   pendingMoveOrder: null,
+                  // A fresh player order replaces whatever was queued behind
+                  // the old one; the settler/follow handlers (keepFollowing)
+                  // are the ship carrying on with its own plan and don't.
+                  orderQueue: keepFollowing ? ship.orderQueue : [],
                   warpReadySimDays: warpReadySimDays ?? ship.warpReadySimDays,
                   followingShipId: keepFollowing ? ship.followingShipId : null,
                 },
@@ -615,6 +630,14 @@ export const useShipStore = create<ShipState>((set) => ({
   setPendingStance: (id, pending) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingStance: pending } : ship)),
+    })),
+  setOrderQueue: (id, queue) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, orderQueue: queue } : ship)),
+    })),
+  setPendingQueueAdds: (id, adds) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingQueueAdds: adds } : ship)),
     })),
   setSafeSince: (id, simDays) =>
     set((s) => ({

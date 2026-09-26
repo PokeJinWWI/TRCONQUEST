@@ -8,6 +8,8 @@ import { atWar, useDiplomacyStore } from '../state/diplomacyStore'
 import { playerFightLive, reapLostCargo } from '../scene/armyLogic'
 import { groundSurface } from '../scene/groundLogic'
 import { simDaysToGroundStep, stepGroundWar } from '../scene/groundResolution'
+import { engagedUnitIds, stepTerrainWar } from '../scene/terrainWar'
+import { useTerrainStore } from '../state/terrainStore'
 import { controllerOf } from '../scene/territory'
 import { recordLoss } from '../scene/peace'
 import { ARMY_LOSS_VALUE_PER_STRENGTH } from '../data/diplomacyData'
@@ -28,15 +30,14 @@ function nameOf(countryId: string): string {
 // `paused`. Same preference as the space-combat switch to tactical time
 // (combatStore.autoTacticalOnEngage).
 export const GROUND_FIGHT_COOLDOWN_DAYS = 2
-let lastPlayerFightSimDays = -Infinity
 
 export function followGroundFightWithClock(fighting: boolean, simDays: number): void {
   const wasLive = fightPace.groundLive
-  const newFight = fighting && simDays - lastPlayerFightSimDays >= GROUND_FIGHT_COOLDOWN_DAYS
+  const newFight = fighting && simDays - fightPace.lastGroundFightSimDays >= GROUND_FIGHT_COOLDOWN_DAYS
   if (fighting) {
     fightPace.groundLive = true
-    lastPlayerFightSimDays = simDays
-  } else if (wasLive && simDays - lastPlayerFightSimDays >= GROUND_FIGHT_COOLDOWN_DAYS) {
+    fightPace.lastGroundFightSimDays = simDays
+  } else if (wasLive && simDays - fightPace.lastGroundFightSimDays >= GROUND_FIGHT_COOLDOWN_DAYS) {
     fightPace.groundLive = false
   }
   if (!useCombatStore.getState().autoTacticalOnEngage) return
@@ -44,6 +45,24 @@ export function followGroundFightWithClock(fighting: boolean, simDays: number): 
   if (newFight && time.mode === 'normal') time.setMode('operational')
   const ended = wasLive && !fightPace.groundLive
   if (ended && !fightPace.spaceLive && time.mode !== 'normal') time.setMode('normal')
+}
+
+// The node holders as they stand after this call's painting (so a battle opened
+// now records who holds its key nodes).
+function mergeHolders(
+  holders: Record<string, Record<number, string>>,
+  paints: Record<string, Record<number, string | null>>,
+  owners: Record<string, string>,
+): Record<string, Record<number, string>> {
+  const out = { ...holders }
+  for (const [body, changes] of Object.entries(paints)) {
+    out[body] = { ...(out[body] ?? {}) }
+    for (const [node, h] of Object.entries(changes)) {
+      if (h === null || owners[body] === h) delete out[body][Number(node)]
+      else out[body][Number(node)] = h
+    }
+  }
+  return out
 }
 
 // One step of the ground war up to `simDays` — the hook's body, exported so a
@@ -60,19 +79,26 @@ export function resolveGroundWar(simDays: number): void {
 
   const territory = useTerritoryStore.getState()
   const player = usePlayerStore.getState().selectedCountryId
-  const step = stepGroundWar(
-    {
-      armies: reaped,
-      owners: territory.bodyOwner,
-      controllers: territory.bodyController,
-      nodeHolders: territory.nodeHolders,
-      atWar,
-      isAutonomous: (countryId) => countryId !== player,
-      surfaceOf: (bodyName) => groundSurface(bodyName, territory.bodyOwner),
-    },
-    from,
-    simDays,
+  const battlesBefore = useTerrainStore.getState().battles
+  const world = {
+    owners: territory.bodyOwner,
+    controllers: territory.bodyController,
+    nodeHolders: territory.nodeHolders,
+    atWar,
+    isAutonomous: (countryId: string) => countryId !== player,
+    surfaceOf: (bodyName: string) => groundSurface(bodyName, territory.bodyOwner),
+  }
+  const coarse = stepGroundWar({ ...world, armies: reaped, engagedUnitIds: engagedUnitIds(battlesBefore) }, from, simDays)
+
+  // Fights that have come to close quarters move onto terrain maps, and the
+  // ones already there are played out. Their units go back onto these armies.
+  const terrain = stepTerrainWar(
+    { armies: coarse.armies, battles: battlesBefore, owners: territory.bodyOwner, holders: coarse.paints ? mergeHolders(territory.nodeHolders, coarse.paints, territory.bodyOwner) : territory.nodeHolders, atWar, isAutonomous: world.isAutonomous, surfaceOf: world.surfaceOf },
+    nowStep,
+    (body, at, n) => `terrain-${body}-${at}-${n}`,
   )
+  const step = { ...coarse, armies: terrain.armies, losses: [...coarse.losses, ...terrain.losses.map((l) => ({ ...l, bodyName: l.bodyName, unitType: l.unitType }))] }
+  if (terrain.battles !== battlesBefore && (terrain.battles.length > 0 || battlesBefore.length > 0)) useTerrainStore.getState().setBattles(terrain.battles)
   followGroundFightWithClock(playerFightLive(step.armies, player), simDays)
   if (step.armies !== armyState.armies || step.resolvedThroughStep !== armyState.resolvedThroughStep) {
     useArmyStore.getState().setArmies(step.armies, step.resolvedThroughStep)

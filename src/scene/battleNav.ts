@@ -7,6 +7,7 @@ import { useViewStore } from '../state/viewStore'
 export function openBattle(battle: PlayerBattle): void {
   const view = useViewStore.getState()
   if (battle.starId && view.selectedStarId !== battle.starId) useViewStore.setState({ selectedStarId: battle.starId })
-  if (battle.kind === 'space' && battle.engagementId) view.enterCombat(battle.engagementId)
-  else if (battle.kind === 'ground' && battle.bodyName) view.enterGround(battle.bodyName)
+  if (battle.kind === 'terrain' && battle.terrainBattleId && battle.bodyName) view.enterTerrain(battle.terrainBattleId, battle.bodyName)
+  else if (battle.kind === 'space' && battle.engagementId) view.enterCombat(battle.engagementId)
+  else if (battle.bodyName) view.enterGround(battle.bodyName)
 }

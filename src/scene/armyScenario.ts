@@ -52,20 +52,57 @@ function nodesAtDistance(from: number, cells: number): number[] {
   return frontier.sort((a, b) => a - b)
 }
 
-// The first (lowest-numbered) pair that fits: a node of `playerTerrain` with
-// its neighbours mostly the same, and walkable ground `gapCells` away on the
-// same landmass with an infantry route between them. Deterministic — a
-// world's surface is fixed, so a scenario always lands in the same place.
-// Null if the world has none.
-export function findBattlefield(surface: BodySurface, playerTerrain: TerrainId, gapCells: number): Battlefield | null {
+// Share of the ground within a battlefield's reach (the gap and a little
+// beyond) that is the player's terrain. Fields are tried from the most uniform
+// down, so "the Ice" is a real stretch of ice, not a strip of tundra on a coast
+// with forest behind it.
+const UNIFORMITY_TIERS = [0.85, 0.7, 0.5, 0.3, 0]
+
+// How much of the ground within `cells` steps of `node` is `terrain`.
+function terrainShare(surface: BodySurface, node: number, cells: number, terrain: TerrainId): number {
   const mesh = surfaceMesh()
-  for (let p = 0; p < mesh.count.fine; p++) {
-    if (terrainAt(surface, p) !== playerTerrain || sameTerrainNeighbours(surface, p) < MIN_SAME_TERRAIN_NEIGHBOURS) continue
-    for (const e of nodesAtDistance(p, gapCells)) {
-      if (!passableFor(terrainAt(surface, e), 'infantry')) continue
-      if (surface.landComponent[e] !== surface.landComponent[p]) continue
-      if (!findPath(surface, nodePoint(e), p, 'infantry')) continue
-      return { playerNode: p, enemyNode: e }
+  const seen = new Set<number>([node])
+  let frontier = [node]
+  let same = terrainAt(surface, node) === terrain ? 1 : 0
+  for (let d = 0; d < cells; d++) {
+    const next: number[] = []
+    for (const n of frontier) {
+      for (const m of mesh.neighbors.fine[n]) {
+        if (seen.has(m)) continue
+        seen.add(m)
+        next.push(m)
+        if (terrainAt(surface, m) === terrain) same++
+      }
+    }
+    frontier = next
+  }
+  return same / seen.size
+}
+
+// The first (lowest-numbered) pair that fits, from the most uniform ground
+// down: a node of `playerTerrain` with its neighbours mostly the same, and
+// walkable ground `gapCells` away on the same landmass with an infantry route
+// between them. Deterministic — a world's surface is fixed, so a scenario
+// always lands in the same place. Null if the world has none.
+export function findBattlefield(surface: BodySurface, playerTerrain: TerrainId, gapCells: number, rear?: { cells: number; terrain: TerrainId }): Battlefield | null {
+  const mesh = surfaceMesh()
+  const shares = new Map<number, number>()
+  for (const tier of UNIFORMITY_TIERS) {
+    for (let p = 0; p < mesh.count.fine; p++) {
+      if (terrainAt(surface, p) !== playerTerrain || sameTerrainNeighbours(surface, p) < MIN_SAME_TERRAIN_NEIGHBOURS) continue
+      let share = shares.get(p)
+      if (share === undefined) {
+        share = terrainShare(surface, p, gapCells + 2, playerTerrain)
+        shares.set(p, share)
+      }
+      if (share < tier) continue
+      if (rear && !nodesAtDistance(p, rear.cells).some((n) => terrainAt(surface, n) === rear.terrain && surface.landComponent[n] === surface.landComponent[p])) continue
+      for (const e of nodesAtDistance(p, gapCells)) {
+        if (!passableFor(terrainAt(surface, e), 'infantry')) continue
+        if (surface.landComponent[e] !== surface.landComponent[p]) continue
+        if (!findPath(surface, nodePoint(e), p, 'infantry')) continue
+        return { playerNode: p, enemyNode: e }
+      }
     }
   }
   return null
@@ -74,12 +111,13 @@ export function findBattlefield(surface: BodySurface, playerTerrain: TerrainId, 
 // Where a rear force starts: `cells` steps back from the player's spot, on
 // walkable ground of the same landmass, as far from the enemy's as the map
 // allows. Falls back to the spot itself when there's no such ground.
-export function findRearNode(surface: BodySurface, playerNode: number, enemyNode: number, cells: number): number {
+export function findRearNode(surface: BodySurface, playerNode: number, enemyNode: number, cells: number, terrain?: TerrainId): number {
   const enemy = nodePoint(enemyNode)
   const candidates = nodesAtDistance(playerNode, cells).filter(
     (n) => passableFor(terrainAt(surface, n), 'infantry') && surface.landComponent[n] === surface.landComponent[playerNode],
   )
-  candidates.sort((a, b) => arc(nodePoint(b), enemy) - arc(nodePoint(a), enemy) || a - b)
+  const wanted = (n: number) => (terrain && terrainAt(surface, n) === terrain ? 1 : 0)
+  candidates.sort((a, b) => wanted(b) - wanted(a) || arc(nodePoint(b), enemy) - arc(nodePoint(a), enemy) || a - b)
   return candidates[0] ?? playerNode
 }
 
@@ -142,21 +180,22 @@ export function buildArmyScenario(
   if (!surface) return null
   const { gapCells } = scenario.battlefield
   const playerTerrain = overrides.playerTerrain ?? scenario.battlefield.playerTerrain
-  const field = findBattlefield(surface, playerTerrain, gapCells)
+  const reserve = scenario.player.find((f) => f.rearCells && f.rearTerrain)
+  const field = findBattlefield(surface, playerTerrain, gapCells, reserve ? { cells: reserve.rearCells!, terrain: reserve.rearTerrain! } : undefined)
   if (!field) return null
 
   const armies: Army[] = []
   const raise = (forces: ArmyScenarioForce[], ownerId: string, role: 'player' | 'enemy', node: number, terrain: TerrainId | null) => {
     forces.forEach((force, i) => {
       // A rear force starts back from the line, out of the enemy's way.
-      const rear = force.rearCells ? findRearNode(surface, field.playerNode, field.enemyNode, force.rearCells) : null
+      const rear = force.rearCells ? findRearNode(surface, field.playerNode, field.enemyNode, force.rearCells, force.rearTerrain) : null
       const prefix = `${scenario.id}-${role}${i}`
       const units = stableUnits(makeUnits(force.kind, force.strengthFraction ?? 1), prefix)
       armies.push({
         id: `${prefix}`,
         ownerId,
         kind: force.kind,
-        units: rear === null ? placeOnTerrain(surface, units, node, terrain, startStep) : placeOnTerrain(surface, units, rear, null, startStep),
+        units: rear === null ? placeOnTerrain(surface, units, node, terrain, startStep) : placeOnTerrain(surface, units, rear, force.rearTerrain ?? null, startStep),
         location: { kind: 'body', bodyName: scenario.battlefield.bodyName },
       })
     })

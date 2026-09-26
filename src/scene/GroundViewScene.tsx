@@ -1,20 +1,30 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
-import { Html, OrbitControls, Stars } from '@react-three/drei'
-import { BufferAttribute, BufferGeometry, Color, type Group, type LineSegments } from 'three'
+import { KeyboardPan } from './KeyboardPan'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
+import { Html, Line, OrbitControls, Stars } from '@react-three/drei'
+import { BufferAttribute, BufferGeometry, Color, MOUSE, SRGBColorSpace, type Group, type InterleavedBuffer, type InterleavedBufferAttribute } from 'three'
+import type { Line2 } from 'three-stdlib'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { TERRAIN, UNIT_TYPES } from '../data/groundData'
 import { ownerDisplay } from '../data/countryRoster'
 import { useArmyStore } from '../state/armyStore'
+import { LINE_THICKNESS_PX, useSettingsStore } from '../state/settingsStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useGroundViewStore } from '../state/groundViewStore'
 import { useViewStore } from '../state/viewStore'
+import { useTerrainStore } from '../state/terrainStore'
 import { usePlayerStore } from '../state/playerStore'
 import { atWar } from '../state/diplomacyStore'
 import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { groundSurface, holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
-import { TERRAIN_IDS, type BodySurface } from './planetTerrain'
+import { bodyGroundInfo, TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
+import { HoloGlobe, HoloHalo, type HoloNode } from './HoloGlobe'
+import { hologramTint } from './HoloPlanet'
+import { FlatMapSurface } from './FlatMap'
+import { ProjectionSwitch } from '../components/ProjectionSwitch'
+import { FLAT_HEIGHT, FLAT_WIDTH, crossesSeam, flatPos, fromFlat } from './mapProjection'
+import { HOLO_TERRAIN } from './holoTerrain'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { isAdditiveClick } from './selectionInput'
 import { GroundPanel, UnitCard, describeDefense, describeMoveCost, handleGroundClick, orderSelectedUnitsTo, targetWithSelection } from '../components/GroundPanel'
@@ -34,6 +44,8 @@ const MAX_DISTANCE = 44
 const EXIT_DISTANCE = 36
 // How much a holder's colour tints the ground (the rest is terrain).
 const HOLDER_TINT = 0.42
+// The width the nav bar and the Outliner take out of the canvas (both sit on top of it).
+const SIDE_PANELS_PX = 460
 const GRID_OPACITY = { coarse: 0.35, standard: 0.22, fine: 0.14 } as const
 
 function toVec(p: SurfacePoint, r: number): [number, number, number] {
@@ -61,6 +73,12 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
     [bodyName],
   )
 
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
+  // A plain click on empty space clears the selection.
+  const clearOnMiss = (e: MouseEvent) => {
+    if (e.type === 'click' && !isAdditiveClick(e)) useGroundViewStore.getState().selectUnits([])
+  }
+
   if (!surface) {
     return (
       <div className="solar-system-wrapper">
@@ -71,22 +89,37 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
 
   return (
     <div className="solar-system-wrapper">
-      <Canvas camera={{ position: [0, 5, INITIAL_DISTANCE], fov: 50 }} onPointerMissed={(e) => {
-        // A plain click on empty space clears the selection.
-        if (e.type === 'click' && !isAdditiveClick(e)) useGroundViewStore.getState().selectUnits([])
-      }}>
-        <color attach="background" args={['#020409']} />
-        <ambientLight intensity={0.9} />
-        <Stars radius={300} depth={80} count={2500} factor={2} fade speed={0.2} />
-        <SurfaceGlobe surface={surface} />
-        <SurfaceGrid />
-        <FrontLines surface={surface} />
-        <KeyNodeMarkers surface={surface} />
-        <UnitMarkers bodyName={bodyName} />
-        <GroundLines bodyName={bodyName} />
-        <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitGround} controlsRef={controlsRef} />
-        <OrbitControls ref={controlsRef} enablePan={false} enableDamping dampingFactor={0.08} minDistance={MIN_DISTANCE} maxDistance={MAX_DISTANCE} />
-      </Canvas>
+      {flat ? (
+        <Canvas key="flat" orthographic camera={{ position: [0, 0, 60], zoom: 20, near: 0.1, far: 200 }} onPointerMissed={clearOnMiss}>
+          <color attach="background" args={['#020409']} />
+          <SurfaceGlobe surface={surface} />
+          <SurfaceGrid />
+          <FrontLines surface={surface} />
+          <KeyNodeMarkers surface={surface} />
+          <TerrainBattleChips bodyName={bodyName} />
+          <UnitMarkers bodyName={bodyName} />
+          <GroundLines bodyName={bodyName} />
+          <FlatControls controlsRef={controlsRef} />
+          <KeyboardPan controlsRef={controlsRef} mode="pan" />
+        </Canvas>
+      ) : (
+        <Canvas key="globe" camera={{ position: [0, 5, INITIAL_DISTANCE], fov: 50 }} onPointerMissed={clearOnMiss}>
+          <color attach="background" args={['#020409']} />
+          <ambientLight intensity={0.9} />
+          <Stars radius={300} depth={80} count={2500} factor={2} fade speed={0.2} />
+          <SurfaceGlobe surface={surface} />
+          <SurfaceGrid />
+          <FrontLines surface={surface} />
+          <KeyNodeMarkers surface={surface} />
+          <TerrainBattleChips bodyName={bodyName} />
+          <UnitMarkers bodyName={bodyName} />
+          <GroundLines bodyName={bodyName} />
+          <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitGround} controlsRef={controlsRef} />
+          <OrbitControls ref={controlsRef} enablePan={false} enableDamping dampingFactor={0.08} minDistance={MIN_DISTANCE} maxDistance={MAX_DISTANCE} />
+          <KeyboardPan controlsRef={controlsRef} mode="orbit" />
+        </Canvas>
+      )}
+      <GroundSwitch surface={surface} />
       <GroundPanel bodyName={bodyName} surface={surface} />
       <UnitCard bodyName={bodyName} surface={surface} />
       <HoverTooltip bodyName={bodyName} surface={surface} />
@@ -94,46 +127,87 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
   )
 }
 
-// The globe: every fine node coloured by its terrain, tinted by whoever holds
-// it. Colours are rewritten in place when the front moves.
-function SurfaceGlobe({ surface }: { surface: BodySurface }) {
-  const mesh = surfaceMesh()
+// The flat map's camera: fitted to the whole map, dragged to pan (right-click
+// stays free for orders), the wheel zooms.
+function FlatControls({ controlsRef }: { controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const size = useThree((s) => s.size)
+  const camera = useThree((s) => s.camera)
+  // The canvas runs under the side panels, so fit the map to what is left
+  // between them.
+  const fit = Math.min(Math.max(320, size.width - SIDE_PANELS_PX) / (FLAT_WIDTH * 1.04), size.height / (FLAT_HEIGHT * 1.35))
+  useEffect(() => {
+    camera.zoom = fit
+    camera.updateProjectionMatrix()
+    controlsRef.current?.target.set(0, 0, 0)
+    camera.position.set(0, 0, 60)
+    controlsRef.current?.update()
+  }, [camera, fit, controlsRef])
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      enableRotate={false}
+      enableDamping
+      dampingFactor={0.1}
+      minZoom={fit * 0.9}
+      maxZoom={fit * 10}
+      mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY }}
+    />
+  )
+}
+
+// The globe / flat map switch (a picture of the other view, top right).
+function GroundSwitch({ surface }: { surface: BodySurface }) {
+  const nodeAt = useSurfaceNodeAt(surface)
+  return <ProjectionSwitch bodyName={surface.bodyName} nodeAt={nodeAt} />
+}
+
+// How each node of a world's surface is coloured on the map: its terrain, tinted
+// by whoever holds it. A new function whenever the ground changes hands.
+function useSurfaceNodeAt(surface: BodySurface): (node: number) => HoloNode {
   const bodyName = surface.bodyName
   const holders = useTerritoryStore((s) => s.nodeHolders[bodyName])
   const owners = useTerritoryStore((s) => s.bodyOwner)
-  const geometry = useMemo(() => {
-    const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(Float32Array.from(mesh.positions, (v) => v * GLOBE_RADIUS), 3))
-    g.setAttribute('normal', new BufferAttribute(Float32Array.from(mesh.positions), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(mesh.count.fine * 3), 3))
-    g.setIndex(new BufferAttribute(mesh.faces, 1))
-    return g
-  }, [mesh])
-  useEffect(() => () => geometry.dispose(), [geometry])
-
-  useEffect(() => {
-    const colors = geometry.getAttribute('color') as BufferAttribute
+  return useMemo(() => {
+    const all = { [bodyName]: holders ?? {} }
     const c = new Color()
     const tint = new Color()
-    const all = { [bodyName]: holders ?? {} }
-    for (let i = 0; i < mesh.count.fine; i++) {
-      const terrain = TERRAIN[TERRAIN_IDS[surface.terrain[i]]]
-      c.set(terrain.tint)
-      const h = terrain.paintable ? holderOf(bodyName, i, owners, all) : undefined
-      if (h) c.lerp(tint.set(ownerDisplay(h).color), HOLDER_TINT)
-      colors.setXYZ(i, c.r, c.g, c.b)
+    const rgb = { r: 0, g: 0, b: 0 }
+    return (i: number): HoloNode => {
+      const id = TERRAIN_IDS[surface.terrain[i]]
+      const holo = HOLO_TERRAIN[id]
+      // sRGB in, sRGB out: the tint mix happens on the colours as written.
+      c.setStyle(holo.color, SRGBColorSpace)
+      const h = TERRAIN[id].paintable ? holderOf(bodyName, i, owners, all) : undefined
+      if (h) c.lerp(tint.setStyle(ownerDisplay(h).color, SRGBColorSpace), HOLDER_TINT)
+      c.getRGB(rgb, SRGBColorSpace)
+      return { r: Math.round(rgb.r * 255), g: Math.round(rgb.g * 255), b: Math.round(rgb.b * 255), land: holo.land, landValue: surface.landValue?.[i] }
     }
-    colors.needsUpdate = true
-  }, [geometry, holders, owners, surface, bodyName, mesh])
+  }, [surface, bodyName, holders, owners])
+}
 
-  const pickNode = (e: ThreeEvent<MouseEvent | PointerEvent>) => nearestNode(normalize(e.point), useGroundViewStore.getState().density)
+// The globe: every fine node coloured by its terrain, tinted by whoever holds
+// it, drawn as a hologram (see HoloGlobe). Colours are rewritten in place when
+// the front moves.
+function SurfaceGlobe({ surface }: { surface: BodySurface }) {
+  const bodyName = surface.bodyName
+  const nodeAt = useSurfaceNodeAt(surface)
+  // The map glows in the world's own colour, as the planet does from orbit.
+  const glow = useMemo<[number, number, number]>(() => {
+    const c = hologramTint(bodyGroundInfo(bodyName)?.color ?? '#9fe8ff')
+    return [c.r, c.g, c.b]
+  }, [bodyName])
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
+  // Where on the world a hit is: the globe's own point, or the flat map's
+  // longitude/latitude.
+  const pointOf = (e: ThreeEvent<MouseEvent | PointerEvent>) => (flat ? fromFlat(e.point.x, e.point.y) : normalize(e.point))
+  const pickNode = (e: ThreeEvent<MouseEvent | PointerEvent>) => nearestNode(pointOf(e), useGroundViewStore.getState().density)
 
+  // The handlers sit on a group so they catch the map's own hits.
   return (
-    <mesh
-      geometry={geometry}
+    <group
       onPointerMove={(e) => {
         e.stopPropagation()
-        const node = nearestNode(normalize(e.point), 'fine')
+        const node = nearestNode(pointOf(e), 'fine')
         if (useGroundViewStore.getState().hoverNode !== node) useGroundViewStore.getState().setHoverNode(node)
       }}
       onPointerOut={() => useGroundViewStore.getState().setHoverNode(null)}
@@ -147,8 +221,15 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
         orderSelectedUnitsTo(pickNode(e))
       }}
     >
-      <meshBasicMaterial vertexColors />
-    </mesh>
+      {flat ? (
+        <FlatMapSurface nodeAt={nodeAt} version={nodeAt} glow={glow} />
+      ) : (
+        <>
+          <HoloGlobe radius={GLOBE_RADIUS} nodeAt={nodeAt} version={nodeAt} glow={glow} />
+          <HoloHalo radius={GLOBE_RADIUS} glow={glow} />
+        </>
+      )}
+    </group>
   )
 }
 
@@ -157,30 +238,46 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
 // on the ground moves.
 function SurfaceGrid() {
   const density = useGroundViewStore((s) => s.density)
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
   const mesh = surfaceMesh()
   const { edges, points } = useMemo(() => {
     const r = GLOBE_RADIUS * 1.004
     const seg: number[] = []
     const seen = new Set<string>()
-    const faces = mesh.facesByDensity[density]
-    for (let f = 0; f < faces.length; f += 3) {
-      const tri = [faces[f], faces[f + 1], faces[f + 2]]
-      for (let k = 0; k < 3; k++) {
-        const a = tri[k]
-        const b = tri[(k + 1) % 3]
-        const key = a < b ? `${a}|${b}` : `${b}|${a}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        seg.push(mesh.positions[a * 3] * r, mesh.positions[a * 3 + 1] * r, mesh.positions[a * 3 + 2] * r)
-        seg.push(mesh.positions[b * 3] * r, mesh.positions[b * 3 + 1] * r, mesh.positions[b * 3 + 2] * r)
+    const at = (i: number) => ({ x: mesh.positions[i * 3], y: mesh.positions[i * 3 + 1], z: mesh.positions[i * 3 + 2] })
+    // On the flat map the triangles are stretched toward the poles and torn by
+    // the seam, so only the nodes are drawn there (what a click snaps to).
+    if (!flat) {
+      const faces = mesh.facesByDensity[density]
+      for (let f = 0; f < faces.length; f += 3) {
+        const tri = [faces[f], faces[f + 1], faces[f + 2]]
+        for (let k = 0; k < 3; k++) {
+          const a = tri[k]
+          const b = tri[(k + 1) % 3]
+          const key = a < b ? `${a}|${b}` : `${b}|${a}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          seg.push(mesh.positions[a * 3] * r, mesh.positions[a * 3 + 1] * r, mesh.positions[a * 3 + 2] * r)
+          seg.push(mesh.positions[b * 3] * r, mesh.positions[b * 3 + 1] * r, mesh.positions[b * 3 + 2] * r)
+        }
       }
     }
     const e = new BufferGeometry()
     e.setAttribute('position', new BufferAttribute(Float32Array.from(seg), 3))
+    const count = mesh.count[density]
+    const pts = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      if (flat) pts.set(flatPos(at(i), 0.01), i * 3)
+      else {
+        pts[i * 3] = mesh.positions[i * 3] * r
+        pts[i * 3 + 1] = mesh.positions[i * 3 + 1] * r
+        pts[i * 3 + 2] = mesh.positions[i * 3 + 2] * r
+      }
+    }
     const p = new BufferGeometry()
-    p.setAttribute('position', new BufferAttribute(Float32Array.from(mesh.positions.subarray(0, mesh.count[density] * 3), (v) => v * r), 3))
+    p.setAttribute('position', new BufferAttribute(pts, 3))
     return { edges: e, points: p }
-  }, [density, mesh])
+  }, [density, mesh, flat])
   useEffect(() => () => {
     edges.dispose()
     points.dispose()
@@ -191,7 +288,7 @@ function SurfaceGrid() {
         <lineBasicMaterial color="#6fe3ff" transparent opacity={GRID_OPACITY[density]} />
       </lineSegments>
       <points geometry={points}>
-        <pointsMaterial color="#6fe3ff" size={density === 'fine' ? 0.035 : 0.06} transparent opacity={0.7} />
+        <pointsMaterial color="#6fe3ff" size={flat ? 3 : density === 'fine' ? 0.035 : 0.06} sizeAttenuation={!flat} transparent opacity={flat ? 0.5 : 0.7} />
       </points>
     </group>
   )
@@ -200,6 +297,7 @@ function SurfaceGrid() {
 // Bright lines along every fine edge whose two ends are held by different
 // nations — the front, readable whatever the colours.
 function FrontLines({ surface }: { surface: BodySurface }) {
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
   const bodyName = surface.bodyName
   const holders = useTerritoryStore((s) => s.nodeHolders[bodyName])
   const owners = useTerritoryStore((s) => s.bodyOwner)
@@ -217,6 +315,13 @@ function FrontLines({ surface }: { surface: BodySurface }) {
           if (j <= i) continue
           const hj = holderAt(j)
           if (!hj || hj === hi) continue
+          if (flat) {
+            const pi = { x: mesh.positions[i * 3], y: mesh.positions[i * 3 + 1], z: mesh.positions[i * 3 + 2] }
+            const pj = { x: mesh.positions[j * 3], y: mesh.positions[j * 3 + 1], z: mesh.positions[j * 3 + 2] }
+            if (crossesSeam(pi, pj)) continue
+            seg.push(...flatPos(pi, 0.03), ...flatPos(pj, 0.03))
+            continue
+          }
           seg.push(mesh.positions[i * 3] * r, mesh.positions[i * 3 + 1] * r, mesh.positions[i * 3 + 2] * r)
           seg.push(mesh.positions[j * 3] * r, mesh.positions[j * 3 + 1] * r, mesh.positions[j * 3 + 2] * r)
         }
@@ -225,12 +330,30 @@ function FrontLines({ surface }: { surface: BodySurface }) {
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(Float32Array.from(seg), 3))
     return g
-  }, [holders, owners, surface, bodyName, mesh])
+  }, [holders, owners, surface, bodyName, mesh, flat])
   useEffect(() => () => geometry.dispose(), [geometry])
   return (
     <lineSegments geometry={geometry}>
       <lineBasicMaterial color="#ffffff" transparent opacity={0.85} />
     </lineSegments>
+  )
+}
+
+// A fight that has moved onto a terrain map is marked where it is: click to open it.
+function TerrainBattleChips({ bodyName }: { bodyName: string }) {
+  const key = useTerrainStore((s) => s.battles.filter((b) => b.bodyName === bodyName).map((b) => b.id).join('|'))
+  const enterTerrain = useViewStore((s) => s.enterTerrain)
+  const battles = useTerrainStore.getState().battles.filter((b) => key.split('|').includes(b.id))
+  return (
+    <>
+      {battles.map((b) => (
+        <FacingHtml key={b.id} point={b.frame.center} radius={GLOBE_RADIUS * 1.03}>
+          <button type="button" className="ground-terrain-chip" style={{ pointerEvents: 'auto' }} title="Units are at close quarters here — open the terrain map" onClick={() => enterTerrain(b.id, bodyName)}>
+            ◈ terrain battle
+          </button>
+        </FacingHtml>
+      ))}
+    </>
   )
 }
 
@@ -264,11 +387,13 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
 function FacingHtml({ point, radius, children }: { point: SurfacePoint; radius: number; children: React.ReactNode }) {
   const groupRef = useRef<Group>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
   useFrame(({ camera }) => {
     const g = groupRef.current
     if (!g) return
-    g.position.set(...toVec(point, radius))
-    const facing = point.x * camera.position.x + point.y * camera.position.y + point.z * camera.position.z > radius * 0.2
+    // On the flat map every point is in view.
+    g.position.set(...(flat ? flatPos(point, 0.05) : toVec(point, radius)))
+    const facing = flat || point.x * camera.position.x + point.y * camera.position.y + point.z * camera.position.z > radius * 0.2
     if (wrapRef.current) wrapRef.current.style.display = facing ? '' : 'none'
   })
   return (
@@ -316,6 +441,7 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
   const wrapRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLSpanElement>(null)
   const selected = useGroundViewStore((s) => s.selectedUnitIds.includes(unitId))
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
   const player = usePlayerStore((s) => s.selectedCountryId)
   useRelationKey()
   // Coloured by how the owner relates to the player, not by nation.
@@ -331,8 +457,9 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
     if (!found?.unit.position || !g) return
     const p = found.unit.position
     const r = GLOBE_RADIUS * 1.015
-    g.position.set(p.x * r, p.y * r, p.z * r)
-    const facing = p.x * camera.position.x + p.y * camera.position.y + p.z * camera.position.z > r * 0.2
+    if (flat) g.position.set(...flatPos(p, 0.1))
+    else g.position.set(p.x * r, p.y * r, p.z * r)
+    const facing = flat || p.x * camera.position.x + p.y * camera.position.y + p.z * camera.position.z > r * 0.2
     if (wrapRef.current) {
       wrapRef.current.style.display = facing ? '' : 'none'
       // How many listed units share this unit's node, and its place among them.
@@ -400,39 +527,49 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
 }
 
 // Paths of the player's own moving units, and every unit's line of fire,
-// rebuilt every frame from the store.
-const MAX_SEGMENTS = 4000
+// rebuilt every frame from the store. Drawn as Line2 (like the arena's route
+// lines) so the player's thickness setting really changes how wide they are —
+// WebGL's native lines are always one pixel.
+const MAX_SEGMENTS = 1500
 
 function GroundLines({ bodyName }: { bodyName: string }) {
-  const pathRef = useRef<LineSegments>(null)
-  const fireRef = useRef<LineSegments>(null)
-  const geoms = useMemo(() => {
-    const make = () => {
-      const g = new BufferGeometry()
-      g.setAttribute('position', new BufferAttribute(new Float32Array(MAX_SEGMENTS * 6), 3))
-      g.setDrawRange(0, 0)
-      return g
-    }
-    return { path: make(), fire: make() }
-  }, [])
-  useEffect(() => () => {
-    geoms.path.dispose()
-    geoms.fire.dispose()
-  }, [geoms])
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
+  const pathRef = useRef<Line2>(null)
+  const fireRef = useRef<Line2>(null)
+  // Stable, full-size seeds so drei builds each interleaved buffer once at
+  // mount; every frame after that writes into it in place.
+  const seed = useMemo(() => Array.from({ length: MAX_SEGMENTS * 2 }, () => [0, 0, 0] as [number, number, number]), [])
+  const thickness = useSettingsStore((s) => LINE_THICKNESS_PX[s.armyLineThickness])
 
   useFrame(() => {
+    const pathLine = pathRef.current
+    const fireLine = fireRef.current
+    if (!pathLine || !fireLine) return
     const player = usePlayerStore.getState().selectedCountryId
     const armies = useArmyStore.getState().armies.filter((a) => a.location.kind === 'body' && a.location.bodyName === bodyName)
     const byId = new Map(armies.flatMap((a) => a.units.map((u) => [u.id, u] as const)))
     const r = GLOBE_RADIUS * 1.012
-    const pathPos = geoms.path.getAttribute('position') as BufferAttribute
-    const firePos = geoms.fire.getAttribute('position') as BufferAttribute
+    const pathBuf = (pathLine.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data
+    const fireBuf = (fireLine.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data
     let np = 0
     let nf = 0
-    const push = (attr: BufferAttribute, n: number, a: SurfacePoint, b: SurfacePoint) => {
+    const push = (buf: InterleavedBuffer, n: number, a: SurfacePoint, b: SurfacePoint) => {
       if (n >= MAX_SEGMENTS) return n
-      attr.setXYZ(n * 2, a.x * r, a.y * r, a.z * r)
-      attr.setXYZ(n * 2 + 1, b.x * r, b.y * r, b.z * r)
+      const array = buf.array as Float32Array
+      const o = n * 6
+      if (flat) {
+        // A leg across the map's seam has no straight drawing; leave it out.
+        if (crossesSeam(a, b)) return n
+        array.set(flatPos(a, 0.06), o)
+        array.set(flatPos(b, 0.06), o + 3)
+        return n + 1
+      }
+      array[o] = a.x * r
+      array[o + 1] = a.y * r
+      array[o + 2] = a.z * r
+      array[o + 3] = b.x * r
+      array[o + 4] = b.y * r
+      array[o + 5] = b.z * r
       return n + 1
     }
     for (const army of armies) {
@@ -441,30 +578,28 @@ function GroundLines({ bodyName }: { bodyName: string }) {
         if (army.ownerId === player && u.path && u.path.length > 0) {
           let prev = u.position
           for (const wp of u.path) {
-            np = push(pathPos, np, prev, wp)
+            np = push(pathBuf, np, prev, wp)
             prev = wp
           }
         }
         if (u.firingAtId) {
           const target = byId.get(u.firingAtId)
-          if (target?.position) nf = push(firePos, nf, u.position, target.position)
+          if (target?.position) nf = push(fireBuf, nf, u.position, target.position)
         }
       }
     }
-    pathPos.needsUpdate = true
-    firePos.needsUpdate = true
-    geoms.path.setDrawRange(0, np * 2)
-    geoms.fire.setDrawRange(0, nf * 2)
+    pathBuf.needsUpdate = true
+    fireBuf.needsUpdate = true
+    pathLine.geometry.instanceCount = np
+    fireLine.geometry.instanceCount = nf
+    pathLine.visible = np > 0
+    fireLine.visible = nf > 0
   })
 
   return (
     <>
-      <lineSegments ref={pathRef} geometry={geoms.path} frustumCulled={false}>
-        <lineBasicMaterial color="#4ade80" transparent opacity={0.9} />
-      </lineSegments>
-      <lineSegments ref={fireRef} geometry={geoms.fire} frustumCulled={false}>
-        <lineBasicMaterial color="#ff6b4a" transparent opacity={0.8} />
-      </lineSegments>
+      <Line ref={pathRef} points={seed} segments color="#4ade80" lineWidth={thickness} transparent opacity={0.9} frustumCulled={false} />
+      <Line ref={fireRef} points={seed} segments color="#ff6b4a" lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
     </>
   )
 }

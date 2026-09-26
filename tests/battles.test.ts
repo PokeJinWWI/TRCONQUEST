@@ -9,8 +9,11 @@ import {
   battleKindsInSystem,
   battlesInStars,
   groundBattleDetail,
+  playerContests,
   playerGroundBattles,
   playerSpaceBattles,
+  playerTerrainBattles,
+  terrainBattleDetail,
   spaceBattleDetail,
   type PlayerBattle,
 } from '../src/scene/battleList'
@@ -19,6 +22,10 @@ import { syncEngagements } from '../src/scene/combatResolution'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
 import { spawnSandboxArmy, startSandbox } from '../src/scene/sandboxSetup'
 import { atWar } from '../src/state/diplomacyStore'
+import { groundSurface } from '../src/scene/groundLogic'
+import { fromLonLat } from '../src/scene/mapProjection'
+import { makeFrame, toGlobal } from '../src/scene/terrainMap'
+import { createBattle } from '../src/scene/terrainBattle'
 import { useArmyStore } from '../src/state/armyStore'
 import { useShipStore } from '../src/state/shipStore'
 
@@ -87,6 +94,64 @@ console.log('\n=== 2. Ground battles ===')
   check('the detail gives each side\'s strength on the world', detail === 'yours 100 · enemy 100', detail)
   check('with no player there is nothing to list', playerGroundBattles(armies, null).length === 0)
   useArmyStore.getState().reset()
+}
+
+console.log('\n=== 2b. Contests (hostile armies on one world, nobody firing) ===')
+{
+  useArmyStore.getState().reset()
+  const a = spawnSandboxArmy(ME, 'assault', 'Earth')!
+  spawnSandboxArmy(PIRATES_ID, 'assault', 'Earth')
+  spawnSandboxArmy(PIRATES_ID, 'assault', 'Luna')
+  spawnSandboxArmy(NEUTRAL_ROGUE_ID, 'assault', 'Mars')
+  spawnSandboxArmy(ME, 'assault', 'Mars')
+  spawnSandboxArmy(PIRATES_ID, 'assault', 'Venus')
+  let armies = useArmyStore.getState().armies
+  const contests = playerContests(armies, ME)
+  check('the player and a hostile army on one world make a contest', contests.length === 1 && contests.some((c) => c.place === 'Earth'), contests.map((c) => c.place).join())
+  check('...tagged as a contest, on that world, in its system', contests[0]?.kind === 'contest' && contests[0].bodyName === contests[0].place && contests[0].starId === 'sol' && contests[0].key === `contest:${contests[0].place}`)
+  check('a hostile army with none of the player\'s there is no contest', !contests.some((c) => c.place === 'Luna' || c.place === 'Venus'))
+  check('a neutral army beside the player\'s is no contest', !contests.some((c) => c.place === 'Mars'))
+  check('nothing to list without a player', playerContests(armies, null).length === 0)
+  check('the badge kinds include a contest', battleKindsAtBody(contests, 'Earth').join() === 'contest' && battleKindsInSystem(contests, 'sol').join() === 'contest')
+
+  armies = armies.map((army) => ({ ...army, units: army.units.map((u) => ({ ...u })) }))
+  const mine = armies.find((x) => x.id === a)!
+  const theirs = armies.find((x) => x.ownerId === PIRATES_ID && x.location.kind === 'body' && x.location.bodyName === 'Earth')!
+  theirs.units[0].firingAtId = mine.units[0].id
+  check('once shots are exchanged it stops being a contest...', !playerContests(armies, ME).some((c) => c.place === 'Earth'))
+  check('...and is a ground battle instead', playerGroundBattles(armies, ME).some((b) => b.place === 'Earth' && b.kind === 'ground'))
+  useArmyStore.getState().reset()
+}
+
+console.log('\n=== 2c. Terrain battles ===')
+{
+  const frame = makeFrame(fromLonLat(0.4, 0.5))
+  const at = (x: number) => toGlobal(frame, x, 0)
+  const surface = groundSurface('Earth', {})!
+  const mk = (owner: string, x: number, id: string) => {
+    const unit = { id, type: 'infantry' as const, strength: 25, maxStrength: 25, position: at(x) }
+    return { army: { id: `a-${id}`, ownerId: owner, kind: 'assault' as const, units: [unit], location: { kind: 'body' as const, bodyName: 'Earth' } }, unit }
+  }
+  const battle = createBattle('tb-1', surface, [mk(ME, -0.5, 'm1'), mk(PIRATES_ID, 0.5, 'p1')], at(0), 0, {}, {})
+  const elsewhere = createBattle('tb-2', surface, [mk(PIRATES_ID, -0.5, 'x1'), mk(NEUTRAL_ROGUE_ID, 0.5, 'x2')], at(0), 0, {}, {})
+  const list = playerTerrainBattles([battle, elsewhere], ME)
+  check("only terrain battles with a unit of the player's are listed", list.length === 1 && list[0].terrainBattleId === 'tb-1')
+  check('...tagged as a terrain battle, on Earth in Sol, opening its battle', list[0].kind === 'terrain' && list[0].place === 'Earth' && list[0].starId === 'sol' && list[0].key === 'terrain:tb-1')
+  check('with no player there is nothing to list', playerTerrainBattles([battle], null).length === 0)
+  check('the detail gives each side\'s strength', terrainBattleDetail(battle, ME, atWar) === 'yours 25 · enemy 25', terrainBattleDetail(battle, ME, atWar))
+  check('the badge shows a terrain kind on the body and its system', battleKindsAtBody(list, 'Earth').join() === 'terrain' && battleKindsInSystem(list, 'sol').join() === 'terrain')
+  check('kinds come out space, ground, terrain, contest', battleKindsAtBody([{ ...list[0], kind: 'contest' }, { ...list[0], kind: 'terrain' }, { ...list[0], kind: 'ground' }, { ...list[0], kind: 'space' }], 'Earth').join() === 'space,ground,terrain,contest')
+
+  // Units in a terrain battle are not also a ground battle or a contest.
+  const armies = [mk(ME, -0.5, 'm1').army, mk(PIRATES_ID, 0.5, 'p1').army]
+  armies[1].units[0].firingAtId = 'm1'
+  armies[0].units[0].firingAtId = 'p1'
+  check('a fight on the coarse map is a ground battle', playerGroundBattles(armies, ME).length === 1)
+  const engaged = new Set(['m1', 'p1'])
+  check('...but not once its units are in a terrain battle', playerGroundBattles(armies, ME, engaged).length === 0)
+  armies[0].units[0].firingAtId = null
+  armies[1].units[0].firingAtId = null
+  check('nor is it a contest then', playerContests(armies, ME).length === 1 && playerContests(armies, ME, atWar, engaged).length === 0)
 }
 
 console.log('\n=== 3. Where battles show on the maps ===')

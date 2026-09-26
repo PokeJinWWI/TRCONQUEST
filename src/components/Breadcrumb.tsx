@@ -7,6 +7,7 @@ export function Breadcrumb() {
   const enterInterstellar = useViewStore((s) => s.enterInterstellar)
   const enterSystem = useViewStore((s) => s.enterSystem)
   const exitGround = useViewStore((s) => s.exitGround)
+  const exitTerrain = useViewStore((s) => s.exitTerrain)
 
   return (
     <nav className="breadcrumb">
@@ -17,7 +18,7 @@ export function Breadcrumb() {
       <button type="button" className="crumb" onClick={() => enterInterstellar()} disabled={level === 'interstellar'}>
         INTERSTELLAR
       </button>
-      {(level === 'system' || level === 'satellite' || level === 'combat' || level === 'ground') && (
+      {(level === 'system' || level === 'satellite' || level === 'combat' || level === 'ground' || level === 'terrain') && (
         <>
           <span className="crumb-sep">›</span>
           <button
@@ -30,7 +31,7 @@ export function Breadcrumb() {
           </button>
         </>
       )}
-      {(level === 'satellite' || level === 'ground') && (
+      {(level === 'satellite' || level === 'ground' || level === 'terrain') && (
         <>
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb" disabled={level === 'satellite'} onClick={exitGround}>
@@ -38,11 +39,19 @@ export function Breadcrumb() {
           </button>
         </>
       )}
-      {level === 'ground' && (
+      {(level === 'ground' || level === 'terrain') && (
         <>
           <span className="crumb-sep">›</span>
-          <button type="button" className="crumb" disabled>
+          <button type="button" className="crumb" disabled={level === 'ground'} onClick={exitTerrain}>
             GROUND
+          </button>
+        </>
+      )}
+      {level === 'terrain' && (
+        <>
+          <span className="crumb-sep">›</span>
+          <button type="button" className="crumb crumb-combat" disabled>
+            TERRAIN
           </button>
         </>
       )}

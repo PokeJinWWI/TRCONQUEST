@@ -74,6 +74,10 @@ export interface GroundWorld {
   // Nations whose units the ground AI drives (everyone but the player).
   isAutonomous: (countryId: string) => boolean
   surfaceOf: (bodyName: string) => BodySurface | null
+  // Units in a terrain battle (scene/terrainWar.ts): they are fighting on a
+  // finer map, so this sim neither has them fire, be fired on, move nor rest.
+  // Omitted (the default) changes nothing.
+  engagedUnitIds?: ReadonlySet<string>
 }
 
 export interface Occupation {
@@ -122,6 +126,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
   if (toStep <= fromStep) return { armies: world.armies, occupations, losses, paints, resolvedThroughStep: fromStep }
 
   const { owners, atWar } = world
+  const engaged = world.engagedUnitIds ?? new Set<string>()
   const controllers = { ...world.controllers }
   // Copy-on-write node holders, per body.
   const holders: NodeHolderMap = { ...world.nodeHolders }
@@ -219,7 +224,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
       if (army.location.kind !== 'body') continue
       const body = army.location.bodyName
       for (const unit of army.units) {
-        if (!unit.position || unit.strength >= unit.maxStrength) continue
+        if (engaged.has(unit.id) || !unit.position || unit.strength >= unit.maxStrength) continue
         const node = nearestNode(unit.position, 'fine', unit.nodeHint)
         if (holderOf(body, node, owners, holders) !== army.ownerId) continue
         const list = mutable()
@@ -255,8 +260,9 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
     const byId = new Map(units.map((u) => [u.unit.id, u]))
     const shooters = new Map<string, string[]>()
     for (const lu of units) {
+      if (engaged.has(lu.unit.id)) continue
       const range = unitRangeRad(lu.unit.type)
-      const inRange = units.filter((v) => atWar(v.army.ownerId, lu.army.ownerId) && arc(v.unit.position!, lu.unit.position!) <= range)
+      const inRange = units.filter((v) => !engaged.has(v.unit.id) && atWar(v.army.ownerId, lu.army.ownerId) && arc(v.unit.position!, lu.unit.position!) <= range)
       let target: LandedUnit | undefined
       if (lu.unit.targetUnitId) target = inRange.find((v) => v.unit.id === lu.unit.targetUnitId)
       if (!target) {
@@ -271,7 +277,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
     // 3. Damage, summed then applied.
     const damage = new Map<string, number>()
     for (const lu of units) {
-      if (!lu.unit.firingAtId) continue
+      if (!lu.unit.firingAtId || engaged.has(lu.unit.id)) continue
       const v = byId.get(lu.unit.firingAtId)!
       const tv = terrainOf(v.unit)
       const entrenched =
@@ -284,6 +290,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
 
     // 4. Movement.
     for (const { unit } of units) {
+      if (engaged.has(unit.id)) continue
       if (!unit.path || unit.path.length === 0) continue
       if (unit.firingAtId && !unit.orderedMove) continue
       const budget = unitSpeedRadPerDay(unit.type, radiusKm, terrainOf(unit)) * DT
@@ -353,7 +360,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
     // 8. Recovery for units resting on their own ground.
     for (const lu of alive) {
       const u = lu.unit
-      if (u.firingAtId || (u.path?.length ?? 0) > 0 || u.strength >= u.maxStrength) continue
+      if (engaged.has(u.id) || u.firingAtId || (u.path?.length ?? 0) > 0 || u.strength >= u.maxStrength) continue
       const node = nearestNode(u.position!, 'fine', u.nodeHint)
       if (holderOf(body, node, owners, holders) !== lu.army.ownerId) continue
       u.strength = Math.min(u.maxStrength, u.strength + u.maxStrength * UNIT_REGEN_PER_DAY * DT)

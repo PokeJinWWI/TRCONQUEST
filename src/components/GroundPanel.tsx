@@ -8,6 +8,7 @@ import { TERRAIN_IDS, type BodySurface } from '../scene/planetTerrain'
 import { nearestNode } from '../scene/surfaceMesh'
 import { controllerOf } from '../scene/territory'
 import { isAdditiveClick } from '../scene/selectionInput'
+import { isQueueModifierHeld } from '../scene/queueModifier'
 import { useArmyStore } from '../state/armyStore'
 import { useGroundViewStore } from '../state/groundViewStore'
 import { useTerritoryStore } from '../state/territoryStore'
@@ -49,7 +50,8 @@ export function handleGroundClick(bodyName: string, node: number): void {
 export function orderSelectedUnitsTo(node: number): void {
   const view = useGroundViewStore.getState()
   if (view.selectedUnitIds.length === 0) return
-  const r = useArmyStore.getState().orderUnits(view.selectedUnitIds, node)
+  // Shift + right-click queues the move after each unit's current route.
+  const r = useArmyStore.getState().orderUnits(view.selectedUnitIds, node, isQueueModifierHeld())
   view.setNotice(r.ok ? null : r.reason)
 }
 

@@ -253,7 +253,7 @@ console.log('\n=== 6. Scenarios load into the sandbox against the pirates ===')
     )
   }
   check('an army scenario replaces the armies that were on the board', !useArmyStore.getState().armies.some((a) => a.ownerId === FRIENDLY_ROGUE_ID))
-  check('...and opens the ground map on the battlefield', useViewStore.getState().level === 'ground' && useViewStore.getState().selectedBodyName === 'Earth')
+  check('...and opens the ground map on the battlefield', useViewStore.getState().level === 'ground' && useViewStore.getState().selectedBodyName === ARMY_SCENARIOS[ARMY_SCENARIOS.length - 1].battlefield.bodyName)
   check('...with no wars stored', useDiplomacyStore.getState().wars.length === 0)
   check(
     "the ship classes scenarios use all exist",

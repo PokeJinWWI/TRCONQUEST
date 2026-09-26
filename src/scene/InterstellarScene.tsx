@@ -1,4 +1,5 @@
 import { BattleBadge } from '../components/BattleBadge'
+import { KeyboardPan } from './KeyboardPan'
 import { useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Html, OrbitControls, Stars } from '@react-three/drei'
@@ -18,6 +19,8 @@ import { HyperlaneLine } from './HyperlaneLine'
 import { ShipMarker } from './ShipMarker'
 import { NavigationLine } from './NavigationLine'
 import { PendingOrderLine } from './PendingOrderLine'
+import { QueuedRouteLine } from './QueuedRouteLine'
+import { CommsSignals } from './CommsSignals'
 import { ShipPanel } from './ShipPanel'
 import { shipSystemId, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
 import { orderSelectedFleets, playerVisualShipRenderPosition } from './commsVisual'
@@ -74,6 +77,23 @@ function resolveInterstellarDestinationPosition(destination: MoveDestination): V
   }
   if (destination.kind === 'interstellar-point') return new Vector3(...destination.position)
   return null
+}
+
+// Where a comms signal sets out from in interstellar view: the capital's star.
+function resolveInterstellarSignalOrigin(): Vector3 | null {
+  const country = getCountry(usePlayerStore.getState().selectedCountryId ?? '')
+  const star = country ? STARS.find((s) => s.id === country.capitalStarId) : undefined
+  return star ? new Vector3(...starScenePosition(star)) : null
+}
+
+// Where a ship is in interstellar view for a comms signal to head for: its own
+// position in deep space, or its star (where its system's badge sits) if it's
+// inside a system.
+function resolveInterstellarShipPosition(ship: ShipInstance, simDays: number): Vector3 | null {
+  const render = playerVisualShipRenderPosition(ship, simDays)
+  if (render.space === 'interstellar') return render.position
+  const star = render.systemId ? STARS.find((s) => s.id === render.systemId) : undefined
+  return star ? new Vector3(...starScenePosition(star)) : null
 }
 
 interface StarNodeProps {
@@ -340,6 +360,7 @@ export function InterstellarScene() {
     <div className="interstellar-wrapper">
       <Canvas camera={{ position: initialCameraPosition, fov: 50, near: 0.05, far: 5000 }} onPointerMissed={handleUnfocus}>
         <color attach="background" args={['#020409']} />
+        <KeyboardPan controlsRef={controlsRef} />
         <ambientLight intensity={0.3} />
         <Stars radius={800} depth={200} count={5000} factor={3} fade speed={0.2} />
 
@@ -404,6 +425,28 @@ export function InterstellarScene() {
               resolveTarget={resolveInterstellarDestinationPosition}
             />
           ))}
+
+        {/* Orders queued behind the current one (Shift + right-click). */}
+        {interstellarShips
+          .filter((ship) => (ship.orderQueue?.length ?? 0) > 0 && ship.ownerId === playerCountryId)
+          .map((ship) => (
+            <QueuedRouteLine
+              key={`queue-${ship.id}`}
+              ship={ship}
+              color={RELATION_COLORS.own}
+              arrowLength={NAV_ARROW_LENGTH}
+              dashSize={PENDING_DASH_SIZE}
+              gapSize={PENDING_GAP_SIZE}
+              resolveTarget={resolveInterstellarDestinationPosition}
+            />
+          ))}
+
+        {/* Signals crossing comms delay, from the capital's star to the ship. */}
+        <CommsSignals
+          ships={ships.filter((ship) => ship.ownerId === playerCountryId)}
+          resolveOrigin={resolveInterstellarSignalOrigin}
+          resolveShipPosition={resolveInterstellarShipPosition}
+        />
 
         {focusedStar && (
           <CameraFocusRig

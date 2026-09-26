@@ -29,6 +29,7 @@ import { PLANETS_BY_STAR, type PlanetClass } from './planetData'
 import { getMoonsForPlanet } from './moonData'
 import { estimateSize } from './bodyStats'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
+import { earthBiomeAt, earthLandValues } from './earthTerrain'
 
 export const TERRAIN_IDS: TerrainId[] = ['ocean', 'plains', 'forest', 'desert', 'tundra', 'mountains', 'urban', 'rock', 'lava', 'cloud', 'aerostat']
 const TERRAIN_INDEX = Object.fromEntries(TERRAIN_IDS.map((t, i) => [t, i])) as Record<TerrainId, number>
@@ -53,6 +54,10 @@ export interface BodySurface {
   tier: SettlementTier
   // Per fine node: index into TERRAIN_IDS.
   terrain: Uint8Array
+  // Earth only: per fine node, the share of its cell that is land (0-1), from
+  // the real coastline. The map draws coasts along its half-way contour; the
+  // node is land when it is at least a half.
+  landValue?: Float32Array
   // Per fine node: land-component id for walkable ground, -1 otherwise.
   landComponent: Int32Array
   mainland: number
@@ -64,6 +69,8 @@ export interface BodySurface {
 export interface BodyGroundInfo {
   radiusKm: number
   planetClass: PlanetClass
+  // The body's own colour (for the glow of its map).
+  color: string
 }
 
 let bodyInfoCache: Map<string, BodyGroundInfo> | null = null
@@ -75,8 +82,8 @@ export function bodyGroundInfo(bodyName: string): BodyGroundInfo | null {
     bodyInfoCache = new Map()
     for (const planets of Object.values(PLANETS_BY_STAR)) {
       for (const p of planets) {
-        bodyInfoCache.set(p.name, { radiusKm: p.radiusKm, planetClass: p.planetClass })
-        for (const m of getMoonsForPlanet(p.name).moons) bodyInfoCache.set(m.name, { radiusKm: m.radiusKm, planetClass: 'barren' })
+        bodyInfoCache.set(p.name, { radiusKm: p.radiusKm, planetClass: p.planetClass, color: p.color })
+        for (const m of getMoonsForPlanet(p.name).moons) bodyInfoCache.set(m.name, { radiusKm: m.radiusKm, planetClass: 'barren', color: m.color })
       }
     }
   }
@@ -169,7 +176,7 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
   const key = `${bodyName}|${tier}`
   const hit = cache.get(key)
   if (hit) return hit
-  const info = bodyGroundInfo(bodyName) ?? { radiusKm: 1000, planetClass: 'barren' as PlanetClass }
+  const info = bodyGroundInfo(bodyName) ?? { radiusKm: 1000, planetClass: 'barren' as PlanetClass, color: '#9fe8ff' }
   const spec = SURFACE_CLASSES[info.planetClass]
   const seed = hashString(bodyName)
   const mesh = surfaceMesh()
@@ -192,7 +199,7 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
   let components: Int32Array = new Int32Array(n)
   let mainland = -1
   for (let attempt = 0; attempt < 20; attempt++) {
-    terrain = assignTerrain(spec, landFraction, elevRank, moisture, ridge)
+    terrain = bodyName === 'Earth' ? assignEarthTerrain() : assignTerrain(spec, landFraction, elevRank, moisture, ridge)
     ;({ components, mainland } = landComponents(terrain))
     const mainlandSize = mainland < 0 ? 0 : countOf(components, mainland)
     if (spec.belt !== undefined || landFraction >= 1 || mainlandSize >= MIN_MAINLAND_FRACTION * n) break
@@ -217,9 +224,18 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
     landComponent: components,
     mainland,
     keySlots,
+    ...(bodyName === 'Earth' ? { landValue: earthLandValues() } : {}),
   }
   cache.set(key, surface)
   return surface
+}
+
+// Earth: the real coastline, with biomes laid over the land (earthTerrain.ts).
+function assignEarthTerrain(): Uint8Array {
+  const land = earthLandValues()
+  const out = new Uint8Array(land.length)
+  for (let i = 0; i < land.length; i++) out[i] = land[i] >= 0.5 ? TERRAIN_INDEX[earthBiomeAt(nodePoint(i))] : TERRAIN_INDEX.ocean
+  return out
 }
 
 function assignTerrain(spec: SurfaceClassSpec, landFraction: number, elevRank: number[], moisture: number[], ridge: number[]): Uint8Array {

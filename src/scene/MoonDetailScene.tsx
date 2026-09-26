@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import { KeyboardPan } from './KeyboardPan'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import { HologramBody } from './HologramBody'
@@ -24,6 +26,7 @@ const MAX_DISTANCE = 160
 const EXIT_DISTANCE = 130
 
 export function MoonDetailScene({ moon, parentOrbitAU, onExit }: MoonDetailSceneProps) {
+  const controlsRef = useRef<OrbitControlsImpl>(null)
   const [inspected, setInspected] = useState(false)
 
   const body: InspectableBody = useMemo(
@@ -51,18 +54,20 @@ export function MoonDetailScene({ moon, parentOrbitAU, onExit }: MoonDetailScene
         <directionalLight position={[8, 4, 6]} intensity={2.2} color="#fff4d6" />
         <Stars radius={300} depth={80} count={3000} factor={2} fade speed={0.2} />
 
-        <HologramBody color={moon.color} radius={VISUAL_RADIUS} variant="planet" onSelect={() => setInspected(true)} />
+        <HologramBody color={moon.color} radius={VISUAL_RADIUS} variant="planet" bodyName={moon.name} onSelect={() => setInspected(true)} />
         <FocusableMarker name={moon.name} radius={VISUAL_RADIUS} onSelect={() => setInspected(true)} />
 
         <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={onExit} />
 
         <OrbitControls
+          ref={controlsRef}
           enablePan={false}
           enableDamping
           dampingFactor={0.08}
           minDistance={VISUAL_RADIUS + 1}
           maxDistance={MAX_DISTANCE}
         />
+        <KeyboardPan controlsRef={controlsRef} mode="orbit" />
       </Canvas>
 
       {inspected && <InspectPanel body={body} onClose={() => setInspected(false)} />}

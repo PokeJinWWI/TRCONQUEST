@@ -62,7 +62,7 @@ export function CombatPathLine({ engagementId, shipId, color = '#4ade80' }: Comb
 
     const engagement = useCombatStore.getState().engagements.find((e) => e.id === engagementId)
     const participant = engagement?.participants.find((p) => p.shipId === shipId)
-    if (!engagement || !participant || participant.path.length === 0) {
+    if (!engagement || !participant || (participant.path.length === 0 && !participant.stops?.length)) {
       line.visible = false
       return
     }
@@ -95,7 +95,8 @@ export function CombatPathLine({ engagementId, shipId, color = '#4ade80' }: Comb
     // Window-local: everything is drawn relative to the arena's current
     // center, which the scene positions as a group.
     let previous: ArenaPoint = { x: live.x, y: live.y, z: live.z }
-    for (const waypoint of participant.path) {
+    // The committed route, then any queued stops after it (Shift + right-click).
+    for (const waypoint of [...participant.path, ...(participant.stops ?? [])]) {
       if (segment >= MAX_SEGMENTS) break
       const start = new Vector3(previous.x - center.x, previous.y - center.y, previous.z - center.z)
       const end = new Vector3(waypoint.x - center.x, waypoint.y - center.y, waypoint.z - center.z)

@@ -730,62 +730,56 @@ Update this file with relevant, useful information as you go.
 
 ---
 
-# Project Context — Combat/Navy track handoff (diplomacy, armies, fleets, ground war)
+# Project Context — Combat/Navy track handoff (ships, armies, sandbox, controls, terrain battles)
 
-(Appended by /newchat. `Context.md` == `CONTEXT.md` on this case-insensitive FS — append, never overwrite. Standing rules live in `CLAUDE.md`; its Architecture notes already cover ownership, N-sided combat, territory, armies, war/peace and the AI, but NOT yet the items marked NEW below.)
+(Updated by /newchat, 2026-09-25. `Context.md` == `CONTEXT.md` on this case-insensitive FS — edit only this section, never overwrite the file. Standing rules and architecture live in `CLAUDE.md` (read it first; it has bullets for Sandbox, Scenarios, Comms & the arena, Controls, Time & interruptions, Terrain battles).)
 
 ## Objective
-Demo-quality build built around the navy/navigation: nations own ships, diplomacy + borders + war, army invasions, a multi-agent strategic AI (`src/ai/`) — and now (in progress) a **spatial ground war** on planetary maps, fleets that travel together, multi-select, and no-nation "rogue" ships. User owns combat/tech/ships; a collaborator owns economy/politics (only sanctioned edit there: `economyStore.setWorldOwner`).
+Web grand-strategy game (Vite + React + TS + r3f + zustand). User owns combat/tech/ships; a collaborator owns economy/politics (only sanctioned edit there: `economyStore.setWorldOwner`). This track: nations own ships/armies, war/peace + AI, the spatial ground war, the no-nation sandbox, scenarios, pacing, controls, and (this session) the **holographic map look, real Earth, and the new terrain-battle layer**.
 
 ## Current State
-**Done and verified (tsc clean, 17 test suites pass, build ok, live-checked):**
-- Phases 1–6 of the original plan: `ownerId` on ships, N-sided combat (`isEnemy`/`hostileSides`), per-country resources/shipyard, territory (`bodyOwner`/`bodyController`, system claims), troop transports, war score/peace (`scene/warScore.ts`, `scene/peace.ts`), `src/ai/` (Diplomat→Strategist→Shipwright→Admiral→Marshal + executor), Diplomacy panel + toasts.
-- **Phase A (rogues):** `countryRoster.ts` has `PIRATES_ID`/`FRIENDLY_ROGUE_ID`, `ownerDisplay(id)`; `diplomacyStore.rogueHostility` (pirates at war with everyone; friendlies only with pirates; nothing stored in wars); `ShipRelation` gained `'allied'`; console owner dropdown lists both; CombatPanel has an "Allied" group. Tests in `factions.test.ts` §6.
-- **Phase B (fleets/selection):** fleets travel as one at slowest ship's pace (`scene/fleetMove.ts` `planFleetMove`/`synchroniseOrders`; `commsVisual.applyFleetMove/queueFleetMoveOrder/orderSelectedFleets`; `useCommsResolver` groups by fleet); **no auto-merge on arrival** (merge/split explicit; `setShipLocation` keeps `fleetId`); multi-select (`shipStore.selectedShipIds/toggleShipSelection/selectShips`, `scene/selectionInput.isAdditiveClick`, Shift/Ctrl/Cmd everywhere; `SelectionGroupPanel` in ShipPanel; arena formation-move + group targeting); AI executor moves whole fleets, Marshal splits transports off, Admiral merges idle warship fleets. `tests/fleet.test.ts`.
-- **Phase C (surface/terrain):** `data/groundData.ts` (terrain, unit types, surface classes, sim constants), `scene/surfaceMesh.ts` (nested icosphere 162/642/2562 nodes, Float64, atan2 `arc`), `scene/planetTerrain.ts` (seeded procedural terrain per body; mainland guarantee; key slots; giants get aerostat belt). `tests/surface.test.ts`, `tests/terrain.test.ts`.
-- **Phase D (unit model + sim):** armies are formations of units (`data/armyData.ts`: assault/marine/garrison; `scene/armyLogic.ts` `Army`/`GroundUnit`/`makeUnits`/`armyStrength`), `scene/groundLogic.ts` (findPath A* on fine grid, dropCheck, defaultDropNode, placeUnits, musterNode, armyInContact), `scene/groundResolution.ts` `stepGroundWar` (integer step clock, 16/day; range-gated fighting; painting nodes; key-node capture rule), `scene/groundAI.ts`, `state/armyStore.ts` (recruit/embark/`land(shipId, dropNode?)`/addArmy/`orderUnits`/`targetUnit`/`haltUnits`), `territoryStore.nodeHolders/paintNodes/clearPaintBetween`, `useGroundCombatResolver.resolveGroundWar`. `tests/ground.test.ts`, rewritten `army.test.ts`, updated `ai.test.ts` (Marshal now uses instant Lanchester estimate `wouldTakeBody`, `AI_INVASION_POWER_RATIO=0.9`; headless campaign: Mars declares d93, occupies Venus d296, cedes d298), `diplomacy/territory` tests.
-- **Phase E (AI on ground model):** done as part of D (marshal `chooseDropNode`, `land` intent carries `dropNode`).
-- **Phase F (ground view UI) — code written, live-verified partly:** `viewStore` level `'ground'` (`enterGround/exitGround`, reuses `selectedBodyName`), `scene/GroundViewScene.tsx` (globe w/ vertex colours, grid per density, front lines, key-node chips, unit chips with fan-out, path/fire lines, hover tooltip), `components/GroundPanel.tsx` (roster + grid selector + drop/spawn banners) and `UnitCard` (capabilities in real km), `state/groundViewStore.ts`, entry points (`ArmyViews`: "Choose landing site…", "Open ground map", marine recruit; `PlanetGroundHud` button), satellite view: `HologramBody` children slot + `PlanetArmyMarkers` (control shell + per-army chips). Breadcrumb/LocationLabel/TabBar handle `'ground'`.
-- **Phase G (console spawn army) — code written, NOT yet live-tested:** `DebugConsole.tsx` "Spawn Army" (owner incl. rogues, formation, body, placement Auto / Pick on ground map / Aboard selected transport).
+Everything below is built, live-verified in the browser, and green (last sweep: `npx tsc -b` clean, every `tests/*.test.ts` 0 fails, `npm run build` ok). **Nothing is committed** (user rule; large uncommitted diff). No probe left in `src/main.tsx`.
 
-**Live browser findings so far (Venus ground map):** landing at a clicked site works; chips fan out; card/roster show correct data; Shift/Cmd multi-select works (via dispatched clicks); right-click ordering works when the pane is fronted and the page freshly loaded (real `contextmenu` on canvas → path set, `orderedMove` true); a 60-day fight resolved with Mars taking the city key node while capital+spaceport stayed Venus's (world not yet flipped — expected under key-node rule; garrisons still standing).
-The working tree has NO probe in `main.tsx` (reverted). Nothing is committed (user rule).
+**This session's work**
+- Small UI fixes: Outliner **Colonies** now under Battles and lists every owned world in every system (click navigates); Settings label contrast; Esc from Settings then Esc reopens the main menu (`menuStore.view`).
+- **Contests**: hostile armies on one body with no shooting = Battles kind `'contest'` (red ◆ badge, rolls up to system/star/neighbourhood).
+- **Ground speed/pace**: unit speeds cut ~4x (infantry 37.5 km/day ref) and fight rates (damage 0.02, regen 0.005, entrench 8d, AI rethink 64 steps) cut to match, so a campaign takes months; `AI_STALEMATE_DAYS` 730; a single `stepGroundWar` call is capped at `MAX_GROUND_STEPS_PER_CALL` (4096 steps ~256 days — long test runs must be chunked).
+- **Holographic look**: ground map = crisp per-node shader globe (`scene/HoloGlobe.tsx`, `holoTerrain.ts`, node-colour texture, contour coasts, hatch, rim glow, halo) glowing in the world's own colour; **flat rectangular map** (`FlatMap.tsx`, `mapProjection.ts`, `flatLookup.ts` baked lookup) with a top-right live-thumbnail **projection switch** (`components/ProjectionSwitch.tsx`, `projectionThumb.ts`); satellite view planets/moons are terrain-lit holograms in the planet's colour (`HoloPlanet.tsx`, `HologramBody.tsx`), control shell drawn as crisp cells.
+- **Real Earth**: Natural Earth 110m coastline embedded (`data/earthLand.ts`, `scene/earthTerrain.ts`), biomes hand-placed regions (approximate), `BodySurface.landValue` for smooth coasts. This changed army scenarios: Woods reserve 9 cells back; **Outnumbered on the Ice moved to Pluto, now medium**, enemy third army 20% (falling back can't win on uniform ice); `findBattlefield` prefers uniform ground.
+- **Terrain battles (new, plan-approved, all 4 milestones + polish done)**: `scene/terrainMap.ts` (local gnomonic frame, relief grid 56x56 over 7 cells), `terrainBattle.ts` (pure fine-scale sim: same ranges/speeds/damage, fine terrain, height advantage, slope slowing, A*, AI advance, end rules), `terrainWar.ts` (trigger/group/join/write-back), `state/terrainStore.ts`, view level `'terrain'` (`TerrainViewScene.tsx`, `TerrainPanel.tsx`), Battles kind `'terrain'` (violet ◈, Outliner row, ground-map chip). Trigger: hostile pair within 1.5 cells, at least one non-artillery; units within 2.5 cells join; ends when a side is gone or apart >3 cells for 2 days. `GroundWorld.engagedUnitIds` freezes engaged units in `stepGroundWar` (default undefined = old behaviour); strength/position/route/`firingAtId` written back to `armyStore` each resolve; survivors get `objectiveNode: null` (else coarse AI never replans). Coarse orders to engaged units are refused; player orders on the terrain map. Relief rendered as a glowing **point cloud with a height colour gradient** (blue→teal→green→yellow→orange→gold, gamma 0.55, legend bottom-right), contour lines coloured by height. Scenario tiers verified through the whole resolver (`tests/terrainWar.test.ts` §5). New tests: `terrain`, `terrainWar`, `earth`, `flatMap`; `battles`/`controls`/`workspace` extended.
 
 ## Decisions
-- Ground war runs on the strategic clock; leave the clock alone when viewing the ground map (space battle → tactical time effectively pauses it).
-- Capture rule: hold ALL key nodes (capital/cities/spaceport, or outpost) with no enemy on them; other nodes only recolour.
-- Armies = formations of typed units; transports carry whole armies; player commands individual units (multi-select). Units stand for many people (`UnitTypeSpec.personnel`).
-- Hostile rogue ships = pirates, at war with everyone; friendly rogues fight only pirates, show as "Allied"; nobody commands either.
-- Fleets merge only on request; new spawns still join a fleet resting at the spawn point.
-- Gas/ice giants: aerostat belt is the only walkable ground. Ranges/speeds authored in km on an Earth-sized reference body and converted to angles (small moons get a mild speed factor); UI shows real km per body.
-- `CONTACT_RANGE_KM_REF=480` (~1 fine cell), artillery 900; drop exclusion 2.5 cells.
+- Terrain map is the SAME war at finer resolution (honest scale, ~3,400 km wide at Earth size), not a magnified/different game; opens automatically like ship combat (pace to OPS, Battles entry/badge/chip; player opens it); no new time mode.
+- Every engagement (incl. AI vs AI) uses the terrain sim; fallback if it hurts the AI campaign: only when the player is in the group (not needed so far; AI campaign takes Venus ~d708).
+- Satellite/ground holograms use each world's own colour; ground-map land palette stays teal (user hasn't asked to change it).
+- Sandbox = four no-nation factions; hostile sandbox armies hold and fire (ground AI untouched); queueable = movement orders only; Quit resets every store via `getInitialState()`.
+- Never call a hook after an early return in a component (tests scan for it).
 
 ## Constraints
-- Never commit unless asked. Verification sweep after any change: `npx tsc -b`, every `tests/*.test.ts` via `npx tsx`, `npm run build` (all must be clean). macOS: no `timeout`; `sed -i ''`.
-- Store-probe convention: temporarily expose stores on `window` in `src/main.tsx`, ALWAYS revert (`git checkout src/main.tsx`) before ending a turn. Browser pane is often "hidden" (rAF suspended, 1 frame/500ms): call `tabs_select` to front it before screenshots/clicks; HMR reloads leave stale console errors — do a full `navigate` reload and redo setup.
-- Don't read `Context.md` whole; don't touch collaborator economy code beyond `setWorldOwner`.
-- Two pre-existing flaky checks in `combat.test.ts` were fixed by pinning rng to `() => 0` (applyShot misses when `rng() < missChance`).
+- Never commit unless asked. Full sweep after any change: `npx tsc -b`, every `tests/*.test.ts` via `npx tsx`, `npm run build`.
+- `Context.md`==`CONTEXT.md` (case-insensitive); don't read it whole, edit only this last section.
+- r3f scenes: Vite HMR does not re-run effects in a Canvas — reload/re-enter the view before judging; browser screenshots lag (use DOM/JS); the browser tool can't drive canvas right-click on the globe reliably (it did work on the terrain map); scenario starts unpaused — pause with Space. Temporary store probes on `window.__probe` in `src/main.tsx` must be reverted (backup pattern: copy main.tsx to the scratchpad first).
+- macOS: no `timeout`; python heredoc for multi-line edits; don't `pgrep -f` in a Monitor.
+- Nation ids: `imperial-state-of-mars`, `republic-of-venus`, `orion-republic`, `kingdom-of-lalande`. Sandbox ids in `countryRoster`.
 
 ## Important Details
-- Ground step clock: `simDaysToGroundStep`; `armyStore.resolvedThroughStep`; a call stops short of a partial step. Occupations returned by `stepGroundWar` are applied by the resolver (`occupyBody` + event). Losses feed `recordLoss` (war score).
-- Player's own units never move on their own; AI (`isAutonomous = id !== player`) units are driven by `groundAI`. Militia hold posts.
-- `groundSurface(body, owners)` → `surfaceOf(body, tier)`; tier from `settlementTierOf` (capital/world/outpost/wild). ~30 ms per body generation.
-- Venus has a small mainland; default landing may land near enemy; island landings warn (only marines reach the mainland).
-- Test helpers: `tests/testNations.ts` (TEST_PLAYER/TEST_ENEMY), AI tests use `freshWorld()`.
+- Terrain constants live in `data/groundData.ts` (`TERRAIN_*`, `HIGH_GROUND_BONUS`, `SLOPE_*`, `TERRAIN_RELIEF`). Relief is a property of the globe point (noise), sim uses only the grid; the point cloud adds visual-only detail.
+- Earth site for the easy/medium scenarios is where the terrain battle was checked; one dominant peak there (heights 0–3980 m).
+- Plan file for the terrain feature: `/Users/pikaj/.claude/plans/concurrent-dazzling-wilkinson.md`.
 
 ## Open Questions
-- Balance is untuned (assault vs garrison capital needs ~3+ armies; user has not reviewed numbers in `groundData.ts`/`armyData.ts`).
-- Known gaps: shipyard keeps building while capital occupied; nation losing capital gives AI nothing to do; moon close-up view (MoonDetailScene) has no army markers; declined AI peace offer not logged.
-- Should ground view force normal time? (User chose: leave clock alone.)
+- Terrain map visuals are a first pass (relief exaggerated ×0.0011, one big hill on the checked site, small unit chips, camera framing); user may want tuning toward the reference images (glowing ridge lines, city blocks).
+- No line-of-sight blocking by ridges yet; no regen inside battles; ground balance untuned beyond scenario tiers.
+- Should the ground-map land palette also take each planet's colour? Comms signals in satellite/arena views? Should hostile sandbox armies hunt on wild ground? A manually chosen OPS/TAC revert after a while? (older open items)
+- Moon close-up (`MoonDetailScene`) has no army markers; declined AI peace offers aren't logged.
 
 ## Next Steps
-1. Finish live verification in the browser: (a) full capture of Venus (all 3 key nodes) → occupation event + Inspect/satellite reflect it; (b) `Choose landing site` from a transport's Ship panel via real clicks; (c) grid density switching (nothing moves); (d) UnitCard on Venus vs Phobos km figures; (e) debug console "Spawn Army" (Auto, Pick on ground map, Aboard transport; owners incl. pirates/friendly); (f) satellite-view control shell recolouring + army chips; (g) fleet/multi-select map behaviour with real Shift-click on Outliner rows and right-click orders (Phase B was only unit-tested + arena roster checked live). Use store-probe; revert `main.tsx`.
-2. Run full sweep (tsc, all 17 tests, build) — last full sweep was green before Phase F/G UI edits; only tsc has been rerun since.
-3. Update `CLAUDE.md` Architecture notes for NEW items: rogue factions, fleets-travel-together/explicit merge, multi-select, ground model (surfaceMesh/planetTerrain/groundLogic/groundResolution/groundAI, `nodeHolders`, `'ground'` view level).
-4. Optional polish: tune balance; MoonDetailScene army chips; screen-space chip fan-out edge cases; consider adding a `ground` test for `ArmyViews`-free UI logic.
+1. Ask the user for the next request; likely: terrain-map visual tuning, line of sight / more relief effects, cities/key nodes as solid blocks, more scenarios that exercise terrain, satellite-view army chips, balance.
+2. If touching scenes: reload/re-enter the view before verifying; run the full sweep before finishing.
+3. Commit only if asked.
 
 ## User Preferences
-- Real-time steering; short corrections are authoritative. Ask (AskUserQuestion) before big architectural commitments; plan mode for big features (used this session; plan at `/Users/pikaj/.claude/plans/shimmying-conjuring-dahl.md`).
-- No invented mechanics for systems that don't exist; report test/balance findings honestly incl. "no bug found".
-- Live browser verification for anything UI-observable; ships have owners and hostility is national (no allegiance field).
-- Wants to be able to spawn hostile/friendly no-nation ships and armies from the console, multi-select with Shift/Ctrl/Cmd, fleets moving at slowest ship's speed.
+- Short mid-task corrections are authoritative; wants plain-language UI text; direct control in combat views; cheats in the sandbox in any build.
+- Ask (AskUserQuestion) before big architectural commitments and use plan mode for big features; no invented mechanics; report findings honestly (incl. "no bug found").
+- Wants the maps to look like the holographic reference images (bright glowing teal/planet-coloured, crisp not blurry), colours that match each planet, relief with a gradient; terrain accuracy for Earth.
+- Live browser verification for anything UI-observable, plus tests for each new mechanic and bug.

@@ -63,7 +63,7 @@ interface Outcome {
   frontArmiesLeft: number
 }
 
-const MAX_DAYS = 300
+const MAX_DAYS = 1200
 // Front army and reserve count as linked up when this close (radians) — about
 // one and a half map cells.
 const LINKED_UP_RAD = 0.12

@@ -425,7 +425,7 @@ export function getShipRenderPosition(ship: ShipInstance, simDays: number): Ship
   return resolveLocation(ship.location, simDays)
 }
 
-function destinationLabel(destination: MoveDestination): string {
+export function destinationLabel(destination: MoveDestination): string {
   switch (destination.kind) {
     case 'body':
       return destination.bodyName

@@ -6,17 +6,26 @@
 //           engagementIsContested) — opens the combat arena
 //   ground  a world where the player's units are firing or being fired at —
 //           opens the planetary map
+//   terrain a fight that has come to close quarters and moved onto a terrain
+//           map (terrainBattle.ts) with a unit of the player's in it — opens
+//           the terrain map
+//   contest a world where the player's armies and a hostile nation's share the
+//           ground but nobody is firing yet — the same fight in waiting; it
+//           becomes a ground battle the moment shots are exchanged
 import { armyStrength, playerFightLive, type Army } from './armyLogic'
 import { bodyIndex, bodyStarId } from './territory'
 import { engagementIsContested, type Engagement } from '../state/combatStore'
-import type { AtWarFn } from '../state/diplomacyStore'
+import { atWar, type AtWarFn } from '../state/diplomacyStore'
 import type { ShipInstance } from '../state/shipStore'
+import type { TerrainBattle } from './terrainBattle'
 
-export type BattleKind = 'space' | 'ground'
+export type BattleKind = 'space' | 'ground' | 'terrain' | 'contest'
 
 export const BATTLE_KIND_LABELS: Record<BattleKind, string> = {
   space: 'Space',
   ground: 'Ground',
+  terrain: 'Terrain',
+  contest: 'Contest',
 }
 
 export interface PlayerBattle {
@@ -30,6 +39,8 @@ export interface PlayerBattle {
   // Space only: the engagement to open. Ground only: the world to open.
   engagementId?: string
   bodyName?: string
+  // Terrain only: the terrain battle to open.
+  terrainBattleId?: string
 }
 
 function shipStarId(ship: Pick<ShipInstance, 'location'>): string | undefined {
@@ -54,8 +65,16 @@ export function playerSpaceBattles(engagements: Engagement[], ships: Pick<ShipIn
 }
 
 // Worlds where the player's ground units are in a fight.
-export function playerGroundBattles(armies: Army[], playerId: string | null): PlayerBattle[] {
+// Units in a terrain battle are that battle's business, not the planetary
+// map's: a fight they are in shows as a Terrain battle, not a Ground one.
+function withoutEngaged(armies: Army[], engaged: ReadonlySet<string>): Army[] {
+  if (engaged.size === 0) return armies
+  return armies.map((a) => ({ ...a, units: a.units.filter((u) => !engaged.has(u.id)) }))
+}
+
+export function playerGroundBattles(all: Army[], playerId: string | null, engaged: ReadonlySet<string> = new Set()): PlayerBattle[] {
   if (!playerId) return []
+  const armies = withoutEngaged(all, engaged)
   const byBody = new Map<string, Army[]>()
   for (const a of armies) {
     if (a.location.kind !== 'body') continue
@@ -67,6 +86,46 @@ export function playerGroundBattles(armies: Army[], playerId: string | null): Pl
     out.push({ key: `ground:${body}`, kind: 'ground', place: body, starId: bodyStarId(body), bodyName: body })
   }
   return out
+}
+
+// Worlds where the player's armies stand alongside a hostile nation's with no
+// shooting going on yet. A world with a live fight is a ground battle instead,
+// never both.
+export function playerContests(all: Army[], playerId: string | null, atWarFn: AtWarFn = atWar, engaged: ReadonlySet<string> = new Set()): PlayerBattle[] {
+  if (!playerId) return []
+  const armies = withoutEngaged(all, engaged)
+  const byBody = new Map<string, Army[]>()
+  for (const a of armies) {
+    if (a.location.kind !== 'body' || a.units.length === 0) continue
+    byBody.set(a.location.bodyName, [...(byBody.get(a.location.bodyName) ?? []), a])
+  }
+  const out: PlayerBattle[] = []
+  for (const [body, here] of [...byBody.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (!here.some((a) => a.ownerId === playerId) || !here.some((a) => a.ownerId !== playerId && atWarFn(a.ownerId, playerId))) continue
+    if (playerFightLive(here, playerId)) continue
+    out.push({ key: `contest:${body}`, kind: 'contest', place: body, starId: bodyStarId(body), bodyName: body })
+  }
+  return out
+}
+
+// Terrain battles the player has a unit in.
+export function playerTerrainBattles(battles: TerrainBattle[], playerId: string | null): PlayerBattle[] {
+  if (!playerId) return []
+  return battles
+    .filter((b) => b.units.some((u) => u.ownerId === playerId))
+    .map((b) => ({ key: `terrain:${b.id}`, kind: 'terrain' as const, place: b.bodyName, starId: bodyStarId(b.bodyName), bodyName: b.bodyName, terrainBattleId: b.id }))
+}
+
+// One line of state for a terrain battle: each side's strength.
+export function terrainBattleDetail(battle: TerrainBattle | undefined, playerId: string, atWarFn: AtWarFn): string {
+  if (!battle) return ''
+  let mine = 0
+  let theirs = 0
+  for (const u of battle.units) {
+    if (u.ownerId === playerId) mine += u.strength
+    else if (atWarFn(u.ownerId, playerId)) theirs += u.strength
+  }
+  return `yours ${Math.round(mine)} · enemy ${Math.round(theirs)}`
 }
 
 // One line of state for a ground battle: each side's strength on the world.
@@ -104,7 +163,7 @@ export function spaceBattleDetail(engagement: Engagement | undefined, ships: Pic
 // answers "which kinds of battle are at or below this marker?", in a fixed
 // order so the result can be a stable string.
 function kindsOf(battles: PlayerBattle[]): BattleKind[] {
-  return (['space', 'ground'] as const).filter((k) => battles.some((b) => b.kind === k))
+  return (['space', 'ground', 'terrain', 'contest'] as const).filter((k) => battles.some((b) => b.kind === k))
 }
 
 // Battles at a body, or — for a planet — at any of its moons (a fight over

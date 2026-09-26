@@ -23,6 +23,12 @@ import { useEconomyStore, worldByName } from './economyStore'
 import { useGameTimeStore } from './gameTimeStore'
 import { atWar } from './diplomacyStore'
 import { isPlayerOwned } from './shipRelations'
+import { useTerrainStore } from './terrainStore'
+import { engagedUnitIds } from '../scene/terrainWar'
+
+// Units fighting on a terrain map take their orders there, not on the planetary
+// map (scene/terrainWar.ts).
+const inTerrainBattle = () => engagedUnitIds(useTerrainStore.getState().battles)
 
 // Every nation's ground armies — the player's and every AI empire's, under
 // the same rules (the AI's Marshal calls these same actions). The fighting is
@@ -58,7 +64,9 @@ interface ArmyState {
   addArmy: (army: NewArmy) => string
   // Player orders to individual units (any the player doesn't own, or that
   // hold position, are ignored).
-  orderUnits: (unitIds: string[], node: number) => ArmyActionResult
+  // `queue` (Shift + right-click) adds the move to the END of each unit's
+  // current route instead of replacing it; a unit with no route just goes.
+  orderUnits: (unitIds: string[], node: number, queue?: boolean) => ArmyActionResult
   targetUnit: (unitIds: string[], targetUnitId: string | null) => void
   haltUnits: (unitIds: string[]) => void
   // Wholesale replacement — the ground-war resolver applying a step.
@@ -122,7 +130,8 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
     const ship = useShipStore.getState().ships.find((s) => s.id === shipId)
     if (!ship) return { ok: false, reason: 'Unknown ship' }
     const armies = get().armies
-    const check = canEmbark(armyIds, ship, armies, (a) => armyInContact(a, armies, atWar))
+    const engaged = inTerrainBattle()
+    const check = canEmbark(armyIds, ship, armies, (a) => armyInContact(a, armies, atWar) || a.units.some((u) => engaged.has(u.id)))
     if (!check.ok) return check
     const ids = new Set(armyIds)
     set((s) => ({
@@ -194,26 +203,32 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
     return id
   },
 
-  orderUnits: (unitIds, node) => {
+  orderUnits: (unitIds, node, queue = false) => {
     const { bodyOwner } = useTerritoryStore.getState()
     const armies = get().armies
-    const targets = unitsById(armies, new Set(unitIds)).filter(({ army }) => isPlayerOwned(army) && army.location.kind === 'body')
+    const engaged = inTerrainBattle()
+    const mineSelected = unitsById(armies, new Set(unitIds)).filter(({ army }) => isPlayerOwned(army) && army.location.kind === 'body')
+    const targets = mineSelected.filter(({ unitId }) => !engaged.has(unitId))
+    if (mineSelected.length > 0 && targets.length === 0) return { ok: false, reason: 'In a terrain battle: give the order on the terrain map' }
     if (targets.length === 0) return { ok: false, reason: 'No units of yours selected' }
-    const byUnit = new Map<string, { path: NonNullable<ReturnType<typeof findPath>> }>()
+    const byUnit = new Map<string, { path: NonNullable<ReturnType<typeof findPath>>; keep: NonNullable<ReturnType<typeof findPath>> }>()
     let refused = 0
     for (const { army, unitId } of targets) {
       const unit = army.units.find((u) => u.id === unitId)!
       if (UNIT_TYPES[unit.type].holdsPosition || !unit.position || army.location.kind !== 'body') continue
       const surface = groundSurface(army.location.bodyName, bodyOwner)
-      const path = surface ? findPath(surface, unit.position, node, unit.type) : null
-      if (path) byUnit.set(unitId, { path })
+      // Queued: plan from where the current route ends, and keep that route.
+      const keep = queue && unit.path && unit.path.length > 0 ? unit.path : []
+      const from = keep.length > 0 ? keep[keep.length - 1] : unit.position
+      const path = surface ? findPath(surface, from, node, unit.type) : null
+      if (path) byUnit.set(unitId, { path, keep })
       else refused++
     }
     if (byUnit.size === 0) return { ok: false, reason: refused > 0 ? "They can't get there" : 'Those units hold their position' }
     set((s) => ({
       armies: s.armies.map((a) =>
         a.units.some((u) => byUnit.has(u.id))
-          ? { ...a, units: a.units.map((u) => (byUnit.has(u.id) ? { ...u, path: byUnit.get(u.id)!.path, orderedMove: true, stillSinceStep: undefined } : u)) }
+          ? { ...a, units: a.units.map((u) => (byUnit.has(u.id) ? { ...u, path: [...byUnit.get(u.id)!.keep, ...byUnit.get(u.id)!.path], orderedMove: true, stillSinceStep: undefined } : u)) }
           : a,
       ),
     }))
@@ -221,7 +236,8 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
   },
 
   targetUnit: (unitIds, targetUnitId) => {
-    const ids = new Set(unitIds)
+    const engaged = inTerrainBattle()
+    const ids = new Set(unitIds.filter((id) => !engaged.has(id)))
     set((s) => ({
       armies: s.armies.map((a) =>
         isPlayerOwned(a) && a.units.some((u) => ids.has(u.id))
@@ -232,7 +248,8 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
   },
 
   haltUnits: (unitIds) => {
-    const ids = new Set(unitIds)
+    const engaged = inTerrainBattle()
+    const ids = new Set(unitIds.filter((id) => !engaged.has(id)))
     set((s) => ({
       armies: s.armies.map((a) =>
         isPlayerOwned(a) && a.units.some((u) => ids.has(u.id))

@@ -40,6 +40,9 @@ export interface ArmyScenarioForce {
   // Starts this many map cells back from the line, away from the enemy — a
   // reserve. Omitted: it stands on the line.
   rearCells?: number
+  // A reserve digs in on this ground when it can (a field battle's "fall back to
+  // the hills"); the scenario's battlefield is chosen to have some that far back.
+  rearTerrain?: TerrainId
 }
 
 export interface ArmyScenario {
@@ -112,19 +115,19 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     difficulty: 'hard',
     battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 6 },
     description:
-      'An assault army on the forest line, its twin seven cells back, against two assault armies. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is falling back onto the reserve, linking up, and counter-attacking together.',
-    player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 7 }],
+      'An assault army on the forest line, its twin nine cells back, against two assault armies. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is falling back onto the reserve, linking up, and counter-attacking together.',
+    player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 9 }],
     enemy: [{ kind: 'assault' }, { kind: 'assault' }],
   },
   {
-    id: 'army-hard-outnumbered-on-the-ice',
+    id: 'army-medium-outnumbered-on-the-ice',
     name: 'Outnumbered on the Ice',
-    difficulty: 'hard',
-    battlefield: { bodyName: 'Earth', playerTerrain: 'tundra', gapCells: 6 },
+    difficulty: 'medium',
+    battlefield: { bodyName: 'Pluto', playerTerrain: 'tundra', gapCells: 6 },
     description:
-      'An assault army and a marine army against three assault armies, the marines five cells back. Left alone the line falls, and bringing the reserve up doesn’t save it. A plan that wins: fall back onto the reserve, link up, and counter-attack together.',
+      'An assault army and a marine army on the ice of Pluto, the marines five cells back, against two assault armies and a battered third. Left alone the line falls and the reserve never gets into the fight. March the reserve up to the line before the enemy arrives and the combined force wins — with not much to spare.',
     player: [{ kind: 'assault' }, { kind: 'marine', rearCells: 5 }],
-    enemy: [{ kind: 'assault' }, { kind: 'assault' }, { kind: 'assault' }],
+    enemy: [{ kind: 'assault' }, { kind: 'assault' }, { kind: 'assault', strengthFraction: 0.2 }],
   },
 ]
 

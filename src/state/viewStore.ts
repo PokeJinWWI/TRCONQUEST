@@ -12,7 +12,12 @@ import { bodyIndex } from '../scene/territory'
 // scene/GroundViewScene.tsx), entered from satellite view or a transport's
 // "Choose landing site". Like satellite view it shows `selectedBodyName`,
 // which may be a moon.
-export type ViewLevel = 'galactic' | 'interstellar' | 'system' | 'satellite' | 'combat' | 'ground'
+//
+// 'terrain' is the close-up of a fight on a world's ground (see
+// scene/TerrainViewScene.tsx): the ground war lifts units that have come to
+// close quarters onto a relief map. Entered from the ground map or the
+// Outliner's Battles; leaving it returns to the ground map.
+export type ViewLevel = 'galactic' | 'interstellar' | 'system' | 'satellite' | 'combat' | 'ground' | 'terrain'
 
 interface ViewState {
   level: ViewLevel
@@ -99,6 +104,12 @@ interface ViewState {
   // so there's no "one level up" to return to — system view is the sensible
   // place to land, since that's where the fight is physically happening.
   exitCombat: () => void
+  // Which terrain battle the terrain map is showing (state/terrainStore).
+  terrainBattleId: string | null
+  // Opens a terrain battle on `bodyName`.
+  enterTerrain: (battleId: string, bodyName: string) => void
+  // Back to the planetary map of the same body.
+  exitTerrain: () => void
   // Opens a body's planetary map.
   enterGround: (bodyName: string) => void
   // Back to the satellite view of the body — or, for a moon, of the planet
@@ -154,13 +165,16 @@ export const useViewStore = create<ViewState>((set) => ({
   // view's panel wants to keep showing.
   enterCombat: (engagementId) => set({ level: 'combat', combatEngagementId: engagementId }),
   exitCombat: () => set({ level: 'system', combatEngagementId: null, inViewSelection: null }),
-  enterGround: (bodyName) => set({ level: 'ground', selectedBodyName: bodyName, inViewSelection: null }),
+  terrainBattleId: null,
+  enterTerrain: (battleId, bodyName) => set({ level: 'terrain', terrainBattleId: battleId, selectedBodyName: bodyName, inViewSelection: null }),
+  exitTerrain: () => set((s) => ({ level: 'ground', terrainBattleId: null, selectedBodyName: s.selectedBodyName })),
+  enterGround: (bodyName) => set({ level: 'ground', selectedBodyName: bodyName, inViewSelection: null, terrainBattleId: null }),
   exitGround: () =>
     set((s) => {
       const parent = s.selectedBodyName ? bodyIndex().get(s.selectedBodyName)?.parentPlanet : undefined
       return parent
-        ? { level: 'satellite', selectedBodyName: parent, inViewSelection: s.selectedBodyName }
-        : { level: 'satellite', inViewSelection: null }
+        ? { level: 'satellite', selectedBodyName: parent, inViewSelection: s.selectedBodyName, terrainBattleId: null }
+        : { level: 'satellite', inViewSelection: null, terrainBattleId: null }
     }),
   activeNavCategory: null,
   activeNavSubcategory: null,

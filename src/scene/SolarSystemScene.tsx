@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { KeyboardPan } from './KeyboardPan'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import { Vector3 } from 'three'
@@ -9,6 +10,8 @@ import { AsteroidBelt } from './AsteroidBelt'
 import { ShipMarker } from './ShipMarker'
 import { NavigationLine } from './NavigationLine'
 import { PendingOrderLine } from './PendingOrderLine'
+import { QueuedRouteLine } from './QueuedRouteLine'
+import { CommsSignals } from './CommsSignals'
 import { ShipOrbitRing } from './ShipOrbitRing'
 import { ShipPanel } from './ShipPanel'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
@@ -68,6 +71,16 @@ function resolveSystemDestinationPosition(destination: MoveDestination, simDays:
   if (destination.kind === 'body') return bodyLivePosition(destination.bodyName, simDays)
   if (destination.kind === 'point') return new Vector3(...destination.position)
   return null
+}
+
+// Where a comms signal sets out from in system view: the capital, if the
+// capital is in this system (a ship in another system has no coordinate here).
+function resolveSystemSignalOrigin(systemId: string) {
+  return (simDays: number): Vector3 | null => {
+    const country = getCountry(usePlayerStore.getState().selectedCountryId ?? '')
+    if (!country || country.capitalStarId !== systemId) return null
+    return bodyLivePosition(country.capitalBodyName, simDays)
+  }
 }
 
 // Default starting camera direction/distance for a fresh arrival (fly-in
@@ -402,6 +415,28 @@ export function SolarSystemScene() {
             />
           ))}
 
+        {/* Orders queued behind the current one (Shift + right-click). */}
+        {systemShips
+          .filter((ship) => (ship.orderQueue?.length ?? 0) > 0 && ship.ownerId === playerCountryId)
+          .map((ship) => (
+            <QueuedRouteLine
+              key={`queue-${ship.id}`}
+              ship={ship}
+              color={RELATION_COLORS.own}
+              arrowLength={NAV_ARROW_LENGTH}
+              dashSize={PENDING_DASH_SIZE}
+              gapSize={PENDING_GAP_SIZE}
+              resolveTarget={resolveSystemDestinationPosition}
+            />
+          ))}
+
+        {/* Signals crossing comms delay, drawn from the capital to the ship
+            (only when the capital is in this system — see CommsSignals). */}
+        <CommsSignals
+          ships={systemShips.filter((ship) => ship.ownerId === playerCountryId)}
+          resolveOrigin={resolveSystemSignalOrigin(selectedStarId)}
+        />
+
         {flyingToName && (
           <CameraFocusRig
             key={flyingToName}
@@ -494,6 +529,7 @@ export function SolarSystemScene() {
           maxDistance={MAX_DISTANCE}
           maxPolarAngle={Math.PI / 2 - 0.02}
         />
+        <KeyboardPan controlsRef={controlsRef} />
       </Canvas>
 
       {selectedShipId ? (

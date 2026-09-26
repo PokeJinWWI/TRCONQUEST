@@ -1470,6 +1470,9 @@ export function stepEngagements(
       // a stance's own "has the destination moved" check below compares
       // against an already-current path rather than a stale one.
       .map((p) => (p.path.length > 1 ? { ...p, path: pruneOvershotWaypoints(p.path, p.position, engagement.obstacles) } : p))
+      // A manually-ordered ship that has finished its route sets off for the
+      // next queued stop (Shift + right-click).
+      .map((p) => advanceParticipantStops(p, engagement.density, simDays, engagement.obstacles))
 
     // --- Approach: a ship under auto-control (not holding position for a
     // manual order, not spooling a drive) keeps its route pointed at its
@@ -2479,6 +2482,44 @@ export function orderParticipantTo(
   // else. (It's also why the old teleport bug can't recur — this function no
   // longer has any reason to write a position at all.)
   return { ...participant, path }
+}
+
+// Shift + right-click: adds `point` to the end of the participant's plan. The
+// route to it is planned only when the ship gets there (advanceParticipantStops)
+// — but it is checked NOW, from where the plan currently ends, so an
+// unreachable point is refused at the click instead of silently dropped later.
+// Returns the participant unchanged when refused.
+export function appendParticipantStop(
+  participant: CombatParticipant,
+  point: ArenaPoint,
+  density: GridDensity,
+  simDays: number,
+  obstacles: CombatObstacle[] = [],
+): CombatParticipant {
+  const stops = participant.stops ?? []
+  const planEnd = stops.length > 0 ? stops[stops.length - 1] : participant.path.length > 0 ? participant.path[participant.path.length - 1] : participant.position
+  const probe = { ...participant, position: planEnd, path: [] as ArenaPoint[] }
+  if (orderParticipantTo(probe, point, density, simDays, obstacles) === probe) return participant
+  return { ...participant, stops: [...stops, point] }
+}
+
+// A ship under manual control that has flown its whole route takes the next
+// queued stop; one handed back to auto forgets the plan.
+export function advanceParticipantStops(
+  participant: CombatParticipant,
+  density: GridDensity,
+  simDays: number,
+  obstacles: CombatObstacle[] = [],
+): CombatParticipant {
+  const stops = participant.stops
+  if (!stops || stops.length === 0) return participant
+  if (!participant.holdPosition) return { ...participant, stops: [] }
+  if (participant.path.length > 0) return participant
+  const [next, ...rest] = stops
+  const ordered = orderParticipantTo(participant, next, density, simDays, obstacles)
+  // orderParticipantTo returns the participant itself when there is no route
+  // (or it's already there): skip that stop and try the next one.
+  return { ...ordered, stops: rest }
 }
 
 // A ship can end up closer to some LATER point on its route than to the very

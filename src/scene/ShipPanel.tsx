@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { destinationLabel } from './shipPhysics'
 import { useShipStore } from '../state/shipStore'
 import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
 import { ownerDisplay } from '../data/countryRoster'
@@ -604,6 +605,11 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
         <span className="inspect-label">Current Action</span>
       </div>
       <div className="ship-panel-status">{statusText}</div>
+      {owned && ((ship.orderQueue?.length ?? 0) > 0 || (ship.pendingQueueAdds?.length ?? 0) > 0) && (
+        <div className="ship-panel-status" title="Shift + right-click adds to this list; a plain right-click replaces it">
+          Then: {[...(ship.orderQueue ?? []).map((d) => destinationLabel(d)), ...(ship.pendingQueueAdds ?? []).map((a) => `${destinationLabel(a.destination)} (signal in transit)`)].join(' → ')}
+        </div>
+      )}
       {onGoTo && (
         <button type="button" className="detail-view-btn" onClick={onGoTo} disabled={goToPending}>
           {goToPending ? 'Going to…' : 'Go To'}

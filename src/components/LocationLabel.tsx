@@ -11,7 +11,9 @@ export function LocationLabel() {
   const starName = STARS.find((s) => s.id === selectedStarId)?.name ?? selectedStarId
 
   const text =
-    level === 'ground' && selectedBodyName
+    level === 'terrain' && selectedBodyName
+      ? `${starName} System — ${selectedBodyName} · Terrain`
+      : level === 'ground' && selectedBodyName
       ? `${starName} System — ${selectedBodyName} · Ground`
       : level === 'satellite' && selectedBodyName
         ? `${starName} System — ${selectedBodyName}`

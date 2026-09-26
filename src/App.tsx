@@ -11,6 +11,8 @@ import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
 import { FiscalIndicators } from './components/FiscalIndicators'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { EscapeMenu } from './components/EscapeMenu'
+import { useKeyboardControls } from './hooks/useKeyboardControls'
 import { DiplomacyToast } from './components/DiplomacyPanel'
 import { TimeControls } from './components/TimeControls'
 import { useGameClock } from './hooks/useGameClock'
@@ -31,6 +33,7 @@ import { CombatViewScene } from './scene/CombatViewScene'
 import { GroundViewScene } from './scene/GroundViewScene'
 import { GalacticViewScene } from './scene/GalacticViewScene'
 import { InterstellarScene } from './scene/InterstellarScene'
+import { TerrainViewScene } from './scene/TerrainViewScene'
 import { SatelliteViewScene } from './scene/SatelliteViewScene'
 import { SolarSystemScene } from './scene/SolarSystemScene'
 import { useViewStore } from './state/viewStore'
@@ -43,6 +46,7 @@ function ActiveScene() {
   const selectedStarId = useViewStore((s) => s.selectedStarId)
   const selectedBodyName = useViewStore((s) => s.selectedBodyName)
   const combatEngagementId = useViewStore((s) => s.combatEngagementId)
+  const terrainBattleId = useViewStore((s) => s.terrainBattleId)
 
   let scene = <SolarSystemScene />
   if (level === 'galactic') scene = <GalacticViewScene />
@@ -53,13 +57,15 @@ function ActiveScene() {
     scene = <CombatViewScene engagementId={combatEngagementId} />
   } else if (level === 'ground' && selectedBodyName) {
     scene = <GroundViewScene bodyName={selectedBodyName} />
+  } else if (level === 'terrain' && terrainBattleId) {
+    scene = <TerrainViewScene battleId={terrainBattleId} />
   }
 
   // Keying on the full location forces a remount on every navigation change,
   // which retriggers the fade/scale-in animation below — a lightweight
   // "smooth transition" between view levels without needing to keep two
   // WebGL canvases alive at once.
-  const transitionKey = `${level}:${selectedNeighborhoodId}:${selectedStarId}:${selectedBodyName ?? ''}:${combatEngagementId ?? ''}`
+  const transitionKey = `${level}:${selectedNeighborhoodId}:${selectedStarId}:${selectedBodyName ?? ''}:${combatEngagementId ?? ''}:${terrainBattleId ?? ''}`
 
   return (
     <div key={transitionKey} className="view-transition">
@@ -85,6 +91,8 @@ function App() {
   // Which battles the player is in — the Outliner's list and the combat
   // indicators on every map level.
   useBattleTracker()
+  // Escape (menu) and Space (pause).
+  useKeyboardControls()
   // The capital's shipyard, and the placeholder resource supply it builds from
   // — see data/shipyardData.ts.
   useShipyardResolver()
@@ -139,6 +147,7 @@ function App() {
         <LocationLabel />
       </footer>
       <ConfirmDialog />
+      <EscapeMenu />
       <DiplomacyToast />
     </div>
   )

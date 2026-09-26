@@ -27,9 +27,16 @@ export const LINE_THICKNESS_OPTIONS: LineThickness[] = ['thin', 'medium', 'thick
 interface SettingsState {
   navigationLineThickness: LineThickness
   setNavigationLineThickness: (thickness: LineThickness) => void
+  // The planetary map's lines: the routes of the player's moving units and
+  // every unit's line of fire. Medium by default (the ground map is read from
+  // much farther away than a route line in the arena).
+  armyLineThickness: LineThickness
+  setArmyLineThickness: (thickness: LineThickness) => void
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   navigationLineThickness: 'thin',
   setNavigationLineThickness: (thickness) => set({ navigationLineThickness: thickness }),
+  armyLineThickness: 'medium',
+  setArmyLineThickness: (thickness) => set({ armyLineThickness: thickness }),
 }))

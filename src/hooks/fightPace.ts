@@ -14,6 +14,15 @@ export const fightPace = {
   // True from a ground fight starting until a couple of days after its last
   // shot (see GROUND_FIGHT_COOLDOWN_DAYS), so a moment's lull isn't an end.
   groundLive: false,
+  // The sim-day of the last shot in a ground fight the player was in.
+  lastGroundFightSimDays: -Infinity,
+}
+
+// Back to "no fights" — a fresh game (see scene/gameReset.ts).
+export function resetFightPace(): void {
+  fightPace.spaceLive = false
+  fightPace.groundLive = false
+  fightPace.lastGroundFightSimDays = -Infinity
 }
 
 // The pace after a space fight ends.

@@ -17,6 +17,7 @@ import { useShipStore } from '../state/shipStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { usePlayerStore } from '../state/playerStore'
 import { useTechStore } from '../state/techStore'
+import { isQueueModifierHeld } from './queueModifier'
 import { useViewStore } from '../state/viewStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { getCountry } from '../data/countryData'
@@ -303,12 +304,16 @@ export function fleetMembersOf(ship: ShipInstance, ships: ShipInstance[] = useSh
 // The player's map orders: every fleet that has a selected ship in it moves,
 // each at its own slowest ship's pace. Only the player's own fleets; others
 // are ignored (selecting an enemy is just looking at it).
-export function orderSelectedFleets(destination: MoveDestination): void {
+export function orderSelectedFleets(destination: MoveDestination, queue: boolean = isQueueModifierHeld()): void {
   const { ships, selectedShipIds } = useShipStore.getState()
   const fleetIds = new Set(ships.filter((s) => selectedShipIds.includes(s.id) && isPlayerOwned(s)).map((s) => s.fleetId))
   for (const fleetId of fleetIds) {
     const members = ships.filter((s) => s.fleetId === fleetId)
-    if (members.length > 0) queueFleetMoveOrder(members, destination)
+    if (members.length === 0) continue
+    // Shift queues behind whatever the fleet is already doing; an idle fleet
+    // has nothing to queue behind, so the order simply starts.
+    if (queue && fleetIsBusy(members)) queueFleetMoveAppend(members, destination)
+    else queueFleetMoveOrder(members, destination)
   }
 }
 
@@ -329,7 +334,30 @@ export function queueFleetMoveOrder(ships: ShipInstance[], destination: MoveDest
     applyFleetMove(ships, destination, simDays)
     return
   }
-  for (const ship of ships) useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay })
+  for (const ship of ships) useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays })
+}
+
+// Whether a fleet is already doing (or about to do) something a queued order
+// would follow: under way, waiting on a command or a jump, or with a queue.
+export function fleetIsBusy(ships: ShipInstance[]): boolean {
+  return ships.some(
+    (s) => !!s.order || !!s.pendingMoveOrder || !!s.pendingHyperdriveJump || (s.orderQueue?.length ?? 0) > 0 || (s.pendingQueueAdds?.length ?? 0) > 0,
+  )
+}
+
+// A Shift-order: adds `destination` to the end of a busy fleet's route. Under
+// comms delay it travels as its own signal (each queued order is one), joining
+// the queue when it arrives; with instant contact it joins at once. A fleet
+// with nothing to queue behind just takes the order (see orderSelectedFleets).
+export function queueFleetMoveAppend(ships: ShipInstance[], destination: MoveDestination): void {
+  if (ships.length === 0) return
+  const store = useShipStore.getState()
+  const simDays = useGameTimeStore.getState().simDays
+  const delay = playerCommsDelayToShip(ships[0], simDays)
+  for (const ship of ships) {
+    if (commsInstantContact(delay)) store.setOrderQueue(ship.id, [...(ship.orderQueue ?? []), destination])
+    else store.setPendingQueueAdds(ship.id, [...(ship.pendingQueueAdds ?? []), { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays }])
+  }
 }
 
 export function queueMoveOrder(ship: ShipInstance, destination: MoveDestination): void {
@@ -339,7 +367,7 @@ export function queueMoveOrder(ship: ShipInstance, destination: MoveDestination)
     applyMoveDestination(ship, destination, simDays)
     return
   }
-  useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay })
+  useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays })
 }
 
 // Same idea for a stance change — trivial enough to just carry the value
@@ -351,5 +379,5 @@ export function queueStance(ship: ShipInstance, stance: ShipInstance['stance']):
     useShipStore.getState().setStance(ship.id, stance)
     return
   }
-  useShipStore.getState().setPendingStance(ship.id, { stance, arrivesSimDays: simDays + delay })
+  useShipStore.getState().setPendingStance(ship.id, { stance, arrivesSimDays: simDays + delay, sentSimDays: simDays })
 }

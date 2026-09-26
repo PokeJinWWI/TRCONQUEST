@@ -18,6 +18,12 @@ export function useEconomyTick() {
     let lastTickSimDays = useGameTimeStore.getState().simDays
     return useGameTimeStore.subscribe((state) => {
       const elapsed = state.simDays - lastTickSimDays
+      // The clock went backwards (a fresh game after quitting to the menu):
+      // re-anchor to it rather than wait for it to pass the old time.
+      if (elapsed < 0) {
+        lastTickSimDays = state.simDays
+        return
+      }
       if (elapsed < SIM_DAYS_PER_ECONOMY_TICK) return
       const ticks = Math.floor(elapsed / SIM_DAYS_PER_ECONOMY_TICK)
       lastTickSimDays += ticks * SIM_DAYS_PER_ECONOMY_TICK

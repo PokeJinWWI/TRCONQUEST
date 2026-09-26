@@ -46,6 +46,7 @@ export function Moon({ moon, selected, onSelect, onOrderTo }: MoonProps) {
           color={moon.color}
           radius={moon.visualRadius}
           variant="planet"
+          bodyName={moon.name}
           onSelect={() => onSelect(moon)}
           onOrderTo={() => onOrderTo?.(moon)}
         />

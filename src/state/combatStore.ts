@@ -123,6 +123,11 @@ export interface CombatParticipant {
   // Remaining waypoints to fly through, in order. Empty means "hold here"
   // (and the ship will decelerate to a stop if it's still moving).
   path: ArenaPoint[]
+  // Destinations queued after `path` (Shift + right-click): when the ship
+  // reaches the end of its route it plans the next leg to the first of these.
+  // Only kept while the ship is under manual control (holdPosition) — handing
+  // it back to auto drops the plan (see combatResolution.advanceParticipantStops).
+  stops?: ArenaPoint[]
   // Per *mount index* (not mount id) — a hull carrying three identical
   // autocannons needs three independent timers, and they're distinguished
   // only by position in the class's weapons array.

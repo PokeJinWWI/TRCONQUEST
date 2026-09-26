@@ -2,12 +2,16 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { AdditiveBlending, BackSide, Color, type Group, type Mesh } from 'three'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
+import { HoloPlanet, hologramTint } from './HoloPlanet'
+import { HoloHalo } from './HoloGlobe'
 
 interface HologramBodyProps {
   color: string
   radius: number
   /** Stars render with a bright glowing core instead of a dark one. */
   variant?: 'planet' | 'star'
+  /** A world with a surface: its terrain (Earth's real continents) shows on the hologram. */
+  bodyName?: string
   /** When provided, clicking anywhere on the hologram (not just its label marker) selects it. */
   onSelect?: () => void
   /** Right-click anywhere on the hologram — orders the currently-selected
@@ -61,13 +65,17 @@ function useFibonacciSphere(count: number, radius: number) {
 // texture assets required, and in keeping with the game's vector-art style.
 // Used for planets (dark, reflective-looking core) and stars (bright,
 // self-luminous core) alike.
-export function HologramBody({ color, radius, variant = 'planet', onSelect, onOrderTo, children }: HologramBodyProps) {
+export function HologramBody({ color, radius, variant = 'planet', bodyName, onSelect, onOrderTo, children }: HologramBodyProps) {
   const groupRef = useRef<Group>(null)
   const coreRef = useRef<Mesh>(null)
   const dotPositions = useFibonacciSphere(220, radius * 1.01)
   const accent = useMemo(() => new Color(color), [color])
   const rimUniforms = useMemo(() => ({ glowColor: { value: accent } }), [accent])
   const isStar = variant === 'star'
+  const holoGlow = useMemo<[number, number, number]>(() => {
+    const c = hologramTint(color)
+    return [c.r, c.g, c.b]
+  }, [color])
 
   useFrame(() => {
     const simYears = simDaysToYears(useGameTimeStore.getState().simDays)
@@ -78,54 +86,59 @@ export function HologramBody({ color, radius, variant = 'planet', onSelect, onOr
 
   return (
     <group>
-      {/* Core — spins slightly slower, giving the grid/dots a parallax "hologram" feel */}
-      <mesh ref={coreRef}>
-        <sphereGeometry args={[radius * 0.97, 48, 48]} />
-        {isStar ? (
-          <meshBasicMaterial color={color} />
-        ) : (
-          <meshStandardMaterial color="#03060a" emissive={color} emissiveIntensity={0.06} roughness={1} />
-        )}
-      </mesh>
-
-      <group ref={groupRef}>
-        {/* Sparse lat/long wireframe grid */}
-        <mesh>
-          <sphereGeometry args={[radius * 1.002, 20, 14]} />
-          <meshBasicMaterial color={color} wireframe transparent opacity={0.35} />
-        </mesh>
-
-        {/* Glowing dot cloud scattered across the surface */}
-        <points>
-          <bufferGeometry>
-            <bufferAttribute attach="attributes-position" args={[dotPositions, 3]} />
-          </bufferGeometry>
-          <pointsMaterial
-            color={color}
-            size={radius * 0.05}
-            sizeAttenuation
-            transparent
-            opacity={0.9}
-            blending={AdditiveBlending}
-            depthWrite={false}
-          />
-        </points>
-        {children}
-      </group>
-
-      {/* Fresnel rim glow (atmosphere-style halo, or a corona for stars) */}
-      <mesh scale={isStar ? 1.25 : 1.1}>
-        <sphereGeometry args={[radius, 32, 32]} />
-        <shaderMaterial
-          transparent
-          blending={AdditiveBlending}
-          depthWrite={false}
-          side={BackSide}
-          uniforms={rimUniforms}
-          vertexShader={RIM_VERTEX_SHADER}
-          fragmentShader={RIM_FRAGMENT_SHADER}
-        />
-      </mesh>
+      {isStar ? (
+        <>
+          {/* A star: bright core, sparse lat/long wireframe and a dot cloud, spinning at slightly different rates for parallax. */}
+          <mesh ref={coreRef}>
+            <sphereGeometry args={[radius * 0.97, 48, 48]} />
+            <meshBasicMaterial color={color} />
+          </mesh>
+          <group ref={groupRef}>
+            <mesh>
+              <sphereGeometry args={[radius * 1.002, 20, 14]} />
+              <meshBasicMaterial color={color} wireframe transparent opacity={0.35} />
+            </mesh>
+            <points>
+              <bufferGeometry>
+                <bufferAttribute attach="attributes-position" args={[dotPositions, 3]} />
+              </bufferGeometry>
+              <pointsMaterial
+                color={color}
+                size={radius * 0.05}
+                sizeAttenuation
+                transparent
+                opacity={0.9}
+                blending={AdditiveBlending}
+                depthWrite={false}
+              />
+            </points>
+            {children}
+          </group>
+          {/* Corona */}
+          <mesh scale={1.25}>
+            <sphereGeometry args={[radius, 32, 32]} />
+            <shaderMaterial
+              transparent
+              blending={AdditiveBlending}
+              depthWrite={false}
+              side={BackSide}
+              uniforms={rimUniforms}
+              vertexShader={RIM_VERTEX_SHADER}
+              fragmentShader={RIM_FRAGMENT_SHADER}
+            />
+          </mesh>
+        </>
+      ) : (
+        <>
+          {/* A world: the hologram sphere and its graticule turn together, so
+              the army chips (children) stay put on the graticule. */}
+          <group ref={groupRef}>
+            <HoloPlanet color={color} radius={radius} bodyName={bodyName} />
+            {children}
+          </group>
+          <HoloHalo radius={radius} glow={holoGlow} />
+        </>
+      )}
 
       {isStar && <pointLight color={color} intensity={8} decay={2} distance={200} />}
 

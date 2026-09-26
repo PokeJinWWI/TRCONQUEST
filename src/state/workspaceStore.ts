@@ -19,6 +19,7 @@ interface TabViewSnapshot {
   selectedBodyName: string | null
   inViewSelection: string | null
   combatEngagementId: string | null
+  terrainBattleId: string | null
   activeNavCategory: string | null
   activeNavSubcategory: string | null
   techTreeOpen: boolean
@@ -45,6 +46,7 @@ function defaultTabView(): TabViewSnapshot {
     selectedBodyName: null,
     inViewSelection: null,
     combatEngagementId: null,
+    terrainBattleId: null,
     activeNavCategory: null,
     activeNavSubcategory: null,
     techTreeOpen: false,
@@ -80,6 +82,7 @@ function captureActiveTab(): TabViewSnapshot & { selectedShipId: string | null }
     selectedBodyName: v.selectedBodyName,
     inViewSelection: v.inViewSelection,
     combatEngagementId: v.combatEngagementId,
+    terrainBattleId: v.terrainBattleId,
     activeNavCategory: v.activeNavCategory,
     activeNavSubcategory: v.activeNavSubcategory,
     techTreeOpen: v.techTreeOpen,

@@ -2,18 +2,20 @@ import { useMemo, useState } from 'react'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
+import { bodyIndex } from '../scene/territory'
 import { isAdditiveClick } from '../scene/selectionInput'
 import { useFleetStore } from '../state/fleetStore'
 import { usePlayerStore } from '../state/playerStore'
 import { getPlanetsForStar } from '../scene/planetData'
-import { getStarsForNeighborhood, getSystemStars } from '../data/starData'
+import { getStarsForNeighborhood, getSystemStars, STARS } from '../data/starData'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
 import { getMoonsForPlanet } from '../scene/moonData'
 import { RELATION_COLORS } from '../data/shipData'
 import { useArmyStore } from '../state/armyStore'
 import { useCombatStore } from '../state/combatStore'
 import { atWar } from '../state/diplomacyStore'
-import { BATTLE_KIND_LABELS, groundBattleDetail, spaceBattleDetail, type PlayerBattle } from '../scene/battleList'
+import { BATTLE_KIND_LABELS, groundBattleDetail, spaceBattleDetail, terrainBattleDetail, type PlayerBattle } from '../scene/battleList'
+import { useTerrainStore } from '../state/terrainStore'
 import { openBattle } from '../scene/battleNav'
 import { playerArmyGroups, type ArmyGroup } from '../scene/armyOutliner'
 import { useBattleStore } from '../state/battleStore'
@@ -35,6 +37,10 @@ interface OutlinerEntry {
   leadShipId?: string
   /** Moon entries only — the planet whose satellite view holds it. */
   parentPlanet?: string
+  /** Colony entries only — the system the world is in. */
+  starId?: string
+  /** A dim second label (a colony's system, when the list spans several). */
+  detail?: string
 }
 
 const FILTERS: { kind: FilterKind; label: string }[] = [
@@ -116,28 +122,27 @@ function useFleetEntries(): OutlinerEntry[] {
   }, [ships, fleets, playerCountryId])
 }
 
-// Bodies in the currently-viewed system that belong to the player's own
-// country — planets AND moons (a moon can be colonised like any world), from
-// the live territory map, which is what war and peace change. Scoped to the
-// system currently in view, same as useInViewEntries, rather than the player's
-// full territory across every system, since this panel is about what's around
-// you right now.
+// Every world (planet or moon) the player's own country owns, in every system,
+// from the live territory map, which is what war and peace change. Not scoped
+// to the view: the list is the player's colonies, wherever they are, and
+// clicking one takes you there. When they span several systems each row also
+// names its system.
 function useColonyEntries(): OutlinerEntry[] {
-  const level = useViewStore((s) => s.level)
-  const selectedStarId = useViewStore((s) => s.selectedStarId)
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
   const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
   return useMemo(() => {
-    if (!selectedCountryId || (level !== 'system' && level !== 'satellite')) return []
-    const out: OutlinerEntry[] = []
-    for (const p of getPlanetsForStar(selectedStarId)) {
-      if (bodyOwner[p.name] === selectedCountryId) out.push({ key: p.name, name: p.name, color: p.color, kind: 'planet' })
-      for (const m of getMoonsForPlanet(p.name).moons) {
-        if (bodyOwner[m.name] === selectedCountryId) out.push({ key: m.name, name: m.name, color: m.color, kind: 'moon', parentPlanet: p.name })
-      }
-    }
-    return out
-  }, [level, selectedStarId, selectedCountryId, bodyOwner])
+    if (!selectedCountryId) return []
+    const owned = [...bodyIndex().values()].filter((b) => bodyOwner[b.name] === selectedCountryId)
+    const spansSystems = new Set(owned.map((b) => b.starId)).size > 1
+    return owned.map((b) => {
+      const color =
+        b.kind === 'moon'
+          ? getMoonsForPlanet(b.parentPlanet ?? '').moons.find((m) => m.name === b.name)?.color
+          : getPlanetsForStar(b.starId).find((p) => p.name === b.name)?.color
+      const detail = spansSystems ? STARS.find((st) => st.id === b.starId)?.name : undefined
+      return { key: b.name, name: b.name, color: color ?? '#ffffff', kind: b.kind, parentPlanet: b.parentPlanet, starId: b.starId, detail }
+    })
+  }, [selectedCountryId, bodyOwner])
 }
 
 // The player's armies, grouped by world / transport — right below Fleets.
@@ -209,27 +214,44 @@ function ArmiesSection() {
 function BattleRow({ battle }: { battle: PlayerBattle }) {
   const playerId = usePlayerStore((s) => s.selectedCountryId)
   const detail = useArmyStore((s) =>
-    battle.kind === 'ground' && playerId && battle.bodyName ? groundBattleDetail(s.armies, battle.bodyName, playerId, atWar) : '',
+    battle.kind !== 'space' && battle.kind !== 'terrain' && playerId && battle.bodyName ? groundBattleDetail(s.armies, battle.bodyName, playerId, atWar) : '',
   )
   const spaceDetail = useCombatStore((s) =>
     battle.kind === 'space' && playerId
       ? spaceBattleDetail(s.engagements.find((e) => e.id === battle.engagementId), useShipStore.getState().ships, playerId, atWar)
       : '',
   )
+  const terrainDetail = useTerrainStore((s) =>
+    battle.kind === 'terrain' && playerId ? terrainBattleDetail(s.battles.find((b) => b.id === battle.terrainBattleId), playerId, atWar) : '',
+  )
   const level = useViewStore((s) => s.level)
+  const terrainBattleId = useViewStore((s) => s.terrainBattleId)
   const engagementId = useViewStore((s) => s.combatEngagementId)
   const selectedBody = useViewStore((s) => s.selectedBodyName)
-  const here = battle.kind === 'space' ? level === 'combat' && engagementId === battle.engagementId : level === 'ground' && selectedBody === battle.bodyName
+  const here =
+    battle.kind === 'space'
+      ? level === 'combat' && engagementId === battle.engagementId
+      : battle.kind === 'terrain'
+        ? level === 'terrain' && terrainBattleId === battle.terrainBattleId
+        : level === 'ground' && selectedBody === battle.bodyName
   return (
     <li
       className={`outliner-entry clickable outliner-battle${here ? ' selected' : ''}`}
       onClick={() => openBattle(battle)}
-      title={here ? 'You are viewing this battle' : `Open the ${BATTLE_KIND_LABELS[battle.kind].toLowerCase()} battle at ${battle.place}`}
+      title={
+        here
+          ? 'You are viewing this battle'
+          : battle.kind === 'terrain'
+            ? `Units are at close quarters at ${battle.place} — open the terrain map`
+            : battle.kind === 'contest'
+            ? `Hostile armies share ${battle.place}, but nobody is firing yet — open the ground map`
+            : `Open the ${BATTLE_KIND_LABELS[battle.kind].toLowerCase()} battle at ${battle.place}`
+      }
     >
       <span className={`outliner-battle-tag ${battle.kind}`}>{BATTLE_KIND_LABELS[battle.kind]}</span>
       <span className="outliner-battle-body">
         <span className="outliner-entry-name">{battle.place}</span>
-        <span className="outliner-battle-detail">{detail || spaceDetail}</span>
+        <span className="outliner-battle-detail">{detail || spaceDetail || terrainDetail}</span>
       </span>
     </li>
   )
@@ -246,7 +268,7 @@ function BattlesSection() {
       </button>
       {!collapsed &&
         (battles.length === 0 ? (
-          <div className="outliner-empty">Not in any battle</div>
+          <div className="outliner-empty">Not in any battle or contest</div>
         ) : (
           <ul className="outliner-list">
             {battles.map((b) => (
@@ -314,6 +336,7 @@ function OutlinerSection({
               >
                 <OutlinerIcon color={entry.color} kind={entry.kind} />
                 <span className="outliner-entry-name">{entry.name}</span>
+                {entry.detail && <span className="outliner-entry-detail">{entry.detail}</span>}
               </li>
             ))}
           </ul>
@@ -360,14 +383,23 @@ export function Outliner() {
     selectShip(null)
     selectInView(entry.key)
   }
-  // A colonised moon lives in its planet's satellite view: go there first
-  // (unless already there), then select it.
+  // A colony can be in any system: go to its system first (a moon: its
+  // planet's satellite view), then select it.
   const handleColonyClick = (entry: OutlinerEntry) => {
+    const view = useViewStore.getState()
+    selectShip(null)
     if (entry.parentPlanet) {
-      const view = useViewStore.getState()
-      if (!(view.level === 'satellite' && view.selectedBodyName === entry.parentPlanet)) view.enterSatellite(entry.parentPlanet)
+      const there = view.level === 'satellite' && view.selectedBodyName === entry.parentPlanet && view.selectedStarId === entry.starId
+      if (!there) {
+        if (entry.starId && view.selectedStarId !== entry.starId) useViewStore.setState({ selectedStarId: entry.starId })
+        view.enterSatellite(entry.parentPlanet)
+      }
+      selectInView(entry.key)
+    } else if (view.selectedStarId === entry.starId && (view.level === 'system' || (view.level === 'satellite' && view.selectedBodyName === entry.key))) {
+      selectInView(entry.key)
+    } else if (entry.starId) {
+      view.enterSystem(entry.starId, entry.key)
     }
-    handleInViewClick(entry)
   }
   // Shift/Ctrl/Cmd-click adds or removes the fleet from the selection, so
   // several fleets can be ordered at once.
@@ -432,6 +464,13 @@ export function Outliner() {
         </div>
 
         <BattlesSection />
+        <OutlinerSection
+          title="Colonies"
+          entries={colonyEntries}
+          emptyText="No colonies established"
+          selectedKey={inViewSelection}
+          onEntryClick={handleColonyClick}
+        />
 
         {/* Your own market, not a list of every market that exists — same
             player-only scope as Fleets/Colonies, hence singular. */}
@@ -442,13 +481,6 @@ export function Outliner() {
           emptyText="Nothing charted here"
           selectedKey={inViewSelection}
           onEntryClick={handleInViewClick}
-        />
-        <OutlinerSection
-          title="Colonies"
-          entries={colonyEntries}
-          emptyText="No colonies established"
-          selectedKey={inViewSelection}
-          onEntryClick={handleColonyClick}
         />
         <OutlinerSection
           title="Fleets"

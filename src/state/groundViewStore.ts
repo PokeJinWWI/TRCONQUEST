@@ -11,7 +11,13 @@ export type GroundClickMode =
   | { kind: 'drop'; shipId: string }
   | { kind: 'spawn'; ownerId: string; armyKind: ArmyKind }
 
+// Which way the planetary map is drawn: a turning globe, or a flat rectangular
+// map of the whole surface (same units, same orders, same clicks).
+export type GroundProjection = 'globe' | 'flat'
+
 interface GroundViewState {
+  projection: GroundProjection
+  setProjection: (projection: GroundProjection) => void
   selectedUnitIds: string[]
   density: GridDensity
   mode: GroundClickMode
@@ -29,6 +35,8 @@ interface GroundViewState {
 }
 
 export const useGroundViewStore = create<GroundViewState>((set) => ({
+  projection: 'globe',
+  setProjection: (projection) => set({ projection, hoverNode: null }),
   selectedUnitIds: [],
   density: 'standard',
   mode: { kind: 'order' },

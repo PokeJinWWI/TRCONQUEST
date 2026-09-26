@@ -9,6 +9,8 @@ import { AI_WAR_GRACE_DAYS, AI_WAR_RATIO, AI_WAR_RATIO_AT_HATRED } from '../src/
 import { usePlayerStore } from '../src/state/playerStore'
 import { useShipStore, type ShipInstance } from '../src/state/shipStore'
 import { useArmyStore } from '../src/state/armyStore'
+import { arc, nodePoint, surfaceMesh } from '../src/scene/surfaceMesh'
+import { useTerrainStore } from '../src/state/terrainStore'
 import { useTerritoryStore } from '../src/state/territoryStore'
 import { useDiplomacyStore, atWar } from '../src/state/diplomacyStore'
 import { useResourceStore } from '../src/state/resourceStore'
@@ -296,7 +298,7 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
   let firstWar: { day: number; attacker: string; defender: string } | null = null
   let marsBuilt = 0
   const seenShips = new Set(useShipStore.getState().ships.map((s) => s.id))
-  for (let day = 1; day <= 720; day++) {
+  for (let day = 1; day <= (Number(process.env.AI_STOP) || 1100); day++) {
     if (day % 30 === 0) for (const c of COUNTRIES) applyStrategicIncome(c.id, 1)
     runStrategicAI(day)
     resolveShipyards(day)
@@ -317,12 +319,24 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
       const arm = (o: string) => armies.filter((a) => a.ownerId === o && a.kind === 'assault').map((a) => `${a.location.kind === 'body' ? a.location.bodyName : a.location.kind}:${a.units.length}u`).join(',')
       console.log(`    d${day} mem=${JSON.stringify(useAiStore.getState().memory[MARS]?.targetBody)} post=${useAiStore.getState().memory[MARS]?.posture} res=${JSON.stringify(useResourceStore.getState().stateFor(MARS).amounts)}`)
       console.log(`      MARS ships: ${where(MARS)} | armies: ${arm(MARS)} | q=${useShipyardStore.getState().ordersFor(MARS).length}`)
+      console.log(`      TERRAIN battles: ${useTerrainStore.getState().battles.map((b) => `${b.bodyName}[${b.units.map((u) => `${u.ownerId[0]}${u.type[0]}${Math.round(u.strength)}@${u.x.toFixed(1)},${u.y.toFixed(1)}${u.path.length ? '>' : ''}`).join(' ')}] quiet=${b.quietSinceStep}`).join(' | ') || 'none'}`)
       console.log(`      VENUS ships: ${where(VENUS)} | armies: ${arm(VENUS)} | onVenus=${armies.filter((a) => a.location.kind === 'body' && a.location.bodyName === 'Venus').length}`)
     }
     const wars = useDiplomacyStore.getState().wars
     if (!firstWar && wars.length > 0) firstWar = { day, attacker: wars[0].attackerId, defender: wars[0].defenderId }
   }
 
+  if (process.env.AI_STOP) {
+    for (const b of useTerrainStore.getState().battles) {
+      const ids = b.units.map((u) => u.id)
+      console.log('BATTLE', b.id, 'units', ids.length, 'unique', new Set(ids).size, 'started', b.startedStep, 'at', b.resolvedThroughStep)
+    }
+    const all = useArmyStore.getState().armies.flatMap((a) => a.units.map((u) => u.id))
+    console.log('ARMY units', all.length, 'unique', new Set(all).size)
+    const vs = groundSurface('Venus', useTerritoryStore.getState().bodyOwner)!
+    console.log('KEYS', vs.keySlots.map((k) => k.node + ':' + k.kind).join(' '), 'holders', JSON.stringify(useTerritoryStore.getState().nodeHolders['Venus'] ?? {}).slice(0, 200), 'controller', useTerritoryStore.getState().bodyController['Venus'])
+    for (const a of useArmyStore.getState().armies) if (a.location.kind === 'body' && a.location.bodyName === 'Venus') for (const u of a.units) console.log(' ', a.ownerId.slice(0, 6), u.type, Math.round(u.strength), 'key-dists', vs.keySlots.map((k) => (arc(u.position!, nodePoint(k.node)) / surfaceMesh().fineSpacingRad).toFixed(1)).join(','), 'path', u.path?.length ?? 0, 'obj', u.objectiveNode, 'fire', u.firingAtId ? 1 : 0)
+  }
   const events = useDiplomacyStore.getState().events
   const log = events.map((e) => `d${Math.round(e.simDays)} ${e.text}`)
   console.log('    event log:\n      ' + log.join('\n      '))

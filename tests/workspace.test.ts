@@ -40,7 +40,7 @@ console.log('\n=== 2. createTab: snapshots the outgoing tab, opens a fresh defau
     selectedStarId: 'sol',
     selectedBodyName: 'Mars',
     inViewSelection: 'Mars',
-    combatEngagementId: null,
+    combatEngagementId: null, terrainBattleId: null,
   })
   useViewStore.getState().setNavCategory('Technology', 'Physics')
   useShipStore.getState().selectShip('some-ship-id')
@@ -116,9 +116,9 @@ console.log('\n=== 5. closeTab ===')
 {
   useWorkspaceStore.setState({
     tabs: [
-      { id: 'a', view: { level: 'system', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
-      { id: 'b', view: { level: 'combat', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: 'eng-1', activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
-      { id: 'c', view: { level: 'galactic', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
+      { id: 'a', view: { level: 'system', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, terrainBattleId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
+      { id: 'b', view: { level: 'combat', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: 'eng-1', terrainBattleId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
+      { id: 'c', view: { level: 'galactic', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, terrainBattleId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
     ],
     activeTabId: 'b',
   })
@@ -145,8 +145,8 @@ console.log('\n=== 6. renameTab and toggleTabBar ===')
 {
   useWorkspaceStore.setState({
     tabs: [
-      { id: 'x', view: { level: 'system', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
-      { id: 'y', view: { level: 'combat', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
+      { id: 'x', view: { level: 'system', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, terrainBattleId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
+      { id: 'y', view: { level: 'combat', selectedNeighborhoodId: 'solar-neighborhood', selectedStarId: 'sol', selectedBodyName: null, inViewSelection: null, combatEngagementId: null, terrainBattleId: null, activeNavCategory: null, activeNavSubcategory: null, techTreeOpen: false }, selectedShipId: null, name: null },
     ],
     activeTabId: 'x',
   })
@@ -184,7 +184,7 @@ console.log('\n=== 7. techTreeOpen survives a tab switch away and back (the bug 
           selectedStarId: 'sol',
           selectedBodyName: null,
           inViewSelection: null,
-          combatEngagementId: null,
+          combatEngagementId: null, terrainBattleId: null,
           activeNavCategory: 'Technology',
           activeNavSubcategory: 'Physics',
           techTreeOpen: false,
@@ -200,7 +200,7 @@ console.log('\n=== 7. techTreeOpen survives a tab switch away and back (the bug 
           selectedStarId: 'sol',
           selectedBodyName: null,
           inViewSelection: null,
-          combatEngagementId: null,
+          combatEngagementId: null, terrainBattleId: null,
           activeNavCategory: null,
           activeNavSubcategory: null,
           techTreeOpen: false,

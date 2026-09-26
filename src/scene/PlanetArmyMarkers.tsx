@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { Html } from '@react-three/drei'
-import { BufferAttribute, BufferGeometry, Color } from 'three'
+import { Color, ShaderMaterial, SRGBColorSpace, Vector2 } from 'three'
+import { buildGeometry, TEX_WIDTH, useNodeTexture, VERT, type HoloNode } from './HoloGlobe'
 import { useArmyStore } from '../state/armyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useViewStore } from '../state/viewStore'
@@ -10,7 +11,7 @@ import { TERRAIN } from '../data/groundData'
 import { armiesOnBody, armyStrength } from './armyLogic'
 import { groundSurface, holderOf } from './groundLogic'
 import { TERRAIN_IDS } from './planetTerrain'
-import { normalize, surfaceMesh } from './surfaceMesh'
+import { normalize } from './surfaceMesh'
 import { GroundBattleSummary, useGroundBattles } from '../components/ArmyViews'
 import { relationColorOf, useRelationKey } from '../state/shipRelations'
 
@@ -58,37 +59,67 @@ export function PlanetArmyMarkers({ bodyName, radius }: { bodyName: string; radi
   )
 }
 
+// Each fine node is one crisp cell (its triangle's nearest corner), so the
+// front reads as sharp patches rather than a colour wash blurred across the
+// mesh. Node colours live in a texture (see HoloGlobe.useNodeTexture): alpha
+// 255 where a nation holds the node, 0 where nobody does.
+const SHELL_FRAG = /* glsl */ `
+uniform sampler2D uNodes;
+uniform vec2 uTexSize;
+varying vec3 vIds;
+varying vec3 vBary;
+vec4 node(float id) {
+  float row = floor((id + 0.5) / uTexSize.x);
+  float col = id - row * uTexSize.x;
+  return texture2D(uNodes, (vec2(col, row) + 0.5) / uTexSize);
+}
+void main() {
+  vec3 w = vBary;
+  float id = w.x >= w.y && w.x >= w.z ? vIds.x : (w.y >= w.z ? vIds.y : vIds.z);
+  vec4 n = node(floor(id + 0.5));
+  if (n.a < 0.5) discard;
+  gl_FragColor = vec4(n.rgb, 0.4);
+}
+`
+
 function SurfaceControlShell({ bodyName, radius }: { bodyName: string; radius: number }) {
-  const mesh = surfaceMesh()
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const holders = useTerritoryStore((s) => s.nodeHolders[bodyName])
   const surface = useMemo(() => groundSurface(bodyName, owners), [bodyName, owners])
-  const geometry = useMemo(() => {
-    const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(Float32Array.from(mesh.positions, (v) => v * radius * 1.01), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(mesh.count.fine * 4), 4))
-    g.setIndex(new BufferAttribute(mesh.faces, 1))
-    return g
-  }, [mesh, radius])
-  useEffect(() => () => geometry.dispose(), [geometry])
-  useEffect(() => {
-    if (!surface) return
-    const colors = geometry.getAttribute('color') as BufferAttribute
+  const nodeAt = useMemo(() => {
     const c = new Color()
-    for (let i = 0; i < mesh.count.fine; i++) {
+    const rgb = { r: 0, g: 0, b: 0 }
+    return (i: number): HoloNode => {
+      if (!surface) return { r: 0, g: 0, b: 0, land: false }
       const terrain = TERRAIN[TERRAIN_IDS[surface.terrain[i]]]
       const h = terrain.paintable ? holderOf(bodyName, i, owners, { [bodyName]: holders ?? {} }) : undefined
-      if (h) c.set(ownerDisplay(h).color)
-      colors.setXYZW(i, c.r, c.g, c.b, h ? 0.45 : 0)
+      if (!h) return { r: 0, g: 0, b: 0, land: false }
+      c.setStyle(ownerDisplay(h).color, SRGBColorSpace).getRGB(rgb, SRGBColorSpace)
+      return { r: Math.round(rgb.r * 255), g: Math.round(rgb.g * 255), b: Math.round(rgb.b * 255), land: true }
     }
-    colors.needsUpdate = true
-  }, [geometry, surface, holders, owners, bodyName, mesh])
-  if (!surface) return null
-  return (
-    <mesh geometry={geometry} raycast={() => null}>
-      <meshBasicMaterial vertexColors transparent depthWrite={false} />
-    </mesh>
+  }, [surface, holders, owners, bodyName])
+  const { texture, rows } = useNodeTexture(nodeAt, nodeAt)
+  const geometry = useMemo(() => buildGeometry(radius * 1.01), [radius])
+  const material = useMemo(
+    () =>
+      new ShaderMaterial({
+        vertexShader: VERT,
+        fragmentShader: SHELL_FRAG,
+        uniforms: { uNodes: { value: texture }, uTexSize: { value: new Vector2(TEX_WIDTH, rows) } },
+        transparent: true,
+        depthWrite: false,
+      }),
+    [texture, rows],
   )
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      material.dispose()
+    },
+    [geometry, material],
+  )
+  if (!surface) return null
+  return <mesh geometry={geometry} material={material} raycast={() => null} />
 }
 
 // The planet view's ground-war HUD: the occupation banner and the battle's

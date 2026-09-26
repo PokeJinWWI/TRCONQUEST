@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { KeyboardPan } from './KeyboardPan'
+import { isQueueModifierHeld } from './queueModifier'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Stars } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -11,7 +13,7 @@ import { ShipPanel } from './ShipPanel'
 import { CombatPanel, combatPanelVerticalOffset } from '../components/CombatPanel'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { ARENA_SPAN_UNITS, type ArenaPoint } from './combatArena'
-import { arenaWindowSpan, orderParticipantTo } from './combatResolution'
+import { appendParticipantStop, arenaWindowSpan, orderParticipantTo } from './combatResolution'
 import { useCombatStore, isEnemy } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { useViewStore } from '../state/viewStore'
@@ -110,11 +112,19 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
     if (!engagement || !selectedParticipant || !canCommand) return
     const simDays = useGameTimeStore.getState().simDays
     const anchor = selectedParticipant.position
+    const queue = isQueueModifierHeld()
     for (const p of commandedParticipants()) {
       const ship = ships.find((s) => s.id === p.shipId)
       // A ship spooling a drive has committed to leaving and can't maneuver.
       if (!ship || ship.combat.ftlCharge) continue
       const dest = { x: point.x + p.position.x - anchor.x, y: point.y + p.position.y - anchor.y, z: point.z + p.position.z - anchor.z }
+      // Shift + right-click queues the point after the ship's current route
+      // (a ship with nothing to follow just starts, like a plain order).
+      if (queue && (p.path.length > 0 || (p.stops?.length ?? 0) > 0)) {
+        const queued = appendParticipantStop(p, dest, engagement.density, simDays, engagement.obstacles)
+        if (queued !== p) setParticipant(engagement.id, { ...queued, holdPosition: true })
+        continue
+      }
       const ordered = orderParticipantTo(p, dest, engagement.density, simDays, engagement.obstacles)
       // orderParticipantTo returns the participant unchanged when no route
       // exists (the point is inside a body, or walled off) — don't latch
@@ -125,7 +135,8 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
       // is taking explicit control, so "resume auto" afterward should land
       // back on the ship's own stance rather than silently resuming a
       // pursuit, a charge, or a velocity lock they never re-requested.
-      setParticipant(engagement.id, { ...ordered, holdPosition: true, chasing: false, ramming: false, inheritVelocityFrom: null })
+      // A plain order replaces the whole plan, queued stops included.
+      setParticipant(engagement.id, { ...ordered, stops: [], holdPosition: true, chasing: false, ramming: false, inheritVelocityFrom: null })
     }
   }
 
@@ -231,6 +242,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
           minDistance={frame.min}
           maxDistance={frame.max}
         />
+        <KeyboardPan controlsRef={controlsRef} mode="orbit" />
       </Canvas>
 
       <CombatPanel engagement={engagement} onRecenter={canCommand ? handleRecenter : undefined} />
