@@ -538,7 +538,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
             return (
               <div key={o.id} className="econ-build-row">
                 <span className="econ-build-name">
-                  {recipe?.label ?? o.recipeId}
+                  {o.district ? `${DISTRICT_LABELS[o.district]} district — new level` : recipe?.label ?? o.recipeId}
                   <span className={`econ-owner-tag econ-owner-${oc === 'corporation' ? 'corporation' : oc} econ-build-owner`} title={`This will be a ${ownerTag}-owned building`}>
                     {ownerTag}
                   </span>

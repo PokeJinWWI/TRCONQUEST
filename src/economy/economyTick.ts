@@ -13,6 +13,8 @@
 
 import { GOOD_IDS, GOODS, priceFloor, priceCeiling, type GoodId } from './goods'
 import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor, type NeedTier, type NeedGroup } from './species'
+import { buildingLevelsByDistrict, districtBonus, withDistrictLevel } from './districts'
+import { DEVASTATION_OUTPUT_LOSS } from '../data/defenseData'
 import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, CONSTRUCTION_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, constructionWork, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
 import { economicSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
 import type {
@@ -414,7 +416,12 @@ function tickWorld(
   const law = economicSystemDef(system)
   const govShareOf = (good: GoodId) => publicServices[good] ?? 0
   // Directly-state-run buildings seize up when the state has no bureaucracy.
-  const outputFactor = (b: Building) => interferenceMultiplier(b, system) * (b.owner.kind === 'state' ? stateBureaucracyMalus : 1)
+  // District ecosystem bonus (economy/districts.ts), per district of this world.
+  const levelsByDistrict = buildingLevelsByDistrict(world)
+  const districtMult = Object.fromEntries(DISTRICT_TYPES.map((d) => [d, 1 + districtBonus(world, d, levelsByDistrict).total])) as Record<DistrictType, number>
+  const devastationMult = 1 - DEVASTATION_OUTPUT_LOSS * Math.min(1, Math.max(0, world.devastation ?? 0))
+  const outputFactor = (b: Building) =>
+    interferenceMultiplier(b, system) * (b.owner.kind === 'state' ? stateBureaucracyMalus : 1) * districtMult[districtOfRecipe(b.recipeId)] * devastationMult
 
   // --- Labor market (qualification-gated) ---
   const workers = zeroClasses()
@@ -729,6 +736,8 @@ function tickWorld(
   //     cash funds its orders. Several can finish in a tick. ---
   let builtBuildings = nextBuildings
   let nextQueue = world.constructionQueue
+  // District levels developed this tick (economy/districts.ts).
+  let developed: Pick<World, 'districts' | 'districtCapacity'> = { districts: world.districts, districtCapacity: world.districtCapacity }
   let constructionSpend = 0 // drawn from the treasury (government pool)
   if (world.constructionQueue.length > 0) {
     const queue = world.constructionQueue.map((o) => ({ ...o }))
@@ -780,6 +789,11 @@ function tickWorld(
       a.kind === o.kind && (a.kind !== 'corporation' || a.corporationId === (o as { corporationId: string }).corporationId)
     for (const o of queue) {
       if (o.progress < o.cost - 1e-9) continue
+      if (o.district) {
+        const grown = withDistrictLevel({ ...world, ...developed }, o.district)
+        developed = { districts: grown.districts, districtCapacity: grown.districtCapacity }
+        continue
+      }
       const existing = builtBuildings.find((b) => b.recipeId === o.recipeId && sameOwner(b.owner, o.owner))
       if (existing)
         builtBuildings = builtBuildings.map((b) =>
@@ -885,6 +899,8 @@ function tickWorld(
       pops: grownPops,
       buildings: finalBuildings,
       constructionQueue: nextQueue,
+      districts: developed.districts,
+      districtCapacity: developed.districtCapacity,
       market: { prices },
       labor: { wages },
       importStock: {},
@@ -1387,7 +1403,8 @@ export function constructionCapacityOf(world: World): number {
 export function districtUsage(world: World): Record<DistrictType, number> {
   const used = { core: 0, urban: 0, industrial: 0, resource: 0 } as Record<DistrictType, number>
   for (const b of world.buildings) used[districtOfRecipe(b.recipeId)] += b.level
-  for (const o of world.constructionQueue) used[districtOfRecipe(o.recipeId)] += 1
+  for (const o of world.constructionQueue) if (!o.district) used[districtOfRecipe(o.recipeId)] += 1
+  used.urban += world.foreignSlots ?? 0
   return used
 }
 

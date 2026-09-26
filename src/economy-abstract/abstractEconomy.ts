@@ -12,6 +12,9 @@
 //              electronics). Factories burn minerals and energy.
 //   Goods      Stellaris-style stockpiles, no prices (the resourceStore
 //              stockpile ships and armies are paid from).
+//   Productivity  output per worker, growing each month with research per
+//              person (labs) — the main source of long-run growth, as in a
+//              developed economy; population grows slowly (~0.4%/yr).
 //   Pops       Stellaris-style strata (workers / specialists / unemployed), each
 //              with a goods upkeep — food to survive (shortage starves them),
 //              consumer goods and electronics to be content — and a happiness.
@@ -31,6 +34,16 @@
 // holds the states, syncs the stockpile and advances it monthly.
 
 import {
+  ACADEMIC_TO_INDUSTRIAL,
+  CLUSTER_MAX,
+  CLUSTER_PER_BUILDING,
+  DISTRICT_COST,
+  DISTRICT_OF_BUILDING,
+  LINK_MAX,
+  SIMPLE_DISTRICT_DEFS,
+  SIMPLE_DISTRICTS,
+  SLOTS_PER_DISTRICT,
+  type SimpleDistrictId,
   GOOD_VALUE,
   SIMPLE_BUILDING_DEFS,
   SIMPLE_BUILDINGS,
@@ -40,8 +53,15 @@ import {
   type SimpleGood,
 } from '../data/simplisticEconomyData'
 import type { TechCategory } from '../data/techData'
+import { DEVASTATION_OUTPUT_LOSS } from '../data/defenseData'
 
 export type EconomyType = 'market' | 'corporatist' | 'planned'
+
+// The central bank's stance (TNO-style central bank policy): tight money pulls
+// inflation down but makes credit dear, slowing construction; loose money does
+// the opposite.
+export type MonetaryStance = 'loose' | 'neutral' | 'tight'
+export const MONETARY_STANCES: MonetaryStance[] = ['loose', 'neutral', 'tight']
 export const ECONOMY_TYPES: EconomyType[] = ['market', 'corporatist', 'planned']
 
 export type CreditRating = 'AAA' | 'AA' | 'A' | 'BBB' | 'BB' | 'B' | 'CCC'
@@ -58,14 +78,30 @@ export type Stockpile = Record<SimpleGood, number>
 export interface WorldState {
   bodyName: string
   population: number // millions
-  slots: number // building levels the world can hold
   buildings: BuildingLevels
+  // District levels built, per district (see SIMPLE_DISTRICT_DEFS). Optional: a
+  // world without it is treated as having just enough districts to house its
+  // buildings (districtsOf).
+  districts?: Partial<Record<SimpleDistrictId, number>>
+  // District levels the world's land can hold (from its size). Optional —
+  // defaults via landOf.
+  land?: number
+  // Legacy flat building-slot count (pre-districts); only read by landOf.
+  slots?: number
+  // Orbital bombardment damage 0–1 (scene/bombardment.ts): cuts this world's
+  // building output. Optional: absent = none.
+  devastation?: number
+  // Urban slots taken by other nations' embassies and branch offices
+  // (scene/holdings.ts, kept in sync by the holdings store). Absent = 0.
+  foreignSlots?: number
 }
 
+// A project in the construction queue: one building level, or one district level.
 export interface ConstructionOrder {
   id: number
   bodyName: string
-  building: SimpleBuildingId
+  building?: SimpleBuildingId
+  district?: SimpleDistrictId
   progress: number // construction points put in so far
 }
 
@@ -100,6 +136,12 @@ export interface AbstractEconomyState {
   welfare: number // 0..1 welfare spending level — costs budget, buys stability and growth
   allocation: Allocation
   researchFocus: TechCategory
+  monetaryStance?: MonetaryStance // default neutral
+  // Productivity: output per worker, 1 at game start. Everything buildings and
+  // services produce is multiplied by it; it grows every month, faster the more
+  // research the nation does per person (see productivityGrowth). Optional so
+  // older states and test literals default to 1.
+  productivity?: number
   // Construction queue (worked in order) and the next order id.
   queue: ConstructionOrder[]
   nextOrderId: number
@@ -108,7 +150,7 @@ export interface AbstractEconomyState {
 }
 
 // --- Balance constants ---------------------------------------------------------
-const WORKFORCE_SHARE = 0.5 // share of a world's population that works
+const WORKFORCE_SHARE = 0.42 // share of a world's population in the labour force (the rest: children, retirees, carers)
 const PU_PER_FACTORY = 10
 const FARM_FOOD = 6
 const MINE_MINERALS = 25
@@ -166,10 +208,31 @@ const WELFARE_PER_POP = 0.04 // annual welfare cost per million pop at full welf
 const MILITARY_UPKEEP_PER_PU = 6 // annual
 const DEBT_SERVICE_RATE = 0.05
 const PRINT_INFLATION = 0.8
-const INFLATION_DECAY = 0.1 // monthly pull back toward the base rate
+// Inflation drifts each month toward a target set by the economy's pressures —
+// the jobs market, shortages, the budget, the currency and the central bank —
+// closing INFLATION_DECAY of the gap per month. Printing money spikes it on top.
+const INFLATION_DECAY = 0.1
 const BASE_INFLATION = 0.02
+const NATURAL_UNEMPLOYMENT = 0.05 // unemployment at which wages neither push nor pull prices
+const PHILLIPS = 0.25 // inflation per point of unemployment below the natural rate (and disinflation above it)
+const SHORTAGE_INFLATION = 0.06 // at a total shortage of consumer goods (electronics count half)
+const DEFICIT_INFLATION = 0.3 // per unit of deficit/GDP (a surplus cools prices the same way)
+const IMPORT_INFLATION = 0.05 // per unit of currency weakness vs its base rate (imports are only part of what people buy)
+const STANCE_INFLATION: Record<MonetaryStance, number> = { loose: 0.015, neutral: 0, tight: -0.015 }
+const STANCE_CONSTRUCTION: Record<MonetaryStance, number> = { loose: 1.1, neutral: 1, tight: 0.9 }
+const MAX_INFLATION_TARGET = 0.25
+const MIN_INFLATION_TARGET = -0.03
 const STAB_SPEED = 0.15 // how fast stability follows approval
-const POP_GROWTH = 0.012 // annual, × (0.5 + approval)
+const POP_GROWTH = 0.004 // annual, × (0.5 + approval) — a developed nation's pace
+// Productivity growth (annual): a base drift plus a research-driven part with
+// diminishing returns — research per billion people per month, r, adds
+// PRODUCTIVITY_RESEARCH_MAX · r / (r + PRODUCTIVITY_RESEARCH_HALF). The starting
+// nations' labs give about 1%/yr in total; a nation that goes all-in on labs
+// approaches base + max (~4%/yr, a space-age science boom), one with none
+// drifts at the base.
+const PRODUCTIVITY_BASE = 0.003
+const PRODUCTIVITY_RESEARCH_MAX = 0.04
+const PRODUCTIVITY_RESEARCH_HALF = 10
 const STARVATION = 0.1 // annual population loss at zero food
 const WAR_TAX_REVENUE = 0.25
 const IMPORT_MARKUP = 1.1
@@ -236,12 +299,84 @@ export function worldLevels(w: WorldState): number {
   for (const b of SIMPLE_BUILDINGS) n += w.buildings[b] ?? 0
   return n
 }
-// Slots still free on a world, counting what's already queued for it.
-export function freeSlots(w: WorldState, queue: ConstructionOrder[]): number {
-  return w.slots - worldLevels(w) - queue.filter((o) => o.bodyName === w.bodyName).length
+
+// --- Districts -------------------------------------------------------------------
+// Buildings in a district (across its building families).
+export function buildingsInDistrict(w: WorldState, d: SimpleDistrictId): number {
+  let n = d === 'urban' ? w.foreignSlots ?? 0 : 0
+  for (const b of SIMPLE_DISTRICT_DEFS[d].buildings) n += w.buildings[b] ?? 0
+  return n
 }
-export function orderCost(o: Pick<ConstructionOrder, 'building'>): number {
-  return SIMPLE_BUILDING_DEFS[o.building].cost
+// District levels built — or, for a world that predates districts, just enough
+// to house what's on it.
+export function districtsOf(w: WorldState): Record<SimpleDistrictId, number> {
+  const out = {} as Record<SimpleDistrictId, number>
+  for (const d of SIMPLE_DISTRICTS) out[d] = w.districts ? (w.districts[d] ?? 0) : Math.ceil(buildingsInDistrict(w, d) / SLOTS_PER_DISTRICT)
+  return out
+}
+export function districtLevelsTotal(w: WorldState): number {
+  const ds = districtsOf(w)
+  return SIMPLE_DISTRICTS.reduce((n, d) => n + ds[d], 0)
+}
+// District levels the world's land holds.
+export function landOf(w: WorldState): number {
+  if (w.land !== undefined) return w.land
+  if (w.slots !== undefined) return Math.floor(w.slots / SLOTS_PER_DISTRICT)
+  return districtLevelsTotal(w) + 4
+}
+// Building slots a district offers.
+export function districtSlots(w: WorldState, d: SimpleDistrictId): number {
+  return districtsOf(w)[d] * SLOTS_PER_DISTRICT
+}
+// Free slots in the district a building belongs to, counting queued buildings.
+export function freeSlots(w: WorldState, queue: ConstructionOrder[], d: SimpleDistrictId): number {
+  const queued = queue.filter((o) => o.bodyName === w.bodyName && o.building && DISTRICT_OF_BUILDING[o.building] === d).length
+  return districtSlots(w, d) - buildingsInDistrict(w, d) - queued
+}
+// Free land for more district levels, counting queued districts.
+export function freeLand(w: WorldState, queue: ConstructionOrder[]): number {
+  const queued = queue.filter((o) => o.bodyName === w.bodyName && o.district).length
+  return landOf(w) - districtLevelsTotal(w) - queued
+}
+export function orderCost(o: Pick<ConstructionOrder, 'building' | 'district'>): number {
+  return o.district ? DISTRICT_COST : o.building ? SIMPLE_BUILDING_DEFS[o.building].cost : 0
+}
+export function orderName(o: Pick<ConstructionOrder, 'building' | 'district'>): string {
+  return o.district ? `${SIMPLE_DISTRICT_DEFS[o.district].name} level` : o.building ? SIMPLE_BUILDING_DEFS[o.building].name : 'Project'
+}
+
+// One world's people by stratum (millions, dependants included) and its jobs
+// by building — the planet screen's Population tab.
+export function worldStrata(w: WorldState): { workers: number; specialists: number; unemployed: number; jobsByBuilding: Partial<Record<SimpleBuildingId, number>> } {
+  const staffing = worldStaffing(w)
+  const workforce = worldWorkforce(w)
+  let specialistJobs = 0
+  let workerJobs = 0
+  const jobsByBuilding: Partial<Record<SimpleBuildingId, number>> = {}
+  for (const b of SIMPLE_BUILDINGS) {
+    const jobs = (w.buildings[b] ?? 0) * SIMPLE_BUILDING_DEFS[b].jobs
+    if (jobs <= 0) continue
+    jobsByBuilding[b] = jobs
+    if (SPECIALIST_BUILDINGS.includes(b)) specialistJobs += jobs * staffing
+    else workerJobs += jobs * staffing
+  }
+  const perWorker = workforce > 0 ? w.population / workforce : 0
+  return {
+    workers: workerJobs * perWorker,
+    specialists: specialistJobs * perWorker,
+    unemployed: Math.max(0, workforce - workerJobs - specialistJobs) * perWorker,
+    jobsByBuilding,
+  }
+}
+
+// The ecosystem bonus a district gives the buildings in it: a cluster bonus for
+// every building beyond the first (suppliers, skilled labour, shared
+// infrastructure), capped; industry also gains from research parks (academic
+// district levels) on the same world.
+export function districtBonus(w: WorldState, d: SimpleDistrictId): { cluster: number; link: number; total: number } {
+  const cluster = Math.min(CLUSTER_MAX, CLUSTER_PER_BUILDING * Math.max(0, buildingsInDistrict(w, d) - 1))
+  const link = d === 'industrial' ? Math.min(LINK_MAX, ACADEMIC_TO_INDUSTRIAL * districtsOf(w).academic) : 0
+  return { cluster, link, total: cluster + link }
 }
 
 // The consumer PU needed to cover the population's consumer goods and
@@ -259,7 +394,9 @@ export function consumerPUNeeded(r: AbstractReport): number {
 // applies it; the UI and AI read it as the report.
 export interface AbstractReport {
   population: number
-  efficiency: number // output multiplier from stability × economy type
+  efficiency: number // output multiplier from stability × economy type × productivity
+  productivity: number
+  productivityGrowth: number // annual rate it is growing at this month
   workforce: number
   jobs: number
   productionUnits: number
@@ -292,8 +429,6 @@ export interface AbstractReport {
   // National accounts (annual)
   realGdp: number
   gdp: number // nominal
-  realGrowth: number // vs last tick's real GDP, annualized
-  nominalGrowth: number
   revenue: number
   spending: number
   balance: number
@@ -312,6 +447,10 @@ export interface AbstractReport {
   expOther: number
   // Stability follows approval; below UNREST_BELOW the nation is in unrest.
   stabilityTarget: number
+  // Where inflation is heading and what pushes it (signed annual rates; the
+  // target is BASE_INFLATION + their sum, clamped).
+  inflationTarget: number
+  inflationParts: { label: string; value: number }[]
   unrest: boolean
 }
 
@@ -324,7 +463,8 @@ export interface StratumReport {
 
 export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], stock: Stockpile): AbstractReport {
   const mods = TYPE_MODS[s.economyType]
-  const efficiency = (0.8 + 0.4 * s.stability) * mods.production
+  const productivity = s.productivity ?? 1
+  const efficiency = (0.8 + 0.4 * s.stability) * mods.production * productivity
   const alloc = normalizeAllocation(s.allocation)
 
   // Staffed building levels, nationally.
@@ -334,7 +474,8 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   let jobs = 0
   for (const w of worlds) {
     const staffing = worldStaffing(w)
-    for (const b of SIMPLE_BUILDINGS) L[b] += (w.buildings[b] ?? 0) * staffing
+    const intact = 1 - DEVASTATION_OUTPUT_LOSS * Math.min(1, Math.max(0, w.devastation ?? 0))
+    for (const b of SIMPLE_BUILDINGS) L[b] += (w.buildings[b] ?? 0) * staffing * intact * (1 + districtBonus(w, DISTRICT_OF_BUILDING[b]).total)
     population += w.population
     workforce += worldWorkforce(w)
     jobs += worldJobs(w)
@@ -355,7 +496,8 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   const civilianPU = PU * alloc.civilian
   const militaryPU = PU * alloc.military
   const consumerPU = PU * alloc.consumer
-  const cpRaw = civilianPU * CP_PER_PU * mods.construction
+  const stance = s.monetaryStance ?? 'neutral'
+  const cpRaw = civilianPU * CP_PER_PU * mods.construction * STANCE_CONSTRUCTION[stance]
   const needMinerals = (militaryPU + consumerPU) * MINERALS_PER_PU + cpRaw * MINERALS_PER_CP
   const needEnergy = PU * ENERGY_PER_PU + L.researchLab * LAB_ENERGY + L.exoticRefinery * REFINERY_ENERGY
   const availMinerals = Math.max(0, stock.minerals) + produced.minerals
@@ -448,7 +590,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     for (const g of NEED_GOODS) {
       if (POP_UPKEEP[st][g] > 0) add(`${g === 'food' ? 'Food' : g === 'consumerGoods' ? 'Consumer goods' : 'Electronics'} shortage`, -SHORTAGE_HAPPINESS[g] * (1 - goodSatisfaction[g]))
     }
-    add('Inflation', -Math.min(0.3, s.inflation * INFLATION_HAPPINESS))
+    add('Inflation', -Math.min(0.3, Math.max(0, s.inflation) * INFLATION_HAPPINESS))
     if (s.warTaxes) add('War taxes', -WAR_TAX_HAPPINESS)
     const happiness = clamp(0.5 + parts.reduce((n, p) => n + p.value, 0), 0, 1)
     strata[st] = { population: stratumPop[st], happiness, parts }
@@ -464,11 +606,10 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   for (const g of SIMPLE_GOODS) grossValue += produced[g] * GOOD_VALUE[g]
   let inputValue = 0
   for (const g of SIMPLE_GOODS) inputValue += used[g] * GOOD_VALUE[g]
-  const services = population * SERVICES_PER_POP * (0.5 + s.stability)
+  const services = population * SERVICES_PER_POP * (0.5 + s.stability) * productivity
+  const productivityGrowth = productivityGrowthFor(research, population)
   const realGdp = Math.max(1, (grossValue - inputValue + services) * TICKS_PER_YEAR)
   const gdp = realGdp * s.priceLevel
-  const realGrowth = s.realGdp > 0 ? (realGdp / s.realGdp - 1) * TICKS_PER_YEAR : 0
-  const nominalGrowth = s.gdp > 0 ? (gdp / s.gdp - 1) * TICKS_PER_YEAR : 0
 
   // Budget (annual).
   const unrest = s.stability < UNREST_BELOW
@@ -487,6 +628,24 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   // Stability follows approval (50% approval holds it at 50%).
   const stabilityTarget = clamp(approval, 0, 1)
 
+  // Inflation's pressures.
+  const unemploymentRate = workforce > 0 ? unemployedWorkers / workforce : 0
+  const consumerShortage = 1 - goodSatisfaction.consumerGoods + 0.5 * (1 - goodSatisfaction.electronics)
+  const currencyWeakness = s.currency.baseRate > 0 ? 1 - s.currency.rate / s.currency.baseRate : 0
+  const inflationParts = [
+    { label: 'Base', value: BASE_INFLATION },
+    { label: unemploymentRate < NATURAL_UNEMPLOYMENT ? 'Tight jobs market' : 'Unemployment', value: PHILLIPS * (NATURAL_UNEMPLOYMENT - unemploymentRate) },
+    { label: 'Shortages', value: SHORTAGE_INFLATION * consumerShortage },
+    { label: balance < 0 ? 'Budget deficit' : 'Budget surplus', value: -DEFICIT_INFLATION * (gdp > 0 ? balance / gdp : 0) },
+    { label: currencyWeakness > 0 ? 'Weak currency' : 'Strong currency', value: IMPORT_INFLATION * currencyWeakness },
+    { label: `${stance[0].toUpperCase()}${stance.slice(1)} money`, value: STANCE_INFLATION[stance] },
+  ].filter((p) => Math.abs(p.value) > 5e-5)
+  const inflationTarget = clamp(
+    inflationParts.reduce((n, p) => n + p.value, 0),
+    MIN_INFLATION_TARGET,
+    MAX_INFLATION_TARGET,
+  )
+
   return {
     population,
     efficiency,
@@ -501,6 +660,8 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     energyNeeded: needEnergy,
     constructionPoints,
     research,
+    productivity,
+    productivityGrowth,
     produced,
     used,
     consumed,
@@ -517,8 +678,6 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     tradeBalance: exportRevenue - importCost,
     realGdp,
     gdp,
-    realGrowth,
-    nominalGrowth,
     revenue,
     spending,
     balance,
@@ -536,8 +695,17 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     expDebt,
     expOther,
     stabilityTarget,
+    inflationTarget,
+    inflationParts,
     unrest,
   }
+}
+
+// Annual productivity growth from a month's research and the population
+// (millions) — see PRODUCTIVITY_*.
+export function productivityGrowthFor(researchPerMonth: number, populationMillions: number): number {
+  const perBillion = populationMillions > 0 ? researchPerMonth / (populationMillions / 1000) : 0
+  return PRODUCTIVITY_BASE + (PRODUCTIVITY_RESEARCH_MAX * perBillion) / (perBillion + PRODUCTIVITY_RESEARCH_HALF)
 }
 
 // The exchange rate fundamentals pull toward: low inflation, stability, low
@@ -586,7 +754,11 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
     const put = Math.min(cp, MAX_CP_PER_ORDER, orderCost(o) - o.progress)
     cp -= put
     const next = { ...o, progress: o.progress + put }
-    if (next.progress >= orderCost(o) - 1e-9 && worldLevels(w) < w.slots) {
+    const done = next.progress >= orderCost(o) - 1e-9
+    if (done && o.district && districtLevelsTotal(w) < landOf(w)) {
+      w.districts = { ...districtsOf(w), [o.district]: districtsOf(w)[o.district] + 1 }
+      completed.push(next)
+    } else if (done && o.building && buildingsInDistrict(w, DISTRICT_OF_BUILDING[o.building]) < districtSlots(w, DISTRICT_OF_BUILDING[o.building])) {
       w.buildings[o.building] = (w.buildings[o.building] ?? 0) + 1
       completed.push(next)
     } else queue.push(next)
@@ -612,12 +784,9 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
     inflation += (r.gdp > 0 ? printed / r.gdp : 0) * PRINT_INFLATION
     treasury = 0
   }
-  if (treasury > 0 && debt > 0 && r.balance > 0) {
-    const repay = Math.min(debt, treasury * 0.2)
-    debt -= repay
-    treasury -= repay
-  }
-  inflation = Math.max(0, BASE_INFLATION + (inflation - BASE_INFLATION) * (1 - INFLATION_DECAY))
+  // A surplus stays in the treasury (as the balance shows); paying down debt is
+  // a choice — the player's Pay Debt button, the AI's cash rules.
+  inflation = r.inflationTarget + (inflation - r.inflationTarget) * (1 - INFLATION_DECAY)
   const priceLevel = s.priceLevel * (1 + inflation / TICKS_PER_YEAR)
 
   // Currency drifts toward its fundamentals.
@@ -626,6 +795,7 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
 
   const state: AbstractEconomyState = {
     ...s,
+    productivity: r.productivity * (1 + r.productivityGrowth / TICKS_PER_YEAR),
     population: r.population,
     gdp: r.gdp,
     realGdp: r.realGdp,

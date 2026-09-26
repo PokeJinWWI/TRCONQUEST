@@ -202,7 +202,9 @@ export type DropResult = { ok: true } | { ok: false; reason: string }
 
 // Can these unit types be put down at this node? Walkable for all of them,
 // and not right on top of the enemy.
-export function dropCheck(surface: BodySurface, node: number, types: UnitType[], ownerId: string, armies: Army[], atWar: AtWarFn): DropResult {
+// `shielded` (optional): nodes an enemy planetary shield covers — no landing there.
+export function dropCheck(surface: BodySurface, node: number, types: UnitType[], ownerId: string, armies: Army[], atWar: AtWarFn, shielded?: (node: number) => boolean): DropResult {
+  if (shielded?.(node)) return { ok: false, reason: 'A planetary shield covers this area' }
   const terrain = terrainAt(surface, node)
   const blocked = types.filter((t) => !passableFor(terrain, t))
   if (blocked.length > 0) return { ok: false, reason: `${TERRAIN[terrain].name} — ${UNIT_TYPES[blocked[0]].name} can't land there` }
@@ -234,6 +236,7 @@ export function defaultDropNode(
   owners: OwnerMap,
   holders: NodeHolderMap,
   atWar: AtWarFn,
+  shielded?: (node: number) => boolean,
 ): number | null {
   const here = landedUnits(armies, surface.bodyName)
   const enemyKeys = surface.keySlots.filter((k) => {
@@ -257,7 +260,7 @@ export function defaultDropNode(
     )
     .sort((a, b) => arc(nodePoint(a), goal) - arc(nodePoint(b), goal) || a - b)
   for (const node of candidates) {
-    if (dropCheck(surface, node, types, ownerId, armies, atWar).ok) return node
+    if (dropCheck(surface, node, types, ownerId, armies, atWar, shielded).ok) return node
   }
   return null
 }

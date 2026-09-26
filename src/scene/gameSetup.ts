@@ -14,6 +14,10 @@ import { useEconomyStore, worldByName } from '../state/economyStore'
 import { bodiesOwnedBy } from './territory'
 import { spawnOwnedShip } from './shipyardLogic'
 import { groundSurface, musterNode } from './groundLogic'
+import { placeInstallation } from './defenseLogic'
+import { useDefenseStore } from '../state/defenseStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
 
 export function setUpNewGame(): void {
   const { ships } = useShipStore.getState()
@@ -22,6 +26,29 @@ export function setUpNewGame(): void {
     for (const classId of STARTING_NAVY) spawnOwnedShip(classId, country.id, country.capitalStarId, country.capitalBodyName)
   }
   seedStartingArmies()
+  seedStartingDefenses()
+}
+
+// Every capital starts fortified: a Fortress and a Defense Battery, ready now
+// (scene/defenseLogic.ts). Guarded per nation like the armies.
+export const STARTING_DEFENSES: DefenseKind[] = ['fortress', 'defenseBattery']
+export function seedStartingDefenses(simDays = useGameTimeStore.getState().simDays): void {
+  const { bodyOwner } = useTerritoryStore.getState()
+  let installations = useDefenseStore.getState().installations
+  for (const country of COUNTRIES) {
+    if (installations.some((i) => i.builtBy === country.id)) continue
+    const surface = groundSurface(country.capitalBodyName, bodyOwner)
+    if (!surface) continue
+    for (const kind of STARTING_DEFENSES) {
+      const node = placeInstallation(surface, installations, kind)
+      if (node === null) continue
+      installations = [
+        ...installations,
+        { id: `def-start-${country.id}-${kind}`, bodyName: country.capitalBodyName, kind, node, integrity: DEFENSE_DEFS[kind].integrity, builtBy: country.id, readySimDays: simDays },
+      ]
+    }
+  }
+  useDefenseStore.getState().setInstallations(installations)
 }
 
 export function seedStartingArmies(): void {

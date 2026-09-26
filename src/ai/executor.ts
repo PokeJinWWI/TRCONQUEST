@@ -127,6 +127,9 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
       case 'land':
         useArmyStore.getState().land(intent.shipId, intent.dropNode)
         break
+      case 'set-bombard':
+        useShipStore.getState().setBombardStance(intent.shipId, intent.stance)
+        break
     }
   }
 }

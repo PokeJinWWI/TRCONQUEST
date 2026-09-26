@@ -11,6 +11,7 @@ import {
   consumerPUNeeded,
   debtCeiling,
   freeSlots,
+  freeLand,
   normalizeAllocation,
   worldJobs,
   worldWorkforce,
@@ -22,7 +23,7 @@ import {
   type TradeOrders,
   type WorldState,
 } from './abstractEconomy'
-import { SIMPLE_BUILDING_DEFS, type SimpleBuildingId } from '../data/simplisticEconomyData'
+import { DISTRICT_OF_BUILDING, SIMPLE_BUILDING_DEFS, type SimpleBuildingId } from '../data/simplisticEconomyData'
 
 export interface AbstractAIContext {
   atWar: boolean
@@ -64,6 +65,11 @@ const EXPORT_ABOVE = 3000 // export part of a bulk good's surplus once stockpile
 const EXPORT_SHARE = 0.25
 const EXOTIC_TARGET = 2 // keep at least this much exotic matter coming in per month
 const FACTORIES_PER_LAB = 6
+const JOB_HEADROOM = 0.05
+const TIGHTEN_ABOVE = 0.04 // inflation above this → tight money…
+const UNTIGHTEN_BELOW = 0.025 // …held until it's back under this
+const LOOSEN_BELOW = 0.01 // below this → loose money…
+const UNLOOSEN_ABOVE = 0.0175 // …held until it's back over this // build until jobs exceed the workforce by this much
 const FACTORIES_PER_REFINERY = 8
 
 function clamp(x: number, lo: number, hi: number): number {
@@ -89,7 +95,7 @@ function levels(worlds: WorldState[], b: SimpleBuildingId): number {
 // flowing, then strategic fuel and research, then more industry.
 export function nextBuilding(s: AbstractEconomyState, ctx: AbstractAIContext): SimpleBuildingId {
   const r = ctx.report
-  const queued = (b: SimpleBuildingId) => s.queue.some((o) => o.building === b)
+  const queued = (b: SimpleBuildingId) => s.queue.some((o) => o.building === b || (o.district && o.district === DISTRICT_OF_BUILDING[b]))
   const factories = levels(ctx.worlds, 'factory')
   // A drained stockpile shows a net of 0, not a deficit — so compare this
   // month's output against what's wanted too.
@@ -103,15 +109,20 @@ export function nextBuilding(s: AbstractEconomyState, ctx: AbstractAIContext): S
   return 'factory'
 }
 
-// The world with the most spare workers that can take the building.
+// The world with the most spare workers that can take the building — one with a
+// free slot in the building's district, or land to develop that district first.
+// A nation builds a little AHEAD of its labour force (up to JOB_HEADROOM more
+// jobs than workers): the new jobs fill as the population grows, so output rises
+// month by month instead of in a step every time enough idle workers pile up.
 export function worldFor(s: AbstractEconomyState, worlds: WorldState[], b: SimpleBuildingId): WorldState | null {
   const need = SIMPLE_BUILDING_DEFS[b].jobs
+  const d = DISTRICT_OF_BUILDING[b]
   let best: WorldState | null = null
   let bestSpare = -Infinity
   for (const w of worlds) {
-    const queuedJobs = s.queue.filter((o) => o.bodyName === w.bodyName).reduce((n, o) => n + SIMPLE_BUILDING_DEFS[o.building].jobs, 0)
-    const spare = worldWorkforce(w) - worldJobs(w) - queuedJobs
-    if (spare < need || freeSlots(w, s.queue) <= 0) continue
+    const queuedJobs = s.queue.filter((o) => o.bodyName === w.bodyName && o.building).reduce((n, o) => n + SIMPLE_BUILDING_DEFS[o.building!].jobs, 0)
+    const spare = worldWorkforce(w) * (1 + JOB_HEADROOM) - worldJobs(w) - queuedJobs
+    if (spare < need || (freeSlots(w, s.queue, d) <= 0 && freeLand(w, s.queue) <= 0)) continue
     if (spare > bestSpare) {
       bestSpare = spare
       best = w
@@ -171,6 +182,14 @@ export function applyAbstractEconomyAI(s: AbstractEconomyState, ctx: AbstractAIC
   const nearCeiling = r.debtToGdp >= debtCeiling(r.rating) * CEILING_PRESSURE
   const moneyCreation = nearCeiling && s.inflation < PRINT_MAX_INFLATION ? PRINT_RATE : 0
 
+  // Monetary stance — lean against inflation, holding a stance until inflation is
+  // well back toward 2% (hysteresis), so it never flip-flops month to month.
+  let monetaryStance = s.monetaryStance ?? 'neutral'
+  if (s.inflation > TIGHTEN_ABOVE) monetaryStance = 'tight'
+  else if (s.inflation < LOOSEN_BELOW) monetaryStance = 'loose'
+  else if (monetaryStance === 'tight' && s.inflation < UNTIGHTEN_BELOW) monetaryStance = 'neutral'
+  else if (monetaryStance === 'loose' && s.inflation > UNLOOSEN_ABOVE) monetaryStance = 'neutral'
+
   // War taxes — at war and stable enough; dropped in peace or unrest.
   const warTaxes = ctx.atWar && s.stability >= (s.warTaxes ? LOW_STABILITY : WAR_TAX_MIN_STABILITY)
 
@@ -201,10 +220,14 @@ export function applyAbstractEconomyAI(s: AbstractEconomyState, ctx: AbstractAIC
     const building = nextBuilding(s, ctx)
     const world = worldFor(s, ctx.worlds, building)
     if (world) {
-      queue = [...queue, { id: nextOrderId, bodyName: world.bodyName, building, progress: 0 }]
+      // No free slot in its district yet: develop the district first; the
+      // building follows once the district level stands.
+      const d = DISTRICT_OF_BUILDING[building]
+      const order = freeSlots(world, queue, d) > 0 ? { building } : { district: d }
+      queue = [...queue, { id: nextOrderId, bodyName: world.bodyName, ...order, progress: 0 }]
       nextOrderId++
     }
   }
 
-  return { ...s, allocation, taxRate, welfare, moneyCreation, warTaxes, treasury, reserves, debt, queue, nextOrderId, trade: tradeOrders(ctx) }
+  return { ...s, allocation, taxRate, welfare, moneyCreation, monetaryStance, warTaxes, treasury, reserves, debt, queue, nextOrderId, trade: tradeOrders(ctx) }
 }

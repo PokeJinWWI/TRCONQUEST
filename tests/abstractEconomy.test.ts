@@ -9,12 +9,13 @@ import {
   normalizeAllocation,
   emptyStockpile,
   fundamentalRate,
+  productivityGrowthFor,
   type AbstractEconomyState,
   type Allocation,
   type Stockpile,
   type WorldState,
 } from '../src/economy-abstract/abstractEconomy'
-import { useAbstractEconomyStore } from '../src/state/abstractEconomyStore'
+import { useAbstractEconomyStore, smoothedRealGrowth, worldsOf } from '../src/state/abstractEconomyStore'
 import { useResourceStore } from '../src/state/resourceStore'
 import { useTechStore } from '../src/state/techStore'
 import { useTerritoryStore } from '../src/state/territoryStore'
@@ -179,10 +180,10 @@ console.log('\n=== 6. Construction builds buildings ===')
   // An order for a world the nation doesn't hold is paused, not lost.
   const paused = tickAbstractEconomy(mk({ queue: [{ id: 1, bodyName: 'Elsewhere', building: 'farm', progress: 10 }] }), [world()], stock())
   check('an order on a world not held is paused', paused.state.queue.length === 1 && paused.state.queue[0].progress === 10)
-  // A full world can't complete a building.
-  const packed = world({ slots: 36 }) // exactly its 36 levels
-  const stuck = tickAbstractEconomy(mk({ queue: [{ id: 1, bodyName: 'Home', building: 'farm', progress: 149 }] }), [packed], stock())
-  check('a world with no free slot does not gain a building', (stuck.worlds[0].buildings.farm ?? 0) === 6)
+  // A full district can't complete a building.
+  const packed = world({ buildings: { ...world().buildings, farm: 8 }, districts: { industrial: 4, academic: 1, agricultural: 2, mining: 2, generator: 2 } })
+  const stuck = tickAbstractEconomy(mk({ queue: [{ id: 1, bodyName: 'Home', building: 'farm', progress: 299 }] }), [packed], stock())
+  check('a district with no free slot does not gain a building', (stuck.worlds[0].buildings.farm ?? 0) === 8)
 }
 
 console.log('\n=== 7. Budget: deficits are printed or borrowed; welfare costs money and buys stability ===')
@@ -198,8 +199,8 @@ console.log('\n=== 7. Budget: deficits are printed or borrowed; welfare costs mo
   const fullWelfare = abstractReport(mk({ welfare: 1 }), [world()], stock())
   check('welfare costs money', fullWelfare.expWelfare > noWelfare.expWelfare && noWelfare.expWelfare === 0)
   check('welfare raises the stability target', fullWelfare.stabilityTarget > noWelfare.stabilityTarget)
-  const steady = run(mk(), [world()], stock(), 120).s
-  check('with no printing, inflation settles near 2%', Math.abs(steady.inflation - 0.02) < 0.005, (steady.inflation * 100).toFixed(2) + '%')
+  const steady = run(mk({ taxRate: 0.12 }), [world({ population: 2600 })], stock(), 24).s
+  check('with no printing and a normal economy, inflation settles near 2%', Math.abs(steady.inflation - 0.02) < 0.01, (steady.inflation * 100).toFixed(2) + '%')
 }
 
 console.log('\n=== 8. Economy type ===')
@@ -272,7 +273,7 @@ console.log('\n=== 12. Store: seeds, stockpile sync, research, construction, ter
   check('...and the monthly figure', after.monthlyDelta.alloys > 0, `+${after.monthlyDelta.alloys}`)
   check('research reaches the tech tree', useTechStore.getState().stateFor(mars).researchPoints.physics > research0)
 
-  const q1 = useAbstractEconomyStore.getState().queueBuilding(mars, 'Mars', 'factory')
+  const q1 = useAbstractEconomyStore.getState().queueBuilding(mars, 'Mars', 'farm') // agricultural district has room
   check('queueing on an owned world works', q1.ok && useAbstractEconomyStore.getState().byCountry[mars].queue.length === 1)
   const q2 = useAbstractEconomyStore.getState().queueBuilding(mars, 'Venus', 'factory')
   check("can't build on someone else's world", !q2.ok)
@@ -297,6 +298,83 @@ console.log('\n=== 12. Store: seeds, stockpile sync, research, construction, ter
   check('a ceded world drops its queued projects', !useAbstractEconomyStore.getState().byCountry[mars].queue.some((o) => o.bodyName === 'Phobos'))
   check('...and its economy now belongs to the new owner', useAbstractEconomyStore.getState().reports['republic-of-venus'].population > 3000)
   useTerritoryStore.getState().reset()
+}
+
+console.log('\n=== 13. Stability for players (playtest regressions) ===')
+{
+  // Growth readout: never one month x 12.
+  const flat = Array.from({ length: 10 }, () => ({ realGdp: 1000 }))
+  flat.push({ realGdp: 1020 }) // a factory completes: +2% in one month
+  const g = smoothedRealGrowth(flat)
+  check('one building finishing does not read as +24% growth', g !== undefined && g < 0.03, g === undefined ? 'undefined' : (g * 100).toFixed(1) + '%')
+  check('no growth figure before 6 months of history', smoothedRealGrowth(flat.slice(0, 6)) === undefined)
+  const year = Array.from({ length: 13 }, (_, i) => ({ realGdp: i === 12 ? 1030 : 1000 }))
+  check('with a year of history it is year on year', Math.abs((smoothedRealGrowth(year) ?? 0) - 0.03) < 1e-9)
+
+  // Nations start at rest: stability where approval holds it.
+  const fresh = useAbstractEconomyStore.getState()
+  fresh.reset()
+  const st0 = useAbstractEconomyStore.getState()
+  for (const [id, n] of Object.entries(st0.byCountry)) {
+    check(`${id} starts with stability at its approval`, Math.abs(n.stability - st0.reports[id].approval) < 1e-9, `${n.stability.toFixed(3)}`)
+  }
+  const mars0 = st0.byCountry['imperial-state-of-mars']
+  const marsWorlds = worldsOf('imperial-state-of-mars', st0.worlds, seedBodyOwners(), {})
+  const idle = run(mars0, marsWorlds, stock(), 36)
+  check('an idle nation stays steady for 3 years (stability)', Math.abs(idle.s.stability - mars0.stability) < 0.03, `${mars0.stability.toFixed(2)} -> ${idle.s.stability.toFixed(2)}`)
+  const idleGrowth = Math.pow(idle.s.realGdp / mars0.realGdp, 1 / 3) - 1
+  check('...and its real GDP grows only by productivity (~0.5-1.5%/yr), no swings', idleGrowth > 0.005 && idleGrowth < 0.015, `${(idleGrowth * 100).toFixed(2)}%/yr`)
+
+  // A surplus stays in the treasury; debt is only paid on purpose.
+  const surplus = mk({ taxRate: 0.3, treasury: 100, debt: 1000 })
+  const r = abstractReport(surplus, [world()], stock())
+  const next = tickAbstractEconomy(surplus, [world()], stock()).state
+  check('a surplus adds its monthly balance to the treasury', r.balance > 0 && Math.abs(next.treasury - (100 + r.balance / 12)) < 1e-6)
+  check('...and debt is not silently repaid', next.debt === 1000)
+  useAbstractEconomyStore.getState().reset()
+}
+
+console.log('\n=== 14. Productivity: research-driven growth, developed-nation population ===')
+{
+  const r = abstractReport(mk(), [world()], stock())
+  check('productivity starts at 1 when unset', r.productivity === 1)
+  check('labs make productivity grow faster than the base drift', r.productivityGrowth > productivityGrowthFor(0, r.population), (r.productivityGrowth * 100).toFixed(2) + '%/yr')
+  check('with no research it still drifts up slowly', productivityGrowthFor(0, 3000) > 0 && productivityGrowthFor(0, 3000) < 0.005)
+  check('diminishing returns: even huge research stays under ~4.5%/yr', productivityGrowthFor(1e6, 1000) < 0.045)
+  const later = run(mk(), [world()], stock(), 120).s
+  check('productivity compounds over ten years', (later.productivity ?? 1) > 1.05, (later.productivity ?? 1).toFixed(3))
+  const hi = abstractReport(mk({ productivity: 1.2 }), [world()], stock())
+  check('higher productivity means more output and real GDP', hi.productionUnits > r.productionUnits * 1.15 && hi.realGdp > r.realGdp * 1.15)
+  const pop = run(mk(), [world()], stock(), 120).ws[0].population
+  check('population grows at a developed-nation pace (<1%/yr)', pop > 3000 && pop < 3000 * Math.pow(1.01, 10), `${pop.toFixed(0)} after 10 yrs`)
+}
+
+console.log('\n=== 15. Inflation responds to the economy (not stuck at 2%) ===')
+{
+  const base = abstractReport(mk(), [world()], stock())
+  const partsOf = (r: typeof base) => r.inflationParts.map((p) => p.label).join(', ')
+  check('the target is the sum of its parts', Math.abs(base.inflationTarget - base.inflationParts.reduce((n, p) => n + p.value, 0)) < 1e-9, partsOf(base))
+  const tight = abstractReport(mk(), [world({ population: 2400 })], stock()) // jobs ≈ workforce
+  const slack = abstractReport(mk(), [world({ population: 5000 })], stock()) // mass unemployment
+  check('a tight jobs market pushes inflation up, mass unemployment pulls it down', tight.inflationTarget > base.inflationTarget && slack.inflationTarget < base.inflationTarget, `${(tight.inflationTarget * 100).toFixed(2)}% / ${(slack.inflationTarget * 100).toFixed(2)}%`)
+  const short = abstractReport(mk({ allocation: { civilian: 0.7, military: 0.3, consumer: 0 } }), [world()], stock({ consumerGoods: 0, electronics: 0 }))
+  check('shortages raise inflation', short.inflationTarget > base.inflationTarget + 0.02)
+  const deficit = abstractReport(mk({ taxRate: 0.01 }), [world()], stock())
+  check('a deficit raises it, a surplus cools it', deficit.inflationTarget > abstractReport(mk({ taxRate: 0.3 }), [world()], stock()).inflationTarget)
+  const weak = abstractReport(mk({ currency: { code: 'X', name: 'X', rate: 0.6, baseRate: 1 } }), [world()], stock())
+  check('a weak currency imports inflation', weak.inflationTarget > base.inflationTarget)
+  const tightMoney = abstractReport(mk({ monetaryStance: 'tight' }), [world()], stock())
+  const loose = abstractReport(mk({ monetaryStance: 'loose' }), [world()], stock())
+  check('tight money lowers inflation and slows construction', tightMoney.inflationTarget < base.inflationTarget && tightMoney.constructionPoints < base.constructionPoints)
+  check('loose money raises inflation and speeds construction', loose.inflationTarget > base.inflationTarget && loose.constructionPoints > base.constructionPoints)
+  const employed = world({ population: 2600 }) // ~4% unemployment
+  let s = mk({ inflation: 0.02, monetaryStance: 'loose' })
+  const firstStep = tickAbstractEconomy(s, [employed], stock()).state.inflation
+  for (let i = 0; i < 36; i++) s = tickAbstractEconomy(s, [employed], stock()).state
+  const target = abstractReport(s, [employed], stock()).inflationTarget
+  check('inflation drifts toward its target gradually, not in one jump', Math.abs(firstStep - 0.02) < Math.abs(target - 0.02) * 0.2 && Math.abs(s.inflation - target) < 0.01, `${(firstStep * 100).toFixed(2)}% → ${(s.inflation * 100).toFixed(2)}% (target ${(target * 100).toFixed(2)}%)`)
+  const deflating = abstractReport(mk({ inflation: -0.01 }), [world()], stock())
+  check('deflation does not count as happiness', !deflating.strata.workers.parts.some((p) => p.label === 'Inflation' && p.value > 0))
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

@@ -5437,3 +5437,429 @@ div.fleet-row .combat-density-row {
   align-items: center;
   margin-top: 4px;
 }
+
+/* --- Planet screen (Stellaris-style): header, summary, districts & slot grid --- */
+.pl-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border: 1px solid;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(111, 227, 255, 0.06), transparent);
+}
+.pl-header-globe {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 10px rgba(111, 227, 255, 0.25);
+}
+.pl-header-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #dff4ff;
+  letter-spacing: 0.03em;
+}
+.pl-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 6px 0;
+}
+.pl-stat {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+.pl-stat span {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pl-stat b {
+  font-size: 12px;
+  color: #cdeeff;
+}
+.pl-stat.warn b {
+  color: #ffb36b;
+}
+.pl-output {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.pl-output-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  color: rgba(223, 244, 255, 0.85);
+}
+.pl-output-chip b {
+  color: #4ade80;
+}
+.pl-land {
+  font-size: 11px;
+  color: rgba(223, 244, 255, 0.85);
+  margin-bottom: 6px;
+}
+.pl-message,
+.pl-owner-note {
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+.pl-district {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 3px solid rgba(111, 227, 255, 0.5);
+  border-radius: 4px;
+  padding: 6px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.015);
+}
+.pl-district-industrial { border-left-color: #ffb36b; }
+.pl-district-academic { border-left-color: #c49bff; }
+.pl-district-agricultural { border-left-color: #4ade80; }
+.pl-district-mining { border-left-color: #b8a07a; }
+.pl-district-generator { border-left-color: #ffd23f; }
+.pl-district-urban { border-left-color: #6fe3ff; }
+.pl-district-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #dff4ff;
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.pl-district-name {
+  font-weight: 700;
+  flex: 1;
+}
+.pl-district-level,
+.pl-district-slots {
+  font-size: 10px;
+  color: rgba(223, 244, 255, 0.6);
+}
+.pl-district-bonus {
+  font-size: 10px;
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 8px;
+  padding: 0 5px;
+}
+.pl-develop {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.pl-develop:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 4px;
+}
+.pl-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 2px 4px;
+  min-height: 54px;
+  border: 1px solid rgba(111, 227, 255, 0.28);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(111, 227, 255, 0.09), rgba(111, 227, 255, 0.02));
+  color: #9fe8ff;
+  font: inherit;
+}
+.pl-tile.understaffed {
+  border-color: rgba(255, 179, 107, 0.45);
+  color: #ffcf9e;
+}
+.pl-tile.queued {
+  border-style: dashed;
+  opacity: 0.75;
+}
+.pl-tile.empty {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.15);
+  background: none;
+  color: rgba(255, 255, 255, 0.35);
+  justify-content: center;
+}
+button.pl-tile.empty {
+  cursor: pointer;
+}
+button.pl-tile.empty:hover {
+  border-color: rgba(111, 227, 255, 0.6);
+  color: #9fe8ff;
+}
+.pl-plus {
+  font-size: 18px;
+  line-height: 1;
+}
+.pl-tile-name {
+  font-size: 8.5px;
+  text-align: center;
+  line-height: 1.1;
+  color: rgba(223, 244, 255, 0.8);
+}
+.pl-tile-bar {
+  width: 80%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: auto;
+}
+.pl-tile-bar > span {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+.pl-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+.pl-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(111, 227, 255, 0.05);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  color: #cdeeff;
+  font: inherit;
+  font-size: 10px;
+  padding: 3px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.pl-pick:hover {
+  background: rgba(111, 227, 255, 0.15);
+}
+.pl-pick:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pl-pick.small {
+  padding: 2px 5px;
+}
+.pl-new-district {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  margin-bottom: 8px;
+}
+.pl-urban-note {
+  font-size: 10px;
+}
+.pl-queue {
+  margin-top: 6px;
+}
+.pl-stratum {
+  display: grid;
+  grid-template-columns: 80px 1fr 56px 52px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #cdeeff;
+  padding: 2px 0;
+}
+.pl-stratum-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.pl-stratum-bar > span {
+  display: block;
+  height: 100%;
+  background: #6fe3ff;
+}
+.pl-stratum-num,
+.pl-stratum-happy {
+  font-size: 10px;
+  text-align: right;
+}
+.pl-jobs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+}
+.pl-job {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: rgba(223, 244, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+.pl-job span {
+  flex: 1;
+}
+.abs-world-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #cdeeff;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  padding: 0 0 4px;
+}
+.pl-district-c-core { border-left-color: #c77dff; }
+.pl-district-c-urban { border-left-color: #6fe3ff; }
+.pl-district-c-industrial { border-left-color: #ffd23f; }
+.pl-district-c-resource { border-left-color: #4ade80; }
+.pl-tile { position: relative; }
+.pl-tile-level {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #dff4ff;
+}
+.pl-tile.owner-corporation { border-color: rgba(255, 210, 63, 0.35); }
+.pl-tile.owner-worker { border-color: rgba(74, 222, 128, 0.35); }
+.pl-picker-wide {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.pl-funder {
+  margin-bottom: 6px;
+}
+.pl-manage {
+  margin-top: 8px;
+  color: #9fe8ff;
+}
+.pl-def-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pl-def {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 1px solid rgba(111, 227, 255, 0.25);
+  border-radius: 4px;
+  color: #9fe8ff;
+  background: rgba(111, 227, 255, 0.04);
+}
+.pl-def.building {
+  border-style: dashed;
+  opacity: 0.8;
+}
+.pl-def-body {
+  flex: 1;
+  font-size: 11px;
+  color: #cdeeff;
+}
+.pl-def-name {
+  font-weight: 700;
+}
+.pl-def-bar {
+  display: block;
+  height: 4px;
+  margin-top: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.pl-def-bar > span {
+  display: block;
+  height: 100%;
+  background: #4ade80;
+}
+.pl-def-build {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ground-install-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 3px;
+  border: 1px solid;
+  border-radius: 3px;
+  background: rgba(5, 12, 20, 0.85);
+  transform: translate(-50%, -50%);
+}
+.ground-install-marker.building {
+  border-style: dashed;
+  opacity: 0.7;
+}
+.ground-install-bar {
+  width: 16px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.ground-install-bar > span {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+.pl-bombard {
+  border: 1px solid rgba(255, 107, 74, 0.35);
+  border-radius: 4px;
+  padding: 5px 7px;
+  margin: 6px 0;
+  background: rgba(255, 60, 40, 0.06);
+}
+.pl-bombard-order {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0;
+  font-size: 10px;
+}
+.pl-tile.foreign {
+  background: rgba(255, 255, 255, 0.03);
+}
+.pl-flag {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+.pl-tile-x {
+  position: absolute;
+  top: 0;
+  right: 1px;
+}
+.pl-foreign {
+  margin-top: 5px;
+}

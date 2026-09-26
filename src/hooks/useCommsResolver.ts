@@ -37,6 +37,7 @@ export function useCommsResolver() {
       }
 
       for (const ship of ships) {
+        if (ship.pendingBombard && simDays >= ship.pendingBombard.arrivesSimDays) useShipStore.getState().setBombardStance(ship.id, ship.pendingBombard.stance)
         if (ship.pendingStance && simDays >= ship.pendingStance.arrivesSimDays) {
           setStance(ship.id, ship.pendingStance.stance)
         }

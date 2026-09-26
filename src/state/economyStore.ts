@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { districtOrder, freeLandOfWorld } from '../economy/districts'
+import type { DistrictType } from '../economy/recipes'
 import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies, seedBanks } from '../economy/economySeed'
 import { tickEconomy, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
@@ -281,6 +283,16 @@ interface EconomyStore {
   // government pool → treasury) or a corporation (private pool → its cash).
   // Refused if the target district on the world is full.
   queueConstruction: (worldId: string, recipeId: string, owner?: BuildingOwner) => void
+  // Develop one more level of a district (a state project; uses one unit of land).
+  queueDistrict: (worldId: string, district: DistrictType) => void
+  // Orbital bombardment (scene/bombardment.ts), keyed by world NAME (body):
+  // devastation 0–1, and the share of population killed.
+  setDevastation: (byBody: Record<string, number>) => void
+  killPopulation: (shareByBody: Record<string, number>) => void
+  // Foreign buildings (scene/holdings.ts): urban slots taken, per world name,
+  // and money in/out of a country's treasury.
+  setForeignSlots: (byBody: Record<string, number>) => void
+  adjustTreasury: (countryId: string, amount: number) => void
   cancelConstruction: (worldId: string, orderId: string) => void
   // State override: pin a building to a method. On a private building under a
   // market economy this is interference (see economyTick's malus).
@@ -541,6 +553,45 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         constructionCounter += 1
         const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionWork(recipeId), progress: 0, owner }
         return { ...w, constructionQueue: [...w.constructionQueue, order] }
+      }),
+    })),
+  setDevastation: (byBody) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const dev = byBody[w.name] ?? 0
+        if ((w.devastation ?? 0) === dev) return w
+        changed = true
+        return { ...w, devastation: dev > 0 ? dev : undefined }
+      })
+      return changed ? { worlds } : state
+    }),
+  setForeignSlots: (byBody) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const n = byBody[w.name] ?? 0
+        if ((w.foreignSlots ?? 0) === n) return w
+        changed = true
+        return { ...w, foreignSlots: n > 0 ? n : undefined }
+      })
+      return changed ? { worlds } : state
+    }),
+  adjustTreasury: (countryId, amount) =>
+    set((state) => ({ countries: state.countries.map((c) => (c.id === countryId ? { ...c, treasury: c.treasury + amount } : c)) })),
+  killPopulation: (shareByBody) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => {
+        const share = shareByBody[w.name] ?? 0
+        return share > 0 ? { ...w, pops: w.pops.map((p) => ({ ...p, populationSize: p.populationSize * (1 - share) })) } : w
+      }),
+    })),
+  queueDistrict: (worldId, district) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => {
+        if (w.id !== worldId || freeLandOfWorld(w) <= 0) return w
+        constructionCounter += 1
+        return { ...w, constructionQueue: [...w.constructionQueue, districtOrder(`dis-${worldId}-${district}-${constructionCounter}`, district)] }
       }),
     })),
   cancelConstruction: (worldId, orderId) =>

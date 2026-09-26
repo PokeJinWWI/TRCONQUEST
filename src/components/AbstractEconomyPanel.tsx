@@ -1,17 +1,19 @@
 import { Fragment, useState } from 'react'
 import { usePlayerStore } from '../state/playerStore'
-import { useAbstractEconomyStore, worldsOf, type AbstractHistoryPoint } from '../state/abstractEconomyStore'
+import { useAbstractEconomyStore, worldsOf, smoothedRealGrowth, GROWTH_MIN_MONTHS } from '../state/abstractEconomyStore'
 import { useResourceStore } from '../state/resourceStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import {
   ECONOMY_TYPES,
+  MONETARY_STANCES,
   economyTypeLabel,
   fundamentalRate,
-  freeSlots,
   MAX_CP_PER_ORDER,
   orderCost,
+  orderName,
+  districtLevelsTotal,
+  landOf,
   worldJobs,
-  worldLevels,
   worldStaffing,
   worldWorkforce,
   STRATA,
@@ -23,19 +25,13 @@ import {
   type NeedGood,
   type Stratum,
 } from '../economy-abstract/abstractEconomy'
-import {
-  SIMPLE_BUILDINGS,
-  SIMPLE_BUILDING_DEFS,
-  SIMPLE_GOODS,
-  SIMPLE_GOOD_NAMES,
-  GOOD_VALUE,
-  type SimpleBuildingId,
-  type SimpleGood,
-} from '../data/simplisticEconomyData'
+import { SIMPLE_GOODS, SIMPLE_GOOD_NAMES, GOOD_VALUE, type SimpleGood } from '../data/simplisticEconomyData'
 import { getCountry } from '../data/countryData'
 import type { TechCategory } from '../data/techData'
 import { formatMoney, formatPop } from '../economy/format'
 import { TimeChart } from './TimeChart'
+import { SimpleDistrictsTab } from './planet/SimplePlanetTabs'
+import { HoldingsAbroad } from './planet/ForeignHoldings'
 
 // Simple mode's economy screen for the player's nation (Complex mode has
 // its own panels). Four tabs: Macro (the national accounts and policy),
@@ -71,9 +67,9 @@ function Meter({ label, value, title }: { label: string; value: number; title?: 
   )
 }
 
-function WarningSigns({ s, r }: { s: AbstractEconomyState; r: AbstractReport }) {
+function WarningSigns({ s, r, growth }: { s: AbstractEconomyState; r: AbstractReport; growth: number | undefined }) {
   const signs: { label: string; on: boolean }[] = [
-    { label: 'Negative real growth', on: r.realGrowth < 0 },
+    { label: 'Negative real growth', on: (growth ?? 0) < 0 },
     { label: 'Inflation critical', on: s.inflation > 0.08 },
     { label: 'Extremely high deficit', on: r.deficitPctGdp < -0.05 },
     { label: 'Critical debt', on: r.debtToGdp > r.debtCeilingPct * 0.9 },
@@ -90,17 +86,6 @@ function WarningSigns({ s, r }: { s: AbstractEconomyState; r: AbstractReport }) 
       ))}
     </div>
   )
-}
-
-// Year-on-year real growth from the history once there's a year of it (the
-// per-month figure jumps whenever a building completes), else the monthly rate.
-function realGrowthOf(h: AbstractHistoryPoint[], r: AbstractReport): number {
-  if (h.length >= 13) {
-    const a = h[h.length - 13].realGdp
-    const b = h[h.length - 1].realGdp
-    return a > 0 ? b / a - 1 : 0
-  }
-  return r.realGrowth
 }
 
 export function AbstractEconomyPanel() {
@@ -140,12 +125,13 @@ function MacroTab({ countryId, s, r }: TabProps) {
   const setTaxRate = useAbstractEconomyStore((st) => st.setTaxRate)
   const setEconomyType = useAbstractEconomyStore((st) => st.setEconomyType)
   const setMoneyCreation = useAbstractEconomyStore((st) => st.setMoneyCreation)
+  const setMonetaryStance = useAbstractEconomyStore((st) => st.setMonetaryStance)
   const setWarTaxes = useAbstractEconomyStore((st) => st.setWarTaxes)
   const setAllocation = useAbstractEconomyStore((st) => st.setAllocation)
   const invest = useAbstractEconomyStore((st) => st.invest)
   const payDebt = useAbstractEconomyStore((st) => st.payDebt)
   const h = history ?? []
-  const realGrowth = realGrowthOf(h, r)
+  const realGrowth = smoothedRealGrowth(h)
   const alloc = s.allocation
 
   return (
@@ -167,7 +153,15 @@ function MacroTab({ countryId, s, r }: TabProps) {
         ]} tip="Nominal GDP is in today's prices; real GDP strips out inflation, so it only grows when you actually produce more." />
       )}
       {chart === 'inflation' && (
-        <TimeChart title="Inflation (per year)" endTick={tick} includeZero format={(v) => pct(v, 1)} series={[{ label: 'Inflation', color: '#ff6b6b', values: h.map((p) => p.inflation) }]} />
+        <>
+          <TimeChart title="Inflation (per year)" endTick={tick} includeZero format={(v) => pct(v, 1)} series={[{ label: 'Inflation', color: '#ff6b6b', values: h.map((p) => p.inflation) }]} />
+          <div className="abs-budget-col abs-parts" title="What pushes prices; inflation drifts toward the total a little each month (printing money spikes it on top).">
+            {r.inflationParts.map((p) => (
+              <div key={p.label}><span>{p.label}</span><span className={p.value > 0 ? 'econ-neg' : 'econ-pos'}>{p.value > 0 ? '+' : ''}{pct(p.value, 2)}</span></div>
+            ))}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 2 }}><span>Heading toward</span><span>{pct(r.inflationTarget, 2)}</span></div>
+          </div>
+        </>
       )}
       {chart === 'debt' && (
         <TimeChart title="Debt / GDP" endTick={tick} includeZero format={(v) => pct(v, 0)} series={[{ label: 'Debt/GDP', color: '#ff9a6b', values: h.map((p) => p.debtToGdp) }]} />
@@ -175,8 +169,9 @@ function MacroTab({ countryId, s, r }: TabProps) {
 
       <div className="cb-facts">
         <div title="GDP at starting prices — growth here is real: new buildings and a bigger population."><span className="inspect-label">Real GDP</span><span>{formatMoney(s.realGdp)}</span></div>
-        <div title={h.length >= 13 ? 'Year on year' : 'Last month, annualized (a year of history gives a steadier figure)'}><span className="inspect-label">Real growth</span><span className={realGrowth >= 0 ? 'econ-pos' : 'econ-neg'}>{pct(realGrowth, 2)}</span></div>
+        <div title={realGrowth === undefined ? `Needs ${GROWTH_MIN_MONTHS} months of history` : h.length >= 13 ? 'Real GDP vs a year ago' : `Annualized over the last ${h.length - 1} months`}><span className="inspect-label">Real growth</span><span className={realGrowth === undefined ? '' : realGrowth >= 0 ? 'econ-pos' : 'econ-neg'}>{realGrowth === undefined ? '—' : pct(realGrowth, 2)}</span></div>
         <div title="Cumulative inflation since the game began"><span className="inspect-label">Price level</span><span>{s.priceLevel.toFixed(3)}</span></div>
+        <div title="Output per worker (1.000 at the start). It grows every month — faster the more research your labs do per person — and multiplies everything your buildings and services produce. The main source of long-run growth."><span className="inspect-label">Productivity</span><span>{r.productivity.toFixed(3)} <span className="econ-pos">+{pct(r.productivityGrowth, 1)}/yr</span></span></div>
         <div><span className="inspect-label">Debt ceiling</span><span>{Math.round(r.debtCeilingPct * 100)}% GDP</span></div>
       </div>
 
@@ -184,6 +179,17 @@ function MacroTab({ countryId, s, r }: TabProps) {
         <Meter label="Stability" value={s.stability} title="Order and contentment — see the Social tab for what drives it. Low stability drags every building's output." />
       </div>
 
+      <div className="econ-control-row">
+        <span className="inspect-label" title="The central bank's stance. Tight money pulls inflation down (−1.5 points) but makes credit dear, slowing construction 10%. Loose money does the opposite.">Monetary stance</span>
+        <span>
+          {MONETARY_STANCES.map((m) => (
+            <button key={m} type="button" className={`laws-enact-btn${(s.monetaryStance ?? 'neutral') === m ? ' abs-on' : ''}`} style={{ marginLeft: 4 }} onClick={() => setMonetaryStance(countryId, m)}
+              title={m === 'tight' ? 'Fight inflation: −1.5 points, construction −10%' : m === 'loose' ? 'Stimulate: +1.5 points inflation, construction +10%' : 'No lean either way'}>
+              {m[0].toUpperCase() + m.slice(1)}
+            </button>
+          ))}
+        </span>
+      </div>
       <label className="econ-control-row" title="Cover this share of any budget deficit by printing money instead of borrowing. Fast cash, but it fuels inflation and weakens the currency.">
         <span className="inspect-label">Money creation</span>
         <span>
@@ -275,7 +281,7 @@ function MacroTab({ countryId, s, r }: TabProps) {
       </div>
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Economic warning signs</div>
-      <WarningSigns s={s} r={r} />
+      <WarningSigns s={s} r={r} growth={realGrowth} />
     </>
   )
 }
@@ -323,7 +329,7 @@ function IndustryTab({ countryId, s, r }: TabProps) {
       </div>
 
       <div className="econ-control-row">
-        <span className="inspect-label" title="Research Labs produce points into this tree">Research {fmt(r.research, 1)}/mo</span>
+        <span className="inspect-label" title={`Research Labs produce points into this tree. All research also raises productivity — currently +${pct(r.productivityGrowth, 2)}/yr; more labs per person, faster growth.`}>Research {fmt(r.research, 1)}/mo</span>
         <span>
           {FOCI.map((f) => (
             <button key={f.id} type="button" className={`laws-enact-btn${s.researchFocus === f.id ? ' abs-on' : ''}`} style={{ marginLeft: 4 }} onClick={() => setResearchFocus(countryId, f.id)}>
@@ -351,7 +357,7 @@ function IndustryTab({ countryId, s, r }: TabProps) {
           const paused = !mine.some((w) => w.bodyName === o.bodyName)
           return (
             <div key={o.id} className="abs-order">
-              <span>{i + 1}. {SIMPLE_BUILDING_DEFS[o.building].name} — {o.bodyName}{paused ? ' (paused: occupied)' : ''}</span>
+              <span>{i + 1}. {orderName(o)} — {o.bodyName}{paused ? ' (paused: occupied)' : ''}</span>
               <span className="abs-order-bar"><span style={{ width: `${Math.min(100, (o.progress / cost) * 100)}%` }} /></span>
               <span className="abs-dim">{fmt(o.progress)}/{cost}</span>
               <button type="button" className="abs-x" title="Cancel (progress is lost)" onClick={() => cancelOrder(countryId, o.id)}>×</button>
@@ -360,9 +366,12 @@ function IndustryTab({ countryId, s, r }: TabProps) {
         })
       )}
 
+      <div className="econ-subtitle" style={{ marginTop: 10 }} title="Your embassies and branch offices on other nations' worlds">Holdings abroad</div>
+      <HoldingsAbroad playerId={countryId} />
+
       <div className="econ-subtitle" style={{ marginTop: 10 }}>Worlds</div>
       {mine.map((w) => (
-        <WorldCard key={w.bodyName} countryId={countryId} bodyName={w.bodyName} />
+        <WorldRow key={w.bodyName} countryId={countryId} bodyName={w.bodyName} />
       ))}
       {occupied.map((w) => (
         <div key={w.bodyName} className="abs-world abs-dim">
@@ -373,57 +382,23 @@ function IndustryTab({ countryId, s, r }: TabProps) {
   )
 }
 
-// One world's population, workers and buildings. `countryId` is the viewer:
-// if they own and hold the world they get the build controls, otherwise it's a
-// read-only look (the planet inspect window uses it for any world).
-export function WorldCard({ countryId, bodyName }: { countryId: string | null; bodyName: string }) {
+// One world in the Industry tab: a summary line that expands into the planet
+// screen's district grid (the same component the planet window uses).
+function WorldRow({ countryId, bodyName }: { countryId: string; bodyName: string }) {
+  const [open, setOpen] = useState(false)
   const w = useAbstractEconomyStore((st) => st.worlds[bodyName])
-  const queue = useAbstractEconomyStore((st) => (countryId ? st.byCountry[countryId]?.queue : undefined))
-  const queueBuilding = useAbstractEconomyStore((st) => st.queueBuilding)
-  const owner = useTerritoryStore((st) => st.bodyOwner[bodyName])
-  const controller = useTerritoryStore((st) => st.bodyController[bodyName] ?? st.bodyOwner[bodyName])
-  const [choice, setChoice] = useState<SimpleBuildingId>('factory')
-  const [message, setMessage] = useState<string | null>(null)
-  if (!w) return <div className="abs-dim">No economy on this world.</div>
+  if (!w) return null
   const staffing = worldStaffing(w)
-  const canBuild = !!countryId && owner === countryId && controller === countryId && !!queue
-  const free = queue ? freeSlots(w, queue) : 0
-  const queuedHere = queue?.filter((o) => o.bodyName === bodyName) ?? []
-  const build = () => {
-    if (!countryId) return
-    const res = queueBuilding(countryId, bodyName, choice)
-    setMessage(res.ok ? null : res.reason)
-  }
   return (
     <div className="abs-world">
-      <div className="abs-world-head">
-        <b>{w.bodyName}</b>
+      <button type="button" className="abs-world-toggle" onClick={() => setOpen(!open)} title="Show this world's districts and buildings">
+        <span>{open ? '▾' : '▸'} <b>{w.bodyName}</b></span>
         <span className="abs-dim">
-          pop {formatPop(w.population)} · workers {fmt(worldWorkforce(w))}/{fmt(worldJobs(w))} jobs
-          {staffing < 1 ? <span className="econ-neg"> (staffed {pct(staffing, 0)})</span> : null} · slots {worldLevels(w)}/{w.slots}
+          pop {formatPop(w.population)} · jobs {fmt(worldJobs(w))}/{fmt(worldWorkforce(w))}
+          {staffing < 1 ? <span className="econ-neg"> · staffed {pct(staffing, 0)}</span> : null} · land {districtLevelsTotal(w)}/{landOf(w)}
         </span>
-        {owner && owner !== countryId && <span className="abs-dim">Owned by {getCountry(owner)?.name ?? owner}</span>}
-        {owner && controller !== owner && <span className="econ-neg" style={{ fontSize: 10 }}>Occupied by {getCountry(controller ?? '')?.name ?? controller} — produces nothing</span>}
-      </div>
-      <div className="abs-chips">
-        {SIMPLE_BUILDINGS.filter((b) => (w.buildings[b] ?? 0) > 0).map((b) => (
-          <span key={b} className="abs-chip" title={SIMPLE_BUILDING_DEFS[b].description}>{SIMPLE_BUILDING_DEFS[b].name} ×{w.buildings[b]}</span>
-        ))}
-        {queuedHere.map((o) => (
-          <span key={o.id} className="abs-chip abs-chip-queued" title="Under construction">+{SIMPLE_BUILDING_DEFS[o.building].name}</span>
-        ))}
-      </div>
-      {canBuild && (
-        <div className="abs-build">
-          <select value={choice} onChange={(e) => setChoice(e.target.value as SimpleBuildingId)} title={SIMPLE_BUILDING_DEFS[choice].description}>
-            {SIMPLE_BUILDINGS.map((b) => (
-              <option key={b} value={b}>{SIMPLE_BUILDING_DEFS[b].name} ({SIMPLE_BUILDING_DEFS[b].cost} CP, {SIMPLE_BUILDING_DEFS[b].jobs} jobs)</option>
-            ))}
-          </select>
-          <button type="button" className="laws-enact-btn" disabled={free <= 0} onClick={build}>Build</button>
-        </div>
-      )}
-      {message && <div className="econ-neg" style={{ fontSize: 10 }}>{message}</div>}
+      </button>
+      {open && <SimpleDistrictsTab countryId={countryId} bodyName={bodyName} />}
     </div>
   )
 }

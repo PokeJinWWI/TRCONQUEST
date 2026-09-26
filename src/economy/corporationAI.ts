@@ -98,7 +98,7 @@ function grossMargin(recipeId: string, world: World): number {
 
 function districtRoom(world: World, recipeId: string): boolean {
   const d: DistrictType = districtOfRecipe(recipeId)
-  const used = world.buildings.reduce((n, b) => n + (districtOfRecipe(b.recipeId) === d ? b.level : 0), 0) + world.constructionQueue.filter((o) => districtOfRecipe(o.recipeId) === d).length
+  const used = world.buildings.reduce((n, b) => n + (districtOfRecipe(b.recipeId) === d ? b.level : 0), 0) + world.constructionQueue.filter((o) => !o.district && districtOfRecipe(o.recipeId) === d).length + (d === 'urban' ? world.foreignSlots ?? 0 : 0)
   return used < world.districtCapacity[d]
 }
 

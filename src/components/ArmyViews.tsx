@@ -1,3 +1,4 @@
+import { batteryDenial } from '../state/defenseStore'
 import { useMemo, useState } from 'react'
 import { useArmyStore, canRecruitAt } from '../state/armyStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
@@ -325,7 +326,7 @@ export function TransportCargo({ ship }: { ship: ShipInstance }) {
   const room = capacity - cargo.length
   const resting = !ship.order
   const loadable = resting ? embarkableArmies(ship, armies, (a) => armyInContact(a, armies, atWar)).slice(0, room) : []
-  const landing = resting ? landingCheck(ship, armies, ships, bodyOwner, bodyController, atWar) : null
+  const landing = resting ? landingCheck(ship, armies, ships, bodyOwner, bodyController, atWar, batteryDenial) : null
 
   return (
     <>

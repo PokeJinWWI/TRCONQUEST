@@ -1,5 +1,7 @@
 import { GOODS, GOOD_IDS, type GoodId } from './goods'
-import { POP_CLASSES, RECIPES, getMethod, type PopClass } from './recipes'
+import { DISTRICT_TYPES, POP_CLASSES, RECIPES, getMethod, type DistrictType, type PopClass } from './recipes'
+import { SLOTS_PER_DISTRICT_LEVEL } from './districts'
+import { landForBody } from '../scene/bodyLand'
 import { DEPLETABLE_GOODS } from './economyTick'
 import { governorAppointmentDef, type CentralBank } from './centralBank'
 import type { ReligionMix } from './demographics'
@@ -174,13 +176,15 @@ function buildWorld(spec: WorldSpec): World {
     ownerId: spec.ownerId,
     cultureId: spec.culture,
     populationCapacity: spec.capacity,
-    // District slots scale with population, sized to hold the seed with headroom.
-    districtCapacity: {
+    // District slots scale with population, sized to hold the seed with headroom
+    // — then rounded up to whole district levels (economy/districts.ts), and the
+    // world's land comes from the body's size (never less than it starts with).
+    ...seedDistricts(spec.id, {
       core: Math.max(12, Math.round(spec.population / 400)),
       urban: Math.max(10, Math.round(spec.population / 250)),
       industrial: Math.max(16, Math.round(spec.population / 72)),
       resource: Math.max(12, Math.round(spec.population / 130)),
-    },
+    }),
     pops,
     buildings,
     constructionQueue: [],
@@ -190,6 +194,17 @@ function buildWorld(spec: WorldSpec): World {
     resourceDeposits: seedDeposits(buildings),
     adoption: seedAdoption(),
   }
+}
+
+function seedDistricts(bodyName: string, capacity: Record<DistrictType, number>): Pick<World, 'districtCapacity' | 'districts' | 'land'> {
+  const districts = {} as Record<DistrictType, number>
+  const districtCapacity = {} as Record<DistrictType, number>
+  for (const d of DISTRICT_TYPES) {
+    districts[d] = Math.ceil(capacity[d] / SLOTS_PER_DISTRICT_LEVEL)
+    districtCapacity[d] = districts[d] * SLOTS_PER_DISTRICT_LEVEL
+  }
+  const total = DISTRICT_TYPES.reduce((n, d) => n + districts[d], 0)
+  return { districts, districtCapacity, land: Math.max(landForBody(bodyName), total) }
 }
 
 const WORLDS: World[] = [

@@ -92,7 +92,7 @@ function bodyArmies(bodyName: string): Army[] {
   return useArmyStore.getState().armies.filter((a) => a.location.kind === 'body' && a.location.bodyName === bodyName)
 }
 
-const KEY_LABEL = { capital: 'Capital', city: 'City', spaceport: 'Spaceport', outpost: 'Outpost' } as const
+const KEY_LABEL = { capital: 'Capital', city: 'City', spaceport: 'Spaceport', outpost: 'Outpost', fortress: 'Fortress' } as const
 
 // --- The roster/controls window ----------------------------------------------
 

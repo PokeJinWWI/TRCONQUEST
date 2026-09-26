@@ -5,7 +5,7 @@
 
 import { tickAbstractEconomy, abstractReport, emptyStockpile, type AbstractEconomyState, type Stockpile, type WorldState } from '../src/economy-abstract/abstractEconomy'
 import { applyAbstractEconomyAI, targetAllocation, nextBuilding, worldFor, tradeOrders, type AbstractAIContext } from '../src/economy-abstract/abstractEconomyAI'
-import { useAbstractEconomyStore } from '../src/state/abstractEconomyStore'
+import { useAbstractEconomyStore, smoothedRealGrowth } from '../src/state/abstractEconomyStore'
 import { seedSimplisticStock, seedStrategicResources } from '../src/scene/shipyardLogic'
 
 let failures = 0
@@ -209,6 +209,32 @@ console.log('\n=== 10. Store steer: AI nations move, the player is left alone ==
   check("the player's allocation is untouched", JSON.stringify(after[player].allocation) === JSON.stringify(before[player].allocation))
   check("the player's queue and policies are untouched", after[player].queue.length === 0 && after[player].taxRate === before[player].taxRate && !after[player].warTaxes)
   check('AI nations go on a war footing and start building', after['republic-of-venus'].allocation.military > before['republic-of-venus'].allocation.military && after['republic-of-venus'].queue.length > 0)
+}
+
+console.log('\n=== 11. Realistic growth: an actively building nation grows ~1-3%/yr, never boom-scale ===')
+{
+  useAbstractEconomyStore.getState().reset()
+  const ids = Object.keys(useAbstractEconomyStore.getState().byCountry)
+  for (const id of ids) {
+    seedStrategicResources(id)
+    seedSimplisticStock(id)
+  }
+  const id = 'imperial-state-of-mars'
+  const yoy: number[] = []
+  for (let m = 0; m < 120; m++) {
+    useAbstractEconomyStore.getState().advance(1, (s, env) => applyAbstractEconomyAI(s, { ...env, atWar: false }))
+    const g = smoothedRealGrowth(useAbstractEconomyStore.getState().history[id])
+    if (g !== undefined && useAbstractEconomyStore.getState().history[id].length >= 13) yoy.push(g)
+  }
+  const h = useAbstractEconomyStore.getState().history[id]
+  const avg = Math.pow(h[h.length - 1].realGdp / h[0].realGdp, 12 / (h.length - 1)) - 1
+  const max = Math.max(...yoy)
+  check('average real growth over the decade is realistic (0.5-3%/yr)', avg > 0.005 && avg < 0.03, (avg * 100).toFixed(2) + '%/yr')
+  check('no single year booms past 5%', max < 0.05, 'max ' + (max * 100).toFixed(1) + '%')
+  useAbstractEconomyStore.getState().reset()
+  const fresh = useAbstractEconomyStore.getState().reports
+  const unemp = ids.map((n) => Math.max(0, fresh[n].workforce - fresh[n].jobs) / fresh[n].workforce)
+  check('every nation opens with 1-6% unemployment', unemp.every((u) => u >= 0.01 && u <= 0.06), unemp.map((u) => (u * 100).toFixed(1) + '%').join(' / '))
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

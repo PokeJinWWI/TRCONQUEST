@@ -19,6 +19,7 @@
 
 import type { Country, CountryFiscal, World, Corporation, ConstructionOrder } from './economyTypes'
 import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
+import { districtOrder, freeLandOfWorld } from './districts'
 import { economicSystemDef } from './laws'
 
 // --- Tunables (all deliberately gentle: the AI nudges, it does not lurch) ---
@@ -144,7 +145,7 @@ const GROWTH_BUILDINGS: { recipeId: string }[] = [
 
 function districtRoom(world: World, recipeId: string): boolean {
   const d: DistrictType = districtOfRecipe(recipeId)
-  const used = world.buildings.reduce((n, b) => n + (districtOfRecipe(b.recipeId) === d ? b.level : 0), 0) + world.constructionQueue.filter((o) => districtOfRecipe(o.recipeId) === d).length
+  const used = world.buildings.reduce((n, b) => n + (districtOfRecipe(b.recipeId) === d ? b.level : 0), 0) + world.constructionQueue.filter((o) => !o.district && districtOfRecipe(o.recipeId) === d).length + (d === 'urban' ? world.foreignSlots ?? 0 : 0)
   return used < world.districtCapacity[d]
 }
 
@@ -169,9 +170,16 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
   })
   const placeOn = (recipeId: string): World[] | null => {
     // Prefer the owned world with the most buildings that still has room.
-    const candidate = [...owned].sort((a, b) => b.buildings.length - a.buildings.length).find((w) => districtRoom(w, recipeId))
-    if (!candidate) return null
-    return worlds.map((w) => (w.id === candidate.id ? { ...w, constructionQueue: [...w.constructionQueue, order(recipeId)] } : w))
+    const byBuildings = [...owned].sort((a, b) => b.buildings.length - a.buildings.length)
+    const candidate = byBuildings.find((w) => districtRoom(w, recipeId))
+    if (candidate) return worlds.map((w) => (w.id === candidate.id ? { ...w, constructionQueue: [...w.constructionQueue, order(recipeId)] } : w))
+    // No room anywhere: develop that district one level on a world with free
+    // land (economy/districts.ts) — once, not while a level is already coming.
+    const d: DistrictType = districtOfRecipe(recipeId)
+    if (owned.some((w) => w.constructionQueue.some((o) => o.district === d))) return null
+    const land = byBuildings.find((w) => freeLandOfWorld(w) > 0)
+    if (!land) return null
+    return worlds.map((w) => (w.id === land.id ? { ...w, constructionQueue: [...w.constructionQueue, districtOrder(`ai-${country.id}-${tick}-district-${d}`, d)] } : w))
   }
 
   // Priority 1: bureaucracy under strain → build administrative capacity. That

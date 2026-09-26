@@ -23,6 +23,11 @@ import { HoloGlobe, HoloHalo, type HoloNode } from './HoloGlobe'
 import { hologramTint } from './HoloPlanet'
 import { FlatMapSurface } from './FlatMap'
 import { ProjectionSwitch } from '../components/ProjectionSwitch'
+import { PlanetIcon } from '../components/planet/PlanetIcons'
+import { useDefenseStore } from '../state/defenseStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { holderOfInstallation, isActive } from './defenseLogic'
+import { DEFENSE_DEFS } from '../data/defenseData'
 import { FLAT_HEIGHT, FLAT_WIDTH, crossesSeam, flatPos, fromFlat } from './mapProjection'
 import { HOLO_TERRAIN } from './holoTerrain'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
@@ -96,6 +101,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <SurfaceGrid />
           <FrontLines surface={surface} />
           <KeyNodeMarkers surface={surface} />
+          <InstallationMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
           <UnitMarkers bodyName={bodyName} />
           <GroundLines bodyName={bodyName} />
@@ -111,6 +117,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <SurfaceGrid />
           <FrontLines surface={surface} />
           <KeyNodeMarkers surface={surface} />
+          <InstallationMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
           <UnitMarkers bodyName={bodyName} />
           <GroundLines bodyName={bodyName} />
@@ -357,7 +364,7 @@ function TerrainBattleChips({ bodyName }: { bodyName: string }) {
   )
 }
 
-const KEY_GLYPHS = { capital: '★', city: '●', spaceport: '⚓', outpost: '◆' } as const
+const KEY_GLYPHS = { capital: '★', city: '●', spaceport: '⚓', outpost: '◆', fortress: '▣' } as const
 
 function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
   const bodyName = surface.bodyName
@@ -378,6 +385,38 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
           </FacingHtml>
         )
       })}
+    </>
+  )
+}
+
+// Defense installations on this world (scene/defenseLogic.ts), coloured by
+// who holds them (they can be captured), with an integrity bar; dashed while
+// still under construction.
+function InstallationMarkers({ bodyName }: { bodyName: string }) {
+  const installations = useDefenseStore((s) => s.installations)
+  const holders = useTerritoryStore((s) => s.nodeHolders[bodyName])
+  const owners = useTerritoryStore((s) => s.bodyOwner)
+  const simDays = useGameTimeStore((s) => Math.floor(s.simDays))
+  const mesh = surfaceMesh()
+  return (
+    <>
+      {installations
+        .filter((i) => i.bodyName === bodyName)
+        .map((i) => {
+          const holder = holderOfInstallation(i, owners, { [bodyName]: holders ?? {} })
+          const color = holder ? ownerDisplay(holder).color : '#cfd8e3'
+          const def = DEFENSE_DEFS[i.kind]
+          const p = { x: mesh.positions[i.node * 3], y: mesh.positions[i.node * 3 + 1], z: mesh.positions[i.node * 3 + 2] }
+          const building = !isActive(i, simDays)
+          return (
+            <FacingHtml key={i.id} point={p} radius={GLOBE_RADIUS * 1.01}>
+              <div className={`ground-install-marker${building ? ' building' : ''}`} style={{ borderColor: color, color }} title={`${def.name}${building ? ' (under construction)' : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'} · integrity ${Math.round(i.integrity)}/${def.integrity}`}>
+                <PlanetIcon id={i.kind} size={14} />
+                <span className="ground-install-bar"><span style={{ width: `${Math.max(0, Math.min(1, i.integrity / def.integrity)) * 100}%` }} /></span>
+              </div>
+            </FacingHtml>
+          )
+        })}
     </>
   )
 }

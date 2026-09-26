@@ -40,7 +40,8 @@ const TERRAIN_INDEX = Object.fromEntries(TERRAIN_IDS.map((t, i) => [t, i])) as R
 //   outpost  an owned but uninhabited body: one outpost
 //   wild     nobody's: no key nodes
 export type SettlementTier = 'capital' | 'world' | 'outpost' | 'wild'
-export type KeyKind = 'capital' | 'city' | 'spaceport' | 'outpost'
+// 'fortress': a defense installation added at runtime (scene/defenseLogic.withFortressKeys).
+export type KeyKind = 'capital' | 'city' | 'spaceport' | 'outpost' | 'fortress'
 
 export interface KeySlot {
   node: number

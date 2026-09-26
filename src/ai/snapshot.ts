@@ -10,6 +10,7 @@ import { useShipyardStore } from '../state/shipyardStore'
 import { useCombatStore } from '../state/combatStore'
 import { usePlayerStore } from '../state/playerStore'
 import { liveBodyValue } from '../scene/peace'
+import { batteryDenial, hostileDefenseCount, shieldedFor } from '../state/defenseStore'
 import type { AiSnapshot } from './blackboard'
 
 export function captureSnapshot(simDays: number): AiSnapshot {
@@ -32,5 +33,8 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     resourcesOf: (id) => useResourceStore.getState().stateFor(id).amounts,
     buildQueueLengthOf: (id) => useShipyardStore.getState().ordersFor(id).length,
     valueOf: liveBodyValue,
+    orbitDenied: batteryDenial,
+    hostileDefensesAt: hostileDefenseCount,
+    shieldedFor,
   }
 }

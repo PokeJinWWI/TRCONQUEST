@@ -1,3 +1,4 @@
+import type { BombardStance } from '../data/defenseData'
 // The FTL comms "visual" layer — resolving how stale a player's own view of
 // a ship should be, and reconstructing what it looked like that long ago.
 // Pure functions plus a couple of thin store-reading helpers, same split
@@ -368,6 +369,17 @@ export function queueMoveOrder(ship: ShipInstance, destination: MoveDestination)
     return
   }
   useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays })
+}
+
+// A bombardment stance change, comms-delayed the same way (scene/bombardment.ts).
+export function queueBombard(ship: ShipInstance, stance: BombardStance): void {
+  const simDays = useGameTimeStore.getState().simDays
+  const delay = playerCommsDelayToShip(ship, simDays)
+  if (commsInstantContact(delay)) {
+    useShipStore.getState().setBombardStance(ship.id, stance)
+    return
+  }
+  useShipStore.getState().setPendingBombard(ship.id, { stance, arrivesSimDays: simDays + delay, sentSimDays: simDays })
 }
 
 // Same idea for a stance change — trivial enough to just carry the value

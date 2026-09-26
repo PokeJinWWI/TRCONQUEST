@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { batteryDenial, shieldedFor } from './defenseStore'
 import { ARMY_KINDS, type ArmyKind } from '../data/armyData'
 import { COUNTRIES } from '../data/countryData'
 import { UNIT_TYPES } from '../data/groundData'
@@ -155,7 +156,7 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
     if (!ship) return { ok: false, reason: 'Unknown ship' }
     const { bodyOwner, bodyController, nodeHolders } = useTerritoryStore.getState()
     const armies = get().armies
-    const check = landingCheck(ship, armies, ships, bodyOwner, bodyController, atWar)
+    const check = landingCheck(ship, armies, ships, bodyOwner, bodyController, atWar, batteryDenial)
     if (!check.ok) return check
     const surface = groundSurface(check.bodyName, bodyOwner)
     if (!surface) return { ok: false, reason: 'No surface to land on' }
@@ -166,10 +167,10 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
       node =
         check.kind === 'disembark'
           ? musterNode(surface)
-          : defaultDropNode(surface, types, ship.ownerId, armies, bodyOwner, nodeHolders, atWar) ?? undefined
+          : defaultDropNode(surface, types, ship.ownerId, armies, bodyOwner, nodeHolders, atWar, shieldedFor(ship.ownerId, check.bodyName)) ?? undefined
       if (node === undefined) return { ok: false, reason: 'No clear landing site' }
     }
-    const drop = dropCheck(surface, node, types, ship.ownerId, armies, atWar)
+    const drop = dropCheck(surface, node, types, ship.ownerId, armies, atWar, check.kind === 'invade' ? shieldedFor(ship.ownerId, check.bodyName) : undefined)
     if (!drop.ok) return drop
     const step = simDaysToGroundStep(useGameTimeStore.getState().simDays)
     const aboard = new Set(cargo.map((a) => a.id))

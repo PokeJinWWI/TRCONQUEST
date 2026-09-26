@@ -124,8 +124,11 @@ export function hostileWarshipsAt(countryId: string, bodyName: string, ships: Sh
   return ships.filter((s) => orbitedBody(s) === bodyName && atWarFn(countryId, s.ownerId) && isArmed(s))
 }
 
-export function hasOrbitalSuperiority(countryId: string, bodyName: string, ships: ShipLike[], atWarFn: AtWarFn): boolean {
-  return hostileWarshipsAt(countryId, bodyName, ships, atWarFn).length === 0
+// `groundDenial` (optional): true when something on the ground — an enemy
+// defense battery (scene/defenseLogic.ts) — also denies `countryId` the orbit.
+export type GroundDenial = (countryId: string, bodyName: string) => boolean
+export function hasOrbitalSuperiority(countryId: string, bodyName: string, ships: ShipLike[], atWarFn: AtWarFn, groundDenial?: GroundDenial): boolean {
+  return hostileWarshipsAt(countryId, bodyName, ships, atWarFn).length === 0 && !groundDenial?.(countryId, bodyName)
 }
 
 // Is a ground war going on at this body — units of a nation at war with its
@@ -181,6 +184,7 @@ export function landingCheck(
   owners: OwnerMap,
   controllers: OwnerMap,
   atWarFn: AtWarFn,
+  groundDenial?: GroundDenial,
 ): { ok: true; kind: LandingKind; bodyName: string } | { ok: false; reason: string } {
   const body = orbitedBody(transport)
   if (!body) return { ok: false, reason: 'Transport must be in orbit' }
@@ -191,6 +195,7 @@ export function landingCheck(
   if (!controller) return { ok: false, reason: 'Nobody holds this body to invade' }
   if (!atWarFn(me, controller)) return { ok: false, reason: 'Not at war with its holder' }
   if (!hasOrbitalSuperiority(me, body, ships, atWarFn)) return { ok: false, reason: 'Enemy warships hold the orbit' }
+  if (groundDenial?.(me, body)) return { ok: false, reason: 'Enemy defense batteries cover the orbit — destroy them first (bombard)' }
   return { ok: true, kind: 'invade', bodyName: body }
 }
 
