@@ -420,7 +420,7 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
             </button>
           )}
           {onClose && (
-            <button type="button" className="draggable-window-close" onClick={onClose} aria-label="Close">
+            <button type="button" className="draggable-window-close" onClick={onClose} aria-label="Close" title="Close">
               ×
             </button>
           )}

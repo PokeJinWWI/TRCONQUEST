@@ -4290,6 +4290,49 @@ div.fleet-row .combat-density-row {
   border-radius: 3px;
   padding: 4px 6px;
   background: rgba(255, 255, 255, 0.02);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.abs-statcard.active {
+  border-color: rgba(111, 227, 255, 0.6);
+  background: rgba(111, 227, 255, 0.08);
+}
+/* TimeChart — a history graph with month and value axes */
+.tchart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tchart-ranges {
+  display: flex;
+  gap: 2px;
+}
+.tchart-range {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  color: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  font-size: 9px;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.tchart-range.active {
+  border-color: rgba(111, 227, 255, 0.6);
+  color: #cdeeff;
+}
+.tchart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.tchart-label {
+  font-size: 8px;
+  fill: rgba(255, 255, 255, 0.55);
+}
+.tchart-when {
+  color: #cdeeff;
 }
 .abs-statcard-head {
   font-size: 8px;
@@ -4356,6 +4399,144 @@ div.fleet-row .combat-density-row {
   background: rgba(255, 60, 60, 0.15);
   color: #ff9a9a;
   font-weight: 700;
+}
+/* Simple mode: Industry / Social / Trade tabs */
+.abs-dim {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+}
+.laws-enact-btn.abs-on {
+  background: rgba(111, 227, 255, 0.25);
+  color: #fff;
+}
+.abs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.abs-table th {
+  text-align: left;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
+}
+.abs-table td {
+  padding: 2px 4px;
+  color: rgba(255, 255, 255, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.abs-table tr.abs-me td {
+  color: #cdeeff;
+  font-weight: 700;
+}
+.abs-num {
+  width: 56px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  color: #cdeeff;
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 3px;
+}
+.abs-order {
+  display: grid;
+  grid-template-columns: 1fr 60px auto auto;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  padding: 2px 0;
+}
+.abs-order-bar {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.abs-order-bar > span {
+  display: block;
+  height: 100%;
+  background: #6fe3ff;
+}
+.abs-x {
+  background: none;
+  border: none;
+  color: rgba(255, 120, 120, 0.8);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.abs-world {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 5px 6px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: #cdeeff;
+}
+.abs-world-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.abs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 4px 0;
+}
+.abs-chip {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(111, 227, 255, 0.1);
+  border: 1px solid rgba(111, 227, 255, 0.25);
+  color: #9fe8ff;
+}
+.abs-hbar {
+  display: inline-block;
+  width: 40px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.abs-hbar > span {
+  display: block;
+  height: 100%;
+}
+.abs-click {
+  cursor: pointer;
+}
+.abs-click:hover td {
+  background: rgba(111, 227, 255, 0.05);
+}
+.abs-parts {
+  padding: 2px 0 4px 14px;
+}
+.abs-chip-queued {
+  border-style: dashed;
+  background: none;
+  color: rgba(159, 232, 255, 0.7);
+}
+.abs-build {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.abs-build select {
+  flex: 1;
+  min-width: 0;
+  background: rgba(10, 20, 30, 0.9);
+  color: #cdeeff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  font: inherit;
+  font-size: 10px;
 }
 
 .main-menu-countries {
@@ -5012,4 +5193,32 @@ div.fleet-row .combat-density-row {
   min-height: 80px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Hover tooltips (TooltipLayer) — every title and glossary term in the game */
+.game-tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: 280px;
+  padding: 6px 9px;
+  background: rgba(8, 16, 26, 0.97);
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  color: #dff4ff;
+  font-size: 11px;
+  line-height: 1.4;
+  pointer-events: none;
+  white-space: pre-line;
+}
+.game-tooltip-gloss {
+  color: rgba(223, 244, 255, 0.85);
+}
+.game-tooltip-gloss b {
+  color: #6fe3ff;
+}
+.game-tooltip-gloss.with-title {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }

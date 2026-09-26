@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
 import { SHIP_CLASSES, SHIP_ROLE_LABELS, describeFtlDrive, type ShipClass } from '../data/shipData'
-import { MAX_QUEUED_BUILDS, RESOURCE_INCOME_PER_MONTH, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
+import { MAX_QUEUED_BUILDS, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerResources } from '../hooks/usePlayerResources'
@@ -38,7 +38,7 @@ function CostChips({ cost, amounts }: { cost: ResourceCost; amounts: Record<Reso
 // hooks/useShipyardResolver for what actually advances the queue.
 export function ShipyardPanel() {
   const { world } = usePlayerEconomy()
-  const { amounts } = usePlayerResources()
+  const { amounts, monthlyDelta } = usePlayerResources()
   const countryId = usePlayerStore((s) => s.selectedCountryId) ?? ''
   const orders = useShipyardStore((s) => s.ordersFor(countryId))
   const queueBuild = useShipyardStore((s) => s.queueBuild)
@@ -74,8 +74,8 @@ export function ShipyardPanel() {
       <div className="shipyard-stockpile">
         {COST_RESOURCE_IDS.map((id) => (
           <span key={id} className="shipyard-stock" title={RESOURCE_TYPES.find((r) => r.id === id)?.description}>
-            {RESOURCE_SHORT[id]} <b>{(amounts[id] ?? 0).toLocaleString()}</b>
-            {(RESOURCE_INCOME_PER_MONTH[id] ?? 0) > 0 && <span className="shipyard-income"> +{RESOURCE_INCOME_PER_MONTH[id]}/mo</span>}
+            {RESOURCE_SHORT[id]} <b>{Math.floor(amounts[id] ?? 0).toLocaleString()}</b>
+            {(monthlyDelta[id] ?? 0) > 0 && <span className="shipyard-income"> +{monthlyDelta[id].toLocaleString()}/mo</span>}
           </span>
         ))}
       </div>

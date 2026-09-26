@@ -2,7 +2,7 @@
 // exists yet (see resourceStore) — this is the data layer for the readout
 // itself, the same "reserve the spot with real empty state, not fake
 // numbers" pattern Outliner already uses for Colonies/Starbases.
-export type ResourceId = 'energy' | 'minerals' | 'food' | 'consumerGoods' | 'alloys' | 'exoticMatter' | 'hyperium' | 'special'
+export type ResourceId = 'energy' | 'minerals' | 'food' | 'consumerGoods' | 'alloys' | 'electronics' | 'exoticMatter' | 'hyperium' | 'special'
 
 export interface ResourceType {
   id: ResourceId
@@ -48,6 +48,12 @@ export const RESOURCE_TYPES: ResourceType[] = [
     name: 'Alloys',
     short: 'ALLOY',
     description: 'Refined from minerals — the structural material every ship hull and starbase is actually built from.',
+  },
+  {
+    id: 'electronics',
+    name: 'Electronics',
+    short: 'ELEC',
+    description: 'Circuits, computers and sensors — consumed by research labs and wanted by the population. Produced only in Simple mode.',
   },
   {
     id: 'exoticMatter',

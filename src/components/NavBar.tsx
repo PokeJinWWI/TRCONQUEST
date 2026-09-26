@@ -9,7 +9,7 @@ import { LawsPanel } from './LawsPanel'
 import { CentralBankPanel, type CentralBankSection } from './CentralBankPanel'
 import { BanksPanel } from './BanksPanel'
 import { ForexPanel } from './ForexPanel'
-import { AbstractEconomyPanel } from './AbstractEconomyPanel'
+import { AbstractEconomyPanel, SimplisticDemographics } from './AbstractEconomyPanel'
 import { CorporationsPanel } from './CorporationsPanel'
 import { StockExchangePanel } from './StockExchangePanel'
 import { DemographicsPanel } from './DemographicsPanel'
@@ -67,7 +67,7 @@ const CATEGORIES: CategoryDef[] = [
   { name: SETTINGS_CATEGORY },
 ]
 
-// The Abstract-Simplistic economy replaces the deep simulation: no goods
+// Simple mode replaces Complex mode's deep simulation: no goods
 // Markets, Central Bank or Corporations, and Economy is one macro panel. The
 // rest of the game (government, tech, society, diplomacy, military…) is unchanged.
 const ABSTRACT_CATEGORIES: CategoryDef[] = [
@@ -113,7 +113,7 @@ const CB_SECTIONS: Record<string, CentralBankSection> = {
 // the Outliner's empty Starbases section — there's no
 // government/economy/society/characters simulation behind these yet.
 function renderContent(category: CategoryDef, subcategory: string | null, abstractEconomy: boolean) {
-  // Abstract economy: the whole Economy category is one macro panel.
+  // Simple mode: the whole Economy category is one macro panel.
   if (abstractEconomy && category.name === ECONOMY_CATEGORY) return <AbstractEconomyPanel />
   if (category.name === SANDBOX_CATEGORY) return <SandboxPanel />
   if (category.name === SETTINGS_CATEGORY) return <SettingsPanel />
@@ -133,7 +133,7 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   if (category.name === TECHNOLOGY_CATEGORY) return <NationTechPanel subcategory={subcategory} />
   if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />
   if (category.name === CORPORATIONS_CATEGORY) return <CorporationsPanel subcategory={subcategory} />
-  if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return <DemographicsPanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return abstractEconomy ? <SimplisticDemographics /> : <DemographicsPanel />
   if (category.name === CHARACTERS_CATEGORY) return <CharactersPanel subcategory={subcategory} />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   if (category.name === MILITARY_CATEGORY && subcategory === ARMY_SUBCATEGORY) return <ArmyPanel />

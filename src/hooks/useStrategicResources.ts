@@ -3,7 +3,7 @@ import { useGameTimeStore } from '../state/gameTimeStore'
 import { usePlayerStore } from '../state/playerStore'
 import { COUNTRIES } from '../data/countryData'
 import { SIM_DAYS_PER_INCOME_TICK } from '../data/shipyardData'
-import { applyStrategicIncome, seedStrategicResources } from '../scene/shipyardLogic'
+import { applyStrategicIncome, seedSimplisticStock, seedStrategicResources } from '../scene/shipyardLogic'
 
 // Feeds EVERY nation's strategic stockpile (alloys, exotic matter,
 // hyperium…) with the PLACEHOLDER supply in data/shipyardData.ts: a starting
@@ -14,7 +14,11 @@ import { applyStrategicIncome, seedStrategicResources } from '../scene/shipyardL
 export function useStrategicResources() {
   useEffect(() => {
     const seedAll = () => {
-      for (const country of COUNTRIES) seedStrategicResources(country.id)
+      for (const country of COUNTRIES) {
+        seedStrategicResources(country.id)
+        // Simple mode's civilian goods (food, consumer goods, electronics).
+        if (usePlayerStore.getState().economyModel === 'abstract') seedSimplisticStock(country.id)
+      }
     }
     const started = () => {
       const { selectedCountryId, sandbox } = usePlayerStore.getState()
@@ -37,8 +41,8 @@ export function useStrategicResources() {
       const ticks = Math.floor(elapsed / SIM_DAYS_PER_INCOME_TICK)
       lastTickSimDays += ticks * SIM_DAYS_PER_INCOME_TICK
       if (!started()) return
-      // In the abstract-economy game the resources come from the abstract
-      // economy's production (see useEconomyTick), not this flat placeholder.
+      // In Simple mode the resources come from that economy's buildings
+      // (see useEconomyTick), not this flat placeholder.
       if (usePlayerStore.getState().economyModel === 'abstract') return
       for (const country of COUNTRIES) applyStrategicIncome(country.id, ticks)
     })

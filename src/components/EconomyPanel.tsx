@@ -67,6 +67,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
   const worldReports = useEconomyStore((s) => s.worldReports)
   const countryReports = useEconomyStore((s) => s.countryReports)
   const history = useEconomyStore((s) => s.history)
+  const economyTick = useEconomyStore((s) => s.tick)
   const allWorlds = useEconomyStore((s) => s.worlds)
   const setTaxRate = useEconomyStore((s) => s.setTaxRate)
   const setWelfare = useEconomyStore((s) => s.setWelfare)
@@ -259,10 +260,12 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             Rating <b className={`rating-${fiscal?.rating ?? 'AAA'}`}>{fiscal?.rating ?? '—'}</b>
           </span>
         </div>
-        <LineGraph title="GDP (USD)" series={[{ values: series.map((s) => s.gdp), color: GDP_COLOR, label: 'GDP' }]} format={formatMoney} />
-        <LineGraph title="Price level (CPI, 1.00 = base)" series={[{ values: series.map((s) => s.priceLevel), color: PRICE_COLOR, label: 'CPI' }]} format={(v) => v.toFixed(2)} />
+        <LineGraph endTick={economyTick} tip="Gross domestic product: the value of everything the nation produces in a year." title="GDP (USD)" series={[{ values: series.map((s) => s.gdp), color: GDP_COLOR, label: 'GDP' }]} format={formatMoney} />
+        <LineGraph endTick={economyTick} tip="Consumer price index: how expensive a typical basket of goods is compared to the start of the game. Rising = inflation." title="Price level (CPI, 1.00 = base)" series={[{ values: series.map((s) => s.priceLevel), color: PRICE_COLOR, label: 'CPI' }]} format={(v) => v.toFixed(2)} />
         <LineGraph
-          title="Revenue vs Expenditure / tick (USD)"
+          endTick={economyTick}
+          tip="Money the state takes in (taxes etc.) vs money it spends, each month. Spending above revenue is a deficit."
+          title="Revenue vs Expenditure / month (USD)"
           includeZero
           series={[
             { values: series.map((s) => s.revenue), color: REVENUE_COLOR, label: 'Rev' },
@@ -270,7 +273,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
           ]}
           format={formatMoney}
         />
-        <LineGraph title="Debt-to-GDP" includeZero series={[{ values: series.map((s) => s.debtToGdp), color: DEBT_COLOR, label: 'Debt/GDP' }]} format={(v) => `${(v * 100).toFixed(0)}%`} />
+        <LineGraph endTick={economyTick} tip="National debt as a share of a year's GDP — the usual yardstick for how heavy a debt is." title="Debt-to-GDP" includeZero series={[{ values: series.map((s) => s.debtToGdp), color: DEBT_COLOR, label: 'Debt/GDP' }]} format={(v) => `${(v * 100).toFixed(0)}%`} />
       </div>
     )
   }

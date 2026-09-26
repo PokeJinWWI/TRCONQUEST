@@ -13,6 +13,9 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { BodyArmies } from './ArmyViews'
 import { useViewStore } from '../state/viewStore'
 import { groundSurface } from '../scene/groundLogic'
+import { usePlayerStore } from '../state/playerStore'
+import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { WorldCard } from './AbstractEconomyPanel'
 
 export interface InspectPanelAction {
   label: string
@@ -165,6 +168,9 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   const countries = useEconomyStore((s) => s.countries)
   const world = worldByName(worlds, body.name)
   const country = world ? countries.find((c) => c.id === world.ownerId) : undefined
+  const simplistic = usePlayerStore((s) => s.economyModel === 'abstract')
+  const playerId = usePlayerStore((s) => s.selectedCountryId)
+  const simpleWorld = useAbstractEconomyStore((s) => !!s.worlds[body.name])
 
   // A star stays a simple single-pane readout. Planets and moons get the
   // tabbed view: a moon can be settled, garrisoned and invaded just like a
@@ -177,7 +183,13 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
       </DraggableWindow>
     )
   }
-  const tabs = body.kind === 'planet' || world ? PLANET_TABS : PLANET_TABS.filter((t) => t.id === 'overview' || t.id === 'armies')
+  // Simple mode has no pops, per-world markets or world politics — a
+  // world's Economy tab is its Simple view (population and buildings).
+  const tabs = simplistic
+    ? PLANET_TABS.filter((t) => t.id === 'overview' || t.id === 'armies' || (t.id === 'economy' && simpleWorld))
+    : body.kind === 'planet' || world
+      ? PLANET_TABS
+      : PLANET_TABS.filter((t) => t.id === 'overview' || t.id === 'armies')
 
   return (
     <DraggableWindow title={body.name} onClose={onClose}>
@@ -195,10 +207,11 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
       </div>
       {tab === 'overview' && <OverviewRows body={body} action={action} />}
       {tab === 'armies' && <BodyArmies bodyName={body.name} />}
-      {tab === 'pops' && <PopsPanel worldName={body.name} world={world} />}
-      {tab === 'buildings' && <BuildingsPanel subtab={null} worldName={body.name} world={world} country={country} />}
-      {tab === 'economy' && <EconomyPanel subcategory="Market" worldName={body.name} world={world} country={country} />}
-      {tab === 'politics' && <PoliticsPanel worldName={body.name} world={world} />}
+      {simplistic && tab === 'economy' && <WorldCard countryId={playerId} bodyName={body.name} />}
+      {!simplistic && tab === 'pops' && <PopsPanel worldName={body.name} world={world} />}
+      {!simplistic && tab === 'buildings' && <BuildingsPanel subtab={null} worldName={body.name} world={world} country={country} />}
+      {!simplistic && tab === 'economy' && <EconomyPanel subcategory="Market" worldName={body.name} world={world} country={country} />}
+      {!simplistic && tab === 'politics' && <PoliticsPanel worldName={body.name} world={world} />}
     </DraggableWindow>
   )
 }

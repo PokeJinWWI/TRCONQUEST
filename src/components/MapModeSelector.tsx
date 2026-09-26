@@ -20,6 +20,7 @@ export function MapModeSelector() {
           type="button"
           className={`nav-subtab${mode === m ? ' active' : ''}`}
           onClick={() => setMode(m)}
+          title={`Colour the map by ${MAP_MODE_LABELS[m].toLowerCase()}`}
         >
           {MAP_MODE_LABELS[m]}
         </button>

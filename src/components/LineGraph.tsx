@@ -1,3 +1,5 @@
+import { TimeChart } from './TimeChart'
+
 interface Series {
   values: number[]
   color: string
@@ -13,6 +15,10 @@ interface LineGraphProps {
   // charts where the zero line is meaningful).
   includeZero?: boolean
   height?: number
+  // The economy tick of the newest sample. When given, the graph is drawn as a
+  // TimeChart with month and value axes.
+  endTick?: number
+  tip?: string
 }
 
 const WIDTH = 260
@@ -22,7 +28,8 @@ const WIDTH = 260
 // self-contained SVG anyway). Plots one or more series sharing a y-scale,
 // oldest sample at the left. Theme colors are passed in so it matches whatever
 // the caller wants.
-export function LineGraph({ title, series, format = (v) => v.toFixed(1), includeZero, height = 70 }: LineGraphProps) {
+export function LineGraph({ title, series, format = (v) => v.toFixed(1), includeZero, height = 70, endTick, tip }: LineGraphProps) {
+  if (endTick !== undefined) return <TimeChart title={title} series={series} endTick={endTick} format={format} includeZero={includeZero} tip={tip} />
   const all = series.flatMap((s) => s.values)
   const n = Math.max(...series.map((s) => s.values.length), 0)
   if (n < 2 || all.length === 0) {

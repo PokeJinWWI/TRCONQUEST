@@ -13,9 +13,9 @@ import { SANDBOX_PLAYER_ID } from '../data/countryRoster'
 // leave nations, territory, economy and AI switched off.
 // Which economic model drives this game — chosen at the main menu, fixed for the
 // session (the two models have entirely different state shapes, so it can't be
-// switched mid-game). 'complex' is the deep Vic3-style simulation
-// (`src/economy/*`, economyStore); 'abstract' is the macro national model
-// (Stellaris/HOI4/TNO-inspired). Default 'complex' so nothing changes unless the
+// switched mid-game). 'complex' is Complex mode, the deep Vic3-style simulation
+// (`src/economy/*`, economyStore); 'abstract' is Simple mode, the macro
+// national model (Stellaris/HOI4/TNO-inspired, `src/economy-abstract/*`). Default 'complex' so nothing changes unless the
 // player opts in.
 export type EconomyModel = 'complex' | 'abstract'
 

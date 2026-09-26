@@ -2,10 +2,9 @@ import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useEconomyStore } from '../state/economyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
-import { useResourceStore } from '../state/resourceStore'
-import { economyModel } from '../state/playerStore'
-import { abstractResourceFlows } from '../economy-abstract/abstractResources'
-import type { ResourceId } from '../data/resourceData'
+import { economyModel, isSandbox, usePlayerStore } from '../state/playerStore'
+import { atWar } from '../state/diplomacyStore'
+import { applyAbstractEconomyAI } from '../economy-abstract/abstractEconomyAI'
 
 // How many sim-days pass per economy tick. The economy moves at a coarse,
 // strategic cadence — ONE TICK PER IN-GAME MONTH — rather than every frame. It's
@@ -28,22 +27,17 @@ export function useEconomyTick() {
       lastTickSimDays += ticks * SIM_DAYS_PER_ECONOMY_TICK
       // Advance whichever economic model this game runs (chosen at the menu).
       if (economyModel() === 'abstract') {
+        // Simple mode: the store runs every nation's month, writing its
+        // goods into the resourceStore stockpile and its research into the tech
+        // trees. Every nation but the player's runs its own economy. Nothing in
+        // the sandbox, where there are no nations.
+        if (isSandbox()) return
         const store = useAbstractEconomyStore.getState()
-        store.advance(ticks)
-        // Payment link: turn each nation's production into the strategic
-        // resources ships/armies are paid for with (useStrategicResources'
-        // flat placeholder is gated off in this mode). setMonthlyDelta powers
-        // the HUD "/mo" read; addAmount credits the whole elapsed span.
-        const res = useResourceStore.getState()
-        const reports = useAbstractEconomyStore.getState().reports
-        const byCountry = useAbstractEconomyStore.getState().byCountry
-        for (const id of Object.keys(reports)) {
-          const flows = abstractResourceFlows(reports[id], byCountry[id]?.gdp ?? 0)
-          for (const [rid, perMonth] of Object.entries(flows) as [ResourceId, number][]) {
-            res.setMonthlyDelta(id, rid, perMonth)
-            res.addAmount(id, rid, perMonth * ticks)
-          }
-        }
+        const playerId = usePlayerStore.getState().selectedCountryId
+        const nations = Object.keys(store.byCountry)
+        store.advance(ticks, (s, env) =>
+          s.countryId === playerId ? s : applyAbstractEconomyAI(s, { ...env, atWar: nations.some((other) => atWar(s.countryId, other)) }),
+        )
       } else useEconomyStore.getState().advance(ticks)
     })
   }, [])

@@ -5,6 +5,7 @@
 // spawn/seed/income) — same split as combatResolution vs. useCombatResolver.
 // Data and every tuning constant live in data/shipyardData.ts.
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
+import { SIMPLE_STARTING_STOCK } from '../data/simplisticEconomyData'
 import {
   RESOURCE_INCOME_PER_MONTH,
   SLOTS_PER_SPACEYARD_LEVEL,
@@ -153,6 +154,18 @@ export function seedStrategicResources(countryId: string): void {
     if ((amounts[id] ?? 0) === 0) setAmount(countryId, id, start)
   }
   for (const r of RESOURCE_TYPES) setMonthlyDelta(countryId, r.id, RESOURCE_INCOME_PER_MONTH[r.id] ?? 0)
+}
+
+// Simple mode's civilian goods on top of the strategic reserve — same
+// only-fill-an-empty-slot rule. Zeroes the monthly figures: that economy sets
+// them from real production on its first month.
+export function seedSimplisticStock(countryId: string): void {
+  const { stateFor, setAmount, setMonthlyDelta } = useResourceStore.getState()
+  const { amounts } = stateFor(countryId)
+  for (const [id, start] of Object.entries(SIMPLE_STARTING_STOCK) as [ResourceId, number][]) {
+    if ((amounts[id] ?? 0) === 0) setAmount(countryId, id, start)
+  }
+  for (const r of RESOURCE_TYPES) setMonthlyDelta(countryId, r.id, 0)
 }
 
 // Credits `months` whole months of the flat income table to one nation.
