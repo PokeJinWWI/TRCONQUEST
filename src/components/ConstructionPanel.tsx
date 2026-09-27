@@ -133,7 +133,7 @@ export function ConstructionPanel() {
             return (
               <div key={o.id} className="econ-build-row">
                 <span className="econ-build-name" title={`${who} · ${DISTRICT_LABELS[districtOfRecipe(o.recipeId)]}`}>
-                  {recipe?.label ?? o.recipeId}
+                  {o.district ? `${DISTRICT_LABELS[o.district]} district — new level` : recipe?.label ?? o.recipeId}
                 </span>
                 <span className="econ-build-bar">
                   <span className="econ-build-fill" style={{ width: `${pct}%` }} />

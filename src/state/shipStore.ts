@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { BombardStance } from '../data/defenseData'
 import { CHAFF_CHARGES, type CombatProfile, type CombatStance, type ComponentKind, type FleetStrategy } from '../data/combatData'
 import { deployChaff as deployChaffState } from '../scene/combatResolution'
 import { combatLocationKey } from './combatStore'
@@ -253,6 +254,11 @@ export interface ShipInstance {
   // delay — trivial enough (a single enum value) to just carry directly
   // rather than needing planMove-style re-resolution at arrival.
   pendingStance?: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null
+  // Orbital bombardment stance (scene/bombardment.ts): off / limited / full,
+  // and the same comms-delayed pending order as a stance change. Optional:
+  // absent = off.
+  bombardStance?: BombardStance
+  pendingBombard?: { stance: BombardStance; arrivesSimDays: number; sentSimDays?: number } | null
   // A short trailing log of this ship's own order/location/combat state,
   // appended once each time any of those actually changes (see
   // setShipOrder/setShipLocation/applyCombatDamage below) — never read by
@@ -376,6 +382,8 @@ interface ShipState {
   setPendingHyperdriveJump: (id: string, starId: string | null, arrivesSimDays?: number) => void
   // See ShipInstance.pendingMoveOrder / pendingStance.
   setPendingMoveOrder: (id: string, pending: { destination: MoveDestination; arrivesSimDays: number; sentSimDays?: number } | null) => void
+  setBombardStance: (id: string, stance: BombardStance) => void
+  setPendingBombard: (id: string, pending: ShipInstance['pendingBombard']) => void
   setPendingStance: (id: string, pending: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null) => void
   // See ShipInstance.orderQueue / pendingQueueAdds.
   setOrderQueue: (id: string, queue: MoveDestination[]) => void
@@ -627,6 +635,10 @@ export const useShipStore = create<ShipState>((set) => ({
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingMoveOrder: pending } : ship)),
     })),
+  setBombardStance: (id, stance) =>
+    set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, bombardStance: stance, pendingBombard: null } : ship)) })),
+  setPendingBombard: (id, pending) =>
+    set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingBombard: pending } : ship)) })),
   setPendingStance: (id, pending) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingStance: pending } : ship)),

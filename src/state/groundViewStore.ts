@@ -32,6 +32,10 @@ interface GroundViewState {
   setMode: (mode: GroundClickMode) => void
   setHoverNode: (node: number | null) => void
   setNotice: (notice: string | null) => void
+  // A request to swing the camera onto a node (the Ground panel's key-node
+  // list); seq makes repeated clicks on the same node count.
+  focusRequest: { node: number; seq: number } | null
+  focusNode: (node: number) => void
 }
 
 export const useGroundViewStore = create<GroundViewState>((set) => ({
@@ -52,4 +56,6 @@ export const useGroundViewStore = create<GroundViewState>((set) => ({
   setMode: (mode) => set({ mode, notice: null }),
   setHoverNode: (hoverNode) => set({ hoverNode }),
   setNotice: (notice) => set({ notice }),
+  focusRequest: null,
+  focusNode: (node) => set((s) => ({ focusRequest: { node, seq: (s.focusRequest?.seq ?? 0) + 1 } })),
 }))

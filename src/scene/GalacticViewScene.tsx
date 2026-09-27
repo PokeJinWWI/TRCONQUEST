@@ -175,7 +175,7 @@ export function GalacticViewScene() {
       </Canvas>
 
       {selected && (
-        <DraggableWindow title={selected.name} onClose={() => selectInView(null)}>
+        <DraggableWindow title={selected.name} memoryKey="galaxy-selection" onClose={() => selectInView(null)}>
           <div className="inspect-row">
             <span className="inspect-label">Distance from core</span>
             <span className="inspect-value">{Math.hypot(selected.position[0], selected.position[1]).toFixed(1)} kly</span>

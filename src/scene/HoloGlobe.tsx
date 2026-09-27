@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { AdditiveBlending, BackSide, BufferAttribute, BufferGeometry, DataTexture, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from 'three'
 import { surfaceMesh } from './surfaceMesh'
+import { pictureUniforms, useBodyPicture } from './bodyPicture'
 
 // The planetary map's globe, drawn as a hologram rather than a smooth blend of
 // vertex colours (which blurred every biome into its neighbours). Each node's
@@ -12,6 +13,8 @@ import { surfaceMesh } from './surfaceMesh'
 //   - within the land, each pixel takes the colour of its nearest land node,
 //     so terrain and front-line tints come out as sharp cells;
 //   - a scanline hatch, a glowing coast line and a rim glow finish the look.
+// Where the body has a real-map picture (bodyPicture.ts), coasts come from it
+// at its own detail and the land is shaded by its relief.
 // Rendering only — the simulation still reads the same node terrain.
 
 export const TEX_WIDTH = 64
@@ -42,6 +45,10 @@ uniform vec2 uTexSize;
 uniform vec3 uOcean;
 uniform vec3 uCoast;
 uniform vec3 uLift;
+// The body's real-map picture (bodyPicture.ts): 0 water, else land relief.
+uniform sampler2D uPicture;
+uniform float uPictureOn;
+uniform float uPictureWater;
 
 vec4 node(float id) {
   float row = floor((id + 0.5) / uTexSize.x);
@@ -67,10 +74,20 @@ float vnoise(vec3 x) {
 // nodes a, b, c; pos is its place on the globe (the sphere the map is drawn
 // on, radius 5), only used to seed the coast noise.
 vec3 groundColor(vec3 w, vec4 a, vec4 b, vec4 c, vec3 pos, float hatchCoord, float aaMin) {
-  // Land/water contour, its edge roughened a little.
+  // Land/water contour: from the real picture where there is one (its own
+  // coasts), else through the nodes, its edge roughened a little.
   float land = w.x * a.a + w.y * b.a + w.z * c.a;
-  float n = vnoise(pos * 34.0) * 0.6 + vnoise(pos * 85.0) * 0.4;
-  land += (n - 0.5) * 0.26;
+  float relief = 0.5;
+  if (uPictureOn > 0.5) {
+    vec3 p = normalize(pos);
+    vec2 uv = vec2(atan(-p.z, p.x) / 6.2831853 + 0.5, asin(clamp(p.y, -1.0, 1.0)) / 3.1415926 + 0.5);
+    float g = texture2D(uPicture, uv).r;
+    if (uPictureWater > 0.5) land = clamp(g * 85.0, 0.0, 1.0);
+    relief = g;
+  } else {
+    float n = vnoise(pos * 34.0) * 0.6 + vnoise(pos * 85.0) * 0.4;
+    land += (n - 0.5) * 0.26;
+  }
   float aa = max(fwidth(land) * 0.8, aaMin) + 1e-4;
   float m = smoothstep(0.5 - aa, 0.5 + aa, land);
   float coast = 1.0 - smoothstep(0.0, aa * 2.4, abs(land - 0.5));
@@ -80,6 +97,8 @@ vec3 groundColor(vec3 w, vec4 a, vec4 b, vec4 c, vec3 pos, float hatchCoord, flo
   float sb = step(0.5, b.a) + w.y;
   float sc = step(0.5, c.a) + w.z;
   vec3 ground = sa >= sb && sa >= sc ? a.rgb : (sb >= sc ? b.rgb : c.rgb);
+  // Real relief as light and shade.
+  if (uPictureOn > 0.5) ground *= 0.72 + 0.46 * relief;
 
   float hatch = 0.93 + 0.07 * sin(hatchCoord);
   vec3 col = mix(uOcean, ground * hatch * 1.12 + uLift, m);
@@ -208,18 +227,19 @@ export const TEAL_GLOW: [number, number, number] = [0.1, 0.75, 0.95]
 export const LIFT_UNIFORM = [0.0, 0.05, 0.06]
 
 // The globe.
-export function HoloGlobe({ radius, nodeAt, version, glow = TEAL_GLOW }: { radius: number; nodeAt: (node: number) => HoloNode; version: unknown; glow?: [number, number, number] }) {
+export function HoloGlobe({ radius, nodeAt, version, glow = TEAL_GLOW, bodyName }: { radius: number; nodeAt: (node: number) => HoloNode; version: unknown; glow?: [number, number, number]; bodyName?: string }) {
   const { texture, rows } = useNodeTexture(nodeAt, version)
+  const picture = useBodyPicture(bodyName)
   const geometry = useMemo(() => buildGeometry(radius), [radius])
   const material = useMemo(
     () =>
       new ShaderMaterial({
         vertexShader: VERT,
         fragmentShader: FRAG,
-        uniforms: { uNodes: { value: texture }, uTexSize: { value: new Vector2(TEX_WIDTH, rows) }, uOcean: { value: OCEAN_UNIFORM }, uCoast: { value: glow }, uLift: { value: LIFT_UNIFORM }, uRim: { value: glow } },
+        uniforms: { uNodes: { value: texture }, uTexSize: { value: new Vector2(TEX_WIDTH, rows) }, uOcean: { value: OCEAN_UNIFORM }, uCoast: { value: glow }, uLift: { value: LIFT_UNIFORM }, uRim: { value: glow }, ...pictureUniforms(picture) },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [texture, rows, glow.join()],
+    [texture, rows, glow.join(), picture.texture, picture.water],
   )
   useEffect(
     () => () => {

@@ -34,6 +34,10 @@ import { runStrategicAI } from '../src/ai/runStrategicAI'
 import { useAiStore } from '../src/ai/aiStore'
 import { INITIAL_AI_MEMORY, type Intent } from '../src/ai/types'
 import { resolveGroundWar } from '../src/hooks/useGroundCombatResolver'
+import { resolveDefenses } from '../src/hooks/useDefenseResolver'
+import { resolveBombardment } from '../src/hooks/useBombardmentResolver'
+import { useDefenseStore } from '../src/state/defenseStore'
+import { useBombardmentStore } from '../src/state/bombardmentStore'
 import { resolveShipyards } from '../src/hooks/useShipyardResolver'
 
 let failures = 0
@@ -60,6 +64,8 @@ function freshWorld() {
   useAiStore.getState().reset()
   useShipyardStore.setState({ ordersByCountry: {} })
   useResourceStore.setState({ byCountry: {} })
+  useDefenseStore.setState({ installations: [] })
+  useBombardmentStore.setState({ devastation: {}, strikes: [] })
   usePlayerStore.setState({ selectedCountryId: LALANDE })
   setUpNewGame()
   for (const c of COUNTRIES) seedStrategicResources(c.id)
@@ -226,8 +232,17 @@ console.log('\n=== 6. The Marshal ===')
       .ships.filter((s) => s.ownerId !== VENUS)
       .map((s) => (s.ownerId === MARS && s.location.kind === 'orbiting' && s.classId !== 'troop-transport' ? { ...s, location: { ...s.location, bodyName: 'Venus' } } : s)),
   })
+  // Venus's capital defenses still stand (a battery denies the landing), so
+  // Mars bombards them first and the transport waits.
+  const bombard = marshal(buildBlackboard(MARS, captureSnapshot(2)), captureSnapshot(2), memory)
+  check('defenses stand: the warships in orbit bombard them', bombard.intents.some((i) => i.kind === 'set-bombard' && i.stance === 'limited'))
+  check("...and the transport doesn't sail yet", !bombard.intents.some((i) => i.kind === 'move-ship' && i.shipId === marsT.id))
+  for (const i of bombard.intents) if (i.kind === 'set-bombard') useShipStore.getState().setBombardStance(i.shipId, i.stance)
+  // The bombardment has done its work.
+  useDefenseStore.setState({ installations: useDefenseStore.getState().installations.filter((i) => i.bodyName !== 'Venus') })
   const go = marshal(buildBlackboard(MARS, captureSnapshot(2)), captureSnapshot(2), memory)
   check('orbit secured: the loaded transport heads for Venus', go.intents.some((i) => i.kind === 'move-ship' && i.shipId === marsT.id && i.bodyName === 'Venus'))
+  check('...and the bombardment stops', go.intents.some((i) => i.kind === 'set-bombard' && i.stance === 'off'))
 
   useShipStore.setState({
     ships: useShipStore.getState().ships.map((s) => (s.id === marsT.id && s.location.kind === 'orbiting' ? { ...s, location: { ...s.location, bodyName: 'Venus' } } : s)),
@@ -297,11 +312,13 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
 
   let firstWar: { day: number; attacker: string; defender: string } | null = null
   let marsBuilt = 0
+  let marsArmiesOnVenus = 0
   const seenShips = new Set(useShipStore.getState().ships.map((s) => s.id))
   for (let day = 1; day <= (Number(process.env.AI_STOP) || 1100); day++) {
     if (day % 30 === 0) for (const c of COUNTRIES) applyStrategicIncome(c.id, 1)
     runStrategicAI(day)
     resolveShipyards(day)
+    marsArmiesOnVenus = Math.max(marsArmiesOnVenus, useArmyStore.getState().armies.filter((a) => a.ownerId === MARS && a.location.kind === 'body' && a.location.bodyName === 'Venus').length)
     for (const s of useShipStore.getState().ships) {
       if (!seenShips.has(s.id)) {
         seenShips.add(s.id)
@@ -311,6 +328,8 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
     settleOrders(day)
     crudeSpaceCombat()
     resolveGroundWar(day)
+    resolveDefenses(day - 1, day)
+    resolveBombardment(day - 1, day)
     // AI_TRACE=1 prints a monthly snapshot of Mars vs Venus, for tuning.
     if (process.env.AI_TRACE && day % 30 === 0) {
       const armies = useArmyStore.getState().armies
@@ -342,8 +361,12 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
   console.log('    event log:\n      ' + log.join('\n      '))
   check('Mars declared war on Venus after the grace period', !!firstWar && firstWar.attacker === MARS && firstWar.defender === VENUS && firstWar.day >= AI_WAR_GRACE_DAYS, JSON.stringify(firstWar))
   check('the AI built ships through its shipyard', marsBuilt > 0, `Mars built ${marsBuilt}`)
-  check('Mars invaded and occupied Venus', events.some((e) => e.kind === 'body-occupied' && e.countryIds[0] === MARS && e.text.includes('Venus')))
-  check('...and made peace taking it', useTerritoryStore.getState().bodyOwner['Venus'] === MARS && events.some((e) => e.kind === 'peace-signed'))
+  // Venus is the real Venus now (bodyTopography.ts): its main continent wraps
+  // half-way round the planet and its cities are spread along it (the user's
+  // choice), so taking all of Venus takes longer than one war lasts — Mars
+  // lands and fights for it, and the war ends in a peace.
+  check('Mars invaded Venus (landed armies and fought for it)', marsArmiesOnVenus >= 3, `${marsArmiesOnVenus} armies at most`)
+  check('...and the war ended in a peace', events.some((e) => e.kind === 'peace-signed' && e.countryIds.includes(MARS) && e.countryIds.includes(VENUS)))
   check('Orion, with no neighbours, stayed at peace', !events.some((e) => e.kind === 'war-declared' && e.countryIds.includes(ORION)))
   check('Lalande (the player here, sharing no system) was left alone', !events.some((e) => e.kind === 'war-declared' && e.countryIds.includes(LALANDE)))
 }

@@ -18,6 +18,7 @@ import {
   gdpPerCapita,
   yoyGrowth,
 } from './complexCharts'
+import { HoldingsAbroad } from './planet/ForeignHoldings'
 
 // Complex mode's Economy > Overview: the whole national economy on one
 // scrollable page (Simple mode's dashboard look) — headline numbers you click
@@ -223,6 +224,9 @@ export function EconomyOverview() {
           <div title="Private capital pooled to finance construction"><span className="inspect-label">Investment pool</span><span>{formatMoney(country.investmentPool)}</span></div>
         </div>
       </Section>
+
+      <div className="econ-subtitle" style={{ marginTop: 12 }} title="Your embassies and branch offices on other nations' worlds">Holdings abroad</div>
+      <HoldingsAbroad playerId={country.id} />
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Economic warning signs</div>
       <div className="abs-warnings">

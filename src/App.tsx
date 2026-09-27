@@ -22,6 +22,9 @@ import { useEscapeBehavior } from './hooks/useEscapeBehavior'
 import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
 import { useGroundCombatResolver } from './hooks/useGroundCombatResolver'
+import { useDefenseResolver } from './hooks/useDefenseResolver'
+import { useBombardmentResolver } from './hooks/useBombardmentResolver'
+import { useHoldingsResolver } from './hooks/useHoldingsResolver'
 import { useCommsResolver } from './hooks/useCommsResolver'
 import { useBattleTracker } from './hooks/useBattleTracker'
 import { useShipyardResolver } from './hooks/useShipyardResolver'
@@ -85,6 +88,12 @@ function App() {
   // Ground wars: invasions, occupations, recruits, and armies lost with their
   // transports — see scene/armyLogic.ts.
   useGroundCombatResolver()
+  // Planetary defenses: batteries fire on hostile warships in orbit.
+  useDefenseResolver()
+  // Orbital bombardment of enemy worlds.
+  useBombardmentResolver()
+  // Foreign buildings: embassies and branch offices.
+  useHoldingsResolver()
   // Fires strategic orders queued behind FTL comms delay once they arrive —
   // see commsVisual.ts / useCommsResolver's own comment.
   useCommsResolver()

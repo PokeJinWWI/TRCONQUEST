@@ -106,6 +106,9 @@ export interface ConstructionOrder {
   recipeId: string
   cost: number
   progress: number
+  // Set on a DISTRICT order (developing one more district level — see
+  // economy/districts.ts); recipeId is '' then. Absent on building orders.
+  district?: DistrictType
   // Who will own the finished building (state, a corporation, or a co-op) — set
   // when the order is queued. Government orders are state-funded; private
   // (corporation) orders are funded from the company's cash.
@@ -167,7 +170,21 @@ export interface World {
   cultureId: string
   populationCapacity: number
   // Building slots available per district — the planet's finite space/resources.
+  // With districts (economy/districts.ts) this is district levels × slots per level.
   districtCapacity: Record<DistrictType, number>
+  // District levels developed, and the land (max total levels) the world has.
+  // Optional: absent means "just enough to cover districtCapacity" / a default.
+  districts?: Record<DistrictType, number>
+  land?: number
+  // Orbital bombardment damage 0–1 (scene/bombardment.ts): cuts building
+  // output. Optional: absent = none.
+  devastation?: number
+  // Urban slots taken by other nations' embassies and branch offices
+  // (scene/holdings.ts, kept in sync by the holdings store). Absent = 0.
+  foreignSlots?: number
+  // Military slots taken by planetary defenses (state/defenseStore.ts keeps it
+  // in sync). Absent = 0.
+  militarySlots?: number
   pops: Pop[]
   buildings: Building[]
   constructionQueue: ConstructionOrder[]
@@ -212,6 +229,10 @@ export interface Country {
   welfarePerCapita: number
   // National cash; negative = an unfunded overdraft (issue bonds to cover it).
   treasury: number
+  // The fiscal rule's scale on the state's purchases (economyTick), 0.3–1:
+  // eased down while it borrows beyond what its debt allows, back up when it
+  // can afford them. Absent = 1.
+  purchaseScale?: number
   // Economic-system law (laws.ts) — governs owner autonomy and the penalty for
   // the state overriding a private building's production method.
   economicSystem: EconomicSystem
@@ -274,6 +295,8 @@ export interface Country {
   // Monetary transmission/inflation state (see monetaryPolicy.ts, Stage 4).
   // Evolves each tick; defaulted on first use, so optional.
   monetary?: MonetaryState
+  // Chained consumer price index (1 at game start) — see economyTick's cpi.
+  priceIndex?: number
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---
@@ -451,6 +474,9 @@ export interface CountryFiscal {
   // Trade (Milestone 5): total goods shipped between the country's worlds this
   // tick, and the freight capacity available.
   tradeVolume: number
+  // What it paid other nations for imports this tick, in its own currency
+  // (internationalTrade.ts). Absent before the first trade.
+  importValue?: number
   logisticsCapacity: number
   // Government subsidies paid out to corporations + individual buildings this
   // tick — a real expenditure line, folded into `expenditure`/`balance`.

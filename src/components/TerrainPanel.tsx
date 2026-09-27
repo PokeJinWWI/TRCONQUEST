@@ -44,7 +44,7 @@ export function TerrainPanel({ battleId, onRecenter }: { battleId: string; onRec
   const mineSelected = battle.units.filter((u) => u.ownerId === player && selectedIds.includes(u.id))
 
   return (
-    <DraggableWindow title={`${battle.bodyName} — Terrain battle`} anchor="left" maximizable={false}>
+    <DraggableWindow title={`${battle.bodyName} — Terrain battle`} memoryKey="terrain-battle" anchor="left" maximizable={false}>
       <div className="ship-panel-hint">
         The same war, closer: ranges, speeds and damage as on the planetary map, on real ground. Higher ground shoots harder; steep ground slows you.
       </div>

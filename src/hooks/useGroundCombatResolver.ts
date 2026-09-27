@@ -8,6 +8,9 @@ import { atWar, useDiplomacyStore } from '../state/diplomacyStore'
 import { playerFightLive, reapLostCargo } from '../scene/armyLogic'
 import { groundSurface } from '../scene/groundLogic'
 import { simDaysToGroundStep, stepGroundWar } from '../scene/groundResolution'
+import { useDefenseStore } from '../state/defenseStore'
+import { withFortressKeys } from '../scene/defenseLogic'
+import { DEFENSE_DEFS } from '../data/defenseData'
 import { engagedUnitIds, stepTerrainWar } from '../scene/terrainWar'
 import { useTerrainStore } from '../state/terrainStore'
 import { controllerOf } from '../scene/territory'
@@ -80,15 +83,28 @@ export function resolveGroundWar(simDays: number): void {
   const territory = useTerritoryStore.getState()
   const player = usePlayerStore.getState().selectedCountryId
   const battlesBefore = useTerrainStore.getState().battles
+  // Defense installations: active fortresses are extra key nodes; the war
+  // damages and destroys installations (scene/defenseLogic.ts).
+  const installations = useDefenseStore.getState().installations
   const world = {
     owners: territory.bodyOwner,
     controllers: territory.bodyController,
     nodeHolders: territory.nodeHolders,
     atWar,
     isAutonomous: (countryId: string) => countryId !== player,
-    surfaceOf: (bodyName: string) => groundSurface(bodyName, territory.bodyOwner),
+    surfaceOf: (bodyName: string) => {
+      const surface = groundSurface(bodyName, territory.bodyOwner)
+      return surface && installations.length > 0 ? withFortressKeys(surface, installations, simDays) : surface
+    },
   }
-  const coarse = stepGroundWar({ ...world, armies: reaped, engagedUnitIds: engagedUnitIds(battlesBefore) }, from, simDays)
+  const coarse = stepGroundWar({ ...world, armies: reaped, engagedUnitIds: engagedUnitIds(battlesBefore), installations }, from, simDays)
+  if (coarse.installations && coarse.installations !== installations) useDefenseStore.getState().setInstallations(coarse.installations)
+  for (const gone of coarse.destroyedInstallations ?? []) {
+    const owner = territory.bodyOwner[gone.bodyName]
+    useDiplomacyStore
+      .getState()
+      .pushEvent('installation-destroyed', owner ? [owner] : [], `${DEFENSE_DEFS[gone.kind].name} on ${gone.bodyName} was destroyed`, simDays)
+  }
 
   // Fights that have come to close quarters move onto terrain maps, and the
   // ones already there are played out. Their units go back onto these armies.

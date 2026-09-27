@@ -136,7 +136,14 @@ console.log('\n=== 2. Relief ===')
     }
   }
   const mean = (t: TerrainId) => (sums[t] ? sums[t]!.s / sums[t]!.n : NaN)
-  check('mountains stand higher than forest, forest higher than plains', mean('mountains') > mean('forest') && mean('forest') > mean('plains'), `m ${mean('mountains').toFixed(0)} f ${mean('forest').toFixed(0)} p ${mean('plains').toFixed(0)}`)
+  // Earth's relief is real (bodyTopography.ts), so plains can stand higher than
+  // forest (high steppe and plateaus vs lowland forest) — only mountains must top both.
+  check('mountains stand higher than forest and plains', mean('mountains') > mean('forest') && mean('mountains') > mean('plains'), `m ${mean('mountains').toFixed(0)} f ${mean('forest').toFixed(0)} p ${mean('plains').toFixed(0)}`)
+  const patchMean = (lonDeg: number, latDeg: number) => {
+    const g = buildRelief(earth, makeFrame(fromLonLat((lonDeg * Math.PI) / 180, (latDeg * Math.PI) / 180)))
+    return g.height.reduce((x, h) => x + h, 0) / g.height.length
+  }
+  check('the relief is real: Tibet stands far above the Amazon', patchMean(88, 32) > patchMean(-60, -4) + 1000, `${patchMean(88, 32).toFixed(0)} vs ${patchMean(-60, -4).toFixed(0)} m`)
   check('height is smooth between points', heightAtLocal(a, 0.01, 0.01) >= Math.min(...a.height) && heightAtLocal(a, 0, 0) <= Math.max(...a.height))
   check('the terrain under a point reads back', TERRAIN_IDS.includes(terrainAtLocal(a, 0.3, -0.2)))
 }

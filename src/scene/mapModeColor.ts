@@ -19,17 +19,20 @@ function lerpHex(a: RGB, b: RGB, t: number): string {
   return `#${[r, g, bch].map((v) => v.toString(16).padStart(2, '0')).join('')}`
 }
 
-// A planet with no real economy data behind it yet — ranked by district
-// count (bodyStats.estimateSize, itself derived from real radius) as an
-// honest stand-in for "how developed this world is" rather than inventing a
-// wholly new GDP number this project has nothing to back up.
-function gdpColors(planets: PlanetData[]): Map<string, string> {
-  const ranked = [...planets].sort((a, b) => estimateSize(a.radiusKm).districts - estimateSize(b.radiusKm).districts)
+// Worlds with an economy are shaded by their real annual GDP (from whichever
+// economy mode is running — `gdpByBody`), on a log scale against the richest
+// world in view so a small colony still shows. A body with no economy is
+// ranked by district count (bodyStats.estimateSize, from its real radius) in
+// the dim bottom band, below every inhabited world.
+const NO_ECONOMY_BAND = 0.12
+export function gdpColors(planets: PlanetData[], gdpByBody: Record<string, number> = {}): Map<string, string> {
   const colors = new Map<string, string>()
-  ranked.forEach((p, i) => {
-    const t = ranked.length > 1 ? i / (ranked.length - 1) : 1
-    colors.set(p.name, lerpHex(GDP_LOW, GDP_HIGH, t))
-  })
+  const withGdp = planets.filter((p) => (gdpByBody[p.name] ?? 0) > 0)
+  const max = Math.max(1, ...withGdp.map((p) => gdpByBody[p.name]))
+  const logMax = Math.log10(1 + max)
+  for (const p of withGdp) colors.set(p.name, lerpHex(GDP_LOW, GDP_HIGH, NO_ECONOMY_BAND + (1 - NO_ECONOMY_BAND) * (Math.log10(1 + gdpByBody[p.name]) / logMax)))
+  const rest = planets.filter((p) => !colors.has(p.name)).sort((a, b) => estimateSize(a.radiusKm).districts - estimateSize(b.radiusKm).districts)
+  rest.forEach((p, i) => colors.set(p.name, lerpHex(GDP_LOW, GDP_HIGH, rest.length > 1 ? (i / (rest.length - 1)) * NO_ECONOMY_BAND : 0)))
   return colors
 }
 
@@ -51,9 +54,10 @@ function politicalColors(planets: PlanetData[], owners?: Record<string, string>)
 
 // Per-planet color overrides for the active map mode, keyed by planet name —
 // null when no mode is active, meaning every planet renders its own natural
-// color (see planetData's `color`). `owners` is the live territory map.
-export function mapModeColorsFor(mode: MapMode, planets: PlanetData[], owners?: Record<string, string>): Map<string, string> | null {
-  if (mode === 'gdp') return gdpColors(planets)
+// color (see planetData's `color`). `owners` is the live territory map;
+// `gdpByBody` each inhabited world's annual GDP (state/nationEconomy.ts).
+export function mapModeColorsFor(mode: MapMode, planets: PlanetData[], owners?: Record<string, string>, gdpByBody?: Record<string, number>): Map<string, string> | null {
+  if (mode === 'gdp') return gdpColors(planets, gdpByBody)
   if (mode === 'political') return politicalColors(planets, owners)
   return null
 }

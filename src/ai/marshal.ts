@@ -71,7 +71,7 @@ export function chooseDropNode(countryId: string, bodyName: string, cargo: Army[
   const surface = groundSurface(bodyName, snap.owners)
   if (!surface) return null
   const types = cargo.flatMap((a) => a.units.map((u) => u.type))
-  return defaultDropNode(surface, types, countryId, snap.armies, snap.owners, snap.nodeHolders, atWar)
+  return defaultDropNode(surface, types, countryId, snap.armies, snap.owners, snap.nodeHolders, atWar, snap.shieldedFor?.(countryId, bodyName))
 }
 
 function move(ship: ShipInstance, bodyName: string): Intent[] {
@@ -109,8 +109,20 @@ export function marshal(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Age
   // Empty transports go home to pick up the next wave.
   for (const t of transports) if (cargoOf(t, snap).length === 0) intents.push(...move(t, home))
 
+  // Warships holding the target's orbit bombard it while enemy defenses stand
+  // there (batteries deny the landing; fortresses and shields make it bloody),
+  // and stop once they're gone.
+  if (target) {
+    const overhead = bb.idleWarships.filter((s) => orbitedBody(s) === target)
+    const defended = (snap.hostileDefensesAt?.(bb.countryId, target) ?? 0) > 0 && hasOrbitalSuperiority(bb.countryId, target, snap.ships, bb.atWar)
+    for (const s of overhead) {
+      const want = defended ? 'limited' : 'off'
+      if ((s.bombardStance ?? 'off') !== want) intents.push({ kind: 'set-bombard', shipId: s.id, stance: want })
+    }
+  }
+
   const orbitSecured =
-    !!target && bb.idleWarships.some((s) => orbitedBody(s) === target) && hasOrbitalSuperiority(bb.countryId, target, snap.ships, bb.atWar)
+    !!target && bb.idleWarships.some((s) => orbitedBody(s) === target) && hasOrbitalSuperiority(bb.countryId, target, snap.ships, bb.atWar, snap.orbitDenied)
 
   if (target && orbitSecured) {
     const loaded = transports.filter((t) => cargoOf(t, snap).length > 0)

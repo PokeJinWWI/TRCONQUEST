@@ -46,7 +46,7 @@ function formatDeposit(n: number): string {
 // governs this world, it also carries a per-building subsidy control and a
 // Nationalize action (transfers a single building to the state regardless of
 // its owning corporation's overall status).
-function BuildingDetail({
+export function BuildingDetail({
   b,
   world,
   country,
@@ -538,7 +538,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
             return (
               <div key={o.id} className="econ-build-row">
                 <span className="econ-build-name">
-                  {recipe?.label ?? o.recipeId}
+                  {o.district ? `${DISTRICT_LABELS[o.district]} district — new level` : recipe?.label ?? o.recipeId}
                   <span className={`econ-owner-tag econ-owner-${oc === 'corporation' ? 'corporation' : oc} econ-build-owner`} title={`This will be a ${ownerTag}-owned building`}>
                     {ownerTag}
                   </span>
@@ -593,6 +593,56 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
       ) : (
         <div className="ship-panel-hint">You don't govern {world.name} — construction is only available on your own worlds.</div>
       )}
+    </div>
+  )
+}
+
+// One building as a card (the planet screen opens it when a tile is clicked):
+// level with upgrade/downgrade, production method, owner, then the full
+// BuildingDetail — inputs, outputs, employment, reserves, subsidy and transfers.
+export function ComplexBuildingCard({ b, world, country, owned, onClose }: { b: Building; world: World; country?: Country; owned: boolean; onClose: () => void }) {
+  const corporations = useEconomyStore((s) => s.corporations)
+  const queueConstruction = useEconomyStore((s) => s.queueConstruction)
+  const downgradeBuilding = useEconomyStore((s) => s.downgradeBuilding)
+  const setProductionMethod = useEconomyStore((s) => s.setProductionMethod)
+  const releaseProductionMethod = useEconomyStore((s) => s.releaseProductionMethod)
+  const recipe = RECIPES[b.recipeId]
+  if (!recipe) return null
+  const method = getMethod(b.recipeId, b.methodId)
+  const { control, pinned, malus } = buildingControl(b, country?.economicSystem ?? 'interventionism')
+  const room = canBuild(world, b.recipeId)
+  return (
+    <div className="pl-detail">
+      <div className="pl-detail-head">
+        <div>
+          <div className="pl-detail-name">{recipe.label} <span className="abs-dim">Level {b.level} · {DISTRICT_LABELS[districtOfRecipe(b.recipeId)]} district</span></div>
+          <div className="abs-dim">
+            <span className={`econ-owner-tag econ-owner-${control}`}>{ownerLabel(b, corporations)}</span>
+            {pinned && <span className="econ-pin-badge" title="State-directed against the market">pinned −{Math.round((1 - malus) * 100)}%</span>}
+          </div>
+        </div>
+        <button type="button" className="abs-x" title="Close" onClick={onClose}>×</button>
+      </div>
+      {owned && (
+        <div className="pl-detail-actions">
+          <button type="button" className="laws-enact-btn" disabled={!room} onClick={() => queueConstruction(world.id, b.recipeId, { kind: 'state' })}
+            title={!room ? 'District is full — develop it first' : `Queue another state-owned level — about ${formatMoney(estimateConstructionCost(b.recipeId, world.market.prices))} of materials`}>
+            + Upgrade
+          </button>
+          <button type="button" className="laws-enact-btn" disabled={control !== 'state'} onClick={() => downgradeBuilding(world.id, b.id)}
+            title={control !== 'state' ? "Can't demolish a company's or co-op's property — nationalize it first" : `Tear down one level (instant, salvages ${formatMoney(BUILD_COST_PER_LEVEL * 0.3)})`}>
+            − Downgrade
+          </button>
+          {recipe.methods.length > 1 && (
+            <select className="econ-method-select" value={b.methodId} onChange={(e) => setProductionMethod(world.id, b.id, e.target.value)} title={method?.description}>
+              {recipe.methods.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          )}
+          {pinned && <button type="button" className="econ-release-btn" onClick={() => releaseProductionMethod(world.id, b.id)} title="Hand this building back to its owner">↩</button>}
+        </div>
+      )}
+      {!owned && method && <div className="abs-dim">Method: {method.label}</div>}
+      <BuildingDetail b={b} world={world} country={country} owned={owned} corporations={corporations} />
     </div>
   )
 }

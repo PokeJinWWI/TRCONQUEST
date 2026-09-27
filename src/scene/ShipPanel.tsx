@@ -144,7 +144,7 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
   const mine = selected.filter((s) => isPlayerOwned(s))
 
   return (
-    <DraggableWindow title={`${selected.length} ships selected`} onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
+    <DraggableWindow title={`${selected.length} ships selected`} memoryKey="ships" onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
       {byFleet.map(([fleetId, members]) => {
         const fleetMembers = ships.filter((s) => s.fleetId === fleetId)
         const relation = relationOf(members[0].ownerId)
@@ -329,7 +329,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
   const chargeSecondsLeft = charge ? Math.max(0, simDaysToSeconds(charge.readySimDays - simDays)) : 0
 
   return (
-    <DraggableWindow title={ship.name} onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
+    <DraggableWindow title={ship.name} memoryKey="ship" onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
       {/* Only shown once there's an actual fleet to talk about — a solo
           hull's own name already says everything this row would. */}
       {fleetMates.length > 1 && (

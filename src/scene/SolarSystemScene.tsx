@@ -20,6 +20,9 @@ import { getMoonsForPlanet } from './moonData'
 import { getAsteroidBeltsForStar } from '../data/asteroidBeltData'
 import { getSystemStars } from '../data/starData'
 import { mapModeColorsFor } from './mapModeColor'
+import { useEconomyStore } from '../state/economyStore'
+import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { worldGdpYearOf } from '../state/nationEconomy'
 import { useMapModeStore } from '../state/mapModeStore'
 import type { InspectableBody } from './inspectableBody'
 import { CameraFocusRig } from './CameraFocusRig'
@@ -150,7 +153,12 @@ export function SolarSystemScene() {
   // each body, drawn as rings on the planet markers.
   const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
   const bodyController = useTerritoryStore((s) => s.bodyController)
-  const mapModeColors = useMemo(() => mapModeColorsFor(mapMode, PLANETS, bodyOwner), [mapMode, PLANETS, bodyOwner])
+  // The GDP lens follows the economy: recomputed each economy month (either mode).
+  const economyMonth = useEconomyStore((s) => s.tick) + useAbstractEconomyStore((s) => s.tick)
+  const mapModeColors = useMemo(
+    () => mapModeColorsFor(mapMode, PLANETS, bodyOwner, mapMode === 'gdp' ? Object.fromEntries(PLANETS.map((p) => [p.name, worldGdpYearOf(p.name)])) : undefined),
+    [mapMode, PLANETS, bodyOwner, economyMonth],
+  )
   const ships = useShipStore((s) => s.ships)
   const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
@@ -227,7 +235,6 @@ export function SolarSystemScene() {
     return [pos.x, pos.y, pos.z]
     // Computed once, at mount, from whatever the state was at that moment —
     // deliberately not reactive to later selection changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const selectedStar = useMemo(

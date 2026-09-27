@@ -1,94 +1,11 @@
-import { EARTH_LAND_RINGS } from '../data/earthLand'
 import type { TerrainId } from '../data/groundData'
 import { lonLatOf } from './mapProjection'
-import { normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
+import type { SurfacePoint } from './surfaceMesh'
 
-// Earth's real geography for its planetary map: land and sea from the Natural
-// Earth coastline (data/earthLand.ts), and biomes laid over the land from
-// hand-placed regions (deserts, mountain ranges, forests, ice) — approximate,
-// where the coastline is exact. Pure and memoised; every other world's terrain
-// stays procedural (planetTerrain.ts).
-
-// --- Land and sea ------------------------------------------------------------
-
-interface Ring {
-  pts: number[] // lon, lat in degrees, flat
-  minLon: number
-  maxLon: number
-  minLat: number
-  maxLat: number
-}
-
-let rings: Ring[] | null = null
-
-function ringsOf(): Ring[] {
-  if (rings) return rings
-  rings = EARTH_LAND_RINGS.map((r) => {
-    const pts = r.map((v) => v / 10)
-    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity
-    for (let i = 0; i < pts.length; i += 2) {
-      minLon = Math.min(minLon, pts[i])
-      maxLon = Math.max(maxLon, pts[i])
-      minLat = Math.min(minLat, pts[i + 1])
-      maxLat = Math.max(maxLat, pts[i + 1])
-    }
-    return { pts, minLon, maxLon, minLat, maxLat }
-  })
-  return rings
-}
-
-// Whether a spot (degrees) is on land: inside an odd number of rings.
-export function isEarthLand(lonDeg: number, latDeg: number): boolean {
-  let inside = false
-  for (const ring of ringsOf()) {
-    if (lonDeg < ring.minLon || lonDeg > ring.maxLon || latDeg < ring.minLat || latDeg > ring.maxLat) continue
-    const p = ring.pts
-    let within = false
-    for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
-      const xi = p[i], yi = p[i + 1], xj = p[j], yj = p[j + 1]
-      if (yi > latDeg !== yj > latDeg && lonDeg < ((xj - xi) * (latDeg - yi)) / (yj - yi) + xi) within = !within
-    }
-    if (within) inside = !inside
-  }
-  return inside
-}
-
-export function isEarthLandAt(p: SurfacePoint): boolean {
-  const { lon, lat } = lonLatOf(p)
-  return isEarthLand((lon * 180) / Math.PI, (lat * 180) / Math.PI)
-}
-
-let landValues: Float32Array | null = null
-
-// How much of each fine node's cell is land (0-1), by sampling the cell: 19
-// points, the middle and two rings around it. A node is land when this is at
-// least a half, and the map's coasts are drawn along the half-way contour of
-// these values, so they follow the real coastline to well within a cell.
-export function earthLandValues(): Float32Array {
-  if (landValues) return landValues
-  const mesh = surfaceMesh()
-  const n = mesh.count.fine
-  const out = new Float32Array(n)
-  const cell = mesh.fineSpacingRad
-  const offsets: [number, number][] = [[0, 0]]
-  for (let k = 0; k < 6; k++) offsets.push([Math.cos((k * Math.PI) / 3) * 0.28 * cell, Math.sin((k * Math.PI) / 3) * 0.28 * cell])
-  for (let k = 0; k < 12; k++) offsets.push([Math.cos((k * Math.PI) / 6 + 0.26) * 0.55 * cell, Math.sin((k * Math.PI) / 6 + 0.26) * 0.55 * cell])
-  for (let i = 0; i < n; i++) {
-    const c = { x: mesh.positions[i * 3], y: mesh.positions[i * 3 + 1], z: mesh.positions[i * 3 + 2] }
-    // A tangent basis at the node.
-    const ref = Math.abs(c.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 }
-    const t1 = normalize({ x: ref.y * c.z - ref.z * c.y, y: ref.z * c.x - ref.x * c.z, z: ref.x * c.y - ref.y * c.x })
-    const t2 = { x: c.y * t1.z - c.z * t1.y, y: c.z * t1.x - c.x * t1.z, z: c.x * t1.y - c.y * t1.x }
-    let land = 0
-    for (const [a, b] of offsets) {
-      const p = normalize({ x: c.x + t1.x * a + t2.x * b, y: c.y + t1.y * a + t2.y * b, z: c.z + t1.z * a + t2.z * b })
-      if (isEarthLandAt(p)) land++
-    }
-    out[i] = land / offsets.length
-  }
-  landValues = out
-  return out
-}
+// Earth's biomes, laid over its land: hand-placed regions (deserts, mountain
+// ranges, forests, ice) — approximate. Its land and sea are real data
+// (bodyTopography.ts: ETOPO 2022 bedrock with the sea 70 m higher, every ice
+// sheet melted), and so is its relief.
 
 // --- Biomes ------------------------------------------------------------------
 

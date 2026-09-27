@@ -28,6 +28,12 @@ import { useTerrainStore } from '../state/terrainStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useViewStore } from '../state/viewStore'
 import { useWorkspaceStore } from '../state/workspaceStore'
+import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { useDefenseStore } from '../state/defenseStore'
+import { useBombardmentStore } from '../state/bombardmentStore'
+import { useHoldingsStore } from '../state/holdingsStore'
+import { useWindowLayoutStore } from '../state/windowLayoutStore'
+import { usePlanetViewStore } from '../state/planetViewStore'
 
 // Every store that holds game (or session) state. Not settingsStore.
 interface Resettable {
@@ -35,6 +41,12 @@ interface Resettable {
   getInitialState: () => unknown
 }
 const GAME_STORES: Resettable[] = [
+  useAbstractEconomyStore,
+  useDefenseStore,
+  useBombardmentStore,
+  useHoldingsStore,
+  useWindowLayoutStore,
+  usePlanetViewStore,
   useAiStore,
   useArmyStore,
   useBattleStore,

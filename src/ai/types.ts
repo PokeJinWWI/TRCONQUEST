@@ -1,3 +1,4 @@
+import type { BombardStance } from '../data/defenseData'
 // Shared shapes for the strategic AI (see coordinator.ts for how the pieces
 // fit together).
 import type { PeaceTerms } from '../data/diplomacyData'
@@ -14,6 +15,7 @@ export type Intent =
   | { kind: 'move-ship'; shipId: string; systemId: string; bodyName: string }
   | { kind: 'embark'; shipId: string; armyIds: string[] }
   | { kind: 'land'; shipId: string; dropNode?: number }
+  | { kind: 'set-bombard'; shipId: string; stance: BombardStance }
   // Fleet organisation: fleets travel as one (scene/fleetMove.ts), so the
   // AI keeps its transports in their own fleet and gathers its warships.
   | { kind: 'split-fleet'; shipIds: string[] }

@@ -18,7 +18,9 @@
 // entry point tickEconomy calls for each non-player country.
 
 import type { Country, CountryFiscal, World, Corporation, ConstructionOrder } from './economyTypes'
+import { goodIsScarce, inputsAvailable, recipeGood } from './scarcity'
 import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
+import { districtOrder, freeLandOfWorld } from './districts'
 import { economicSystemDef } from './laws'
 
 // --- Tunables (all deliberately gentle: the AI nudges, it does not lurch) ---
@@ -144,7 +146,7 @@ const GROWTH_BUILDINGS: { recipeId: string }[] = [
 
 function districtRoom(world: World, recipeId: string): boolean {
   const d: DistrictType = districtOfRecipe(recipeId)
-  const used = world.buildings.reduce((n, b) => n + (districtOfRecipe(b.recipeId) === d ? b.level : 0), 0) + world.constructionQueue.filter((o) => districtOfRecipe(o.recipeId) === d).length
+  const used = world.buildings.reduce((n, b) => n + (districtOfRecipe(b.recipeId) === d ? b.level : 0), 0) + world.constructionQueue.filter((o) => !o.district && districtOfRecipe(o.recipeId) === d).length + (d === 'urban' ? world.foreignSlots ?? 0 : 0)
   return used < world.districtCapacity[d]
 }
 
@@ -169,9 +171,16 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
   })
   const placeOn = (recipeId: string): World[] | null => {
     // Prefer the owned world with the most buildings that still has room.
-    const candidate = [...owned].sort((a, b) => b.buildings.length - a.buildings.length).find((w) => districtRoom(w, recipeId))
-    if (!candidate) return null
-    return worlds.map((w) => (w.id === candidate.id ? { ...w, constructionQueue: [...w.constructionQueue, order(recipeId)] } : w))
+    const byBuildings = [...owned].sort((a, b) => b.buildings.length - a.buildings.length)
+    const candidate = byBuildings.find((w) => districtRoom(w, recipeId))
+    if (candidate) return worlds.map((w) => (w.id === candidate.id ? { ...w, constructionQueue: [...w.constructionQueue, order(recipeId)] } : w))
+    // No room anywhere: develop that district one level on a world with free
+    // land (economy/districts.ts) — once, not while a level is already coming.
+    const d: DistrictType = districtOfRecipe(recipeId)
+    if (owned.some((w) => w.constructionQueue.some((o) => o.district === d))) return null
+    const land = byBuildings.find((w) => freeLandOfWorld(w) > 0)
+    if (!land) return null
+    return worlds.map((w) => (w.id === land.id ? { ...w, constructionQueue: [...w.constructionQueue, districtOrder(`ai-${country.id}-${tick}-district-${d}`, d)] } : w))
   }
 
   // Priority 1: bureaucracy under strain → build administrative capacity. That
@@ -183,6 +192,12 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
   if (strained && !alreadyQueuing('ministry') && !alreadyQueuing('governmentOffice')) {
     const placed = placeOn('ministry') ?? placeOn('governmentOffice')
     if (placed) return placed
+  }
+
+  // Scarce, and a plant for it could run (its inputs are made in the nation).
+  const scarce = (recipeId: string) => {
+    const good = recipeGood(recipeId)
+    return !!good && goodIsScarce(good, owned) && inputsAvailable(recipeId, owned)
   }
 
   // Priority 2: BASIC PROVISION — regardless of economic system, a state keeps
@@ -205,8 +220,12 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
       { tier: 'healthcare', recipe: 'clinic' },
       { tier: 'everyday', recipe: 'solarPlant' },
     ]
+    // Only when the good itself is scarce (economy/scarcity.ts): an unmet need
+    // with the good in glut is people who can't afford it, or a different good
+    // in the group missing — another plant only deepens the glut (Lalande once
+    // stacked seven clinics on one).
     for (const e of essentials) {
-      if (tierAvg(e.tier) < ESSENTIAL_NEEDS_THRESHOLD && !alreadyQueuing(e.recipe)) {
+      if (tierAvg(e.tier) < ESSENTIAL_NEEDS_THRESHOLD && scarce(e.recipe) && !alreadyQueuing(e.recipe)) {
         const placed = placeOn(e.recipe)
         if (placed) return placed
       }
@@ -223,7 +242,7 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
     // (a rough "most under-supplied" signal), that we're not already building.
     let best: { recipeId: string; price: number } | null = null
     for (const g of GROWTH_BUILDINGS) {
-      if (alreadyQueuing(g.recipeId)) continue
+      if (alreadyQueuing(g.recipeId) || !scarce(g.recipeId)) continue
       const recipe = RECIPES[g.recipeId]
       const outGood = recipe?.methods[0]?.outputs[0]?.good
       if (!outGood) continue
@@ -246,6 +265,9 @@ export interface CountryAIOptions {
   // every connected player's nation here, leaving only unclaimed nations to the
   // AI). When empty/absent, every nation is treated as AI (headless sim/tests).
   humanCountryIds?: readonly string[]
+  // Whether two nations are at war — they don't trade (internationalTrade.ts).
+  // Absent = nobody is (headless sims and tests).
+  atWar?: (a: string, b: string) => boolean
   // The current tick index, for review cadence. Managers only act on their
   // review ticks.
   tick?: number

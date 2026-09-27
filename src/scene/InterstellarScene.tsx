@@ -532,7 +532,7 @@ export function InterstellarScene() {
         <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />
       ) : (
         selectedStar && (
-          <DraggableWindow title={selectedStar.name} onClose={() => selectInView(null)}>
+          <DraggableWindow title={selectedStar.name} memoryKey="star" onClose={() => selectInView(null)}>
             <div className="inspect-row">
               <span className="inspect-label">Distance</span>
               <span className="inspect-value">{selectedStar.distanceLy.toFixed(2)} ly from Sol</span>

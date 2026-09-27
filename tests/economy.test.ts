@@ -6,6 +6,7 @@
 //
 // Run:  npx tsx tests/economy.test.ts
 
+import { runForeignInvestmentAI } from '../src/economy/foreignInvestmentAI'
 import { seedWorlds, seedCountries, seedCorporations } from '../src/economy/economySeed'
 import { tickEconomy, estimateWorldGdp, estimateConstructionCost, constructionCapacityOf, creditRating, corporationValue, sharePrice, districtUsage, districtOfRecipe, DISTRICT_TYPES, NEW_BUILDING_THROUGHPUT, distributeDividends } from '../src/economy/economyTick'
 import { GOOD_IDS, GOODS, priceCeiling, priceFloor } from '../src/economy/goods'
@@ -184,7 +185,10 @@ console.log('\n=== 9. Production methods: data + resolution + seeded buildings =
   check('getMethod falls back to the default for an unknown id', getMethod('wheatFarm', 'nonsense')?.id === RECIPES.wheatFarm.methods[0].id)
   const worlds = seedWorlds()
   check('seeded buildings carry a valid method id', worlds.every((w) => w.buildings.every((b) => getMethod(b.recipeId, b.methodId)?.id === b.methodId)))
-  check('seeded (established) buildings start at full throughput', worlds.every((w) => w.buildings.every((b) => b.throughput === 1)))
+  // Established buildings open at the run their staff supports: flat out where
+  // the world has the workers (every building on Mars), less on a colony short
+  // of them (Proxima b), never more.
+  check('seeded (established) buildings open at the run their staff supports', worlds.every((w) => w.buildings.every((b) => b.throughput > 0 && b.throughput <= 1)) && worlds.find((w) => w.id === 'Proxima b')!.buildings.some((b) => b.throughput < 1), worlds.find((w) => w.id === 'Mars')!.buildings.filter((b) => b.throughput === 1).length + ' of Mars at full run')
   check('a mechanized farm needs inputs a manual one does not', getMethod('wheatFarm', 'mechanized')!.inputs.length > getMethod('wheatFarm', 'manual')!.inputs.length)
   check('most industry consumes electricity', getMethod('steelMill', 'standard')!.inputs.some((i) => i.good === 'electricity'))
 }
@@ -380,7 +384,15 @@ console.log('\n=== 18. Milestone 5: inter-world trade & logistics ===')
 {
   // Strip Luna of all food production; with trade it still imports food from Mars.
   let countries = seedCountries()
-  let worlds = seedWorlds().map((w) => (w.id === 'Luna' ? { ...w, buildings: w.buildings.filter((b) => !['wheatFarm', 'foodProcessor'].includes(b.recipeId)) } : w))
+  // (Mars is given spare farms: the seed sizes each nation's farms to its own
+  // use, so there'd be no Martian surplus to ship.)
+  let worlds = seedWorlds().map((w) =>
+    w.id === 'Luna'
+      ? { ...w, buildings: w.buildings.filter((b) => !['wheatFarm', 'foodProcessor'].includes(b.recipeId)) }
+      : w.id === 'Mars'
+        ? { ...w, buildings: w.buildings.map((b) => (b.recipeId === 'wheatFarm' ? { ...b, level: b.level * 3 } : b)) }
+        : w,
+  )
   let corps = seedCorporations()
   let reports = tickEconomy(countries, worlds, corps).reports
   for (let i = 0; i < 80; i++) {
@@ -440,7 +452,9 @@ console.log('\n=== 20. Resource deposits: extraction is capped by a finite reser
   const abundantWorlds = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: [soleMine], resourceDeposits: { ironOre: 1_000_000 } } : w))
   const abundantResult = tickEconomy(countries, abundantWorlds, corporations)
   const abundantMine = abundantResult.worlds.find((w) => w.id === 'Mars')!.buildings.find((b) => b.id === 'sole-ironMine')!
-  check('with an abundant deposit the mine produces close to its uncapped output', (abundantMine.inventory.ironOre ?? 0) > 400, (abundantMine.inventory.ironOre ?? 0).toFixed(1))
+  // (Its 500 less a month's stock decay and a short-staffed run: far above the
+  // 50-unit cap below.)
+  check('with an abundant deposit the mine produces close to its uncapped output', (abundantMine.inventory.ironOre ?? 0) > 350, (abundantMine.inventory.ironOre ?? 0).toFixed(1))
 
   // Test: the same mine, but with only a sliver of ore left in the ground —
   // far less than the 500/tick it would otherwise produce.
@@ -475,7 +489,10 @@ console.log('\n=== 21. Government subsidies: a real treasury cost that credits t
 
   const baseTreasury = baseline.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
   const subTreasury = subsidized.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
-  check('subsidies are a REAL cost: the treasury ends lower by exactly the outlay (400 + 150)', Math.abs(baseTreasury - subTreasury - 550) < 1e-6, `Δtreasury=${(baseTreasury - subTreasury).toFixed(2)}`)
+  // The budget's treasury (the report's): the banks' rescue step afterwards
+  // draws only on a positive treasury, so the final figure also moves with it.
+  const budgetTreasury = (r: typeof baseline) => r.reports.countries['imperial-state-of-mars'].treasury
+  check('subsidies are a REAL cost: the treasury ends lower by exactly the outlay (400 + 150)', Math.abs(budgetTreasury(baseline) - budgetTreasury(subsidized) - 550) < 1e-6, `Δtreasury=${(budgetTreasury(baseline) - budgetTreasury(subsidized)).toFixed(2)} (final ${(baseTreasury - subTreasury).toFixed(2)})`)
 
   const baseCorpCash = baseline.corporations.find((c) => c.id === corpId)!.cash
   const subCorpCash = subsidized.corporations.find((c) => c.id === corpId)!.cash
@@ -497,8 +514,7 @@ console.log('\n=== 21. Government subsidies: a real treasury cost that credits t
   const stateSubsidized = tickEconomy(stateCountries, seedWorlds(), baseCorporations)
   const stateReport = stateSubsidized.reports.countries['imperial-state-of-mars']
   check('a subsidy to a STATE-owned building is still spent (subsidiesSpent > 0)', stateReport.subsidiesSpent === 300, `${stateReport.subsidiesSpent}`)
-  const stateTreasury = stateSubsidized.countries.find((c) => c.id === 'imperial-state-of-mars')!.treasury
-  check('and it still costs the treasury the full amount', Math.abs(baseTreasury - stateTreasury - 300) < 1e-6, `Δtreasury=${(baseTreasury - stateTreasury).toFixed(2)}`)
+  check('and it still costs the treasury the full amount', Math.abs(budgetTreasury(baseline) - budgetTreasury(stateSubsidized) - 300) < 1e-6, `Δtreasury=${(budgetTreasury(baseline) - budgetTreasury(stateSubsidized)).toFixed(2)}`)
 }
 
 console.log('\n=== 22. Per-building nationalization (store action) ===')
@@ -616,7 +632,9 @@ console.log('\n=== 24. Stockpiling: fills toward target on surplus, releases on 
   // that processor running and mask the shortage) so food genuinely runs
   // short, then compare a world holding a food reserve against an otherwise-
   // identical one with none — the reserve should measurably cushion it.
-  const producesFood = (recipeId: string) => (RECIPES[recipeId]?.methods ?? []).some((m) => m.outputs.some((o) => o.good === 'grains' || o.good === 'groceries'))
+  // Buildings that eat grain go too: industry is served before households, so
+  // a ranch would take the whole release and leave the test measuring nothing.
+  const producesFood = (recipeId: string) => (RECIPES[recipeId]?.methods ?? []).some((m) => m.outputs.some((o) => o.good === 'grains' || o.good === 'groceries') || m.inputs.some((i) => i.good === 'grains'))
   const starvedMars = seedWorlds().find((w) => w.id === 'Mars')!
   const noFood = starvedMars.buildings.filter((b) => !producesFood(b.recipeId))
 
@@ -657,7 +675,9 @@ console.log('\n=== 25. Country AI runs non-player nations (and never the player)
   // and the PLAYER nation (excluded) should not be touched by the AI.
   const player = 'imperial-state-of-mars'
   const aiNation = 'orion-republic'
-  let countries = seedCountries().map((c) => ({ ...c, welfarePerCapita: 6, taxRate: 0.1 }))
+  // A welfare no budget can carry (6 once was; with the state's books honest
+  // and imports sold, Orion now runs a surplus at 6).
+  let countries = seedCountries().map((c) => ({ ...c, welfarePerCapita: 40, taxRate: 0.1 }))
   let worlds = seedWorlds()
   let corps = seedCorporations()
   const startAi = { ...countries.find((c) => c.id === aiNation)! }
@@ -736,7 +756,7 @@ console.log('\n=== 26. Corporation AI: reinvest winners, pull out of chronic los
     check('a cash-rich company with a profitable building invests (queues construction)', queuedForCorp)
   }
 
-  // Divestment: a chronic loss-maker (long streak) is closed, with salvage.
+  // Divestment: a chronic loss-maker (long streak) is cut back, with salvage.
   {
     let worlds = seedWorlds()
     worlds = worlds.map((w) =>
@@ -747,9 +767,14 @@ console.log('\n=== 26. Corporation AI: reinvest winners, pull out of chronic los
     const before = buildingsOf(worlds, 'redmines')
     const poor = { ...corp, cash: 0 }
     const after = runCycle(poor, worlds)
-    const loserGone = !after.worlds.some((w) => w.buildings.some((b) => b.id === 'loser'))
-    check('a chronic loss-maker (streak ≥ 12) is divested', loserGone && buildingsOf(after.worlds, 'redmines') < before, `buildings ${before} -> ${buildingsOf(after.worlds, 'redmines')}`)
-    check('closing it returns salvage cash to the company', after.corp.cash > poor.cash, `cash ${poor.cash} -> ${after.corp.cash.toFixed(0)}`)
+    // Downsized a level at a time (razing a whole plant at once cut off every
+    // building downstream of it), and closed at its last level.
+    const loser = after.worlds.flatMap((w) => w.buildings).find((b) => b.id === 'loser')
+    check('a chronic loss-maker (streak ≥ 12) is divested one level', loser?.level === 2 && buildingsOf(after.worlds, 'redmines') === before, `level 3 -> ${loser?.level}`)
+    check('divesting returns salvage cash to the company', after.corp.cash > poor.cash, `cash ${poor.cash} -> ${after.corp.cash.toFixed(0)}`)
+    const lastLevel = worlds.map((w) => ({ ...w, buildings: w.buildings.map((b) => (b.id === 'loser' ? { ...b, level: 1 } : b)) }))
+    const closed = runCycle(poor, lastLevel)
+    check('...and closed at its last level', !closed.worlds.some((w) => w.buildings.some((b) => b.id === 'loser')) && buildingsOf(closed.worlds, 'redmines') < before, `buildings ${before} -> ${buildingsOf(closed.worlds, 'redmines')}`)
   }
 
   // A brief, recent loss (short streak) is NOT enough to trigger a pull-out —
@@ -1046,16 +1071,16 @@ console.log('\n=== 34. Company foreign investment + AI cross-border capital ==='
   const { corporations: dc } = distributeDividends([holderCorp, ownedCorp], seedCountries(), seedWorlds(), new Map([['ownedco', 1000]]))
   check('a company that holds equity in another gets that stake\'s dividends in its cash', dc.find((c) => c.id === 'holdco')!.cash > 0, `HoldCo cash ${dc.find((c) => c.id === 'holdco')!.cash.toFixed(0)}`)
 
-  // The foreign-investment AI spreads cross-border stakes: with everyone AI and
-  // open to foreign capital, foreign governments end up owning slices of the one
-  // profitable private company.
-  let countries = seedCountries().map((c) => ({ ...c, foreignInvestmentPolicy: 'open' as const, treasury: 200000 }))
-  let worlds = seedWorlds()
-  let corps = seedCorporations()
-  for (let i = 0; i < 120; i++) {
-    const r = tickEconomy(countries, worlds, corps, { humanCountryIds: [], tick: i + 1, enableAI: true })
-    countries = r.countries
-    worlds = r.worlds
+  // The foreign-investment AI spreads cross-border stakes: flush, open states
+  // take slices of a profitable foreign private company. Run on its own review
+  // ticks (whether a private company IS profitable is the economy's outcome —
+  // Mars's miners mostly aren't, their ores in glut — so the target is given one).
+  const countries = seedCountries().map((c) => ({ ...c, foreignInvestmentPolicy: 'open' as const, treasury: 200000 }))
+  let corps = seedCorporations().map((c) => (c.kind === 'private' ? { ...c, lastProfit: 5000 } : c))
+  let fiCountries = countries
+  for (let t = 1; t <= 24; t++) {
+    const r = runForeignInvestmentAI(fiCountries, corps, seedWorlds(), t, [], () => 1)
+    fiCountries = r.countries
     corps = r.corporations
   }
   const anyForeignStake = corps.some((c) => c.shares.some((s) => s.holder.kind === 'state' && s.holder.countryId !== undefined && s.holder.countryId !== c.countryId))
@@ -1377,8 +1402,16 @@ console.log('\n=== 40. Central banking Stage 4: transmission with lags, inflatio
 
   // REACTION: an independent bank (Mars) raises its policy rate as inflation runs
   // above target; a government-controlled bank (Lalande) does not move.
-  const marsAfter = runInflation(marsId, 20)
-  check('an independent bank raises its rate against inflation (Taylor rule)', marsAfter.rate > 0.03, `${(marsAfter.rate * 100).toFixed(2)}%`)
+  // (One step, with Mars's prices climbing ~2% a month: measured from prices,
+  // inflation no longer runs above target on its own in a seeded economy.)
+  {
+    const c = seedCountries().find((x) => x.id === marsId)!
+    const hot = { ...c, monetary: { ...defaultMonetaryState(), inflation: 0.2, expectation: 0.1 } }
+    const money = { [marsId]: { baseMoney: 0, currency: 0, bankReserves: 0, deposits: 0, broadMoney: 0, loans: 0, bankCapital: 0, reserveRatio: 0, loanToDeposit: 0, cbBorrowings: 0 } }
+    const reports: import('../src/economy/economyTypes').TickReports = { worlds: {}, countries: { [marsId]: { gdp: 5000, priceLevel: 1.02, inflation: 0.02, revenue: 0, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: 0, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A' as const, population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] }
+    const rate = tickMonetary([hot], money, reports, 1, [])[0].centralBank!.policyRate
+    check('an independent bank raises its rate against inflation (Taylor rule)', rate > c.centralBank!.policyRate, `${(c.centralBank!.policyRate * 100).toFixed(2)}% → ${(rate * 100).toFixed(2)}%`)
+  }
   {
     // The PLAYER's government-controlled bank keeps the rate the player set (the
     // AI monetary manager only steers NON-player government banks — see §41).
@@ -1400,7 +1433,9 @@ console.log('\n=== 40. Central banking Stage 4: transmission with lags, inflatio
     const r1 = mkReports(); const outDirect = tickMonetary([direct], money, r1)[0]
     const r2 = mkReports(); const outProhib = tickMonetary([prohibited], money, r2)[0]
     check('direct monetary financing credits the treasury', outDirect.treasury > outProhib.treasury, `${outDirect.treasury.toFixed(0)} vs ${outProhib.treasury.toFixed(0)}`)
-    check('direct monetary financing yields higher inflation than no financing', r1.countries[lalandeId].inflation > r2.countries[lalandeId].inflation, `${(r1.countries[lalandeId].inflation * 100).toFixed(2)}% vs ${(r2.countries[lalandeId].inflation * 100).toFixed(2)}%`)
+    // Printed money pushes prices up next month (the price drift economyTick
+    // applies); inflation itself is measured from prices.
+    check('direct monetary financing pushes prices up (a price drift) where no financing does not', (outDirect.monetary?.priceDrift ?? 0) > (outProhib.monetary?.priceDrift ?? 0), `${((outDirect.monetary?.priceDrift ?? 0) * 100).toFixed(2)}% vs ${((outProhib.monetary?.priceDrift ?? 0) * 100).toFixed(2)}%`)
   }
 
   // IMPORTED INFLATION: a currency that has depreciated since last tick imports
@@ -1411,9 +1446,17 @@ console.log('\n=== 40. Central banking Stage 4: transmission with lags, inflatio
     const stable = { ...c, currency: { ...c.currency!, rate: 1.0 }, monetary: { ...defaultMonetaryState(), lastRate: 1.0 } }
     const money = { [marsId]: { baseMoney: 0, currency: 0, bankReserves: 0, deposits: 0, broadMoney: 0, loans: 0, bankCapital: 0, reserveRatio: 0, loanToDeposit: 0, cbBorrowings: 0 } }
     const mk = (): import('../src/economy/economyTypes').TickReports => ({ worlds: {}, countries: { [marsId]: { gdp: 5000, priceLevel: 1, inflation: 0.02, revenue: 0, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: 0, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A' as const, population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] })
-    const rd = mk(); tickMonetary([depreciated], money, rd)
-    const rs = mk(); tickMonetary([stable], money, rs)
-    check('currency depreciation imports inflation', rd.countries[marsId].inflation > rs.countries[marsId].inflation, `${(rd.countries[marsId].inflation * 100).toFixed(2)}% vs ${(rs.countries[marsId].inflation * 100).toFixed(2)}%`)
+    const [od] = tickMonetary([depreciated], money, mk())
+    const [os] = tickMonetary([stable], money, mk())
+    check('currency depreciation imports inflation (a price drift)', (od.monetary?.priceDrift ?? 0) > (os.monetary?.priceDrift ?? 0), `${((od.monetary?.priceDrift ?? 0) * 100).toFixed(2)}% vs ${((os.monetary?.priceDrift ?? 0) * 100).toFixed(2)}%`)
+    // …and the drift really moves prices: the same economy with a drift on
+    // one nation ends with that nation's measured inflation higher.
+    const withDrift = (drift: number) => {
+      let cs = seedCountries().map((c) => (c.id === marsId ? { ...c, monetary: { ...defaultMonetaryState(), priceDrift: drift } } : c)), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
+      const r = tickEconomy(cs, ws, corps, { tick: 1 }, bs)
+      return r.reports.countries[marsId].priceLevel
+    }
+    check('a price drift shows up in the measured price level', withDrift(0.1) > withDrift(0), `${withDrift(0.1).toFixed(4)} vs ${withDrift(0).toFixed(4)}`)
   }
 
   // OMO: buying securities injects bank reserves and grows the CB's holdings;
@@ -1450,10 +1493,14 @@ console.log('\n=== 41. Central banking Stage 5: AI monetary manager, banking cri
   // development-minded government won't let a runaway go forever. (Contrast §40,
   // where the PLAYER's government bank stays put.)
   {
-    let cs = seedCountries(), ws = seedWorlds(), corps = seedCorporations(), bs = seedBanks()
-    for (let i = 0; i < 40; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: [marsId] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
-    const rate = cs.find((c) => c.id === lalandeId)!.centralBank!.policyRate
-    check('the AI steers a non-player government bank’s rate up against inflation', rate > 0.02, `${(rate * 100).toFixed(2)}%`)
+    // One monetary step for a NON-player Lalande whose prices are climbing ~2%
+    // a month (~27% a year): its AI-steered bank raises the rate.
+    const c = seedCountries().find((x) => x.id === lalandeId)!
+    const hot = { ...c, monetary: { ...defaultMonetaryState(), inflation: 0.2, expectation: 0.1 } }
+    const money = { [lalandeId]: { baseMoney: 0, currency: 0, bankReserves: 0, deposits: 0, broadMoney: 0, loans: 0, bankCapital: 0, reserveRatio: 0, loanToDeposit: 0, cbBorrowings: 0 } }
+    const reports: import('../src/economy/economyTypes').TickReports = { worlds: {}, countries: { [lalandeId]: { gdp: 5000, priceLevel: 1.02, inflation: 0.02, revenue: 0, welfare: 0, admin: 0, services: 0, interest: 0, construction: 0, expenditure: 0, balance: 0, treasury: 0, debt: 0, debtToGdp: 0, rating: 'A' as const, population: 100, bureaucracy: 0, bureaucracyCapacity: 0, bureaucracyProduced: 0, bureaucracyConsumed: 0, tradeVolume: 0, logisticsCapacity: 0, subsidiesSpent: 0, stockpileSpend: 0 } }, money: {}, events: [] }
+    const rate = tickMonetary([hot], money, reports, 1, [marsId])[0].centralBank!.policyRate
+    check('the AI steers a non-player government bank’s rate up against inflation', rate > c.centralBank!.policyRate, `${(rate * 100).toFixed(2)}%`)
   }
 
   // LOAN LOSSES: a deep downturn (very negative output gap) writes off loans, so

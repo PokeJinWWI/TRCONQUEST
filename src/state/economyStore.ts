@@ -1,4 +1,7 @@
 import { create } from 'zustand'
+import { atWar } from './diplomacyStore'
+import { districtOrder, freeLandOfWorld } from '../economy/districts'
+import type { DistrictType } from '../economy/recipes'
 import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies, seedBanks } from '../economy/economySeed'
 import { tickEconomy, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
@@ -281,6 +284,17 @@ interface EconomyStore {
   // government pool → treasury) or a corporation (private pool → its cash).
   // Refused if the target district on the world is full.
   queueConstruction: (worldId: string, recipeId: string, owner?: BuildingOwner) => void
+  // Develop one more level of a district (a state project; uses one unit of land).
+  queueDistrict: (worldId: string, district: DistrictType) => void
+  // Orbital bombardment (scene/bombardment.ts), keyed by world NAME (body):
+  // devastation 0–1, and the share of population killed.
+  setDevastation: (byBody: Record<string, number>) => void
+  killPopulation: (shareByBody: Record<string, number>) => void
+  // Foreign buildings (scene/holdings.ts): urban slots taken, per world name,
+  // and money in/out of a country's treasury.
+  setForeignSlots: (byBody: Record<string, number>) => void
+  setMilitarySlots: (byBody: Record<string, number>) => void
+  adjustTreasury: (countryId: string, amount: number) => void
   cancelConstruction: (worldId: string, orderId: string) => void
   // State override: pin a building to a method. On a private building under a
   // market economy this is interference (see economyTick's malus).
@@ -407,20 +421,27 @@ interface EconomyStore {
 
 let constructionCounter = 0
 
-// Unemployment across a country's worlds: 1 − employed / labour force.
+// Unemployment across a country's worlds: 1 − employed / labour force. The
+// labour force is the working classes plus the subsistence class's formal
+// jobholders; subsistence people without a formal job are the informal sector
+// (self-provision, the grey economy), not unemployed — counting them read as
+// 60% unemployment on worlds whose working classes were nearly all in work.
+// Investors hold no jobs and aren't in it.
 export function unemploymentOf(countryId: string, worlds: World[], worldReports: Record<string, WorldReport>): number {
-  let workers = 0
+  let force = 0
   let employed = 0
   for (const w of worlds) {
     if (w.ownerId !== countryId) continue
     const labor = worldReports[w.id]?.labor
     if (!labor) continue
-    for (const cls of Object.values(labor)) {
-      workers += cls.workers
-      employed += cls.workers * cls.employmentRate
+    for (const [cls, l] of Object.entries(labor)) {
+      if (cls === 'investor') continue
+      const inWork = l.workers * l.employmentRate
+      force += cls === 'subsistence' ? inWork : l.workers
+      employed += inWork
     }
   }
-  return workers > 0 ? Math.max(0, 1 - employed / workers) : 0
+  return force > 0 ? Math.max(0, 1 - employed / force) : 0
 }
 
 function sampleOf(f: CountryFiscal, country?: Country, money?: MonetaryAggregates, unemployment?: number): FiscalSample {
@@ -486,7 +507,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const localPlayer = usePlayerStore.getState().selectedCountryId
       const humanCountryIds = localPlayer ? [localPlayer] : []
       for (let i = 0; i < steps; i++) {
-        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true }, banks)
+        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true, atWar }, banks)
         countries = res.countries
         worlds = res.worlds
         corporations = res.corporations
@@ -541,6 +562,56 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         constructionCounter += 1
         const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionWork(recipeId), progress: 0, owner }
         return { ...w, constructionQueue: [...w.constructionQueue, order] }
+      }),
+    })),
+  setDevastation: (byBody) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const dev = byBody[w.name] ?? 0
+        if ((w.devastation ?? 0) === dev) return w
+        changed = true
+        return { ...w, devastation: dev > 0 ? dev : undefined }
+      })
+      return changed ? { worlds } : state
+    }),
+  setForeignSlots: (byBody) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const n = byBody[w.name] ?? 0
+        if ((w.foreignSlots ?? 0) === n) return w
+        changed = true
+        return { ...w, foreignSlots: n > 0 ? n : undefined }
+      })
+      return changed ? { worlds } : state
+    }),
+  setMilitarySlots: (byBody) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const n = byBody[w.name] ?? 0
+        if ((w.militarySlots ?? 0) === n) return w
+        changed = true
+        return { ...w, militarySlots: n > 0 ? n : undefined }
+      })
+      return changed ? { worlds } : state
+    }),
+  adjustTreasury: (countryId, amount) =>
+    set((state) => ({ countries: state.countries.map((c) => (c.id === countryId ? { ...c, treasury: c.treasury + amount } : c)) })),
+  killPopulation: (shareByBody) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => {
+        const share = shareByBody[w.name] ?? 0
+        return share > 0 ? { ...w, pops: w.pops.map((p) => ({ ...p, populationSize: p.populationSize * (1 - share) })) } : w
+      }),
+    })),
+  queueDistrict: (worldId, district) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => {
+        if (w.id !== worldId || freeLandOfWorld(w) <= 0) return w
+        constructionCounter += 1
+        return { ...w, constructionQueue: [...w.constructionQueue, districtOrder(`dis-${worldId}-${district}-${constructionCounter}`, district)] }
       }),
     })),
   cancelConstruction: (worldId, orderId) =>

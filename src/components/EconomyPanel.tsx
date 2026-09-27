@@ -77,6 +77,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
     return (
       <div className="econ-panel">
         <div className="econ-subtitle">{world.name} market</div>
+        {!report && <div className="abs-dim" style={{ fontSize: 10, marginBottom: 4 }}>Markets clear at the end of each month — supply and demand show from the first month on.</div>}
         <table className="econ-table">
           <thead>
             <tr>

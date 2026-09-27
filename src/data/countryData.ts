@@ -8,6 +8,13 @@ export interface Country {
   // body to arrive pre-selected at (see MainMenu.selectCountry).
   capitalStarId: string
   capitalBodyName: string
+  // The capital city's name, where the setting has one (shown on its key node).
+  capitalCityName?: string
+  // The capital's name in its own script (Mars's kanji), when it has one.
+  capitalCityNative?: string
+  // Where on the capital world it stands (degrees east, north); the nearest
+  // mainland to it. Omitted: the map picks a spot.
+  capitalCityAt?: [number, number]
 }
 
 export const COUNTRIES: Country[] = [
@@ -17,6 +24,9 @@ export const COUNTRIES: Country[] = [
     color: '#c9704a',
     capitalStarId: 'sol',
     capitalBodyName: 'Mars',
+    capitalCityName: 'Akakyō',
+    capitalCityNative: '赤京',
+    capitalCityAt: [-48.1, 1.6], // Xanthe Terra (IAU centre)
   },
   {
     id: 'republic-of-venus',
@@ -24,6 +34,7 @@ export const COUNTRIES: Country[] = [
     color: '#3d7dc9',
     capitalStarId: 'sol',
     capitalBodyName: 'Venus',
+    capitalCityName: 'Paphos',
   },
   {
     id: 'orion-republic',
@@ -31,6 +42,7 @@ export const COUNTRIES: Country[] = [
     color: '#8fd0ff',
     capitalStarId: 'alpha-centauri',
     capitalBodyName: 'Arcadia',
+    capitalCityName: 'Elysion',
   },
   {
     // An alien empire — the Tidalians of Lalande 21185 d.
@@ -39,6 +51,7 @@ export const COUNTRIES: Country[] = [
     color: '#5ad1a0',
     capitalStarId: 'lalande-21185',
     capitalBodyName: 'Lalande 21185 d',
+    capitalCityName: 'Bellerive',
   },
 ]
 

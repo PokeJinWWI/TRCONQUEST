@@ -2,18 +2,23 @@ import { create } from 'zustand'
 import {
   tickAbstractEconomy,
   abstractReport,
-  normalizeAllocation,
   emptyStockpile,
   freeSlots,
+  freeLand,
+  districtsOf,
+  importUnitCost,
   type AbstractEconomyState,
   type AbstractReport,
-  type Allocation,
   type EconomyType,
+  type MonetaryStance,
   type Stockpile,
   type WorldState,
 } from '../economy-abstract/abstractEconomy'
 import {
   OUTPOST_SEED,
+  DISTRICT_OF_BUILDING,
+  SIMPLE_DISTRICT_DEFS,
+  type SimpleDistrictId,
   SIMPLE_BUILDING_DEFS,
   SIMPLE_CURRENCIES,
   SIMPLE_GOODS,
@@ -25,9 +30,13 @@ import {
 import { STARTING_STOCKPILE } from '../data/shipyardData'
 import type { TechCategory } from '../data/techData'
 import { controllerOf, seedBodyOwners, type OwnerMap } from '../scene/territory'
+import { landForBody } from '../scene/bodyLand'
+import { COUNTRIES } from '../data/countryData'
 import { useTerritoryStore } from './territoryStore'
 import { useResourceStore } from './resourceStore'
 import { useTechStore } from './techStore'
+import { atWar } from './diplomacyStore'
+import { matchTrade } from '../economy-abstract/tradeMatching'
 
 // Simple mode's economy store: one macro state per nation, plus every
 // world's population and buildings (keyed by body name — a world's economy
@@ -38,6 +47,24 @@ import { useTechStore } from './techStore'
 
 const MAX_CATCH_UP_TICKS = 40
 const HISTORY_LENGTH = 37 // three years of months (+1 for the chart's left edge)
+
+// Real GDP growth for display, from the monthly history: year on year once
+// there's a year of it, annualized over the span once there are 6 months,
+// undefined before that. Never a single month × 12 — one finished factory or
+// one occupied world would read as ±25% or ±200%.
+export const GROWTH_MIN_MONTHS = 6
+export function smoothedRealGrowth(history: { realGdp: number }[]): number | undefined {
+  const n = history.length
+  if (n >= 13) {
+    const a = history[n - 13].realGdp
+    return a > 0 ? history[n - 1].realGdp / a - 1 : undefined
+  }
+  if (n >= GROWTH_MIN_MONTHS + 1) {
+    const a = history[0].realGdp
+    return a > 0 ? Math.pow(history[n - 1].realGdp / a, 12 / (n - 1)) - 1 : undefined
+  }
+  return undefined
+}
 
 export interface AbstractHistoryPoint {
   gdp: number
@@ -73,11 +100,21 @@ function startingStock(): Stockpile {
   return s
 }
 
+export { landForBody }
+
 function seedWorlds(): Record<string, WorldState> {
   const worlds: Record<string, WorldState> = {}
   for (const bodyName of Object.keys(seedBodyOwners())) {
+    const inhabited = !!SIMPLE_WORLD_SEEDS[bodyName]
     const seed = SIMPLE_WORLD_SEEDS[bodyName] ?? OUTPOST_SEED
-    worlds[bodyName] = { bodyName, population: seed.population, slots: seed.slots, buildings: { ...seed.buildings } }
+    const base: WorldState = { bodyName, population: seed.population, buildings: { ...seed.buildings } }
+    // Just enough district levels to house the seed buildings, plus a small
+    // urban district on inhabited worlds (for embassies and foreign firms).
+    // A capital also starts with one military level (its starting fortress and battery).
+    const capital = COUNTRIES.some((c) => c.capitalBodyName === bodyName)
+    const districts = { ...districtsOf(base), urban: inhabited ? 1 : 0, military: capital ? 1 : 0 }
+    const levels = Object.values(districts).reduce((n, v) => n + v, 0)
+    worlds[bodyName] = { ...base, districts, land: Math.max(landForBody(bodyName), levels) }
   }
   return worlds
 }
@@ -90,8 +127,6 @@ function seedNations(worlds: Record<string, WorldState>): Record<string, Abstrac
     debt: number,
     taxRate: number,
     economyType: EconomyType,
-    allocation: Allocation,
-    stability = 0.6,
   ): AbstractEconomyState => {
     const cur = SIMPLE_CURRENCIES[countryId]
     const base: AbstractEconomyState = {
@@ -101,7 +136,7 @@ function seedNations(worlds: Record<string, WorldState>): Record<string, Abstrac
       realGdp: 0,
       priceLevel: 1,
       inflation: 0.02,
-      stability,
+      stability: 0.5, // replaced by the approval it settles at, below
       treasury,
       reserves: 40,
       debt,
@@ -110,25 +145,29 @@ function seedNations(worlds: Record<string, WorldState>): Record<string, Abstrac
       moneyCreation: 0,
       warTaxes: false,
       welfare: 0.3,
-      allocation,
-      researchFocus: 'physics',
       queue: [],
       nextOrderId: 1,
       currency: { code: cur.code, name: cur.name, rate: cur.rate, baseRate: cur.rate },
       trade: {},
     }
-    // Open on the numbers the economy actually produces.
-    const r = abstractReport(base, worldsOf(countryId, worlds, owners, {}), startingStock())
-    return { ...base, population: r.population, gdp: r.gdp, realGdp: r.realGdp }
+    // Open at rest: stability starts where the population's approval holds it
+    // (so nothing slides on its own in the first year), and on the numbers the
+    // economy actually produces at that stability.
+    const mine = worldsOf(countryId, worlds, owners, {})
+    const settled = { ...base, stability: abstractReport(base, mine, startingStock()).approval }
+    const r = abstractReport(settled, mine, startingStock())
+    return { ...settled, population: r.population, gdp: r.gdp, realGdp: r.realGdp }
   }
   const states: AbstractEconomyState[] = [
-    mk('imperial-state-of-mars', 200, 2000, 0.1, 'corporatist', { civilian: 0.5, military: 0.2, consumer: 0.3 }),
-    mk('republic-of-venus', 150, 1400, 0.12, 'market', { civilian: 0.5, military: 0.15, consumer: 0.35 }, 0.65),
-    mk('orion-republic', 90, 600, 0.09, 'market', { civilian: 0.55, military: 0.15, consumer: 0.3 }),
-    mk('kingdom-of-lalande', 60, 1200, 0.1, 'planned', { civilian: 0.4, military: 0.35, consumer: 0.25 }, 0.55),
+    mk('imperial-state-of-mars', 200, 2000, 0.1, 'corporatist'),
+    mk('republic-of-venus', 150, 1400, 0.12, 'market'),
+    mk('orion-republic', 90, 600, 0.09, 'market'),
+    mk('kingdom-of-lalande', 60, 1200, 0.1, 'planned'),
   ]
   return Object.fromEntries(states.map((s) => [s.countryId, s]))
 }
+
+const TECH_TREES: TechCategory[] = ['physics', 'society', 'engineering']
 
 export type QueueResult = { ok: true } | { ok: false; reason: string }
 
@@ -149,14 +188,26 @@ interface AbstractEconomyStore {
   setMoneyCreation: (countryId: string, rate: number) => void
   setWarTaxes: (countryId: string, on: boolean) => void
   setWelfare: (countryId: string, level: number) => void
-  setResearchFocus: (countryId: string, focus: TechCategory) => void
+  setMonetaryStance: (countryId: string, stance: MonetaryStance) => void
   // A standing monthly trade order: + import, − export, 0 clears it.
   setTrade: (countryId: string, good: SimpleGood, perMonth: number) => void
   invest: (countryId: string, amount: number) => void
   payDebt: (countryId: string, amount: number) => void
-  setAllocation: (countryId: string, leg: keyof Allocation, value: number) => void
   queueBuilding: (countryId: string, bodyName: string, building: SimpleBuildingId) => QueueResult
+  // Develop one more level of a district (uses a unit of the world's land).
+  queueDistrict: (countryId: string, bodyName: string, district: SimpleDistrictId) => QueueResult
   cancelOrder: (countryId: string, orderId: number) => void
+  // Tear down one level of a building (no refund; frees its slot at once).
+  demolish: (countryId: string, bodyName: string, building: SimpleBuildingId) => QueueResult
+  // Orbital bombardment (scene/bombardment.ts): each world's devastation, and
+  // population killed by full bombardment (share per body).
+  setDevastation: (byBody: Record<string, number>) => void
+  killPopulation: (shareByBody: Record<string, number>) => void
+  // Foreign buildings (scene/holdings.ts): urban slots taken, per body, and
+  // money in/out of a nation's treasury.
+  setForeignSlots: (byBody: Record<string, number>) => void
+  setMilitarySlots: (byBody: Record<string, number>) => void
+  adjustTreasury: (countryId: string, amount: number) => void
   reset: () => void
 }
 
@@ -183,33 +234,55 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     const reports = { ...store.reports }
     const history = { ...store.history }
     const worlds = { ...store.worlds }
-    const research: Record<string, number> = {}
+    const research: Record<string, Record<TechCategory, number>> = {}
     const stocks: Record<string, Stockpile> = {}
-
-    for (const id of Object.keys(byCountry)) {
+    const ids = Object.keys(byCountry)
+    const series: Record<string, { gdp: number; realGdp: number; inflation: number; debtToGdp: number; rate: number }[]> = {}
+    for (const id of ids) {
       // A body that changed hands takes its unfinished projects with it.
-      let s = byCountry[id]
-      if (s.queue.some((o) => owners[o.bodyName] !== id)) s = { ...s, queue: s.queue.filter((o) => owners[o.bodyName] === id) }
-      let stock = stockOf(id)
-      let r = reports[id]
-      const series = history[id] ? [...history[id]] : []
-      research[id] = 0
-      for (let i = 0; i < steps; i++) {
-        const mine = worldsOf(id, worlds, owners, controllers)
-        if (steer) s = steer(s, { worlds: mine, stock, report: abstractReport(s, mine, stock) })
-        const res = tickAbstractEconomy(s, mine, stock)
-        s = res.state
-        stock = res.stock
-        r = res.report
-        for (const w of res.worlds) worlds[w.bodyName] = w
-        research[id] += r.research
-        series.push({ gdp: s.gdp, realGdp: s.realGdp, inflation: s.inflation, debtToGdp: r.debtToGdp, rate: s.currency.rate })
+      const s = byCountry[id]
+      if (s.queue.some((o) => owners[o.bodyName] !== id)) byCountry[id] = { ...s, queue: s.queue.filter((o) => owners[o.bodyName] === id) }
+      stocks[id] = stockOf(id)
+      series[id] = history[id] ? [...history[id]] : []
+      research[id] = { physics: 0, society: 0, engineering: 0 }
+    }
+    for (let i = 0; i < steps; i++) {
+      // The AI sets its policies and orders first…
+      if (steer) {
+        for (const id of ids) {
+          const mine = worldsOf(id, worlds, owners, controllers)
+          byCountry[id] = steer(byCountry[id], { worlds: mine, stock: stocks[id], report: abstractReport(byCountry[id], mine, stocks[id]) })
+        }
       }
-      if (series.length > HISTORY_LENGTH) series.splice(0, series.length - HISTORY_LENGTH)
-      byCountry[id] = s
-      reports[id] = r
-      history[id] = series
-      stocks[id] = stock
+      // …then trade between nations (economy-abstract/tradeMatching.ts): the
+      // standing orders fill from real partners at peace, matched each month
+      // on what every nation holds and can pay now.
+      const filled = matchTrade(
+        ids.map((id) => {
+          const r = reports[id]
+          const monthlyUse = r ? Object.fromEntries(SIMPLE_GOODS.map((g) => [g, r.used[g] + r.consumed[g]])) : {}
+          const monthlyNet = r ? Object.fromEntries(SIMPLE_GOODS.map((g) => [g, r.produced[g] - r.used[g] - r.consumed[g]])) : {}
+          return { id, orders: byCountry[id].trade, stock: stocks[id], monthlyUse, monthlyNet, cash: byCountry[id].treasury, unitCost: (g: SimpleGood) => importUnitCost(byCountry[id], g) }
+        }),
+        atWar,
+      )
+      for (const id of ids) {
+        const s = byCountry[id]
+        const mine = worldsOf(id, worlds, owners, controllers)
+        // Tick with the orders as filled; the nation's standing orders stay as set.
+        const res = tickAbstractEconomy({ ...s, trade: filled[id] ?? {} }, mine, stocks[id])
+        byCountry[id] = { ...res.state, trade: s.trade }
+        stocks[id] = res.stock
+        const r = res.report
+        reports[id] = r
+        for (const w of res.worlds) worlds[w.bodyName] = w
+        for (const t of TECH_TREES) research[id][t] += r.researchByTree[t]
+        series[id].push({ gdp: res.state.gdp, realGdp: res.state.realGdp, inflation: res.state.inflation, debtToGdp: r.debtToGdp, rate: res.state.currency.rate })
+      }
+    }
+    for (const id of ids) {
+      if (series[id].length > HISTORY_LENGTH) series[id].splice(0, series[id].length - HISTORY_LENGTH)
+      history[id] = series[id]
     }
     set({ byCountry, reports, history, worlds, tick: store.tick + steps })
 
@@ -221,7 +294,8 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
         res.setAmount(id, g, stocks[id][g])
         res.setMonthlyDelta(id, g, Math.round(reports[id].net[g] * 10) / 10)
       }
-      if (research[id] > 0) tech.grantResearch(id, byCountry[id].researchFocus, research[id])
+      // Each lab feeds its own tree.
+      for (const t of TECH_TREES) if (research[id][t] > 0) tech.grantResearch(id, t, research[id][t])
     }
   },
 
@@ -230,7 +304,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
   setMoneyCreation: (countryId, rate) => set((s) => patch(s, countryId, (c) => ({ ...c, moneyCreation: Math.max(0, Math.min(1, rate)) }))),
   setWarTaxes: (countryId, on) => set((s) => patch(s, countryId, (c) => ({ ...c, warTaxes: on }))),
   setWelfare: (countryId, level) => set((s) => patch(s, countryId, (c) => ({ ...c, welfare: Math.max(0, Math.min(1, level)) }))),
-  setResearchFocus: (countryId, focus) => set((s) => patch(s, countryId, (c) => ({ ...c, researchFocus: focus }))),
+  setMonetaryStance: (countryId, stance) => set((s) => patch(s, countryId, (c) => ({ ...c, monetaryStance: stance }))),
   setTrade: (countryId, good, perMonth) =>
     set((s) =>
       patch(s, countryId, (c) => {
@@ -257,8 +331,6 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
         return { ...c, reserves: c.reserves - fromReserves, treasury: c.treasury - fromTreasury, debt: c.debt - fromReserves - fromTreasury }
       }),
     ),
-  setAllocation: (countryId, leg, value) =>
-    set((s) => patch(s, countryId, (c) => ({ ...c, allocation: normalizeAllocation({ ...c.allocation, [leg]: Math.max(0, value) }) }))),
 
   queueBuilding: (countryId, bodyName, building) => {
     const store = get()
@@ -268,12 +340,80 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     const { bodyOwner, bodyController } = useTerritoryStore.getState()
     if (bodyOwner[bodyName] !== countryId) return { ok: false, reason: `You don't own ${bodyName}.` }
     if (controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `${bodyName} is occupied.` }
-    if (freeSlots(w, c.queue) <= 0) return { ok: false, reason: `${bodyName} has no free building slots.` }
     if (!SIMPLE_BUILDING_DEFS[building]) return { ok: false, reason: 'Unknown building.' }
+    const d = DISTRICT_OF_BUILDING[building]
+    if (freeSlots(w, c.queue, d) <= 0) return { ok: false, reason: `No free slot in ${bodyName}'s ${SIMPLE_DISTRICT_DEFS[d].name} — develop the district first.` }
     set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, building, progress: 0 }], nextOrderId: cur.nextOrderId + 1 })))
     return { ok: true }
   },
+  queueDistrict: (countryId, bodyName, district) => {
+    const store = get()
+    const c = store.byCountry[countryId]
+    const w = store.worlds[bodyName]
+    if (!c || !w) return { ok: false, reason: 'No such world.' }
+    const { bodyOwner, bodyController } = useTerritoryStore.getState()
+    if (bodyOwner[bodyName] !== countryId) return { ok: false, reason: `You don't own ${bodyName}.` }
+    if (controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `${bodyName} is occupied.` }
+    if (!SIMPLE_DISTRICT_DEFS[district]) return { ok: false, reason: 'Unknown district.' }
+    if (freeLand(w, c.queue) <= 0) return { ok: false, reason: `${bodyName} has no land left for another district level.` }
+    set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, district, progress: 0 }], nextOrderId: cur.nextOrderId + 1 })))
+    return { ok: true }
+  },
+  setDevastation: (byBody) =>
+    set((s) => {
+      let changed = false
+      const worlds = { ...s.worlds }
+      for (const [body, w] of Object.entries(s.worlds)) {
+        const dev = byBody[body] ?? 0
+        if ((w.devastation ?? 0) === dev) continue
+        worlds[body] = { ...w, devastation: dev > 0 ? dev : undefined }
+        changed = true
+      }
+      return changed ? { worlds } : s
+    }),
+  setForeignSlots: (byBody) =>
+    set((s) => {
+      let changed = false
+      const worlds = { ...s.worlds }
+      for (const [body, w] of Object.entries(s.worlds)) {
+        const n = byBody[body] ?? 0
+        if ((w.foreignSlots ?? 0) === n) continue
+        worlds[body] = { ...w, foreignSlots: n > 0 ? n : undefined }
+        changed = true
+      }
+      return changed ? { worlds } : s
+    }),
+  setMilitarySlots: (byBody) =>
+    set((s) => {
+      let changed = false
+      const worlds = { ...s.worlds }
+      for (const [body, w] of Object.entries(s.worlds)) {
+        const n = byBody[body] ?? 0
+        if ((w.militarySlots ?? 0) === n) continue
+        worlds[body] = { ...w, militarySlots: n > 0 ? n : undefined }
+        changed = true
+      }
+      return changed ? { worlds } : s
+    }),
+  adjustTreasury: (countryId, amount) => set((s) => patch(s, countryId, (c) => ({ ...c, treasury: c.treasury + amount }))),
+  killPopulation: (shareByBody) =>
+    set((s) => {
+      const worlds = { ...s.worlds }
+      for (const [body, share] of Object.entries(shareByBody)) {
+        const w = worlds[body]
+        if (w && share > 0) worlds[body] = { ...w, population: w.population * (1 - share) }
+      }
+      return { worlds }
+    }),
   cancelOrder: (countryId, orderId) => set((s) => patch(s, countryId, (c) => ({ ...c, queue: c.queue.filter((o) => o.id !== orderId) }))),
+  demolish: (countryId, bodyName, building) => {
+    const w = get().worlds[bodyName]
+    if (!w || (w.buildings[building] ?? 0) <= 0) return { ok: false, reason: 'Nothing to demolish.' }
+    const { bodyOwner, bodyController } = useTerritoryStore.getState()
+    if (bodyOwner[bodyName] !== countryId || controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `You don't hold ${bodyName}.` }
+    set((s) => ({ worlds: { ...s.worlds, [bodyName]: { ...w, buildings: { ...w.buildings, [building]: (w.buildings[building] ?? 0) - 1 } } } }))
+    return { ok: true }
+  },
 
   reset: () => set(initial()),
 }))

@@ -34,7 +34,7 @@ export interface War {
   exhaustion: Record<string, number>
 }
 
-export type DiplomacyEventKind = 'war-declared' | 'peace-offered' | 'peace-signed' | 'peace-rejected' | 'body-occupied' | 'body-ceded'
+export type DiplomacyEventKind = 'war-declared' | 'peace-offered' | 'peace-signed' | 'peace-rejected' | 'body-occupied' | 'body-ceded' | 'installation-destroyed' | 'bombardment' | 'holding'
 
 export interface DiplomacyEvent {
   id: string

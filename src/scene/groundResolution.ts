@@ -62,6 +62,8 @@ import {
   type NodeHolderMap,
 } from './groundLogic'
 import { terrainAt, type BodySurface } from './planetTerrain'
+import { fortressDefense, holderOfInstallation, type Installation } from './defenseLogic'
+import { DEFENSE_DEFS } from '../data/defenseData'
 import { arc, moveAlong, nearestNode, nodePoint, surfaceMesh } from './surfaceMesh'
 import { controllerOf, type OwnerMap } from './territory'
 
@@ -78,6 +80,10 @@ export interface GroundWorld {
   // finer map, so this sim neither has them fire, be fired on, move nor rest.
   // Omitted (the default) changes nothing.
   engagedUnitIds?: ReadonlySet<string>
+  // Planetary defense installations (scene/defenseLogic.ts): fortresses make
+  // their holder's nearby units fight harder; units with no enemy unit in
+  // range fire on enemy installations and destroy them. Omitted = none.
+  installations?: Installation[]
 }
 
 export interface Occupation {
@@ -102,6 +108,9 @@ export interface GroundStepResult {
   // Per body: node → new holder, or null for "back to its owner".
   paints: Record<string, Record<number, string | null>>
   resolvedThroughStep: number
+  // With world.installations: their state after the step, and the ones destroyed.
+  installations?: Installation[]
+  destroyedInstallations?: Installation[]
 }
 
 export function simDaysToGroundStep(simDays: number): number {
@@ -151,6 +160,18 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
       cloned = true
     }
     return armies
+  }
+
+  // Copy-on-write installations.
+  let installs = world.installations ?? []
+  let installsCloned = false
+  const destroyedInstallations: Installation[] = []
+  const mutableInstalls = () => {
+    if (!installsCloned) {
+      installs = installs.map((i) => ({ ...i }))
+      installsCloned = true
+    }
+    return installs
   }
 
   const mesh = surfaceMesh()
@@ -216,6 +237,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
     losses,
     paints,
     resolvedThroughStep: k,
+    ...(world.installations ? { installations: installs, destroyedInstallations } : {}),
   }
 
   function regenIdle(days: number) {
@@ -282,10 +304,48 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
       const tv = terrainOf(v.unit)
       const entrenched =
         v.unit.stillSinceStep !== undefined && !(v.unit.path?.length) && k - v.unit.stillSinceStep >= ENTRENCH_AFTER_DAYS * GROUND_STEPS_PER_DAY
+      const fortress = installs.length > 0 ? fortressDefense(body, v.unit.position!, v.army.ownerId, installs, owners, holders, k / GROUND_STEPS_PER_DAY) : 1
       const defense =
-        unitDefenseBase(v.unit.type, tv) * (fortified(v) ? KEY_NODE_FORTIFICATION : 1) * (entrenched ? ENTRENCHMENT_DEFENSE : 1)
+        unitDefenseBase(v.unit.type, tv) * (fortified(v) ? KEY_NODE_FORTIFICATION : 1) * (entrenched ? ENTRENCHMENT_DEFENSE : 1) * fortress
       const dealt = (lu.unit.strength * unitAttack(lu.unit.type, terrainOf(lu.unit)) * GROUND_DAMAGE_RATE * DT) / defense
       damage.set(v.unit.id, (damage.get(v.unit.id) ?? 0) + dealt)
+    }
+
+    // 3b. Units with no enemy unit to shoot fire on the nearest enemy
+    // installation in range (its holder at war with them).
+    const hereInstalls = installs.filter((i) => i.bodyName === body && i.integrity > 0)
+    if (hereInstalls.length > 0) {
+      const instDamage = new Map<string, number>()
+      for (const lu of units) {
+        if (lu.unit.firingAtId || engaged.has(lu.unit.id)) continue
+        const range = unitRangeRad(lu.unit.type)
+        let best: Installation | undefined
+        let bestD = Infinity
+        for (const inst of hereInstalls) {
+          const h = holderOfInstallation(inst, owners, holders)
+          if (!h || !atWar(h, lu.army.ownerId)) continue
+          const d = arc(nodePoint(inst.node), lu.unit.position!)
+          if (d <= range && d < bestD) {
+            bestD = d
+            best = inst
+          }
+        }
+        if (!best) continue
+        const dealt = (lu.unit.strength * unitAttack(lu.unit.type, terrainOf(lu.unit)) * GROUND_DAMAGE_RATE * DT) / DEFENSE_DEFS[best.kind].armor
+        instDamage.set(best.id, (instDamage.get(best.id) ?? 0) + dealt)
+      }
+      if (instDamage.size > 0) {
+        const list = mutableInstalls()
+        for (const inst of list) {
+          const d = instDamage.get(inst.id)
+          if (d) inst.integrity -= d
+        }
+        const gone = list.filter((i) => i.integrity <= 0)
+        if (gone.length > 0) {
+          destroyedInstallations.push(...gone)
+          installs = list.filter((i) => i.integrity > 0)
+        }
+      }
     }
 
     // 4. Movement.

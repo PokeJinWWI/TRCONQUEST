@@ -18,7 +18,9 @@ import { usePlayerStore } from '../state/playerStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { overallHealthFraction, shipCombatProfile, totalHitPoints } from '../scene/combatResolution'
 import { getShipStatusText } from '../scene/shipPhysics'
-import { queueStance, playerCommsDelayToShip, visualShipSnapshot } from '../scene/commsVisual'
+import { queueStance, queueBombard, playerCommsDelayToShip, visualShipSnapshot } from '../scene/commsVisual'
+import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS } from '../data/defenseData'
+import { isArmed } from '../scene/armyLogic'
 import { useCombatStore, combatLocationKey, engagementIsContested } from '../state/combatStore'
 import { useFleetStore, type Fleet } from '../state/fleetStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -647,6 +649,21 @@ function ShipStrategyRow({
           </button>
         ))}
       </div>
+      {isArmed(ship) && (
+        <div className="combat-density-row" title="Orbital bombardment: works while this ship orbits a world held by a nation you're at war with, and no enemy warships contest that orbit.">
+          <span className="fleet-row-class" style={{ marginRight: 4 }}>Bombard</span>
+          {BOMBARD_STANCES.map((b) => (
+            <button key={b} type="button" className={`combat-density-btn${(ship.bombardStance ?? 'off') === b ? ' active' : ''}`} onClick={() => queueBombard(ship, b)} title={BOMBARD_STANCE_DESCRIPTIONS[b]}>
+              {BOMBARD_STANCE_LABELS[b]}
+            </button>
+          ))}
+        </div>
+      )}
+      {ship.pendingBombard && (
+        <div className="fleet-row-status ship-panel-comms-delay">
+          Bombard order in transit: {BOMBARD_STANCE_LABELS[ship.pendingBombard.stance]} — takes effect in {Math.max(0, ship.pendingBombard.arrivesSimDays - simDays).toFixed(1)} days.
+        </div>
+      )}
       {ship.pendingStance && (
         <div className="fleet-row-status ship-panel-comms-delay">
           Order in transit: {STANCE_LABELS[ship.pendingStance.stance]} — takes effect in{' '}

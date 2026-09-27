@@ -1,11 +1,11 @@
 // Verification of Simple mode's economy AI (non-player nations running
-// their own economy: production split, budget, welfare, construction, trade).
+// their own economy: what to build, budget, welfare, construction, trade).
 // Complex mode never calls it.
 // Run:  npx tsx tests/abstractEconomyAI.test.ts
 
 import { tickAbstractEconomy, abstractReport, emptyStockpile, type AbstractEconomyState, type Stockpile, type WorldState } from '../src/economy-abstract/abstractEconomy'
-import { applyAbstractEconomyAI, targetAllocation, nextBuilding, worldFor, tradeOrders, type AbstractAIContext } from '../src/economy-abstract/abstractEconomyAI'
-import { useAbstractEconomyStore } from '../src/state/abstractEconomyStore'
+import { applyAbstractEconomyAI, nextBuilding, worldFor, tradeOrders, type AbstractAIContext } from '../src/economy-abstract/abstractEconomyAI'
+import { useAbstractEconomyStore, smoothedRealGrowth } from '../src/state/abstractEconomyStore'
 import { seedSimplisticStock, seedStrategicResources } from '../src/scene/shipyardLogic'
 
 let failures = 0
@@ -34,8 +34,6 @@ function mk(over: Partial<AbstractEconomyState> = {}): AbstractEconomyState {
     moneyCreation: 0,
     warTaxes: false,
     welfare: 0.3,
-    allocation: { civilian: 0.5, military: 0.2, consumer: 0.3 },
-    researchFocus: 'physics',
     queue: [],
     nextOrderId: 1,
     currency: { code: 'X', name: 'X', rate: 1, baseRate: 1 },
@@ -43,8 +41,11 @@ function mk(over: Partial<AbstractEconomyState> = {}): AbstractEconomyState {
     ...over,
   }
 }
+const HOME = { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 4, electronicsPlant: 2, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, exoticRefinery: 1, entertainmentCenter: 1 }
+// A bigger world with room to grow (spare workers, its needs covered).
+const BIG = { ...{ civilianFactory: 8, alloyFoundry: 3, consumerFactory: 7, electronicsPlant: 2, farm: 11, mine: 6, powerPlant: 6, physicsLab: 2, exoticRefinery: 1, entertainmentCenter: 3 } }
 function world(over: Partial<WorldState> = {}): WorldState {
-  return { bodyName: 'Home', population: 3000, slots: 80, buildings: { factory: 15, farm: 6, mine: 6, powerPlant: 6, researchLab: 2, exoticRefinery: 1 }, ...over }
+  return { bodyName: 'Home', population: 3000, slots: 80, buildings: { ...HOME }, ...over }
 }
 function stock(over: Partial<Stockpile> = {}): Stockpile {
   return { ...emptyStockpile(), food: 200, minerals: 300, energy: 600, alloys: 400, electronics: 60, consumerGoods: 150, exoticMatter: 30, hyperium: 6, ...over }
@@ -62,32 +63,48 @@ function run(s: AbstractEconomyState, months: number, atWar: boolean | null, ws:
   }
   return { s, ws, st }
 }
-const sum = (s: AbstractEconomyState) => s.allocation.civilian + s.allocation.military + s.allocation.consumer
+const levelsOf = (ws: WorldState[], b: keyof typeof HOME | 'hydroponicsBay' | 'deepCoreMine' | 'fusionReactor' | 'commercialZone' | 'societyLab' | 'engineeringLab') => ws.reduce((n, w) => n + (w.buildings[b] ?? 0), 0)
 
 console.log('=== 1. The AI supplies its population ===')
 {
-  const starved = mk({ allocation: { civilian: 0.6, military: 0.38, consumer: 0.02 } })
-  const one = applyAbstractEconomyAI(starved, ctx(starved, false))
-  check('a consumer-starved nation raises its consumer share', one.allocation.consumer > starved.allocation.consumer, `${starved.allocation.consumer.toFixed(2)} → ${one.allocation.consumer.toFixed(2)}`)
-  check('...gradually', one.allocation.consumer < targetAllocation(starved, ctx(starved, false)).consumer)
-  const withAI = run(starved, 60, false)
-  const without = run(starved, 60, null)
+  const starved = mk()
+  const noGoods = world({ buildings: { ...HOME, consumerFactory: 0 } })
+  check('a nation short of consumer goods builds a consumer goods factory', nextBuilding(starved, ctx(starved, false, [noGoods], stock({ consumerGoods: 0 }))) === 'consumerFactory')
+  const noElec = world({ buildings: { ...HOME, electronicsPlant: 0 } })
+  check('...short of electronics, an electronics plant', nextBuilding(starved, ctx(starved, false, [noElec], stock({ electronics: 0 }))) === 'electronicsPlant')
+  const dull = world({ buildings: { ...HOME, entertainmentCenter: 0 } })
+  const pick = nextBuilding(starved, ctx(starved, false, [dull]))
+  check('...short of amenities, an urban building', pick === 'entertainmentCenter' || pick === 'commercialZone', pick)
+  const withAI = run(starved, 60, false, [noGoods], stock({ consumerGoods: 0 }))
+  const without = run(starved, 60, null, [noGoods], stock({ consumerGoods: 0 }))
   check('with the AI, stability ends higher than a static starved economy', withAI.s.stability > without.s.stability, `${withAI.s.stability.toFixed(2)} vs ${without.s.stability.toFixed(2)}`)
   check('...with its needs met', abstractReport(withAI.s, withAI.ws, withAI.st).upkeepMet > 0.95)
-  const unrest = targetAllocation(mk({ stability: 0.2 }), ctx(mk({ stability: 0.2 }), false)).consumer
-  const calm = targetAllocation(mk(), ctx(mk(), false)).consumer
-  check('low stability targets a bigger consumer share', unrest > calm, `${unrest.toFixed(2)} vs ${calm.toFixed(2)}`)
 }
 
-console.log('\n=== 2. War footing ===')
+console.log('\n=== 2. War footing: foundries ===')
 {
-  const peace = run(mk(), 24, false).s
-  const war = run(mk(), 24, true).s
-  check('at war the military share rises', war.allocation.military > peace.allocation.military, `${war.allocation.military.toFixed(2)} vs ${peace.allocation.military.toFixed(2)}`)
-  check('allocation always sums to 1', Math.abs(sum(war) - 1) < 1e-9 && Math.abs(sum(peace) - 1) < 1e-9)
-  const big = mk()
-  const tgt = targetAllocation(big, ctx(big, true, [world({ population: 60000 })]))
-  check('civilian keeps its floor when consumer demand is huge', tgt.civilian >= 0.1 - 1e-9, tgt.civilian.toFixed(2))
+  const s = mk()
+  const noFoundry = world({ buildings: { ...HOME, alloyFoundry: 0 } })
+  check('a nation with too few foundries builds one', nextBuilding(s, ctx(s, false, [noFoundry])) === 'alloyFoundry')
+  const peaceWorld = world()
+  check('in peace 3 foundries per 8 civilian factories is enough', nextBuilding(s, ctx(s, false, [peaceWorld])) !== 'alloyFoundry')
+  check('at war it wants more', nextBuilding(s, ctx(s, true, [peaceWorld])) === 'alloyFoundry')
+  const peace = run(mk(), 36, false, [world({ population: 5000, buildings: { ...BIG } })])
+  const war = run(mk(), 36, true, [world({ population: 5000, buildings: { ...BIG } })])
+  check('over 3 years at war it builds more foundries than in peace', levelsOf(war.ws, 'alloyFoundry') > levelsOf(peace.ws, 'alloyFoundry'), `${levelsOf(war.ws, 'alloyFoundry')} vs ${levelsOf(peace.ws, 'alloyFoundry')}`)
+}
+
+console.log('\n=== 2b. Dense buildings when land is tight; labs spread over the trees ===')
+{
+  const s = mk()
+  const tight = world({ buildings: { ...HOME, farm: 1 }, land: 0 })
+  check('food short with no land left → hydroponics', nextBuilding(s, ctx(s, false, [tight])) === 'hydroponicsBay')
+  const tightPower = world({ buildings: { ...HOME, powerPlant: 1 }, land: 0 })
+  check('energy short with no land left → fusion', nextBuilding(s, ctx(s, false, [tightPower], stock({ energy: 0 }))) === 'fusionReactor')
+  const tightMine = world({ buildings: { ...HOME, mine: 1 }, land: 0 })
+  check('minerals short with no land left → deep core mine', nextBuilding(s, ctx(s, false, [tightMine], stock({ minerals: 0 }))) === 'deepCoreMine')
+  const lab = nextBuilding(s, ctx(s, false, [world({ buildings: { ...HOME, physicsLab: 3, alloyFoundry: 5, civilianFactory: 12 } })]))
+  check('with physics covered, the next lab is another tree', lab === 'engineeringLab' || lab === 'societyLab', lab)
 }
 
 console.log('\n=== 3. War taxes ===')
@@ -142,15 +159,15 @@ console.log('\n=== 6. Treasury management ===')
 
 console.log('\n=== 7. Construction ===')
 {
-  const hungryWorld = world({ buildings: { factory: 15, farm: 1, mine: 6, powerPlant: 6, researchLab: 2, exoticRefinery: 1 } })
+  const hungryWorld = world({ buildings: { ...HOME, farm: 1 } })
   const s = mk()
   check('a food deficit queues a farm', nextBuilding(s, ctx(s, false, [hungryWorld])) === 'farm')
-  const noPower = world({ buildings: { factory: 15, farm: 8, mine: 6, powerPlant: 1, researchLab: 2, exoticRefinery: 1 } })
+  const noPower = world({ buildings: { ...HOME, farm: 8, powerPlant: 1 } })
   check('an energy deficit queues a power plant', nextBuilding(s, ctx(s, false, [noPower], stock({ energy: 0 }))) === 'powerPlant')
-  const full = world({ bodyName: 'Full', population: 2000 }) // 1000 workers, 1050 jobs
+  const full = world({ bodyName: 'Full', population: 2000 }) // 840 workers, 1055 jobs
   const roomy = world({ bodyName: 'Roomy', population: 5000 })
-  check('builds on the world with spare workers', worldFor(s, [full, roomy], 'factory')?.bodyName === 'Roomy')
-  check("won't build where there are no spare workers", worldFor(s, [full], 'factory') === null)
+  check('builds on the world with spare workers', worldFor(s, [full, roomy], 'civilianFactory')?.bodyName === 'Roomy')
+  check("won't build where there are no spare workers", worldFor(s, [full], 'civilianFactory') === null)
   const one = applyAbstractEconomyAI(s, ctx(s, false))
   check('queues a project when the queue is short', one.queue.length === 1 && one.nextOrderId === 2)
   const over = run(mk(), 36, false)
@@ -162,7 +179,7 @@ console.log('\n=== 7. Construction ===')
 console.log('\n=== 8. Trade ===')
 {
   const s = mk()
-  const hungry = world({ buildings: { factory: 15, farm: 1, mine: 6, powerPlant: 6, researchLab: 2, exoticRefinery: 1 } })
+  const hungry = world({ buildings: { ...HOME, farm: 1 } })
   const t = tradeOrders(ctx(s, false, [hungry], stock({ food: 10 })))
   check('imports food that is running out', (t.food ?? 0) > 0, `food +${t.food}`)
   const t2 = tradeOrders(ctx(s, false, [hungry], stock({ food: 5000 })))
@@ -206,9 +223,34 @@ console.log('\n=== 10. Store steer: AI nations move, the player is left alone ==
   const before = store.byCountry
   store.advance(3, (s, env) => (s.countryId === player ? s : applyAbstractEconomyAI(s, { ...env, atWar: true })))
   const after = useAbstractEconomyStore.getState().byCountry
-  check("the player's allocation is untouched", JSON.stringify(after[player].allocation) === JSON.stringify(before[player].allocation))
   check("the player's queue and policies are untouched", after[player].queue.length === 0 && after[player].taxRate === before[player].taxRate && !after[player].warTaxes)
-  check('AI nations go on a war footing and start building', after['republic-of-venus'].allocation.military > before['republic-of-venus'].allocation.military && after['republic-of-venus'].queue.length > 0)
+  check('AI nations start building', after['republic-of-venus'].queue.length > 0 && after['republic-of-venus'].warTaxes)
+}
+
+console.log('\n=== 11. Realistic growth: an actively building nation grows ~1-3%/yr, never boom-scale ===')
+{
+  useAbstractEconomyStore.getState().reset()
+  const ids = Object.keys(useAbstractEconomyStore.getState().byCountry)
+  for (const id of ids) {
+    seedStrategicResources(id)
+    seedSimplisticStock(id)
+  }
+  const id = 'imperial-state-of-mars'
+  const yoy: number[] = []
+  for (let m = 0; m < 120; m++) {
+    useAbstractEconomyStore.getState().advance(1, (s, env) => applyAbstractEconomyAI(s, { ...env, atWar: false }))
+    const g = smoothedRealGrowth(useAbstractEconomyStore.getState().history[id])
+    if (g !== undefined && useAbstractEconomyStore.getState().history[id].length >= 13) yoy.push(g)
+  }
+  const h = useAbstractEconomyStore.getState().history[id]
+  const avg = Math.pow(h[h.length - 1].realGdp / h[0].realGdp, 12 / (h.length - 1)) - 1
+  const max = Math.max(...yoy)
+  check('average real growth over the decade is realistic (0.5-3%/yr)', avg > 0.005 && avg < 0.03, (avg * 100).toFixed(2) + '%/yr')
+  check('no single year booms past 5%', max < 0.05, 'max ' + (max * 100).toFixed(1) + '%')
+  useAbstractEconomyStore.getState().reset()
+  const fresh = useAbstractEconomyStore.getState().reports
+  const unemp = ids.map((n) => Math.max(0, fresh[n].workforce - fresh[n].jobs) / fresh[n].workforce)
+  check('every nation opens with 1-6% unemployment', unemp.every((u) => u >= 0.01 && u <= 0.06), unemp.map((u) => (u * 100).toFixed(1) + '%').join(' / '))
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

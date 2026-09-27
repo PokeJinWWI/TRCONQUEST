@@ -39,6 +39,14 @@ export interface AiSnapshot {
   resourcesOf: (countryId: string) => Record<ResourceId, number>
   buildQueueLengthOf: (countryId: string) => number
   valueOf: BodyValueFn
+  // Something on the ground (enemy defense batteries) denies this nation the
+  // orbit of this body. Optional: absent = nothing does.
+  orbitDenied?: (countryId: string, bodyName: string) => boolean
+  // Enemy defense installations (any kind) standing on this body, for this
+  // nation — the marshal bombards them before landing. Optional: absent = none.
+  hostileDefensesAt?: (countryId: string, bodyName: string) => number
+  // Nodes an enemy planetary shield covers, for a nation landing here.
+  shieldedFor?: (countryId: string, bodyName: string) => (node: number) => boolean
 }
 
 export interface Threat {

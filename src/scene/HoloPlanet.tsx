@@ -4,6 +4,7 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { groundSurface } from './groundLogic'
 import { buildGeometry, GROUND_GLSL, TEX_WIDTH, useNodeTexture, VERT as GLOBE_VERT, type HoloNode } from './HoloGlobe'
 import { TERRAIN_IDS, type BodySurface } from './planetTerrain'
+import { pictureUniforms, useBodyPicture } from './bodyPicture'
 
 // A planet or moon as a hologram sphere, in the same language as the planetary
 // map (HoloGlobe) but with no terrain: a dark glassy body that brightens toward
@@ -134,6 +135,7 @@ void main() {
 
 function TerrainPlanet({ surface, color, radius }: { surface: BodySurface; color: string; radius: number }) {
   const tint = useMemo(() => hologramTint(color), [color])
+  const picture = useBodyPicture(surface.bodyName)
   const base = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.06).convertLinearToSRGB(), [color])
   const nodeAt = useMemo(() => {
     const cache = new Map<string, [number, number, number]>()
@@ -164,9 +166,10 @@ function TerrainPlanet({ surface, color, radius }: { surface: BodySurface; color
           uLift: { value: [0.02, 0.02, 0.02] },
           uColor: { value: tint },
           uRadius: { value: radius },
+          ...pictureUniforms(picture),
         },
       }),
-    [texture, rows, ocean, tint, radius],
+    [texture, rows, ocean, tint, radius, picture.texture, picture.water],
   )
   useEffect(
     () => () => {

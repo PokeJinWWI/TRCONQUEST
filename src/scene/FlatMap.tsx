@@ -3,6 +3,7 @@ import { Line } from '@react-three/drei'
 import { DataTexture, FloatType, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from 'three'
 import { FLAT_HEIGHT, FLAT_WIDTH } from './mapProjection'
 import { flatLookup, TRI_TEX_WIDTH } from './flatLookup'
+import { pictureUniforms, useBodyPicture } from './bodyPicture'
 import { COAST_UNIFORM, GROUND_GLSL, LIFT_UNIFORM, OCEAN_UNIFORM, TEX_WIDTH, useNodeTexture, type HoloNode } from './HoloGlobe'
 
 // The rectangular (equirectangular) planetary map: the same hologram shading
@@ -54,8 +55,9 @@ void main() {
 }
 `
 
-export function FlatMapSurface({ nodeAt, version, glow = COAST_UNIFORM }: { nodeAt: (node: number) => HoloNode; version: unknown; glow?: number[] }) {
+export function FlatMapSurface({ nodeAt, version, glow = COAST_UNIFORM, bodyName }: { nodeAt: (node: number) => HoloNode; version: unknown; glow?: number[]; bodyName?: string }) {
   const { texture, rows } = useNodeTexture(nodeAt, version)
+  const picture = useBodyPicture(bodyName)
   const lookup = useMemo(() => {
     const lk = flatLookup()
     const pixels = new DataTexture(lk.pixels, lk.width, lk.height, RGBAFormat, UnsignedByteType)
@@ -84,10 +86,11 @@ export function FlatMapSurface({ nodeAt, version, glow = COAST_UNIFORM }: { node
           uLookup: { value: lookup.pixels },
           uTris: { value: lookup.tris },
           uTriSize: { value: new Vector2(TRI_TEX_WIDTH, lookup.triRows) },
+          ...pictureUniforms(picture),
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [texture, rows, lookup, glow.join()],
+    [texture, rows, lookup, glow.join(), picture.texture, picture.water],
   )
   useEffect(
     () => () => {
