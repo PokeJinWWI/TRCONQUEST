@@ -19,6 +19,7 @@ import { KeyboardPan } from './KeyboardPan'
 import { isAdditiveClick } from './selectionInput'
 import { isQueueModifierHeld } from './queueModifier'
 import { bodyGroundInfo } from './planetTerrain'
+import { classifyFireLine } from './armyLogic'
 import { heightAtLocal, terrainAtLocal, type TerrainGrid } from './terrainMap'
 import { rangeCells } from './terrainBattle'
 
@@ -33,6 +34,12 @@ const CELL = 1.4 // world units per fine cell
 const HEIGHT_SCALE = 0.0011 // world units per metre (the relief is exaggerated so it reads)
 const CLOUD_SIDE = 176 // points along a side of the drawn cloud
 const EXIT_DISTANCE = 30
+// A line of fire's colour, the same three space combat's engagement lines use
+// (CombatEngagementLine.tsx): yellow both sides trading fire, red the player's
+// side taking fire it isn't returning, green a free shot the player's way.
+const FIRE_MUTUAL_COLOR = '#ffd23f'
+const FIRE_HOSTILE_COLOR = '#ff3b3b'
+const FIRE_FRIENDLY_COLOR = '#4ade80'
 
 const toWorld = (x: number, y: number, h: number): [number, number, number] => [x * CELL, h * HEIGHT_SCALE, -y * CELL]
 
@@ -472,20 +479,34 @@ const MAX_SEGMENTS = 800
 
 function Lines({ battleId }: { battleId: string }) {
   const pathRef = useRef<Line2>(null)
-  const fireRef = useRef<Line2>(null)
+  // Fire lines split into the same three colours space combat's engagement
+  // lines use (CombatEngagementLine): yellow for a mutual exchange, red for
+  // fire the player's side is taking but not returning, green for a free
+  // shot going the player's way.
+  const mutualRef = useRef<Line2>(null)
+  const friendlyRef = useRef<Line2>(null)
+  const hostileRef = useRef<Line2>(null)
   const seed = useMemo(() => Array.from({ length: MAX_SEGMENTS * 2 }, () => [0, 0, 0] as [number, number, number]), [])
   const thickness = useSettingsStore((s) => LINE_THICKNESS_PX[s.armyLineThickness])
   useFrame(() => {
     const pathLine = pathRef.current
-    const fireLine = fireRef.current
+    const mutualLine = mutualRef.current
+    const friendlyLine = friendlyRef.current
+    const hostileLine = hostileRef.current
     const battle = useTerrainStore.getState().battles.find((b) => b.id === battleId)
-    if (!pathLine || !fireLine || !battle) return
+    if (!pathLine || !mutualLine || !friendlyLine || !hostileLine || !battle) return
     const player = usePlayerStore.getState().selectedCountryId
     const byId = new Map(battle.units.map((u) => [u.id, u]))
     const pathBuf = (pathLine.geometry.getAttribute('instanceStart') as unknown as { data: { array: Float32Array; needsUpdate: boolean } }).data
-    const fireBuf = (fireLine.geometry.getAttribute('instanceStart') as unknown as { data: { array: Float32Array; needsUpdate: boolean } }).data
+    const mutualBuf = (mutualLine.geometry.getAttribute('instanceStart') as unknown as { data: { array: Float32Array; needsUpdate: boolean } }).data
+    const friendlyBuf = (friendlyLine.geometry.getAttribute('instanceStart') as unknown as { data: { array: Float32Array; needsUpdate: boolean } })
+      .data
+    const hostileBuf = (hostileLine.geometry.getAttribute('instanceStart') as unknown as { data: { array: Float32Array; needsUpdate: boolean } })
+      .data
     let np = 0
-    let nf = 0
+    let nMutual = 0
+    let nFriendly = 0
+    let nHostile = 0
     const put = (buf: { array: Float32Array }, n: number, a: [number, number, number], b: [number, number, number]) => {
       if (n >= MAX_SEGMENTS) return n
       buf.array.set(a, n * 6)
@@ -493,6 +514,7 @@ function Lines({ battleId }: { battleId: string }) {
       return n + 1
     }
     const at = (x: number, y: number) => toWorld(x, y, heightAtLocal(battle.grid, x, y) + 70)
+    const seenPairs = new Set<string>()
     for (const u of battle.units) {
       if (u.ownerId === player && u.path.length > 0) {
         let prev = at(u.x, u.y)
@@ -503,19 +525,46 @@ function Lines({ battleId }: { battleId: string }) {
         }
       }
       const target = u.firingAtId ? byId.get(u.firingAtId) : undefined
-      if (target) nf = put(fireBuf, nf, at(u.x, u.y), at(target.x, target.y))
+      if (!target) continue
+      const key = u.id < target.id ? `${u.id}|${target.id}` : `${target.id}|${u.id}`
+      if (seenPairs.has(key)) continue
+      seenPairs.add(key)
+      const mutual = target.firingAtId === u.id
+      const kind = classifyFireLine(u.ownerId, target.ownerId, mutual, player)
+      const a = at(u.x, u.y)
+      const b = at(target.x, target.y)
+      if (kind === 'mutual') nMutual = put(mutualBuf, nMutual, a, b)
+      else if (kind === 'friendly') nFriendly = put(friendlyBuf, nFriendly, a, b)
+      else nHostile = put(hostileBuf, nHostile, a, b)
     }
     pathBuf.needsUpdate = true
-    fireBuf.needsUpdate = true
+    mutualBuf.needsUpdate = true
+    friendlyBuf.needsUpdate = true
+    hostileBuf.needsUpdate = true
     ;(pathLine.geometry as unknown as { instanceCount: number }).instanceCount = np
-    ;(fireLine.geometry as unknown as { instanceCount: number }).instanceCount = nf
+    ;(mutualLine.geometry as unknown as { instanceCount: number }).instanceCount = nMutual
+    ;(friendlyLine.geometry as unknown as { instanceCount: number }).instanceCount = nFriendly
+    ;(hostileLine.geometry as unknown as { instanceCount: number }).instanceCount = nHostile
     pathLine.visible = np > 0
-    fireLine.visible = nf > 0
+    mutualLine.visible = nMutual > 0
+    friendlyLine.visible = nFriendly > 0
+    hostileLine.visible = nHostile > 0
   })
   return (
     <>
       <Line ref={pathRef} points={seed} segments color="#4ade80" lineWidth={thickness} transparent opacity={0.9} frustumCulled={false} />
-      <Line ref={fireRef} points={seed} segments color="#ff6b4a" lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
+      <Line ref={mutualRef} points={seed} segments color={FIRE_MUTUAL_COLOR} lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
+      <Line
+        ref={friendlyRef}
+        points={seed}
+        segments
+        color={FIRE_FRIENDLY_COLOR}
+        lineWidth={thickness}
+        transparent
+        opacity={0.8}
+        frustumCulled={false}
+      />
+      <Line ref={hostileRef} points={seed} segments color={FIRE_HOSTILE_COLOR} lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
     </>
   )
 }
@@ -575,6 +624,16 @@ function TerrainBattleView({ battleId }: { battleId: string }) {
     view.setNotice(r.ok ? null : r.reason)
   }
 
+  // Back to the same framing the battle opened with — orbiting can lose
+  // track of the fight on a wide relief patch with no landmarks to judge by.
+  const recenterCamera = () => {
+    const controls = controlsRef.current
+    if (!controls) return
+    controls.target.set(0, 0.6, 0)
+    controls.object.position.set(0, 7.5, 10.5)
+    controls.update()
+  }
+
   if (!grid || !bodyName) return null
   return (
     <div className="solar-system-wrapper">
@@ -595,7 +654,7 @@ function TerrainBattleView({ battleId }: { battleId: string }) {
         <OrbitControls ref={controlsRef} target={[0, 0.6, 0]} enablePan={false} enableDamping dampingFactor={0.08} minDistance={4} maxDistance={36} maxPolarAngle={1.45} />
         <KeyboardPan controlsRef={controlsRef} mode="orbit" />
       </Canvas>
-      <TerrainPanel battleId={battleId} />
+      <TerrainPanel battleId={battleId} onRecenter={recenterCamera} />
       <ReliefLegend grid={grid} />
       {hover && <TerrainHover grid={grid} at={hover} />}
     </div>

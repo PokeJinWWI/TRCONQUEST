@@ -1,7 +1,9 @@
 // The player's armies grouped for the Outliner: one row per world they stand
-// on (or are being raised on), and one per transport carrying some. Pure.
+// on (or are being raised on), and one per troop transport — carrying some,
+// or empty (still listed, so an idle transport doesn't vanish from view).
+// Pure.
 import { ARMY_KINDS } from '../data/armyData'
-import type { Army } from './armyLogic'
+import { armyCapacityOf, type Army } from './armyLogic'
 import { bodyStarId } from './territory'
 import type { ShipInstance } from '../state/shipStore'
 
@@ -28,7 +30,11 @@ function describe(armies: Army[]): string {
   return parts.join(' · ')
 }
 
-export function playerArmyGroups(armies: Army[], ships: Pick<ShipInstance, 'id' | 'name'>[], playerId: string | null): ArmyGroup[] {
+export function playerArmyGroups(
+  armies: Army[],
+  ships: Pick<ShipInstance, 'id' | 'name' | 'ownerId' | 'classId'>[],
+  playerId: string | null,
+): ArmyGroup[] {
   if (!playerId) return []
   const mine = armies.filter((a) => a.ownerId === playerId)
   const byPlace = new Map<string, Army[]>()
@@ -46,6 +52,14 @@ export function playerArmyGroups(armies: Army[], ships: Pick<ShipInstance, 'id' 
       const bodyName = place.slice(5)
       groups.push({ key: place, label: bodyName, detail: describe(list), bodyName, starId: bodyStarId(bodyName) })
     }
+  }
+  // Every troop transport the player owns gets a row even with nothing
+  // aboard — otherwise an idle transport has no way to show up here at all.
+  for (const ship of ships) {
+    if (ship.ownerId !== playerId || armyCapacityOf(ship) <= 0) continue
+    const place = `ship:${ship.id}`
+    if (byPlace.has(place)) continue
+    groups.push({ key: place, label: `Aboard ${ship.name}`, detail: 'Empty', shipId: ship.id })
   }
   return groups.sort((a, b) => a.label.localeCompare(b.label))
 }

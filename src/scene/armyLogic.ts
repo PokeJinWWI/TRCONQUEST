@@ -19,6 +19,7 @@
 //     units standing on them (see groundResolution.ts).
 //   - A transport destroyed with armies aboard takes them down with it.
 import { ARMY_KINDS, type ArmyKind } from '../data/armyData'
+import { isRogueFaction } from '../data/countryRoster'
 import { UNIT_TYPES, type UnitType } from '../data/groundData'
 import type { ShipInstance } from '../state/shipStore'
 import type { AtWarFn } from '../state/diplomacyStore'
@@ -188,10 +189,34 @@ export function landingCheck(
   const controller = controllerOf(body, owners, controllers)
   const me = transport.ownerId
   if (controller === me) return { ok: true, kind: 'disembark', bodyName: body }
-  if (!controller) return { ok: false, reason: 'Nobody holds this body to invade' }
+  if (!controller) {
+    // A nation can't invade ground nobody holds (there's nothing to fight, and
+    // it waits for the ordinary claim/treaty path) — but sandbox ground stays
+    // unowned by design, and a no-nation faction has no other way onto it.
+    if (isRogueFaction(me)) return { ok: true, kind: 'disembark', bodyName: body }
+    return { ok: false, reason: 'Nobody holds this body to invade' }
+  }
   if (!atWarFn(me, controller)) return { ok: false, reason: 'Not at war with its holder' }
   if (!hasOrbitalSuperiority(me, body, ships, atWarFn)) return { ok: false, reason: 'Enemy warships hold the orbit' }
   return { ok: true, kind: 'invade', bodyName: body }
+}
+
+// How a line of fire between two ground units should read to the player,
+// the same three-way split space combat draws its engagement lines in
+// (CombatEngagementLine): yellow when both units are trading fire, red when
+// a hostile is shooting a friendly unit that isn't shooting back — the
+// dangerous case, taking fire it can't return — and green when a friendly
+// unit has a free shot the other side isn't returning. A pair where neither
+// side is the player's own is drawn as a mutual exchange too: a fight the
+// player isn't part of, not attributed to either side.
+export type FireLineKind = 'mutual' | 'friendly' | 'hostile'
+
+export function classifyFireLine(selfOwnerId: string, targetOwnerId: string, mutual: boolean, playerId: string | null): FireLineKind {
+  const selfIsPlayer = playerId != null && selfOwnerId === playerId
+  const targetIsPlayer = playerId != null && targetOwnerId === playerId
+  if (!selfIsPlayer && !targetIsPlayer) return 'mutual'
+  if (mutual) return 'mutual'
+  return selfIsPlayer ? 'friendly' : 'hostile'
 }
 
 // Every ground war going on right now, for the UI: the holder's forces

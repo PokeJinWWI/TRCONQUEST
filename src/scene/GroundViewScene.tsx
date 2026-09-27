@@ -17,6 +17,7 @@ import { usePlayerStore } from '../state/playerStore'
 import { atWar } from '../state/diplomacyStore'
 import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { groundSurface, holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
+import { classifyFireLine } from './armyLogic'
 import { bodyGroundInfo, TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
 import { HoloGlobe, HoloHalo, type HoloNode } from './HoloGlobe'
@@ -46,7 +47,26 @@ const EXIT_DISTANCE = 36
 const HOLDER_TINT = 0.42
 // The width the nav bar and the Outliner take out of the canvas (both sit on top of it).
 const SIDE_PANELS_PX = 460
-const GRID_OPACITY = { coarse: 0.35, standard: 0.22, fine: 0.14 } as const
+// The grid is drawn twice so it reads on any ground: a dark, much wider stroke
+// (visible on bright land, incl. pale tundra/mountains) under a bright,
+// thinner one (visible on dark ocean). The dark stroke has to peek out by a
+// couple of pixels on each side of the light one to survive anti-aliasing —
+// a 1-2px difference in width all but disappears at these render scales.
+const GRID_STYLE = {
+  coarse: { dark: 0.85, light: 0.8, width: 1.1, darkWidth: 4.6 },
+  standard: { dark: 0.75, light: 0.65, width: 0.9, darkWidth: 4 },
+  fine: { dark: 0.6, light: 0.5, width: 0.75, darkWidth: 3.4 },
+} as const
+// Radians per segment when a grid edge is bent onto the globe.
+const GRID_STEP = 0.05
+const GRID_DARK = '#02141c'
+const GRID_LIGHT = '#b8f6ff'
+// A line of fire's colour, the same three space combat's engagement lines use
+// (CombatEngagementLine.tsx): yellow both sides trading fire, red the player's
+// side taking fire it isn't returning, green a free shot the player's way.
+const FIRE_MUTUAL_COLOR = '#ffd23f'
+const FIRE_HOSTILE_COLOR = '#ff3b3b'
+const FIRE_FRIENDLY_COLOR = '#4ade80'
 
 function toVec(p: SurfacePoint, r: number): [number, number, number] {
   return [p.x * r, p.y * r, p.z * r]
@@ -242,7 +262,7 @@ function SurfaceGrid() {
   const mesh = surfaceMesh()
   const { edges, points } = useMemo(() => {
     const r = GLOBE_RADIUS * 1.004
-    const seg: number[] = []
+    const seg: [number, number, number][] = []
     const seen = new Set<string>()
     const at = (i: number) => ({ x: mesh.positions[i * 3], y: mesh.positions[i * 3 + 1], z: mesh.positions[i * 3 + 2] })
     // On the flat map the triangles are stretched toward the poles and torn by
@@ -257,13 +277,23 @@ function SurfaceGrid() {
           const key = a < b ? `${a}|${b}` : `${b}|${a}`
           if (seen.has(key)) continue
           seen.add(key)
-          seg.push(mesh.positions[a * 3] * r, mesh.positions[a * 3 + 1] * r, mesh.positions[a * 3 + 2] * r)
-          seg.push(mesh.positions[b * 3] * r, mesh.positions[b * 3 + 1] * r, mesh.positions[b * 3 + 2] * r)
+          // Long (coarse) edges are chords that would sink inside the globe, so
+          // each is walked along the great circle in short steps.
+          const pa = at(a)
+          const pb = at(b)
+          const angle = Math.acos(Math.min(1, Math.max(-1, pa.x * pb.x + pa.y * pb.y + pa.z * pb.z)))
+          const steps = Math.max(1, Math.ceil(angle / GRID_STEP))
+          let prev: [number, number, number] = [pa.x * r, pa.y * r, pa.z * r]
+          for (let k = 1; k <= steps; k++) {
+            const t = k / steps
+            const q = normalize({ x: pa.x + (pb.x - pa.x) * t, y: pa.y + (pb.y - pa.y) * t, z: pa.z + (pb.z - pa.z) * t })
+            const cur: [number, number, number] = [q.x * r, q.y * r, q.z * r]
+            seg.push(prev, cur)
+            prev = cur
+          }
         }
       }
     }
-    const e = new BufferGeometry()
-    e.setAttribute('position', new BufferAttribute(Float32Array.from(seg), 3))
     const count = mesh.count[density]
     const pts = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
@@ -276,19 +306,24 @@ function SurfaceGrid() {
     }
     const p = new BufferGeometry()
     p.setAttribute('position', new BufferAttribute(pts, 3))
-    return { edges: e, points: p }
+    return { edges: seg, points: p }
   }, [density, mesh, flat])
-  useEffect(() => () => {
-    edges.dispose()
-    points.dispose()
-  }, [edges, points])
+  useEffect(() => () => points.dispose(), [points])
+  const style = GRID_STYLE[density]
+  const dot = flat ? 3 : density === 'fine' ? 0.035 : 0.06
   return (
     <group>
-      <lineSegments geometry={edges}>
-        <lineBasicMaterial color="#6fe3ff" transparent opacity={GRID_OPACITY[density]} />
-      </lineSegments>
-      <points geometry={points}>
-        <pointsMaterial color="#6fe3ff" size={flat ? 3 : density === 'fine' ? 0.035 : 0.06} sizeAttenuation={!flat} transparent opacity={flat ? 0.5 : 0.7} />
+      {edges.length > 0 && (
+        <>
+          <Line points={edges} segments color={GRID_DARK} lineWidth={style.darkWidth} transparent opacity={style.dark} frustumCulled={false} raycast={() => null} />
+          <Line points={edges} segments color={GRID_LIGHT} lineWidth={style.width} transparent opacity={style.light} frustumCulled={false} raycast={() => null} />
+        </>
+      )}
+      <points geometry={points} raycast={() => null}>
+        <pointsMaterial color={GRID_DARK} size={dot * 2.6} sizeAttenuation={!flat} transparent opacity={flat ? 0.75 : 0.9} />
+      </points>
+      <points geometry={points} raycast={() => null}>
+        <pointsMaterial color={GRID_LIGHT} size={dot} sizeAttenuation={!flat} transparent opacity={flat ? 0.9 : 0.95} />
       </points>
     </group>
   )
@@ -535,7 +570,13 @@ const MAX_SEGMENTS = 1500
 function GroundLines({ bodyName }: { bodyName: string }) {
   const flat = useGroundViewStore((s) => s.projection === 'flat')
   const pathRef = useRef<Line2>(null)
-  const fireRef = useRef<Line2>(null)
+  // Fire lines split into the same three colours space combat's engagement
+  // lines use (CombatEngagementLine): yellow for a mutual exchange, red for
+  // fire the player's side is taking but not returning, green for a free
+  // shot going the player's way.
+  const mutualRef = useRef<Line2>(null)
+  const friendlyRef = useRef<Line2>(null)
+  const hostileRef = useRef<Line2>(null)
   // Stable, full-size seeds so drei builds each interleaved buffer once at
   // mount; every frame after that writes into it in place.
   const seed = useMemo(() => Array.from({ length: MAX_SEGMENTS * 2 }, () => [0, 0, 0] as [number, number, number]), [])
@@ -543,16 +584,24 @@ function GroundLines({ bodyName }: { bodyName: string }) {
 
   useFrame(() => {
     const pathLine = pathRef.current
-    const fireLine = fireRef.current
-    if (!pathLine || !fireLine) return
+    const mutualLine = mutualRef.current
+    const friendlyLine = friendlyRef.current
+    const hostileLine = hostileRef.current
+    if (!pathLine || !mutualLine || !friendlyLine || !hostileLine) return
     const player = usePlayerStore.getState().selectedCountryId
     const armies = useArmyStore.getState().armies.filter((a) => a.location.kind === 'body' && a.location.bodyName === bodyName)
-    const byId = new Map(armies.flatMap((a) => a.units.map((u) => [u.id, u] as const)))
+    const byId = new Map(
+      armies.flatMap((a) => a.units.map((u) => [u.id, { position: u.position, firingAtId: u.firingAtId, ownerId: a.ownerId }] as const)),
+    )
     const r = GLOBE_RADIUS * 1.012
     const pathBuf = (pathLine.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data
-    const fireBuf = (fireLine.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data
+    const mutualBuf = (mutualLine.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data
+    const friendlyBuf = (friendlyLine.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data
+    const hostileBuf = (hostileLine.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data
     let np = 0
-    let nf = 0
+    let nMutual = 0
+    let nFriendly = 0
+    let nHostile = 0
     const push = (buf: InterleavedBuffer, n: number, a: SurfacePoint, b: SurfacePoint) => {
       if (n >= MAX_SEGMENTS) return n
       const array = buf.array as Float32Array
@@ -572,6 +621,7 @@ function GroundLines({ bodyName }: { bodyName: string }) {
       array[o + 5] = b.z * r
       return n + 1
     }
+    const seenPairs = new Set<string>()
     for (const army of armies) {
       for (const u of army.units) {
         if (!u.position) continue
@@ -584,22 +634,38 @@ function GroundLines({ bodyName }: { bodyName: string }) {
         }
         if (u.firingAtId) {
           const target = byId.get(u.firingAtId)
-          if (target?.position) nf = push(fireBuf, nf, u.position, target.position)
+          if (!target?.position) continue
+          const key = u.id < u.firingAtId ? `${u.id}|${u.firingAtId}` : `${u.firingAtId}|${u.id}`
+          if (seenPairs.has(key)) continue
+          seenPairs.add(key)
+          const mutual = target.firingAtId === u.id
+          const kind = classifyFireLine(army.ownerId, target.ownerId, mutual, player)
+          if (kind === 'mutual') nMutual = push(mutualBuf, nMutual, u.position, target.position)
+          else if (kind === 'friendly') nFriendly = push(friendlyBuf, nFriendly, u.position, target.position)
+          else nHostile = push(hostileBuf, nHostile, u.position, target.position)
         }
       }
     }
     pathBuf.needsUpdate = true
-    fireBuf.needsUpdate = true
+    mutualBuf.needsUpdate = true
+    friendlyBuf.needsUpdate = true
+    hostileBuf.needsUpdate = true
     pathLine.geometry.instanceCount = np
-    fireLine.geometry.instanceCount = nf
+    mutualLine.geometry.instanceCount = nMutual
+    friendlyLine.geometry.instanceCount = nFriendly
+    hostileLine.geometry.instanceCount = nHostile
     pathLine.visible = np > 0
-    fireLine.visible = nf > 0
+    mutualLine.visible = nMutual > 0
+    friendlyLine.visible = nFriendly > 0
+    hostileLine.visible = nHostile > 0
   })
 
   return (
     <>
       <Line ref={pathRef} points={seed} segments color="#4ade80" lineWidth={thickness} transparent opacity={0.9} frustumCulled={false} />
-      <Line ref={fireRef} points={seed} segments color="#ff6b4a" lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
+      <Line ref={mutualRef} points={seed} segments color={FIRE_MUTUAL_COLOR} lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
+      <Line ref={friendlyRef} points={seed} segments color={FIRE_FRIENDLY_COLOR} lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
+      <Line ref={hostileRef} points={seed} segments color={FIRE_HOSTILE_COLOR} lineWidth={thickness} transparent opacity={0.8} frustumCulled={false} />
     </>
   )
 }

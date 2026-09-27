@@ -23,7 +23,7 @@ function status(u: TerrainUnit): string {
 
 // The terrain map's window: the two sides' strength, the roster (click to
 // select), Halt / Clear target, and the way back to the planetary map.
-export function TerrainPanel({ battleId }: { battleId: string }) {
+export function TerrainPanel({ battleId, onRecenter }: { battleId: string; onRecenter?: () => void }) {
   useRelationKey()
   // A string that changes when anything shown does, so this is not redrawn on every step.
   useTerrainStore((s) =>
@@ -51,6 +51,11 @@ export function TerrainPanel({ battleId }: { battleId: string }) {
       <button type="button" className="detail-view-btn" onClick={exitTerrain}>
         Back to the ground map
       </button>
+      {onRecenter && (
+        <button type="button" className="detail-view-btn" onClick={onRecenter}>
+          Recenter camera
+        </button>
+      )}
       {notice && <div className="inspect-status ok">{notice}</div>}
       <div className="inspect-divider" />
       <div className="ground-roster">

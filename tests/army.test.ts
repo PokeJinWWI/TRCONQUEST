@@ -9,6 +9,7 @@
 import { SHIP_CLASSES } from '../src/data/shipData'
 import { ARMY_KINDS, armyKindMaxStrength } from '../src/data/armyData'
 import { UNIT_TYPES } from '../src/data/groundData'
+import { classifyFireLine } from '../src/scene/armyLogic'
 import {
   armyStrength,
   canEmbark,
@@ -32,6 +33,7 @@ import { useTerritoryStore } from '../src/state/territoryStore'
 import { useShipStore, type ShipInstance } from '../src/state/shipStore'
 import { seedStartingArmies } from '../src/scene/gameSetup'
 import { seedStrategicResources } from '../src/scene/shipyardLogic'
+import { SANDBOX_PLAYER_ID } from '../src/data/countryRoster'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -141,6 +143,11 @@ console.log('\n=== 4. Landing: war, orbital superiority, and a clear site ===')
   check('landing at home is unloading, not an invasion', home.ok && home.kind === 'disembark')
   check('an empty transport has nothing to land', !landingCheck(t, [], [t], owners, {}, atWar).ok)
   check("an unclaimed body can't be invaded", !landingCheck(orbiting('t1', MARS, 'troop-transport', 'Earth'), cargo, [], owners, {}, atWar).ok)
+  // Sandbox ground never gets an owner, so a no-nation faction needs another
+  // way onto it — there's no invasion to fight over ground nobody holds.
+  const rogueCargo = [army(SANDBOX_PLAYER_ID, 'assault', aboard('t2'))]
+  const rogueLanding = landingCheck(orbiting('t2', SANDBOX_PLAYER_ID, 'troop-transport', 'Earth'), rogueCargo, [], owners, {}, atWar)
+  check('a sandbox faction can still land on unclaimed ground', rogueLanding.ok && rogueLanding.kind === 'disembark', rogueLanding.ok ? '' : rogueLanding.reason)
 
   // Where on the surface.
   const venus = groundSurface('Venus', owners)!
@@ -253,6 +260,14 @@ console.log("\n=== 8. The player's orders to individual units ===")
   check('militia hold their posts even when ordered', !st().orderUnits([marsGarrison.units[0].id], goal).ok)
   st().targetUnit([first.id], venusGarrison.units[0].id)
   check('focus fire can be set on an enemy unit', after()[0].targetUnitId === venusGarrison.units[0].id)
+}
+
+console.log('\n=== N. Fire-line colour (matches the space combat scheme) ===')
+{
+  check('a fight not involving the player reads as mutual (yellow)', classifyFireLine(VENUS, ORION, false, MARS) === 'mutual')
+  check('two sides trading fire read as mutual even when the player is one of them', classifyFireLine(MARS, VENUS, true, MARS) === 'mutual')
+  check('the player firing on someone not firing back is a free shot (green)', classifyFireLine(MARS, VENUS, false, MARS) === 'friendly')
+  check("someone firing on the player who isn't firing back is unreturned fire (red)", classifyFireLine(VENUS, MARS, false, MARS) === 'hostile')
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

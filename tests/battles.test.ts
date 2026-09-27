@@ -182,11 +182,13 @@ console.log('\n=== 4. The Outliner\'s army groups ===')
   const transport = spawnOwnedShip('troop-transport', ME, 'sol', 'Earth')!
   const armies = useArmyStore.getState().armies
   const groups = playerArmyGroups(armies, useShipStore.getState().ships, ME)
-  check("only the player's armies are listed", groups.length === 2)
+  check("only the player's armies are listed", groups.length === 3)
   const earth = groups.find((g) => g.bodyName === 'Earth')
   check('one row per world, counting each kind', earth?.detail === '2 assault · 1 garrison', earth?.detail)
   check('moons get their own row like any world', groups.some((g) => g.bodyName === 'Luna' && g.detail === '1 marine'))
   check('a world row knows its system (to open the ground map)', earth?.starId === 'sol')
+  const empty = groups.find((g) => g.shipId === transport)
+  check('an idle transport still gets a row, empty', empty?.detail === 'Empty' && empty.label.startsWith('Aboard '), empty?.label)
   check('nothing to list without a player', playerArmyGroups(armies, [], null).length === 0)
   // Embark one: it moves to its transport's row.
   const assault = armies.find((a) => a.ownerId === ME && a.kind === 'assault')!
