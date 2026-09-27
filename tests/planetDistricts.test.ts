@@ -129,7 +129,8 @@ console.log('\n=== 5. Complex mode: districts that house buildings ===')
   const mars = st.worlds.find((w) => w.name === 'Mars')!
   check('seeded capacity is whole district levels', DISTRICT_TYPES.every((d) => mars.districtCapacity[d] === D.districtLevels(mars)[d] * D.SLOTS_PER_DISTRICT_LEVEL), JSON.stringify(D.districtLevels(mars)))
   check('every seeded world fits its land and houses its buildings', st.worlds.every((w) => D.districtLevelsTotal(w) <= D.landOfWorld(w) && DISTRICT_TYPES.every((d) => districtUsage(w)[d] <= w.districtCapacity[d])))
-  check('Mars has 15 land (a small planet), Venus 24', D.landOfWorld(mars) === 15 && D.landOfWorld(st.worlds.find((w) => w.name === 'Venus')!) === 24)
+  // Mars's seed already fills its 15 land; its capital's Military level adds one.
+  check('Mars has 15 land (a small planet) + its capital military level, Venus 24', D.landOfWorld(mars) === Math.max(15, D.districtLevelsTotal(mars)) && D.districtLevels(mars).military === 1 && D.landOfWorld(st.worlds.find((w) => w.name === 'Venus')!) === 24, `Mars ${D.landOfWorld(mars)}`)
   const bonus = D.districtBonus(mars, 'industrial')
   check('a busy industrial district has an ecosystem bonus', bonus.cluster > 0 && bonus.total <= D.CLUSTER_MAX + D.LINK_MAX, `+${(bonus.total * 100).toFixed(1)}%`)
   // Developing a district: the order doesn't take a building slot, and it lands as +8 slots.

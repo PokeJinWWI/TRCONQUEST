@@ -292,6 +292,7 @@ interface EconomyStore {
   // Foreign buildings (scene/holdings.ts): urban slots taken, per world name,
   // and money in/out of a country's treasury.
   setForeignSlots: (byBody: Record<string, number>) => void
+  setMilitarySlots: (byBody: Record<string, number>) => void
   adjustTreasury: (countryId: string, amount: number) => void
   cancelConstruction: (worldId: string, orderId: string) => void
   // State override: pin a building to a method. On a private building under a
@@ -574,6 +575,17 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
         if ((w.foreignSlots ?? 0) === n) return w
         changed = true
         return { ...w, foreignSlots: n > 0 ? n : undefined }
+      })
+      return changed ? { worlds } : state
+    }),
+  setMilitarySlots: (byBody) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const n = byBody[w.name] ?? 0
+        if ((w.militarySlots ?? 0) === n) return w
+        changed = true
+        return { ...w, militarySlots: n > 0 ? n : undefined }
       })
       return changed ? { worlds } : state
     }),

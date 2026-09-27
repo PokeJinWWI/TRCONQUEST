@@ -93,13 +93,17 @@ export const CONSTRUCTION_OUTPUT: Record<string, number> = {
 // district holds power + heavy industry; the resource district holds mines and
 // farms. Each district has a bounded number of slots (a building's level = its
 // slots), so construction competes for space.
-export type DistrictType = 'core' | 'urban' | 'industrial' | 'resource'
-export const DISTRICT_TYPES: DistrictType[] = ['core', 'urban', 'industrial', 'resource']
+// The military district holds no economy buildings: it houses the nation's
+// planetary defenses (fortress, shield, battery — data/defenseData.ts), counted
+// through World.militarySlots.
+export type DistrictType = 'core' | 'urban' | 'industrial' | 'resource' | 'military'
+export const DISTRICT_TYPES: DistrictType[] = ['core', 'urban', 'industrial', 'resource', 'military']
 export const DISTRICT_LABELS: Record<DistrictType, string> = {
   core: 'Core',
   urban: 'Urban',
   industrial: 'Industrial',
   resource: 'Resource',
+  military: 'Military',
 }
 const CATEGORY_DISTRICT: Record<BuildingCategory, DistrictType> = {
   government: 'core',

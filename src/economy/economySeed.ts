@@ -2,6 +2,7 @@ import { GOODS, GOOD_IDS, type GoodId } from './goods'
 import { DISTRICT_TYPES, POP_CLASSES, RECIPES, getMethod, type DistrictType, type PopClass } from './recipes'
 import { SLOTS_PER_DISTRICT_LEVEL } from './districts'
 import { landForBody } from '../scene/bodyLand'
+import { COUNTRIES as NATIONS } from '../data/countryData'
 import { DEPLETABLE_GOODS } from './economyTick'
 import { governorAppointmentDef, type CentralBank } from './centralBank'
 import type { ReligionMix } from './demographics'
@@ -184,6 +185,8 @@ function buildWorld(spec: WorldSpec): World {
       urban: Math.max(10, Math.round(spec.population / 250)),
       industrial: Math.max(16, Math.round(spec.population / 72)),
       resource: Math.max(12, Math.round(spec.population / 130)),
+      // A capital starts with one military level: its starting fortress and battery.
+      military: NATIONS.some((c) => c.capitalBodyName === spec.id) ? 1 : 0,
     }),
     pops,
     buildings,
@@ -200,7 +203,7 @@ function seedDistricts(bodyName: string, capacity: Record<DistrictType, number>)
   const districts = {} as Record<DistrictType, number>
   const districtCapacity = {} as Record<DistrictType, number>
   for (const d of DISTRICT_TYPES) {
-    districts[d] = Math.ceil(capacity[d] / SLOTS_PER_DISTRICT_LEVEL)
+    districts[d] = Math.ceil((capacity[d] ?? 0) / SLOTS_PER_DISTRICT_LEVEL)
     districtCapacity[d] = districts[d] * SLOTS_PER_DISTRICT_LEVEL
   }
   const total = DISTRICT_TYPES.reduce((n, d) => n + districts[d], 0)

@@ -1401,10 +1401,11 @@ export function constructionCapacityOf(world: World): number {
 }
 
 export function districtUsage(world: World): Record<DistrictType, number> {
-  const used = { core: 0, urban: 0, industrial: 0, resource: 0 } as Record<DistrictType, number>
+  const used = { core: 0, urban: 0, industrial: 0, resource: 0, military: 0 } as Record<DistrictType, number>
   for (const b of world.buildings) used[districtOfRecipe(b.recipeId)] += b.level
   for (const o of world.constructionQueue) if (!o.district) used[districtOfRecipe(o.recipeId)] += 1
   used.urban += world.foreignSlots ?? 0
+  used.military += world.militarySlots ?? 0
   return used
 }
 

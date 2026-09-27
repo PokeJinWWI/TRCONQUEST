@@ -91,6 +91,9 @@ export interface WorldState {
   // Urban slots taken by other nations' embassies and branch offices
   // (scene/holdings.ts, kept in sync by the holdings store). Absent = 0.
   foreignSlots?: number
+  // Military slots taken by planetary defenses (state/defenseStore.ts keeps it
+  // in sync). Absent = 0.
+  militarySlots?: number
 }
 
 // A project in the construction queue: one building level, or one district level.
@@ -280,7 +283,7 @@ export function worldLevels(w: WorldState): number {
 // --- Districts -------------------------------------------------------------------
 // Buildings in a district (across its building families).
 export function buildingsInDistrict(w: WorldState, d: SimpleDistrictId): number {
-  let n = d === 'urban' ? w.foreignSlots ?? 0 : 0
+  let n = d === 'urban' ? w.foreignSlots ?? 0 : d === 'military' ? w.militarySlots ?? 0 : 0
   for (const b of SIMPLE_DISTRICT_DEFS[d].buildings) n += w.buildings[b] ?? 0
   return n
 }
@@ -373,7 +376,8 @@ export function amenitiesHappiness(ratio: number): number {
 // infrastructure), capped; industry also gains from research parks (academic
 // district levels) on the same world.
 export function districtBonus(w: WorldState, d: SimpleDistrictId): { cluster: number; link: number; total: number } {
-  const cluster = Math.min(CLUSTER_MAX, CLUSTER_PER_BUILDING * Math.max(0, buildingsInDistrict(w, d) - 1))
+  // Defenses in the military district make nothing, so they cluster nothing.
+  const cluster = d === 'military' ? 0 : Math.min(CLUSTER_MAX, CLUSTER_PER_BUILDING * Math.max(0, buildingsInDistrict(w, d) - 1))
   const link = d === 'industrial' ? Math.min(LINK_MAX, ACADEMIC_TO_INDUSTRIAL * districtsOf(w).academic) : 0
   return { cluster, link, total: cluster + link }
 }

@@ -30,6 +30,7 @@ import { STARTING_STOCKPILE } from '../data/shipyardData'
 import type { TechCategory } from '../data/techData'
 import { controllerOf, seedBodyOwners, type OwnerMap } from '../scene/territory'
 import { landForBody } from '../scene/bodyLand'
+import { COUNTRIES } from '../data/countryData'
 import { useTerritoryStore } from './territoryStore'
 import { useResourceStore } from './resourceStore'
 import { useTechStore } from './techStore'
@@ -106,8 +107,11 @@ function seedWorlds(): Record<string, WorldState> {
     const base: WorldState = { bodyName, population: seed.population, buildings: { ...seed.buildings } }
     // Just enough district levels to house the seed buildings, plus a small
     // urban district on inhabited worlds (for embassies and foreign firms).
-    const districts = { ...districtsOf(base), urban: inhabited ? 1 : 0 }
-    worlds[bodyName] = { ...base, districts, land: landForBody(bodyName) }
+    // A capital also starts with one military level (its starting fortress and battery).
+    const capital = COUNTRIES.some((c) => c.capitalBodyName === bodyName)
+    const districts = { ...districtsOf(base), urban: inhabited ? 1 : 0, military: capital ? 1 : 0 }
+    const levels = Object.values(districts).reduce((n, v) => n + v, 0)
+    worlds[bodyName] = { ...base, districts, land: Math.max(landForBody(bodyName), levels) }
   }
   return worlds
 }
@@ -199,6 +203,7 @@ interface AbstractEconomyStore {
   // Foreign buildings (scene/holdings.ts): urban slots taken, per body, and
   // money in/out of a nation's treasury.
   setForeignSlots: (byBody: Record<string, number>) => void
+  setMilitarySlots: (byBody: Record<string, number>) => void
   adjustTreasury: (countryId: string, amount: number) => void
   reset: () => void
 }
@@ -349,6 +354,18 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
         const n = byBody[body] ?? 0
         if ((w.foreignSlots ?? 0) === n) continue
         worlds[body] = { ...w, foreignSlots: n > 0 ? n : undefined }
+        changed = true
+      }
+      return changed ? { worlds } : s
+    }),
+  setMilitarySlots: (byBody) =>
+    set((s) => {
+      let changed = false
+      const worlds = { ...s.worlds }
+      for (const [body, w] of Object.entries(s.worlds)) {
+        const n = byBody[body] ?? 0
+        if ((w.militarySlots ?? 0) === n) continue
+        worlds[body] = { ...w, militarySlots: n > 0 ? n : undefined }
         changed = true
       }
       return changed ? { worlds } : s

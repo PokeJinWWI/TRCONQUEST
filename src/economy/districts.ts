@@ -26,6 +26,7 @@ export const DISTRICT_DESCRIPTIONS: Record<DistrictType, string> = {
   urban: 'Services and city life — clinics, schools, shops. A lively urban core also lifts the industry around it.',
   industrial: 'Factories, refineries, power and shipyards. Industry clusters: every plant here makes the others more productive.',
   resource: 'Mines, wells, farms and forestry. Extraction sites here share rail, storage and processing.',
+  military: 'Fortresses, shield generators and defense batteries — the world’s planetary defenses. Each takes one slot while it stands.',
 }
 
 // District levels built — or, for a world that predates districts, enough to
@@ -54,7 +55,7 @@ export function freeLandOfWorld(world: Pick<World, 'districtCapacity' | 'distric
 
 // Building levels in each district (built buildings only).
 export function buildingLevelsByDistrict(world: Pick<World, 'buildings'>): Record<DistrictType, number> {
-  const out = { core: 0, urban: 0, industrial: 0, resource: 0 } as Record<DistrictType, number>
+  const out = { core: 0, urban: 0, industrial: 0, resource: 0, military: 0 } as Record<DistrictType, number>
   for (const b of world.buildings) out[districtOfRecipe(b.recipeId)] += b.level
   return out
 }

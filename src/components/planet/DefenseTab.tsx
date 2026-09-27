@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS, DEFENSE_DEFS, DEFENSE_KINDS, type DefenseKind } from '../../data/defenseData'
 import { RESOURCE_TYPES, type ResourceId } from '../../data/resourceData'
 import { ownerDisplay } from '../../data/countryRoster'
-import { useDefenseStore, canBuildDefense } from '../../state/defenseStore'
+import { useDefenseStore, canBuildDefense, militaryInUse } from '../../state/defenseStore'
 import { useTerritoryStore } from '../../state/territoryStore'
 import { useGameTimeStore } from '../../state/gameTimeStore'
 import { useArmyStore } from '../../state/armyStore'
@@ -16,6 +16,8 @@ import { canBombard } from '../../scene/bombardment'
 import { queueBombard } from '../../scene/commsVisual'
 import { controllerOf } from '../../scene/territory'
 import { PlanetIcon } from './PlanetIcons'
+import { KeySitesList } from './KeySites'
+import { militarySlotsOf } from '../../state/nationEconomy'
 
 // The planet screen's Defense tab (both economy modes): the world's defense
 // installations (status, integrity, who holds them — they can be captured),
@@ -95,7 +97,10 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
         </div>
       )}
 
-      <div className="econ-subtitle">Installations</div>
+      <div className="econ-subtitle" title="The buildings that are this world's key nodes: an invader must hold them all to take it">Key sites</div>
+      <KeySitesList bodyName={bodyName} />
+
+      <div className="econ-subtitle" style={{ marginTop: 10 }}>Installations</div>
       {here.length === 0 && <div className="abs-dim">None — this world has no fixed defenses.</div>}
       <div className="pl-def-list">
         {here.map((i) => {
@@ -109,7 +114,7 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
               <PlanetIcon id={i.kind} size={26} />
               <div className="pl-def-body">
                 <div className="pl-def-name">
-                  {def.name}
+                  {i.name ?? def.name}
                   {building && <span className="abs-dim"> · ready in {Math.ceil(i.readySimDays - simDays)} days</span>}
                   {captured && <span className="econ-neg"> · captured</span>}
                 </div>
@@ -126,6 +131,9 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
       {mine && (
         <>
           <div className="econ-subtitle" style={{ marginTop: 10 }}>Build</div>
+          <div className="abs-dim" title="Fortresses, shields and batteries each take a Military district slot; develop the district on the Buildings tab">
+            Military district: {militaryInUse(bodyName, installations)} / {militarySlotsOf(bodyName)} slots used
+          </div>
           {message && <div className="econ-neg pl-message">{message}</div>}
           <div className="pl-def-build">
             {DEFENSE_KINDS.map((kind) => {

@@ -6,7 +6,7 @@ import { useAbstractEconomyStore } from './abstractEconomyStore'
 import { useEconomyStore, worldByName } from './economyStore'
 import { useTerritoryStore } from './territoryStore'
 import { useDiplomacyStore, atWar } from './diplomacyStore'
-import { abstractReport, freeSlots } from '../economy-abstract/abstractEconomy'
+import { abstractReport, districtSlots, freeSlots } from '../economy-abstract/abstractEconomy'
 import { stockOf } from './abstractEconomyStore'
 import { districtUsage, estimateWorldGdp, TICKS_PER_YEAR } from '../economy/economyTick'
 import { relationIn } from './diplomacyStore'
@@ -52,6 +52,24 @@ export function freeUrbanSlots(bodyName: string): number {
   }
   const w = worldByName(useEconomyStore.getState().worlds, bodyName)
   return w ? w.districtCapacity.urban - districtUsage(w).urban : 0
+}
+
+// Military district slots on a world (both modes): how many its levels offer.
+// What's in them is the defense store's (planetary defenses of the military
+// kinds), so the caller counts those itself.
+export function militarySlotsOf(bodyName: string): number {
+  if (simple()) {
+    const w = useAbstractEconomyStore.getState().worlds[bodyName]
+    return w ? districtSlots(w, 'military') : 0
+  }
+  const w = worldByName(useEconomyStore.getState().worlds, bodyName)
+  return w ? w.districtCapacity.military ?? 0 : 0
+}
+
+// Tell both economies how many military slots each world's defenses take.
+export function syncMilitarySlots(byBody: Record<string, number>): void {
+  if (simple()) useAbstractEconomyStore.getState().setMilitarySlots(byBody)
+  else useEconomyStore.getState().setMilitarySlots(byBody)
 }
 
 export function holdingContext(): HoldingContext {

@@ -44,7 +44,7 @@ console.log('=== 1. The roster: every building lives in one district and does so
 {
   check('17 buildings', SIMPLE_BUILDINGS.length === 17, SIMPLE_BUILDINGS.join(', '))
   check('each building is listed under its own district', SIMPLE_BUILDINGS.every((b) => SIMPLE_DISTRICT_DEFS[DISTRICT_OF_BUILDING[b]].buildings.includes(b)))
-  check('every district but none is empty', SIMPLE_DISTRICTS.every((d) => SIMPLE_DISTRICT_DEFS[d].buildings.length > 0))
+  check('every economy district has buildings (the military one holds defenses)', SIMPLE_DISTRICTS.every((d) => (d === 'military') === (SIMPLE_DISTRICT_DEFS[d].buildings.length === 0)))
   check('every building has an output, jobs and a cost', SIMPLE_BUILDINGS.every((b) => Object.keys(SIMPLE_BUILDING_DEFS[b].outputs).length > 0 && SIMPLE_BUILDING_DEFS[b].jobs > 0 && SIMPLE_BUILDING_DEFS[b].cost > 0))
   check('the factories are four separate buildings', ['civilianFactory', 'alloyFoundry', 'consumerFactory', 'electronicsPlant'].every((b) => DISTRICT_OF_BUILDING[b as SimpleBuildingId] === 'industrial'))
 }

@@ -38,7 +38,9 @@ import {
 import { getCountry } from '../../data/countryData'
 import { formatPop } from '../../economy/format'
 import { PlanetIcon } from './PlanetIcons'
+import { usePlanetViewStore } from '../../state/planetViewStore'
 import { ForeignHoldingsRow } from './ForeignHoldings'
+import { CivicDistrict, MilitaryTiles } from './KeySites'
 
 // Simple mode's planet screen tabs (Stellaris-style): the world's summary
 // numbers, its districts with their building slots, and its population.
@@ -98,7 +100,7 @@ function pickerSummary(b: SimpleBuildingId): string {
 }
 
 // --- Districts & Buildings --------------------------------------------------------
-function BuildingTile({ b, staffing, bonus, selected, onClick }: { b: SimpleBuildingId; staffing: number; bonus: number; selected: boolean; onClick: () => void }) {
+function BuildingTile({ b, staffing, bonus, selected, onClick, count }: { b: SimpleBuildingId; staffing: number; bonus: number; selected: boolean; onClick: () => void; count?: number }) {
   const def = SIMPLE_BUILDING_DEFS[b]
   return (
     <button
@@ -109,6 +111,7 @@ function BuildingTile({ b, staffing, bonus, selected, onClick }: { b: SimpleBuil
     >
       <PlanetIcon id={b} size={22} />
       <span className="pl-tile-name">{def.name}</span>
+      {count !== undefined && count > 1 && <span className="pl-tile-level">×{count}</span>}
       <span className="pl-tile-bar"><span style={{ width: pct(Math.min(1, staffing)) }} /></span>
     </button>
   )
@@ -229,6 +232,8 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   const [picking, setPicking] = useState<SimpleDistrictId | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [selected, setSelected] = useState<SimpleBuildingId | null>(null)
+  const grouped = usePlanetViewStore((s) => s.groupBuildings)
+  const setGrouped = usePlanetViewStore((s) => s.setGroupBuildings)
   if (!w) return <div className="abs-dim">No economy on this world.</div>
 
   const q = (queue ?? []).filter((o) => o.bodyName === bodyName)
@@ -251,8 +256,13 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
       <div className="pl-land" title="Each district level uses one unit of land; a world's land comes from its size.">
         Land <b>{districtLevelsTotal(w)}</b> / {landOf(w)} district levels
         {land > 0 ? <span className="abs-dim"> · {land} free</span> : <span className="econ-neg"> · full</span>}
+        <label className="pl-group-toggle" title="Show identical buildings as one tile with a count">
+          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> Group identical
+        </label>
       </div>
       {message && <div className="econ-neg pl-message">{message}</div>}
+
+      {(!only || only === 'urban') && <CivicDistrict bodyName={bodyName} />}
 
       {shown.map((d) => {
         const def = SIMPLE_DISTRICT_DEFS[d]
@@ -262,8 +272,13 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
         const queuedHere = q.filter((o) => o.building && DISTRICT_OF_BUILDING[o.building] === d)
         const queuedLevels = q.filter((o) => o.district === d)
         const free = freeSlots(w, queue ?? [], d)
-        const tiles: SimpleBuildingId[] = []
-        for (const b of def.buildings) for (let i = 0; i < (w.buildings[b] ?? 0); i++) tiles.push(b)
+        const tiles: { b: SimpleBuildingId; count?: number }[] = []
+        for (const b of def.buildings) {
+          const n = w.buildings[b] ?? 0
+          if (n <= 0) continue
+          if (grouped) tiles.push({ b, count: n })
+          else for (let i = 0; i < n; i++) tiles.push({ b })
+        }
         return (
           <div key={d} className={`pl-district pl-district-${d}`}>
             <div className="pl-district-head" title={def.description}>
@@ -282,19 +297,22 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                 </button>
               )}
             </div>
-            {def.buildings.length === 0 ? (
+            {d === 'military' ? (
+              <MilitaryTiles bodyName={bodyName} playerId={countryId} canBuild={canBuild} slots={slots} grouped={grouped} />
+            ) : def.buildings.length === 0 ? (
               <ForeignHoldingsRow bodyName={bodyName} playerId={countryId} />
             ) : (
               <div className="pl-grid">
-                {tiles.map((b, i) => <BuildingTile key={`${b}-${i}`} b={b} staffing={staffing} bonus={bonus.total} selected={selected === b} onClick={() => setSelected(selected === b ? null : b)} />)}
+                {tiles.map(({ b, count }, i) => <BuildingTile key={`${b}-${i}`} b={b} count={count} staffing={staffing} bonus={bonus.total} selected={selected === b} onClick={() => setSelected(selected === b ? null : b)} />)}
                 {queuedHere.map((o) => <QueuedTile key={o.id} o={o} />)}
-                {Array.from({ length: Math.max(0, free) }, (_, i) =>
+                {Array.from({ length: grouped ? Math.min(1, Math.max(0, free)) : Math.max(0, free) }, (_, i) =>
                   canBuild ? (
                     <button key={`free-${i}`} type="button" className="pl-tile empty" title={`Build in the ${def.name}`} onClick={() => setPicking(picking === d ? null : d)}>
                       <span className="pl-plus">+</span>
+                      {grouped && <span className="pl-tile-name">{free} free</span>}
                     </button>
                   ) : (
-                    <div key={`free-${i}`} className="pl-tile empty" title="Empty slot" />
+                    <div key={`free-${i}`} className="pl-tile empty" title="Empty slot">{grouped && <span className="pl-tile-name">{free} free</span>}</div>
                   ),
                 )}
               </div>

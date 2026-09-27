@@ -1,4 +1,5 @@
-import { keySlotLabel } from './keyNames'
+import { cityOfNode, KEY_HOLD_BONUS, KEY_ROLE, keyNameOf } from './keyNames'
+import { regionAt } from './bodyTopography'
 import { useEffect, useMemo, useRef } from 'react'
 import { KeyboardPan } from './KeyboardPan'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
@@ -19,7 +20,7 @@ import { atWar } from '../state/diplomacyStore'
 import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { groundSurface, holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
 import { bodyGroundInfo, TERRAIN_IDS, type BodySurface } from './planetTerrain'
-import { nearestNode, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
+import { nearestNode, nodePoint, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
 import { HoloGlobe, HoloHalo, type HoloNode } from './HoloGlobe'
 import { hologramTint } from './HoloPlanet'
 import { FlatMapSurface } from './FlatMap'
@@ -27,7 +28,7 @@ import { ProjectionSwitch } from '../components/ProjectionSwitch'
 import { PlanetIcon } from '../components/planet/PlanetIcons'
 import { useDefenseStore } from '../state/defenseStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { holderOfInstallation, isActive } from './defenseLogic'
+import { holderOfInstallation, isActive, withInstallationKeys } from './defenseLogic'
 import { DEFENSE_DEFS } from '../data/defenseData'
 import { FLAT_HEIGHT, FLAT_WIDTH, crossesSeam, flatPos, fromFlat } from './mapProjection'
 import { HOLO_TERRAIN } from './holoTerrain'
@@ -62,7 +63,19 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const exitGround = useViewStore((s) => s.exitGround)
   const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
-  const surface = useMemo(() => groundSurface(bodyName, bodyOwner), [bodyName, bodyOwner])
+  // With the key nodes installations add (active fortresses, a built
+  // spaceport) — keyed on which are active, so the map re-derives only then.
+  const installations = useDefenseStore((s) => s.installations)
+  const activeKeys = useGameTimeStore((t) =>
+    installations
+      .filter((i) => i.bodyName === bodyName && (i.kind === 'fortress' || i.kind === 'spaceport') && isActive(i, t.simDays))
+      .map((i) => i.id)
+      .join(),
+  )
+  const surface = useMemo(() => {
+    const s = groundSurface(bodyName, bodyOwner)
+    return s && activeKeys ? withInstallationKeys(s, useDefenseStore.getState().installations, useGameTimeStore.getState().simDays) : s
+  }, [bodyName, bodyOwner, activeKeys])
 
   // Leaving the map ends any landing/spawn pick, and drops the selection.
   // Only once the view has really changed — React's dev StrictMode runs this
@@ -107,6 +120,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <UnitMarkers bodyName={bodyName} />
           <GroundLines bodyName={bodyName} />
           <FlatControls controlsRef={controlsRef} />
+          <CameraFocus controlsRef={controlsRef} flat />
           <KeyboardPan controlsRef={controlsRef} mode="pan" />
         </Canvas>
       ) : (
@@ -124,6 +138,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <GroundLines bodyName={bodyName} />
           <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitGround} controlsRef={controlsRef} />
           <OrbitControls ref={controlsRef} enablePan={false} enableDamping dampingFactor={0.08} minDistance={MIN_DISTANCE} maxDistance={MAX_DISTANCE} />
+          <CameraFocus controlsRef={controlsRef} flat={false} />
           <KeyboardPan controlsRef={controlsRef} mode="orbit" />
         </Canvas>
       )}
@@ -133,6 +148,29 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
       <HoverTooltip bodyName={bodyName} surface={surface} />
     </div>
   )
+}
+
+// Swings the camera onto a node when the Ground panel asks (focusRequest):
+// the globe turns to face it at the current distance; the flat map pans to it.
+function CameraFocus({ controlsRef, flat }: { controlsRef: React.RefObject<OrbitControlsImpl | null>; flat: boolean }) {
+  const request = useGroundViewStore((s) => s.focusRequest)
+  const camera = useThree((s) => s.camera)
+  useEffect(() => {
+    if (!request) return
+    const p = nodePoint(request.node)
+    const controls = controlsRef.current
+    if (flat) {
+      const [x, y] = flatPos(p)
+      controls?.target.set(x, y, 0)
+      camera.position.set(x, y, camera.position.z)
+    } else {
+      const d = camera.position.length()
+      camera.position.set(p.x * d, p.y * d, p.z * d)
+      controls?.target.set(0, 0, 0)
+    }
+    controls?.update()
+  }, [request?.seq])
+  return null
 }
 
 // The flat map's camera: fitted to the whole map, dragged to pan (right-click
@@ -378,10 +416,18 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
         const holder = holderOf(bodyName, slot.node, owners, { [bodyName]: holders ?? {} })
         const color = holder ? ownerDisplay(holder).color : '#cfd8e3'
         const p = { x: mesh.positions[slot.node * 3], y: mesh.positions[slot.node * 3 + 1], z: mesh.positions[slot.node * 3 + 2] }
+        const kn = keyNameOf(surface, slot)
+        const region = regionAt(bodyName, slot.node)
         return (
           <FacingHtml key={slot.node} point={p} radius={GLOBE_RADIUS * 1.01}>
-            <div className="ground-key-marker" style={{ borderColor: color, color }} title={`${keySlotLabel(bodyName, slot, owners[bodyName])} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}`}>
-              {KEY_GLYPHS[slot.kind]}
+            <div
+              className="ground-key"
+              title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}\n\n${KEY_ROLE[slot.kind]}\n${KEY_HOLD_BONUS}`}
+            >
+              <div className="ground-key-marker" style={{ borderColor: color, color }}>
+                {KEY_GLYPHS[slot.kind]}
+              </div>
+              <div className="ground-key-name" style={{ color }}>{kn.label}</div>
             </div>
           </FacingHtml>
         )
@@ -677,7 +723,12 @@ function HoverTooltip({ bodyName, surface }: { bodyName: string; surface: BodySu
   return (
     <div className="ground-hover">
       <strong>{terrain.name}</strong>
-      {key && <span> · {keySlotLabel(bodyName, key, owners[bodyName])}</span>}
+      {key ? (
+        <span> · {keyNameOf(surface, key).label}</span>
+      ) : terrain.id === 'urban' && cityOfNode(surface, node) ? (
+        <span> · part of {cityOfNode(surface, node)!.label}</span>
+      ) : null}
+      {regionAt(bodyName, node) && <span> · {regionAt(bodyName, node)}</span>}
       <span>
         {' '}
         · movement: {pace} · cover: {describeDefense(terrain.defense)}

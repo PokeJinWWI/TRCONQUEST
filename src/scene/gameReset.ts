@@ -33,6 +33,7 @@ import { useDefenseStore } from '../state/defenseStore'
 import { useBombardmentStore } from '../state/bombardmentStore'
 import { useHoldingsStore } from '../state/holdingsStore'
 import { useWindowLayoutStore } from '../state/windowLayoutStore'
+import { usePlanetViewStore } from '../state/planetViewStore'
 
 // Every store that holds game (or session) state. Not settingsStore.
 interface Resettable {
@@ -45,6 +46,7 @@ const GAME_STORES: Resettable[] = [
   useBombardmentStore,
   useHoldingsStore,
   useWindowLayoutStore,
+  usePlanetViewStore,
   useAiStore,
   useArmyStore,
   useBattleStore,

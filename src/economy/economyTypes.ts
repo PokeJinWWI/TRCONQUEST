@@ -182,6 +182,9 @@ export interface World {
   // Urban slots taken by other nations' embassies and branch offices
   // (scene/holdings.ts, kept in sync by the holdings store). Absent = 0.
   foreignSlots?: number
+  // Military slots taken by planetary defenses (state/defenseStore.ts keeps it
+  // in sync). Absent = 0.
+  militarySlots?: number
   pops: Pop[]
   buildings: Building[]
   constructionQueue: ConstructionOrder[]

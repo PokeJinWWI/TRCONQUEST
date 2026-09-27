@@ -50,6 +50,8 @@ export type KeyKind = 'capital' | 'city' | 'spaceport' | 'outpost' | 'fortress'
 export interface KeySlot {
   node: number
   kind: KeyKind
+  // A landmark installation's own name (defenseLogic.withInstallationKeys).
+  name?: string
 }
 
 export interface BodySurface {

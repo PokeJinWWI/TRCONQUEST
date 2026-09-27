@@ -1,8 +1,10 @@
 import { create } from 'zustand'
-import { DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
+import { DEFENSE_DEFS, isMilitaryKind, type DefenseKind } from '../data/defenseData'
 import { controllerOf } from '../scene/territory'
 import { groundSurface } from '../scene/groundLogic'
-import { holderOfInstallation, hostileBatteries, placeInstallation, shieldBlocksLanding, type Installation } from '../scene/defenseLogic'
+import { holderOfInstallation, hostileBatteries, placeInstallation, shieldBlocksLanding, withInstallationKeys, type Installation } from '../scene/defenseLogic'
+import { militarySlotsOf, syncMilitarySlots } from './nationEconomy'
+import type { BodySurface } from '../scene/planetTerrain'
 import { atWar } from './diplomacyStore'
 import { useGameTimeStore } from './gameTimeStore'
 import { missingResources, spendCost } from '../scene/shipyardLogic'
@@ -51,6 +53,25 @@ export function shieldedFor(landerId: string, bodyName: string): (node: number) 
   return (node) => shieldBlocksLanding(bodyName, node, landerId, installations, bodyOwner, nodeHolders, atWar, simDays)
 }
 
+// Military district slots the world's standing defenses take (built or building).
+export function militaryInUse(bodyName: string, installations: Installation[]): number {
+  return installations.filter((i) => i.bodyName === bodyName && isMilitaryKind(i.kind) && i.integrity > 0).length
+}
+function militaryByBody(installations: Installation[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const i of installations) if (isMilitaryKind(i.kind) && i.integrity > 0) out[i.bodyName] = (out[i.bodyName] ?? 0) + 1
+  return out
+}
+
+// A world's ground map as the war sees it now: its key nodes plus those its
+// installations add (active fortresses, a built spaceport — where new armies
+// muster).
+export function liveGroundSurface(bodyName: string): BodySurface | null {
+  const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
+  const installations = useDefenseStore.getState().installations
+  return surface && installations.length > 0 ? withInstallationKeys(surface, installations, useGameTimeStore.getState().simDays) : surface
+}
+
 export function canBuildDefense(countryId: string, bodyName: string, kind: DefenseKind, installations: Installation[]): DefenseResult {
   const { bodyOwner, bodyController } = useTerritoryStore.getState()
   if (bodyOwner[bodyName] !== countryId) return { ok: false, reason: 'Not your world' }
@@ -58,6 +79,16 @@ export function canBuildDefense(countryId: string, bodyName: string, kind: Defen
   const def = DEFENSE_DEFS[kind]
   const here = installations.filter((i) => i.bodyName === bodyName && i.kind === kind).length
   if (here >= def.maxPerWorld) return { ok: false, reason: `At most ${def.maxPerWorld} ${def.name}${def.maxPerWorld === 1 ? '' : 's'} per world` }
+  if (isMilitaryKind(kind)) {
+    const slots = militarySlotsOf(bodyName)
+    if (militaryInUse(bodyName, installations) >= slots)
+      return { ok: false, reason: slots === 0 ? 'Needs a Military district — develop one on this world first' : 'No free Military district slot — develop the Military district another level' }
+  }
+  if (kind === 'spaceport') {
+    const surface = groundSurface(bodyName, bodyOwner)
+    if (!surface) return { ok: false, reason: 'No ground to build on' }
+    if (withInstallationKeys(surface, installations, Infinity).keySlots.some((k) => k.kind === 'spaceport')) return { ok: false, reason: 'This world already has a spaceport' }
+  }
   const missing = missingResources(def.cost, useResourceStore.getState().stateFor(countryId).amounts)
   if (missing.length > 0) return { ok: false, reason: `Not enough ${missing.join(', ')}` }
   return { ok: true }
@@ -90,3 +121,11 @@ export const useDefenseStore = create<DefenseState>((set, get) => ({
   },
   setInstallations: (installations) => set({ installations }),
 }))
+
+// Keep both economies' Military districts showing what stands in them.
+export function resyncMilitarySlots(): void {
+  syncMilitarySlots(militaryByBody(useDefenseStore.getState().installations))
+}
+useDefenseStore.subscribe((s, prev) => {
+  if (s.installations !== prev.installations) syncMilitarySlots(militaryByBody(s.installations))
+})

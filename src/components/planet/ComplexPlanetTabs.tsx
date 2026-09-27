@@ -17,6 +17,9 @@ import { useTerritoryStore } from '../../state/territoryStore'
 import { formatMoney, formatPop } from '../../economy/format'
 import type { Building, BuildingOwner, ConstructionOrder, Country, World } from '../../economy/economyTypes'
 import { PlanetIcon } from './PlanetIcons'
+import { usePlanetViewStore } from '../../state/planetViewStore'
+import { CivicDistrict, MilitaryTiles } from './KeySites'
+import { groupsOf } from './grouping'
 import { ForeignHoldingsRow } from './ForeignHoldings'
 import { BuildingsPanel, ComplexBuildingCard } from '../BuildingsPanel'
 
@@ -27,7 +30,7 @@ import { BuildingsPanel, ComplexBuildingCard } from '../BuildingsPanel'
 // below as "Manage buildings".
 
 const pct = (n: number, d = 0) => `${(n * 100).toFixed(d)}%`
-const DISTRICT_ICON: Record<DistrictType, string> = { core: 'core', urban: 'urban', industrial: 'industrial', resource: 'resource' }
+const DISTRICT_ICON: Record<DistrictType, string> = { core: 'core', urban: 'urban', industrial: 'industrial', resource: 'resource', military: 'military' }
 
 function ownerLabel(owner: BuildingOwner, corpName: (id: string) => string): string {
   return owner.kind === 'state' ? 'State' : owner.kind === 'worker' ? 'Co-op' : corpName(owner.corporationId)
@@ -48,6 +51,21 @@ export function ComplexWorldSummary({ world }: { world: World }) {
         <div className="pl-stat"><span>Queued</span><b>{world.constructionQueue.length}</b></div>
       </div>
     </div>
+  )
+}
+
+// A group of identical buildings (same recipe) shown as one tile with a count.
+function GroupTile({ group, selected, onClick }: { group: Building[]; selected: boolean; onClick: () => void }) {
+  const r = RECIPES[group[0].recipeId]
+  const levels = group.reduce((n, b) => n + b.level, 0)
+  const run = group.reduce((n, b) => n + Math.max(0, Math.min(1, b.throughput)) * b.level, 0) / Math.max(1, levels)
+  return (
+    <button type="button" className={`pl-tile${run < 0.6 ? ' understaffed' : ''}${selected ? ' selected' : ''}`} title={`${r?.label ?? group[0].recipeId} — ${group.length} building${group.length === 1 ? '' : 's'}, ${levels} levels in all\nRunning at ${pct(run)} on average\nClick for details`} onClick={onClick}>
+      <PlanetIcon id={buildingGroup(group[0].recipeId)} size={22} />
+      <span className="pl-tile-name">{r?.label ?? group[0].recipeId}</span>
+      <span className="pl-tile-level">×{group.length}{levels !== group.length ? ` · Lv ${levels}` : ''}</span>
+      <span className="pl-tile-bar"><span style={{ width: pct(run) }} /></span>
+    </button>
   )
 }
 
@@ -90,6 +108,8 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
   const [funder, setFunder] = useState('state')
   const [manage, setManage] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const grouped = usePlanetViewStore((s) => s.groupBuildings)
+  const setGrouped = usePlanetViewStore((s) => s.setGroupBuildings)
 
   const canBuildHere = !!playerId && world.ownerId === playerId && controller === playerId
   const corpName = (id: string) => corporations.find((c) => c.id === id)?.name ?? 'Company'
@@ -105,6 +125,9 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
       <div className="pl-land" title="Each district level uses one unit of land; a world's land comes from its size.">
         Land <b>{districtLevelsTotal(world)}</b> / {landOfWorld(world)} district levels
         {land > 0 ? <span className="abs-dim"> · {land} free</span> : <span className="econ-neg"> · full</span>}
+        <label className="pl-group-toggle" title="Show identical buildings as one tile with a count">
+          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> Group identical
+        </label>
       </div>
       {canBuildHere && (
         <div className="econ-econsystem pl-funder">
@@ -117,6 +140,8 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
           </select>
         </div>
       )}
+
+      <CivicDistrict bodyName={world.name} />
 
       {DISTRICT_TYPES.map((d) => {
         const bonus = districtBonus(world, d, levelsByDistrict)
@@ -143,8 +168,16 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
                 </button>
               )}
             </div>
+            {d === 'military' ? (
+              <MilitaryTiles bodyName={world.name} playerId={playerId} canBuild={canBuildHere} slots={cap} grouped />
+            ) : (
             <div className="pl-grid">
-              {inDistrict.map((b) => <BuildingTile key={b.id} b={b} corpName={corpName} selected={selectedId === b.id} onClick={() => setSelectedId(selectedId === b.id ? null : b.id)} />)}
+              {grouped
+                ? groupsOf(inDistrict).map((g) => {
+                    const on = g.some((b) => b.id === selectedId)
+                    return <GroupTile key={g[0].recipeId} group={g} selected={on} onClick={() => setSelectedId(on ? null : g[0].id)} />
+                  })
+                : inDistrict.map((b) => <BuildingTile key={b.id} b={b} corpName={corpName} selected={selectedId === b.id} onClick={() => setSelectedId(selectedId === b.id ? null : b.id)} />)}
               {queued.map((o) => <QueuedTile key={o.id} o={o} />)}
               {free > 0 &&
                 (canBuildHere ? (
@@ -156,9 +189,26 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
                   <div className="pl-tile empty" title={`${free} empty slots`}><span className="pl-tile-name">{free} free</span></div>
                 ))}
             </div>
+            )}
             {(() => {
               const sel = inDistrict.find((b) => b.id === selectedId)
-              return sel ? <ComplexBuildingCard b={sel} world={world} country={country} owned={!!playerId && world.ownerId === playerId} onClose={() => setSelectedId(null)} /> : null
+              if (!sel) return null
+              // In a group, pick which of the identical buildings to look at.
+              const siblings = grouped ? inDistrict.filter((b) => b.recipeId === sel.recipeId) : []
+              return (
+                <>
+                  {siblings.length > 1 && (
+                    <div className="pl-group-pick">
+                      {siblings.map((b, i) => (
+                        <button key={b.id} type="button" className={`laws-enact-btn${b.id === sel.id ? ' abs-on' : ''}`} onClick={() => setSelectedId(b.id)} title={`${ownerLabel(b.owner, corpName)} · level ${b.level}`}>
+                          #{i + 1} · {ownerLabel(b.owner, corpName)} · Lv {b.level}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <ComplexBuildingCard b={sel} world={world} country={country} owned={!!playerId && world.ownerId === playerId} onClose={() => setSelectedId(null)} />
+                </>
+              )
             })()}
             {d === 'urban' && (
               <div className="pl-foreign">

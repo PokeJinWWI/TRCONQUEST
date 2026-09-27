@@ -10,7 +10,7 @@ import { fromLonLat } from '../src/scene/mapProjection'
 import { clearSurfaceCache, surfaceOf, terrainAt } from '../src/scene/planetTerrain'
 import { nearestNode, surfaceMesh } from '../src/scene/surfaceMesh'
 import { COUNTRIES } from '../src/data/countryData'
-import { keySlotLabel } from '../src/scene/keyNames'
+import { keyNameOf } from '../src/scene/keyNames'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -80,8 +80,8 @@ console.log('\n=== 4. Worlds still work as worlds ===')
   const mars = surfaceOf('Mars', 'capital')
   const cap = mars.keySlots.find((k) => k.kind === 'capital')!
   check('Akakyō, the Martian capital, stands in Xanthe Terra', cap.node === node(-48.1, 1.6) || surfaceMesh().neighbors.fine[node(-48.1, 1.6)].includes(cap.node))
-  check('...and is named on its key node', keySlotLabel('Mars', cap, 'imperial-state-of-mars') === 'Akakyō (capital)')
-  check('other capitals keep the plain label', keySlotLabel('Venus', { kind: 'capital' }, 'republic-of-venus') === 'Capital')
+  check('...and is named on its key node', keyNameOf(mars, cap).label === 'Akakyō (capital)')
+  check('Venus’s capital is Paphos', keyNameOf(surfaceOf('Venus', 'capital'), surfaceOf('Venus', 'capital').keySlots.find((k) => k.kind === 'capital')!).label === 'Paphos (capital)')
   check('the terrain map gets real relief on Mars', !!mars.reliefM && mars.reliefM[node(-134, 18)] > 15000)
 }
 

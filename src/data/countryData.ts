@@ -31,6 +31,7 @@ export const COUNTRIES: Country[] = [
     color: '#3d7dc9',
     capitalStarId: 'sol',
     capitalBodyName: 'Venus',
+    capitalCityName: 'Paphos',
   },
   {
     id: 'orion-republic',
@@ -38,6 +39,7 @@ export const COUNTRIES: Country[] = [
     color: '#8fd0ff',
     capitalStarId: 'alpha-centauri',
     capitalBodyName: 'Arcadia',
+    capitalCityName: 'Elysion',
   },
   {
     // An alien empire — the Tidalians of Lalande 21185 d.
@@ -46,6 +48,7 @@ export const COUNTRIES: Country[] = [
     color: '#5ad1a0',
     capitalStarId: 'lalande-21185',
     capitalBodyName: 'Lalande 21185 d',
+    capitalCityName: 'Bellerive',
   },
 ]
 

@@ -5,8 +5,12 @@
 // rules in scene/defenseLogic.ts, state in state/defenseStore.ts.
 import type { ResourceCost } from './shipyardData'
 
-export type DefenseKind = 'fortress' | 'shieldGenerator' | 'defenseBattery'
-export const DEFENSE_KINDS: DefenseKind[] = ['fortress', 'shieldGenerator', 'defenseBattery']
+export type DefenseKind = 'fortress' | 'shieldGenerator' | 'defenseBattery' | 'spaceport'
+export const DEFENSE_KINDS: DefenseKind[] = ['fortress', 'shieldGenerator', 'defenseBattery', 'spaceport']
+// The kinds that stand in a world's Military district (one slot each); a
+// spaceport is civic — it becomes the world's spaceport key node instead.
+export const MILITARY_KINDS: DefenseKind[] = ['fortress', 'shieldGenerator', 'defenseBattery']
+export const isMilitaryKind = (k: DefenseKind) => MILITARY_KINDS.includes(k)
 
 export interface DefenseDef {
   name: string
@@ -48,6 +52,16 @@ export const DEFENSE_DEFS: Record<DefenseKind, DefenseDef> = {
     cost: { alloys: 180, energy: 100 },
     buildDays: 75,
     maxPerWorld: 3,
+  },
+  spaceport: {
+    name: 'Spaceport',
+    description:
+      'A landing field and orbital lift. It becomes this world’s spaceport key node — where armies raised here muster, and a place an invader must hold to take the world. Only for a world that has none. Can be captured or destroyed.',
+    integrity: 40,
+    armor: 1.5,
+    cost: { alloys: 120, energy: 60 },
+    buildDays: 60,
+    maxPerWorld: 1,
   },
 }
 

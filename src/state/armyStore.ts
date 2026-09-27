@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { batteryDenial, shieldedFor } from './defenseStore'
+import { batteryDenial, liveGroundSurface, shieldedFor } from './defenseStore'
 import { ARMY_KINDS, type ArmyKind } from '../data/armyData'
 import { COUNTRIES } from '../data/countryData'
 import { UNIT_TYPES } from '../data/groundData'
@@ -158,7 +158,7 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
     const armies = get().armies
     const check = landingCheck(ship, armies, ships, bodyOwner, bodyController, atWar, batteryDenial)
     if (!check.ok) return check
-    const surface = groundSurface(check.bodyName, bodyOwner)
+    const surface = liveGroundSurface(check.bodyName)
     if (!surface) return { ok: false, reason: 'No surface to land on' }
     const cargo = armiesAboard(armies, shipId)
     const types = cargo.flatMap((a) => a.units.map((u) => u.type))
@@ -189,7 +189,7 @@ export const useArmyStore = create<ArmyState>((set, get) => ({
     let units = makeUnits(kind, strengthFraction ?? 1)
     if (location.kind === 'body') {
       const { bodyOwner, bodyController, nodeHolders } = useTerritoryStore.getState()
-      const surface = groundSurface(location.bodyName, bodyOwner)
+      const surface = liveGroundSurface(location.bodyName)
       if (surface) {
         const holds = controllerOf(location.bodyName, bodyOwner, bodyController) === ownerId
         const anchor =

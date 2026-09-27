@@ -1,4 +1,5 @@
-import { keySlotLabel } from '../scene/keyNames'
+import { KEY_HOLD_BONUS, KEY_KIND_LABEL, KEY_ROLE, keyNameOf } from '../scene/keyNames'
+import { regionAt } from '../scene/bodyTopography'
 import { ARMY_KINDS } from '../data/armyData'
 import { TERRAIN, UNIT_TYPES, type TerrainId } from '../data/groundData'
 import { ownerDisplay } from '../data/countryRoster'
@@ -127,17 +128,32 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
       </div>
       <div className="inspect-row">
         <span className="inspect-label">Key nodes</span>
-        <span className="inspect-value">
-          {keyHolders.length === 0
-            ? 'None'
-            : keyHolders.map((k) => (
-                <span key={k.node} style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined, marginLeft: 6 }} title={`${keySlotLabel(bodyName, k, owner)} — ${k.holder ? ownerDisplay(k.holder).name : 'nobody'}`}>
-                  {keySlotLabel(bodyName, k, owner)}
-                </span>
-              ))}
-        </span>
+        <span className="inspect-value">{keyHolders.length === 0 ? 'None' : `${keyHolders.length}`}</span>
       </div>
-      <div className="ship-panel-hint">Hold every key node, with no enemy on them, to take the world.</div>
+      {keyHolders.length > 0 && (
+        <div className="ground-keys" title={`Key nodes are the places that decide who holds this world.\n${KEY_HOLD_BONUS}`}>
+          {keyHolders.map((k) => {
+            const kn = keyNameOf(surface, k)
+            const region = regionAt(bodyName, k.node)
+            return (
+              <button
+                key={k.node}
+                type="button"
+                className="ground-key-row"
+                onClick={() => useGroundViewStore.getState().focusNode(k.node)}
+                title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
+              >
+                <span className="ground-key-row-name">{kn.name ?? KEY_KIND_LABEL[k.kind]}{kn.native ? <span className="abs-dim"> {kn.native}</span> : null}</span>
+                <span className="abs-dim">{kn.name ? KEY_KIND_LABEL[k.kind] : ''}{region ? `${kn.name ? ' · ' : ''}${region}` : ''}</span>
+                <span className="ground-key-row-holder" style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined }}>{k.holder ? ownerDisplay(k.holder).name : 'nobody'}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <div className="ship-panel-hint">
+        To take this world: hold every key node, with no enemy on any of them — move units onto them (within ¾ of a map cell). Your units on a node you hold defend 25% better; new armies raised here muster at the spaceport.
+      </div>
 
       <div className="inspect-row">
         <span className="inspect-label">Grid</span>

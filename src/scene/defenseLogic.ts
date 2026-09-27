@@ -11,6 +11,7 @@ import {
   FORTRESS_RADIUS_CELLS,
   INSTALLATION_SPACING_CELLS,
   SHIELD_RADIUS_CELLS,
+  isMilitaryKind,
   type DefenseKind,
 } from '../data/defenseData'
 import { TERRAIN } from '../data/groundData'
@@ -29,7 +30,12 @@ export interface Installation {
   integrity: number
   builtBy: string // the nation that built it (holding decides who it serves)
   readySimDays: number // absolute deadline: under construction until then
+  // A landmark's own name (the capitals' starting fortresses: Olympus Castle…).
+  name?: string
 }
+
+// Fortress, shield or battery: the kinds that take a Military district slot.
+export const isMilitaryInstallation = (inst: Installation) => isMilitaryKind(inst.kind)
 
 export function isActive(inst: Installation, simDays: number): boolean {
   return simDays >= inst.readySimDays && inst.integrity > 0
@@ -45,7 +51,7 @@ export function holderOfInstallation(inst: Installation, owners: OwnerMap, holde
 // battery → spaceport/city, shield → capital), and not crowding another one.
 export function placeInstallation(surface: BodySurface, existing: Installation[], kind: DefenseKind): number | null {
   if (surface.keySlots.length === 0) return null
-  const prefer = kind === 'defenseBattery' ? ['spaceport', 'city', 'capital', 'outpost'] : ['capital', 'city', 'outpost', 'spaceport']
+  const prefer = kind === 'defenseBattery' ? ['spaceport', 'city', 'capital', 'outpost'] : kind === 'spaceport' ? ['city', 'capital', 'outpost'] : ['capital', 'city', 'outpost', 'spaceport']
   const anchor = [...surface.keySlots].sort((a, b) => prefer.indexOf(a.kind) - prefer.indexOf(b.kind))[0]
   const here = existing.filter((i) => i.bodyName === surface.bodyName)
   const spacing = cellsToRad(INSTALLATION_SPACING_CELLS)
@@ -68,14 +74,19 @@ export function placeInstallation(surface: BodySurface, existing: Installation[]
   return best >= 0 ? best : null
 }
 
-// The surface with active fortresses as extra key nodes: an invader must hold
-// them too, and the ground AI goes for them like any key node.
-export function withFortressKeys(surface: BodySurface, installations: Installation[], simDays: number): BodySurface {
-  const forts: KeySlot[] = installations
-    .filter((i) => i.bodyName === surface.bodyName && i.kind === 'fortress' && isActive(i, simDays))
-    .map((i) => ({ node: i.node, kind: 'fortress' }))
-  return forts.length === 0 ? surface : { ...surface, keySlots: [...surface.keySlots, ...forts] }
+// The surface with the key nodes installations add: active fortresses (an
+// invader must hold them too, and the ground AI goes for them like any key
+// node) and a built spaceport (the world's spaceport key node — where its new
+// armies muster).
+export function withInstallationKeys(surface: BodySurface, installations: Installation[], simDays: number): BodySurface {
+  const added: KeySlot[] = installations
+    .filter((i) => i.bodyName === surface.bodyName && (i.kind === 'fortress' || i.kind === 'spaceport') && isActive(i, simDays))
+    .filter((i) => i.kind !== 'spaceport' || !surface.keySlots.some((k) => k.kind === 'spaceport'))
+    .map((i) => ({ node: i.node, kind: i.kind === 'spaceport' ? 'spaceport' : 'fortress', ...(i.name ? { name: i.name } : {}) }))
+  return added.length === 0 ? surface : { ...surface, keySlots: [...surface.keySlots, ...added] }
 }
+// Kept for callers written before spaceports: same thing.
+export const withFortressKeys = withInstallationKeys
 
 // Defense multiplier a unit of `ownerId` at `point` gets from fortresses its
 // nation holds nearby (1 = none).

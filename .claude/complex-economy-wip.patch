@@ -1,0 +1,642 @@
+diff --git a/src/economy/economySeed.ts b/src/economy/economySeed.ts
+index cb6e355..83c1e1d 100644
+--- a/src/economy/economySeed.ts
++++ b/src/economy/economySeed.ts
+@@ -2,7 +2,8 @@ import { GOODS, GOOD_IDS, type GoodId } from './goods'
+ import { DISTRICT_TYPES, POP_CLASSES, RECIPES, getMethod, type DistrictType, type PopClass } from './recipes'
+ import { SLOTS_PER_DISTRICT_LEVEL } from './districts'
+ import { landForBody } from '../scene/bodyLand'
+-import { DEPLETABLE_GOODS } from './economyTick'
++import { ADMIN_PER_BUILDING_LEVEL, CAPITAL_UPKEEP, DEPLETABLE_GOODS, GOVERNMENT_BASKET, JOB_SCALE, NEED_SCALE, PUBLIC_SPENDING_PER_CAPITA } from './economyTick'
++import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor } from './species'
+ import { governorAppointmentDef, type CentralBank } from './centralBank'
+ import type { ReligionMix } from './demographics'
+ import type {
+@@ -70,9 +71,10 @@ function makeBuilding(worldId: string, recipeId: string, level: number, owner: s
+   buildingCounter += 1
+   const method = getMethod(recipeId, methodId)
+   const inventory: Building['inventory'] = {}
+-  // Seeded buildings are established: full throughput and a tick of output on
+-  // hand, so the starting economy is productive from tick one.
+-  if (method) for (const out of method.outputs) inventory[out.good] = out.amount * level
++  // Seeded buildings are established: full throughput and a little stock on
++  // hand (a quarter-month — a full month on top of the first month's output
++  // glutted every market at the start and crashed prices).
++  if (method) for (const out of method.outputs) inventory[out.good] = out.amount * level * SEED_STOCK_TICKS
+   return {
+     id: `bld-${worldId}-${recipeId}-${buildingCounter}`,
+     recipeId,
+@@ -93,10 +95,14 @@ function seedMarket(): Market {
+   for (const g of GOOD_IDS) prices[g] = GOODS[g].basePrice
+   return { prices }
+ }
++// Starting wages by class, sized so pay is a realistic share (~40%) of what
++// the jobs produce at base prices — enough for households to buy what their
++// worlds make. (At 2 per job wages were ~2% of output: almost everything
++// went to owners who never spent it on goods, and prices could only sink.)
++export const SEED_WAGES: LaborMarket['wages'] = { subsistence: 14, labor: 30, technical: 46, professional: 70, investor: 35, political: 52 }
++const SEED_STOCK_TICKS = 0.25
+ function seedLabor(): LaborMarket {
+-  const wages = {} as LaborMarket['wages']
+-  for (const cls of POP_CLASSES) wages[cls] = 2
+-  return { wages }
++  return { wages: { ...SEED_WAGES } }
+ }
+ 
+ // Starting ADOPTION for emergent goods (see economyTick's EMERGENT_GOODS): the
+@@ -158,10 +164,92 @@ function seedDeposits(buildings: Building[]): Partial<Record<GoodId, number>> {
+   return deposits
+ }
+ 
+-function buildWorld(spec: WorldSpec): World {
++// A world's people by class, sized to its own jobs: each working class gets
++// its jobs plus a little frictional slack, investors a small fixed share, and
++// the rest are subsistence (the informal economy). Where the jobs outnumber the
++// people, the working classes share what there is in proportion. A world with
++// no jobs falls back to CLASS_SPLIT. (One global split left Mars with 727
++// technicians for 1,601 technical jobs while half its other classes idled.)
++const WORKING_CLASSES: PopClass[] = ['labor', 'technical', 'professional', 'political']
++const FRICTIONAL_SLACK = 1.06
++const INVESTOR_SHARE = 0.04
++const MIN_SUBSISTENCE_SHARE = 0.08
++function classSplitFor(spec: WorldSpec): Record<PopClass, number> {
++  const jobs = {} as Record<PopClass, number>
++  for (const cls of POP_CLASSES) jobs[cls] = 0
++  for (const b of spec.buildings) {
++    const m = getMethod(b.recipe, b.method ?? RECIPES[b.recipe]?.methods[0]?.id ?? '')
++    for (const j of m?.jobs ?? []) jobs[j.class] += j.count * b.level * JOB_SCALE
++  }
++  const want = WORKING_CLASSES.reduce((n, c) => n + jobs[c] * FRICTIONAL_SLACK, 0) + jobs.subsistence
++  if (want <= 0 || spec.population <= 0) return CLASS_SPLIT
++  const room = 1 - INVESTOR_SHARE - MIN_SUBSISTENCE_SHARE
++  const scale = Math.min(1, (room * spec.population) / (want - jobs.subsistence))
++  const split = {} as Record<PopClass, number>
++  for (const cls of POP_CLASSES) split[cls] = 0
++  for (const cls of WORKING_CLASSES) split[cls] = (jobs[cls] * FRICTIONAL_SLACK * scale) / spec.population
++  split.investor = INVESTOR_SHARE
++  split.subsistence = Math.max(0, 1 - WORKING_CLASSES.reduce((n, c) => n + split[c], 0) - INVESTOR_SHARE)
++  return split
++}
++
++// The starting economy in balance: each producing building's level is set so
++// its world makes about BALANCE_HEADROOM more of each good than the world uses —
++// its people's needs (at a middling standard of living), the state's purchases,
++// and other buildings' inputs and upkeep — keeping every building on the roster
++// (a good nobody uses keeps one level). Solved by iterating, since inputs depend
++// on levels. Without it the worlds produced 4–9× what their people could use:
++// most output never sold, prices sank to their floors and wages, profits and
++// the state's accounts all went with them.
++const BALANCE_HEADROOM = 1.1
++const BALANCE_SOL = 0.7
++function balancedBuildings(spec: WorldSpec): BuildingSpec[] {
++  const species = SPECIES_TEMPLATES[spec.species]
++  const adoption = seedAdoption()
++  const household = {} as Record<GoodId, number>
++  for (const g of GOOD_IDS) household[g] = 0
++  if (species) {
++    for (const tier of NEED_TIERS) {
++      const wf = tierWealthFactor(tier, BALANCE_SOL)
++      for (const group of species.needs[tier]) {
++        const total = group.goods.reduce((n, x) => n + x.weight, 0) || 1
++        for (const x of group.goods) household[x.good] += ((group.base * NEED_SCALE * wf * spec.population * x.weight) / total) * (adoption[x.good] ?? 1)
++      }
++    }
++  }
++  let levels = spec.buildings.map((b) => b.level)
++  const methodOf = spec.buildings.map((b) => getMethod(b.recipe, b.method ?? RECIPES[b.recipe]?.methods[0]?.id ?? ''))
++  for (let round = 0; round < 20; round++) {
++    const demand = { ...household }
++    const totalLevels = levels.reduce((n, l) => n + l, 0)
++    const govBudget = ADMIN_PER_BUILDING_LEVEL * totalLevels + PUBLIC_SPENDING_PER_CAPITA * spec.population
++    for (const item of GOVERNMENT_BASKET) demand[item.good] += (govBudget * item.weight) / GOODS[item.good].basePrice
++    const capacity = {} as Record<GoodId, number>
++    for (const g of GOOD_IDS) capacity[g] = 0
++    methodOf.forEach((m, i) => {
++      if (!m) return
++      for (const inp of m.inputs) demand[inp.good] += inp.amount * levels[i]
++      for (const u of CAPITAL_UPKEEP) demand[u.good] += u.amount * levels[i]
++      for (const out of m.outputs) capacity[out.good] += out.amount * levels[i]
++    })
++    const next = levels.map((l, i) => {
++      const m = methodOf[i]
++      if (!m || m.outputs.length === 0) return l
++      const ratio = Math.max(...m.outputs.map((o) => (capacity[o.good] > 0 ? (demand[o.good] * BALANCE_HEADROOM) / capacity[o.good] : 1)))
++      return Math.max(1, Math.round(l * ratio))
++    })
++    if (next.every((l, i) => l === levels[i])) break
++    levels = next
++  }
++  return spec.buildings.map((b, i) => ({ ...b, level: levels[i] }))
++}
++
++function buildWorld(rawSpec: WorldSpec): World {
++  const spec = { ...rawSpec, buildings: balancedBuildings(rawSpec) }
+   const pops: Pop[] = []
++  const split = classSplitFor(spec)
+   for (const cls of POP_CLASSES) {
+-    const classPop = spec.population * CLASS_SPLIT[cls]
++    const classPop = spec.population * split[cls]
+     if (classPop <= 0) continue
+     for (const r of spec.religions) {
+       const size = classPop * r.share
+diff --git a/src/economy/economyTick.ts b/src/economy/economyTick.ts
+index 0806e48..f8b914b 100644
+--- a/src/economy/economyTick.ts
++++ b/src/economy/economyTick.ts
+@@ -39,13 +39,16 @@ import { runForeignInvestmentAI } from './foreignInvestmentAI'
+ 
+ const PRICE_ADJUST = 0.15
+ const WAGE_ADJUST = 0.1
+-const WAGE_FLOOR = 1.0
+-const WAGE_CEILING = 40
++const WAGE_FLOOR = 5
++const WAGE_CEILING = 600
+ // Baseline informal/subsistence income every pop earns regardless of formal
+ // employment (self-provision, barter, the gray economy). Keeps under-employed
+ // worlds — where there aren't enough building jobs for everyone — from
+ // collapsing into destitution, without needing a job for every last pop.
+ const SUBSISTENCE_INCOME = 3.5
++// The job ladder, highest qualification first: spare workers of a class can
++// take unfilled jobs of any class below it (investors don't take jobs).
++const JOB_LADDER: PopClass[] = ['political', 'professional', 'technical', 'labor', 'subsistence']
+ 
+ // How fast a building's throughput closes on what labor, inputs and demand
+ // allow. Ramp-up is deliberately slow (kills "profit teleporting"); ramp-down
+@@ -60,7 +63,7 @@ export const NEW_BUILDING_THROUGHPUT = 0.1
+ // Raising it makes labor scarcer (higher wages, more understaffing); lowering
+ // it means each worker is more productive. Tuned so a world can staff its
+ // buildings and they run near capacity.
+-export const JOB_SCALE = 0.15
++export const JOB_SCALE = 0.12
+ 
+ // --- Standard of Living loop (Milestone 3) ---
+ // SoL is a weighted blend of how well the pop meets each needs tier; it moves
+@@ -79,12 +82,32 @@ const EDU_DRIFT = 0.012 // education creeps toward SoL each tick (slow)
+ const EDU_MAX = 0.98
+ 
+ // Fiscal constants — scaled for a population measured in millions.
+-const ADMIN_PER_BUILDING_LEVEL = 60
++export const ADMIN_PER_BUILDING_LEVEL = 60
+ // Baseline public spending per capita — administration, defense, infrastructure
+ // and the social state beyond healthcare/welfare. Set high enough that a
+ // generous default government runs a DEFICIT and must manage it (cut spending,
+ // raise tax, or borrow) — real states rarely run surpluses.
+-const PUBLIC_SPENDING_PER_CAPITA = 4.5
++export const PUBLIC_SPENDING_PER_CAPITA = 4.5
++// Share of its cash on hand the state spends on public purchases each month
++// (on top of the baseline) — its revenue flows back out within a few months.
++const TREASURY_SPEND_RATE = 0.3
++// What the state's administration and public spending buy: real goods and
++// services on its own worlds (power, supplies, schooling, healthcare,
++// infrastructure, equipment) — so that money reaches producers instead of
++// leaving the economy. Weights are shares of the spend.
++export const GOVERNMENT_BASKET: { good: GoodId; weight: number }[] = [
++  { good: 'electricity', weight: 0.14 },
++  { good: 'consumerGoods', weight: 0.14 },
++  { good: 'retail', weight: 0.08 },
++  { good: 'education', weight: 0.12 },
++  { good: 'healthcare', weight: 0.12 },
++  { good: 'infrastructure', weight: 0.14 },
++  { good: 'paper', weight: 0.04 },
++  { good: 'fuel', weight: 0.06 },
++  { good: 'steel', weight: 0.06 },
++  { good: 'machinery', weight: 0.05 },
++  { good: 'tools', weight: 0.05 },
++]
+ const DEBT_INTEREST_RATE = 0.008
+ // Goods depreciate / spoil / are held at a cost, so a glut can't accumulate
+ // without bound: unsold stock shrinks each tick. This lets buildings run on
+@@ -92,6 +115,30 @@ const DEBT_INTEREST_RATE = 0.008
+ // oversupply is bled off through the price floor instead of throttling the
+ // whole chain to a halt.
+ const INVENTORY_DECAY = 0.08
++// Capital upkeep: every running building level wears out tools, machinery and
++// infrastructure (depreciation) — the steady demand for capital goods an
++// economy has besides new construction. Per level per tick at full run.
++export const CAPITAL_UPKEEP: { good: GoodId; amount: number }[] = [
++  { good: 'tools', amount: 6 },
++  { good: 'machinery', amount: 3 },
++  { good: 'infrastructure', amount: 4 },
++]
++// Spending out of savings: a pop holding more than WEALTH_BUFFER_TICKS of its
++// income wants more of the everyday, comfort and luxury goods, in proportion to
++// the excess (up to 1 + WEALTH_SPEND_MAX times) — so income circulates instead
++// of piling up (a consumption function: richer people buy more).
++const WEALTH_BUFFER_TICKS = 2
++const WEALTH_SPEND_RATE = 0.15
++const WEALTH_SPEND_MAX = 5
++// Share of savings above that buffer banked into the investment pool each month.
++const SAVINGS_TO_INVESTMENT = 0.2
++function wealthBoost(tier: NeedTier, wealth: number, income: number): number {
++  if (tier === 'basic' || tier === 'healthcare') return 1
++  const excessTicks = income > 0 ? Math.max(0, wealth / income - WEALTH_BUFFER_TICKS) : 0
++  // Everyday goods take half the extra; comfort and luxury the full amount.
++  const k = tier === 'everyday' ? 0.5 : 1
++  return 1 + Math.min(WEALTH_SPEND_MAX, WEALTH_SPEND_RATE * excessTicks) * k
++}
+ 
+ // Genuinely finite raw resources — extraction buildings producing these are
+ // capped by (and draw down) `World.resourceDeposits` each tick. Farm crops
+@@ -251,10 +298,14 @@ function estimateMethodProfit(method: ProductionMethod, level: number, prices: P
+   for (const job of method.jobs) wageBill += job.count * level * JOB_SCALE * wages[job.class]
+   return revenue - cost - wageBill
+ }
+-function cpi(priceMap: PerGood): number {
++// `traded` limits the basket to goods actually bought and sold this month: a
++// good nobody can get (no producer in reach) has a price that only climbs, and
++// isn't something anyone pays — it isn't inflation.
++function cpi(priceMap: PerGood, traded?: (g: GoodId) => boolean): number {
+   let num = 0
+   let den = 0
+   for (const g of GOOD_IDS) {
++    if (traded && !traded(g)) continue
+     const w = CPI_WEIGHTS[g] ?? 0
+     num += w * priceMap[g]
+     den += w * GOODS[g].basePrice
+@@ -330,8 +381,12 @@ function exportFromWorld(world: World, good: GoodId, amount: number): World {
+ // --- Pop consumption: need groups + substitution (Vic3-style) ---------------
+ // Total need-units a pop wants of one group, scaled by wealth (Engel's law) and
+ // population size.
++// NEED_SCALE sizes how much a person consumes against what the worlds' industry
++// makes: at 1 the seeded economy produced 5–9× its people's needs, so most of
++// it could never sell and prices sank to their floors.
++export const NEED_SCALE = 1.5
+ function groupTarget(group: NeedGroup, popSize: number, wealthFactor: number): number {
+-  return group.base * wealthFactor * popSize
++  return group.base * NEED_SCALE * wealthFactor * popSize
+ }
+ 
+ // Buy across a need group's substitutable goods to satisfy `target` need-units,
+@@ -411,6 +466,9 @@ function tickWorld(
+   // construction draw from the host world's currency into the financing
+   // country's currency (Stage 3 FX). Same-country builds convert 1:1.
+   fxRate: Map<string, number>,
++  // This world's share of the state's discretionary spending this tick (spent on
++  // GOVERNMENT_BASKET on top of administration and the per-capita baseline).
++  extraGovernmentSpend = 0,
+ ): WorldTickResult {
+   const report = emptyWorldReport()
+   const law = economicSystemDef(system)
+@@ -430,26 +488,76 @@ function tickWorld(
+     workers[pop.class] += pop.populationSize
+     qualified[pop.class] += pop.populationSize * qualificationFraction(pop.class, pop.educationLevel)
+   }
++  // Jobs posted this month: each building hires for the run it plans (its last
++  // run plus the ramp), not its full size — an idle factory isn't hiring.
++  const runPlan = (b: Building) => Math.min(1, b.throughput + THROUGHPUT_RAMP_UP)
+   const jobDemand = zeroClasses()
+-  for (const b of world.buildings) for (const cls of POP_CLASSES) jobDemand[cls] += jobSlots(b, cls)
++  for (const b of world.buildings) for (const cls of POP_CLASSES) jobDemand[cls] += jobSlots(b, cls) * runPlan(b)
+ 
++  // Each class fills its own jobs first. Qualified workers left over in a higher
++  // class then take unfilled jobs further down the ladder (a professional can
++  // work as a technician, a technician on the line), at that job's wage — so a
++  // world short of one class isn't idle in another.
+   const staffFraction = zeroClasses()
+   const wages: LaborMarket['wages'] = { ...world.labor.wages }
++  const ownFilled = zeroClasses()
++  const filledBySubstitutes = zeroClasses()
++  const takes: { from: PopClass; to: PopClass; amount: number }[] = []
++  const pool: { from: PopClass; amount: number }[] = []
++  for (const cls of JOB_LADDER) {
++    ownFilled[cls] = Math.min(qualified[cls], jobDemand[cls])
++    let unfilled = jobDemand[cls] - ownFilled[cls]
++    // Nearest classes above first.
++    for (let k = pool.length - 1; k >= 0 && unfilled > 1e-9; k--) {
++      const take = Math.min(unfilled, pool[k].amount)
++      pool[k].amount -= take
++      unfilled -= take
++      filledBySubstitutes[cls] += take
++      takes.push({ from: pool[k].from, to: cls, amount: take })
++    }
++    const spare = qualified[cls] - ownFilled[cls]
++    if (spare > 0) pool.push({ from: cls, amount: spare })
++  }
+   for (const cls of POP_CLASSES) {
+-    staffFraction[cls] = jobDemand[cls] > 0 ? Math.min(1, qualified[cls] / jobDemand[cls]) : 0
+-    const employmentRate = workers[cls] > 0 ? Math.min(1, jobDemand[cls] / workers[cls]) : 0
+-    wages[cls] = clamp(clearingStep(wages[cls], jobDemand[cls], qualified[cls], WAGE_ADJUST), WAGE_FLOOR, WAGE_CEILING)
+-    const qualifiedRate = workers[cls] > 0 ? qualified[cls] / workers[cls] : 0
+-    report.labor[cls] = { workers: workers[cls], qualified: qualified[cls], qualifiedRate, jobs: jobDemand[cls], employmentRate, wage: wages[cls] }
++    const staffed = ownFilled[cls] + filledBySubstitutes[cls]
++    staffFraction[cls] = jobDemand[cls] > 0 ? Math.min(1, staffed / jobDemand[cls]) : 0
+   }
++  // Buildings run as far as their scarcest class of staff allows (of the run
++  // they planned), and pay — and employ — for exactly that.
+   const buildingLaborScale = new Map<string, number>()
+   const buildingPlannedRun = new Map<string, number>()
++  const worked = zeroClasses() // job-slots actually worked, per job class
+   for (const b of world.buildings) {
+     const method = buildingMethod(b)
+-    let scale = 1
+-    if (method) for (const job of method.jobs) scale = Math.min(scale, staffFraction[job.class])
+-    buildingLaborScale.set(b.id, scale)
+-    buildingPlannedRun.set(b.id, Math.min(scale, b.throughput + THROUGHPUT_RAMP_UP))
++    let staff = 1
++    if (method) for (const job of method.jobs) staff = Math.min(staff, staffFraction[job.class])
++    const run = runPlan(b) * staff
++    buildingLaborScale.set(b.id, run)
++    buildingPlannedRun.set(b.id, run)
++    if (method) for (const job of method.jobs) worked[job.class] += jobSlots(b, job.class) * run
++  }
++  // Share of each class's staffed jobs that are actually worked (a building
++  // short of technicians idles its labourers too).
++  const workedShare = zeroClasses()
++  for (const cls of POP_CLASSES) {
++    const staffed = ownFilled[cls] + filledBySubstitutes[cls]
++    workedShare[cls] = staffed > 0 ? Math.min(1, worked[cls] / staffed) : 0
++  }
++  const employedOf = zeroClasses() // this class's workers in work
++  const classWageIncome = zeroClasses() // what this class is paid, all jobs
++  for (const cls of POP_CLASSES) {
++    employedOf[cls] += ownFilled[cls] * workedShare[cls]
++    classWageIncome[cls] += wages[cls] * ownFilled[cls] * workedShare[cls]
++  }
++  for (const t of takes) {
++    employedOf[t.from] += t.amount * workedShare[t.to]
++    classWageIncome[t.from] += wages[t.to] * t.amount * workedShare[t.to]
++  }
++  for (const cls of POP_CLASSES) {
++    const employmentRate = workers[cls] > 0 ? Math.min(1, employedOf[cls] / workers[cls]) : 0
++    wages[cls] = clamp(clearingStep(wages[cls], jobDemand[cls], qualified[cls] + filledBySubstitutes[cls], WAGE_ADJUST), WAGE_FLOOR, WAGE_CEILING)
++    const qualifiedRate = workers[cls] > 0 ? qualified[cls] / workers[cls] : 0
++    report.labor[cls] = { workers: workers[cls], qualified: qualified[cls], qualifiedRate, jobs: jobDemand[cls], employmentRate, wage: wages[cls] }
+   }
+ 
+   // --- Supply (existing inventories + goods imported by trade) ---
+@@ -481,6 +589,7 @@ function tickWorld(
+     if (!method) continue
+     const plan = buildingPlannedRun.get(b.id) ?? 0
+     for (const input of method.inputs) buildingInputDemand[input.good] += input.amount * b.level * plan
++    for (const u of CAPITAL_UPKEEP) buildingInputDemand[u.good] += u.amount * b.level * plan
+   }
+   // Active construction pulls materials from the market (fuels demand), scaled by
+   // how much work will actually be done this tick — the capacity, capped by the
+@@ -494,8 +603,8 @@ function tickWorld(
+   const popDemand = zeroGoods()
+   let incomeTaxRevenue = 0
+   world.pops.forEach((pop) => {
+-    const filledJobs = Math.min(qualified[pop.class], jobDemand[pop.class])
+-    const wageIncome = workers[pop.class] > 0 ? wages[pop.class] * filledJobs * (pop.populationSize / workers[pop.class]) : 0
++    // Its share of its class's wages: its own jobs, plus lower jobs it took.
++    const wageIncome = workers[pop.class] > 0 ? classWageIncome[pop.class] * (pop.populationSize / workers[pop.class]) : 0
+     const incomeTax = wageIncome * taxRate
+     incomeTaxRevenue += incomeTax
+     const income = wageIncome - incomeTax + (welfarePerUnit + SUBSISTENCE_INCOME) * pop.populationSize
+@@ -507,7 +616,7 @@ function tickWorld(
+       // Post affordability-capped, wealth-scaled demand across each need group's
+       // goods (the preferred weighted mix), spending the budget in tier order.
+       for (const tier of NEED_TIERS) {
+-        const wf = tierWealthFactor(tier, pop.standardOfLiving)
++        const wf = tierWealthFactor(tier, pop.standardOfLiving) * wealthBoost(tier, pop.wealth, income)
+         for (const group of species.needs[tier]) {
+           const target = groupTarget(group, pop.populationSize, wf)
+           const totalW = group.goods.reduce((s, g) => s + g.weight, 0) || 1
+@@ -525,8 +634,15 @@ function tickWorld(
+     }
+   })
+ 
++  // The state's spending here (administration + public spending) buys its
++  // basket at market prices — paid in full from the treasury at country level.
++  const worldPop = world.pops.reduce((n, p) => n + p.populationSize, 0)
++  const governmentBudget = ADMIN_PER_BUILDING_LEVEL * world.buildings.reduce((n, b) => n + b.level, 0) + PUBLIC_SPENDING_PER_CAPITA * worldPop + extraGovernmentSpend
++  const governmentDemand = zeroGoods()
++  for (const item of GOVERNMENT_BASKET) if (prices[item.good] > 0) governmentDemand[item.good] += (governmentBudget * item.weight) / prices[item.good]
++
+   const totalDemand = zeroGoods()
+-  for (const g of GOOD_IDS) totalDemand[g] = buildingInputDemand[g] + popDemand[g]
++  for (const g of GOOD_IDS) totalDemand[g] = buildingInputDemand[g] + popDemand[g] + governmentDemand[g]
+ 
+   // --- Stockpile release: cushion a genuine shortage (demand > supply) before
+   // the market clears, so the relief actually reaches this tick's buyers
+@@ -549,9 +665,18 @@ function tickWorld(
+ 
+   // --- Clear market ---
+   const fulfill = zeroGoods()
++  const inputFulfill = zeroGoods()
++  const finalFulfill = zeroGoods()
+   const sellThrough = zeroGoods()
+   for (const g of GOOD_IDS) {
+     fulfill[g] = totalDemand[g] > 0 ? Math.min(1, supply[g] / totalDemand[g]) : 1
++    // Industry is served first (supply contracts); households and the state
++    // buy what's left — so a surge in consumer demand for, say, power can't
++    // starve the factories and collapse the whole chain.
++    inputFulfill[g] = buildingInputDemand[g] > 0 ? Math.min(1, supply[g] / buildingInputDemand[g]) : 1
++    const leftover = Math.max(0, supply[g] - buildingInputDemand[g] * inputFulfill[g])
++    const finalDemand = popDemand[g] + governmentDemand[g]
++    finalFulfill[g] = finalDemand > 0 ? Math.min(1, leftover / finalDemand) : 1
+     sellThrough[g] = supply[g] > 0 ? Math.min(1, totalDemand[g] / supply[g]) : 1
+     prices[g] = clamp(clearingStep(prices[g], totalDemand[g], supply[g], PRICE_ADJUST), priceFloor(g), priceCeiling(g))
+     report.goods[g] = { supply: supply[g], demand: totalDemand[g], transacted: Math.min(supply[g], totalDemand[g]), price: prices[g] }
+@@ -610,6 +735,7 @@ function tickWorld(
+   // coverage % reads as a fraction of a real number, not "out of nothing").
+   const serviceCostByGood: Partial<Record<GoodId, number>> = {}
+   const serviceValueByGood: Partial<Record<GoodId, number>> = {}
++  let savingsInvested = 0
+   const nextPops: Pop[] = world.pops.map((pop, i) => {
+     let budget = pop.wealth + popIncome[i]
+     const species = SPECIES_TEMPLATES[pop.speciesTemplateId]
+@@ -626,12 +752,12 @@ function tickWorld(
+           nextSatisfaction[tier] = 1
+           continue
+         }
+-        const wf = tierWealthFactor(tier, pop.standardOfLiving)
++        const wf = tierWealthFactor(tier, pop.standardOfLiving) * wealthBoost(tier, pop.wealth, popIncome[i])
+         let tierGot = 0
+         let tierWant = 0
+         for (const group of groups) {
+           const target = groupTarget(group, pop.populationSize, wf)
+-          const res = consumeGroup(group, target, budget, prices, fulfill, govShareOf, adoptOf)
++          const res = consumeGroup(group, target, budget, prices, finalFulfill, govShareOf, adoptOf)
+           tierWant += res.effWant // adoption-reduced want (an unadopted good is not a missed need)
+           budget -= res.spent
+           tierGot += res.got
+@@ -657,9 +783,21 @@ function tickWorld(
+     let solRaw = 0
+     for (const tier of NEED_TIERS) solRaw += SOL_TIER_WEIGHT[tier] * nextSatisfaction[tier]
+     const standardOfLiving = clamp(pop.standardOfLiving * (1 - SOL_SMOOTHING) + solRaw * SOL_SMOOTHING, 0, 1)
+-    return { ...pop, wealth: Math.max(0, budget), needsSatisfaction: nextSatisfaction, needsDetail: nextDetail, standardOfLiving }
++    // Savings beyond a buffer are deposited and lent on: a share goes into the
++    // nation's investment pool each month, financing new construction — the
++    // loop from households' savings back into spending (on capital goods).
++    let wealth = Math.max(0, budget)
++    const excess = wealth - WEALTH_BUFFER_TICKS * popIncome[i]
++    if (excess > 0) {
++      const deposit = excess * SAVINGS_TO_INVESTMENT
++      wealth -= deposit
++      savingsInvested += deposit
++    }
++    return { ...pop, wealth, needsSatisfaction: nextSatisfaction, needsDetail: nextDetail, standardOfLiving }
+   })
+ 
++  if (savingsInvested > 0) poolByCountry.set(world.ownerId, (poolByCountry.get(world.ownerId) ?? 0) + savingsInvested)
++
+   // --- Buildings produce; profit is booked to its OWNER ---
+   let govRevenue = incomeTaxRevenue
+   const corpProfit = new Map<string, number>()
+@@ -678,12 +816,15 @@ function tickWorld(
+     let inputCost = 0
+     for (const input of method.inputs) {
+       const want = input.amount * b.level * plan
+-      const got = want * fulfill[input.good]
++      const got = want * inputFulfill[input.good]
+       inputCost += got * prices[input.good]
+       inputScale = Math.min(inputScale, want > 0 ? got / want : 1)
+     }
++    // Capital upkeep is bought like an input but never stops production.
++    for (const u of CAPITAL_UPKEEP) inputCost += u.amount * b.level * plan * inputFulfill[u.good] * prices[u.good]
+     // Throughput ramps toward what labor and inputs allow. Demand is NOT a
+-    // throttle here (that cascades and deadlocks a long chain); instead a glut
++    // throttle here (throttling on sales or on profit was tried: it cascades —
++    // a cut costs wages, which costs demand, which triggers the next cut); a glut
+     // is bled off by inventory decay + the price floor below.
+     const instantScale = laborScale * inputScale
+     const throughput = rampToward(b.throughput, instantScale)
+@@ -710,8 +851,9 @@ function tickWorld(
+     for (const job of method.jobs) {
+       const slots = job.count * b.level * JOB_SCALE
+       jobsPosted += slots
+-      employed += slots * runScale
+-      wageBill += wages[job.class] * slots * runScale
++      // Paid for the run it staffed this month (what households earned above).
++      employed += slots * plan
++      wageBill += wages[job.class] * slots * plan
+     }
+ 
+     const revenue = revenueByBuilding.get(b.id) ?? 0
+@@ -720,9 +862,12 @@ function tickWorld(
+     govRevenue += tax
+     const netProfit = grossProfit - tax
+     // Route net profit by ownership.
+-    if (b.owner.kind === 'state') govRevenue += Math.max(0, netProfit)
++    // Losses are real too: a state enterprise's loss is paid by the treasury, a
++    // co-op's by its worker-owners (dropping them printed money — the wages and
++    // inputs were already paid).
++    if (b.owner.kind === 'state') govRevenue += netProfit
+     else if (b.owner.kind === 'corporation') corpProfit.set(b.owner.corporationId, (corpProfit.get(b.owner.corporationId) ?? 0) + netProfit)
+-    else if (b.owner.kind === 'worker') workerDividendPool += Math.max(0, netProfit)
++    else if (b.owner.kind === 'worker') workerDividendPool += netProfit
+ 
+     const unprofitableStreak = netProfit < 0 ? (b.unprofitableStreak ?? 0) + 1 : 0
+     return { ...b, inventory: inv, throughput, lastProfit: netProfit, unprofitableStreak, employed, jobsPosted }
+@@ -821,7 +966,9 @@ function tickWorld(
+   }
+ 
+   // --- Admin + GDP ---
+-  const admin = ADMIN_PER_BUILDING_LEVEL * world.buildings.reduce((s, b) => s + b.level, 0)
++  // The state pays for what it actually got of its basket (see governmentDemand).
++  let admin = 0
++  for (const item of GOVERNMENT_BASKET) admin += governmentDemand[item.good] * finalFulfill[item.good] * prices[item.good]
+   let gdp = 0
+   for (const b of builtBuildings) {
+     const method = buildingMethod(b)
+@@ -865,7 +1012,7 @@ function tickWorld(
+     const growth = GROWTH_RATE * (pop.standardOfLiving - GROWTH_MIDPOINT) * 2 * (pop.standardOfLiving >= GROWTH_MIDPOINT ? headroom : 1)
+     const nextSize = Math.max(0.001, pop.populationSize * (1 + growth))
+     const educationLevel = clamp(pop.educationLevel + EDU_DRIFT * (pop.standardOfLiving - pop.educationLevel), 0, EDU_MAX)
+-    const wealth = pop.wealth + dividendPerPop * pop.populationSize
++    const wealth = Math.max(0, pop.wealth + dividendPerPop * pop.populationSize)
+     return { ...pop, populationSize: nextSize, educationLevel, wealth }
+   })
+   const grownPopulation = grownPops.reduce((s, p) => s + p.populationSize, 0)
+@@ -912,8 +1059,8 @@ function tickWorld(
+     tax: govRevenue,
+     admin,
+     gdp,
+-    cpi: cpi(prices),
+-    prevCpi: cpi(world.market.prices),
++    cpi: cpi(prices, (g) => report.goods[g].transacted > 0),
++    prevCpi: cpi(world.market.prices, (g) => report.goods[g].transacted > 0),
+     population: grownPopulation,
+     constructionSpend,
+     corpProfit,
+@@ -976,8 +1123,15 @@ export function tickEconomy(
+     // hobbled this tick.
+     const stateBureaucracyMalus = country.bureaucracy > 0 ? 1 : BUREAUCRACY_SHORTAGE_MALUS
+ 
++    // The state spends what it takes in: beyond administration and the
++    // per-capita baseline, a share of its cash each month goes on public
++    // purchases, split across its worlds by population — so revenue (taxes and
++    // state enterprises' profit) returns to the economy instead of piling up.
++    const ownedPop = owned.reduce((n, { w }) => n + w.pops.reduce((m, p) => m + p.populationSize, 0), 0)
++    const discretionary = Math.max(0, country.treasury) * TREASURY_SPEND_RATE
+     for (const { w, idx } of owned) {
+-      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate)
++      const share = ownedPop > 0 ? w.pops.reduce((m, p) => m + p.populationSize, 0) / ownedPop : 0
++      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate, discretionary * share)
+       runningTreasury -= res.constructionSpend + res.stockpileSpend
+       constructionSpend += res.constructionSpend
+       stockpileSpend += res.stockpileSpend
+@@ -1086,9 +1240,11 @@ export function tickEconomy(
+       }
+     }
+ 
+-    const priceLevel = population > 0 ? cpiNum / population : 1
+-    const prevPriceLevel = population > 0 ? prevCpiNum / population : 1
+-    const inflation = prevPriceLevel > 0 ? priceLevel / prevPriceLevel - 1 : 0
++    // A chained index: this month's change over the goods actually traded,
++    // applied to last month's level (so the basket can change without a jump).
++    const monthlyChange = prevCpiNum > 0 ? cpiNum / prevCpiNum : 1
++    const priceLevel = (country.priceIndex ?? 1) * monthlyChange
++    const inflation = monthlyChange - 1
+ 
+     // --- Bureaucracy: production (government buildings) vs consumption (state
+     //     ownership + decrees), settled into the stored stock. ---
+@@ -1113,8 +1269,9 @@ export function tickEconomy(
+     bureaucracyConsumed += country.decrees.length * BUREAUCRACY_PER_DECREE
+     const bureaucracy = clamp(country.bureaucracy + bureaucracyProduced - bureaucracyConsumed, 0, bureaucracyCapacity)
+ 
+-    // Administration + defense + infrastructure baseline (scales with pop).
+-    adminTotal += PUBLIC_SPENDING_PER_CAPITA * population
++    // Administration + public spending (defense, infrastructure, the social
++    // state) is bought on the worlds themselves (GOVERNMENT_BASKET), already in
++    // adminTotal.
+     const welfare = country.welfarePerCapita * population
+     // Debt service: coupon on outstanding bonds + a penalty on any unfunded
+     // overdraft (negative treasury) to push the player to fund deficits by bonds.
+@@ -1157,7 +1314,7 @@ export function tickEconomy(
+       subsidiesSpent,
+       stockpileSpend,
+     }
+-    nextCountries.push({ ...country, treasury, bureaucracy })
++    nextCountries.push({ ...country, treasury, bureaucracy, priceIndex: priceLevel })
+   }
+ 
+   // Finalize each country's investment pool now that construction draws from
+@@ -1273,7 +1430,9 @@ export function tickEconomy(
+ // held by individual CHARACTERS are retained too for now (character wealth is
+ // settled elsewhere), so only the state/public/financial portions actually leave
+ // the company.
+-const DIVIDEND_RATE = 0.35
++// Share of operating profit a company pays out to its owners (the rest is
++// retained (cash and the investment pool that finances construction).
++const DIVIDEND_RATE = 0.75
+ 
+ // The slice of a private company's retained operating profit that flows into its
+ // country's INVESTMENT POOL each tick — the private sector's savings pooling into
+@@ -1340,7 +1499,11 @@ export function distributeDividends(
+           add(corpCashDelta, corp.id, -amt)
+           break
+         case 'character':
+-          // Retained by the company for now (character wealth settled elsewhere).
++          // A named magnate's stake: paid out to the nation's households like
++          // public shares (character wealth isn't modelled separately), so the
++          // money is spent rather than stranded in the company.
++          add(popDividendByCountry, corp.countryId, amt)
++          add(corpCashDelta, corp.id, -amt)
+           break
+       }
+     }
+diff --git a/src/economy/economyTypes.ts b/src/economy/economyTypes.ts
+index 0e487c8..d3f88ef 100644
+--- a/src/economy/economyTypes.ts
++++ b/src/economy/economyTypes.ts
+@@ -288,6 +288,8 @@ export interface Country {
+   // Monetary transmission/inflation state (see monetaryPolicy.ts, Stage 4).
+   // Evolves each tick; defaulted on first use, so optional.
+   monetary?: MonetaryState
++  // Chained consumer price index (1 at game start) — see economyTick's cpi.
++  priceIndex?: number
+ }
+ 
+ // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---

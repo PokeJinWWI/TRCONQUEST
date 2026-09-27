@@ -38,8 +38,10 @@ export const GOOD_VALUE: Record<SimpleGood, number> = {
 }
 
 // --- District kinds (defined below with their buildings) ------------------------
-export type SimpleDistrictId = 'industrial' | 'academic' | 'agricultural' | 'mining' | 'generator' | 'urban'
-export const SIMPLE_DISTRICTS: SimpleDistrictId[] = ['industrial', 'academic', 'agricultural', 'mining', 'generator', 'urban']
+// The military district houses no economy buildings: its slots hold the
+// planetary defenses (data/defenseData.ts), counted through WorldState.militarySlots.
+export type SimpleDistrictId = 'industrial' | 'academic' | 'agricultural' | 'mining' | 'generator' | 'urban' | 'military'
+export const SIMPLE_DISTRICTS: SimpleDistrictId[] = ['industrial', 'academic', 'agricultural', 'mining', 'generator', 'urban', 'military']
 
 // --- Buildings ---------------------------------------------------------------
 // A Stellaris-style roster: each building has its own output and upkeep per
@@ -209,6 +211,11 @@ export const SIMPLE_DISTRICT_DEFS: Record<SimpleDistrictId, SimpleDistrictDef> =
     name: 'Urban District',
     description: 'Clinics, entertainment and commerce — the amenities city life needs. Other nations’ embassies and branch offices are housed here too.',
     buildings: inDistrict('urban'),
+  },
+  military: {
+    name: 'Military District',
+    description: 'Fortresses, shield generators and defense batteries — the world’s planetary defenses. Each takes one slot while it stands; build them here or from the Defense tab.',
+    buildings: [],
   },
 }
 

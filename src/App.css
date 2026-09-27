@@ -5082,6 +5082,58 @@ div.fleet-row .combat-density-row {
   height: 100%;
 }
 
+.ground-key {
+  position: relative;
+}
+/* A key node's name under its glyph (hover it for what the node does). */
+.ground-key-name {
+  position: absolute;
+  left: 0;
+  top: 11px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 3px #000, 0 0 6px #000;
+  cursor: help;
+  pointer-events: auto;
+}
+.ground-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px;
+}
+.ground-key-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid rgba(111, 227, 255, 0.18);
+  border-radius: 3px;
+  background: rgba(111, 227, 255, 0.04);
+  color: #dff4ff;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ground-key-row:hover {
+  border-color: rgba(111, 227, 255, 0.6);
+}
+.ground-key-row-name {
+  font-weight: 600;
+}
+.ground-key-row .abs-dim {
+  grid-column: 1;
+  font-size: 10px;
+}
+.ground-key-row-holder {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 10px;
+}
 .ground-key-marker {
   position: absolute;
   left: 0;
@@ -5679,6 +5731,23 @@ button.pl-tile.empty:hover {
   height: 100%;
   background: currentColor;
 }
+.pl-group-toggle {
+  margin-left: auto;
+  float: right;
+  font-size: 10px;
+  color: rgba(223, 244, 255, 0.75);
+  cursor: pointer;
+}
+.pl-group-toggle input {
+  vertical-align: middle;
+  margin: 0 3px 0 0;
+}
+.pl-group-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
 .pl-picker {
   display: flex;
   flex-direction: column;
@@ -5910,4 +5979,25 @@ button.pl-tile.empty:hover {
 }
 .pl-foreign {
   margin-top: 5px;
+}
+/* Key sites (components/planet/KeySites.tsx): the Civic group's key-node buildings */
+.pl-district-civic {
+  border-color: rgba(255, 210, 63, 0.3);
+}
+.pl-key-tile {
+  position: relative;
+  border-color: rgba(255, 210, 63, 0.4);
+  color: #ffe08a;
+  background: linear-gradient(180deg, rgba(255, 210, 63, 0.1), rgba(255, 210, 63, 0.02));
+}
+.pl-tile.captured {
+  border-color: rgba(255, 107, 74, 0.6);
+}
+.pl-key-flag {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
 }

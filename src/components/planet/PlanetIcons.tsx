@@ -80,6 +80,13 @@ const GLYPHS: Record<string, ReactElement> = {
   fortress: <path d="M2 14V5h2v2h2V5h4v2h2V5h2v9z M7 14v-3h2v3" fill="none" />,
   shieldGenerator: <path d="M8 1l6 2.5v4c0 3.5-2.5 6-6 7.5-3.5-1.5-6-4-6-7.5v-4z M8 5v6 M5 8h6" fill="none" />,
   defenseBattery: <path d="M3 14h10l-1-4H4z M6 10l3-6 M8.5 4.5l3-1.5 M8 10a2 2 0 0 0-4 0" fill="none" />,
+  military: <path d="M2 14V5h2v2h2V5h4v2h2V5h2v9z M7 14v-3h2v3" fill="none" />,
+
+  // --- Key-node buildings (scene/keyBuildings.ts) ---------------------------------------
+  spaceport: <path d="M8 1c2 2 2.5 5 2.5 8H5.5c0-3 .5-6 2.5-8z M5.5 9 4 12h8l-1.5-3 M8 12v3 M1 15h14" fill="none" />,
+  seat: <path d="M1 14h14 M2 12h12 M3 12V7 M6 12V7 M10 12V7 M13 12V7 M2 7h12 M4 7a4 4 0 0 1 8 0 M8 3V1.5" fill="none" />,
+  cityHall: <path d="M1 14h14 M2 14V7l6-4 6 4v7 M6 14v-4h4v4 M8 3V1" fill="none" />,
+  outpostStation: <path d="M2 14h12 M4 14v-4a4 4 0 0 1 8 0v4 M8 6V2 M8 2l3 1-3 1" fill="none" />,
 
   // --- Foreign buildings -----------------------------------------------------------------
   embassy: <path d="M3 15V1 M3 2h9l-2 3 2 3H3" fill="none" />,

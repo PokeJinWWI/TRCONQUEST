@@ -43,6 +43,8 @@ export interface Topography {
   water: Uint8Array | null // 0–255 share under water
   feature: Uint8Array
   mapped: Uint8Array
+  regionNames: string[]
+  region: Uint8Array | null // 1-based into regionNames, 0 = none
 }
 
 function decode(b64: string): Uint8Array {
@@ -76,10 +78,19 @@ export function topographyOf(bodyName: string): Topography | null {
       water: raw.water ? decode(raw.water) : null,
       feature: decode(raw.feature),
       mapped: decode(raw.mapped),
+      regionNames: raw.regionNames,
+      region: raw.region ? decode(raw.region) : null,
     }
   }
   cache.set(bodyName, t)
   return t
+}
+
+// The named region a node lies in (IAU: Xanthe Terra, Mare Imbrium…), if any.
+export function regionAt(bodyName: string, node: number): string | null {
+  const t = topographyOf(bodyName)
+  const k = t?.region?.[node] ?? 0
+  return k > 0 ? t!.regionNames[k - 1] ?? null : null
 }
 
 export const featureAt = (t: Topography, node: number): FeatureCode => FEATURE_CODES[t.feature[node]] ?? 'none'

@@ -15,7 +15,8 @@ import { bodiesOwnedBy } from './territory'
 import { spawnOwnedShip } from './shipyardLogic'
 import { groundSurface, musterNode } from './groundLogic'
 import { placeInstallation } from './defenseLogic'
-import { useDefenseStore } from '../state/defenseStore'
+import { resyncMilitarySlots, useDefenseStore } from '../state/defenseStore'
+import { LANDMARKS } from '../data/landmarks'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
 
@@ -44,11 +45,22 @@ export function seedStartingDefenses(simDays = useGameTimeStore.getState().simDa
       if (node === null) continue
       installations = [
         ...installations,
-        { id: `def-start-${country.id}-${kind}`, bodyName: country.capitalBodyName, kind, node, integrity: DEFENSE_DEFS[kind].integrity, builtBy: country.id, readySimDays: simDays },
+        {
+          id: `def-start-${country.id}-${kind}`,
+          bodyName: country.capitalBodyName,
+          kind,
+          node,
+          integrity: DEFENSE_DEFS[kind].integrity,
+          builtBy: country.id,
+          readySimDays: simDays,
+          // The capital's fortress is its nation's landmark (Olympus Castle…).
+          name: kind === 'fortress' ? LANDMARKS[country.id]?.fortress.name : undefined,
+        },
       ]
     }
   }
   useDefenseStore.getState().setInstallations(installations)
+  resyncMilitarySlots()
 }
 
 export function seedStartingArmies(): void {
