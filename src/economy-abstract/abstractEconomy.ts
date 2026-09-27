@@ -465,6 +465,11 @@ export interface StratumReport {
   parts: { label: string; value: number }[]
 }
 
+// What one unit of a good costs a nation to import, in its own currency.
+export function importUnitCost(s: Pick<AbstractEconomyState, 'currency'>, g: SimpleGood): number {
+  return (GOOD_VALUE[g] * IMPORT_MARKUP) / Math.max(0.01, s.currency.rate)
+}
+
 export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], stock: Stockpile): AbstractReport {
   const mods = TYPE_MODS[s.economyType]
   const productivity = s.productivity ?? 1
@@ -581,7 +586,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
       traded[g] = -sell
       exportRevenue += (sell * GOOD_VALUE[g] * EXPORT_DISCOUNT) / rate
     } else if (q > 0) {
-      const unit = (GOOD_VALUE[g] * IMPORT_MARKUP) / rate
+      const unit = importUnitCost(s, g)
       const buy = Math.min(q, unit > 0 ? cash / unit : q)
       traded[g] = buy
       importCost += buy * unit

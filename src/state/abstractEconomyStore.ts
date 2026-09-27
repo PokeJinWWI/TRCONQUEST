@@ -6,6 +6,7 @@ import {
   freeSlots,
   freeLand,
   districtsOf,
+  importUnitCost,
   type AbstractEconomyState,
   type AbstractReport,
   type EconomyType,
@@ -34,6 +35,8 @@ import { COUNTRIES } from '../data/countryData'
 import { useTerritoryStore } from './territoryStore'
 import { useResourceStore } from './resourceStore'
 import { useTechStore } from './techStore'
+import { atWar } from './diplomacyStore'
+import { matchTrade } from '../economy-abstract/tradeMatching'
 
 // Simple mode's economy store: one macro state per nation, plus every
 // world's population and buildings (keyed by body name — a world's economy
@@ -233,31 +236,53 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     const worlds = { ...store.worlds }
     const research: Record<string, Record<TechCategory, number>> = {}
     const stocks: Record<string, Stockpile> = {}
-
-    for (const id of Object.keys(byCountry)) {
+    const ids = Object.keys(byCountry)
+    const series: Record<string, { gdp: number; realGdp: number; inflation: number; debtToGdp: number; rate: number }[]> = {}
+    for (const id of ids) {
       // A body that changed hands takes its unfinished projects with it.
-      let s = byCountry[id]
-      if (s.queue.some((o) => owners[o.bodyName] !== id)) s = { ...s, queue: s.queue.filter((o) => owners[o.bodyName] === id) }
-      let stock = stockOf(id)
-      let r = reports[id]
-      const series = history[id] ? [...history[id]] : []
+      const s = byCountry[id]
+      if (s.queue.some((o) => owners[o.bodyName] !== id)) byCountry[id] = { ...s, queue: s.queue.filter((o) => owners[o.bodyName] === id) }
+      stocks[id] = stockOf(id)
+      series[id] = history[id] ? [...history[id]] : []
       research[id] = { physics: 0, society: 0, engineering: 0 }
-      for (let i = 0; i < steps; i++) {
+    }
+    for (let i = 0; i < steps; i++) {
+      // The AI sets its policies and orders first…
+      if (steer) {
+        for (const id of ids) {
+          const mine = worldsOf(id, worlds, owners, controllers)
+          byCountry[id] = steer(byCountry[id], { worlds: mine, stock: stocks[id], report: abstractReport(byCountry[id], mine, stocks[id]) })
+        }
+      }
+      // …then trade between nations (economy-abstract/tradeMatching.ts): the
+      // standing orders fill from real partners at peace, matched each month
+      // on what every nation holds and can pay now.
+      const filled = matchTrade(
+        ids.map((id) => {
+          const r = reports[id]
+          const monthlyUse = r ? Object.fromEntries(SIMPLE_GOODS.map((g) => [g, r.used[g] + r.consumed[g]])) : {}
+          const monthlyNet = r ? Object.fromEntries(SIMPLE_GOODS.map((g) => [g, r.produced[g] - r.used[g] - r.consumed[g]])) : {}
+          return { id, orders: byCountry[id].trade, stock: stocks[id], monthlyUse, monthlyNet, cash: byCountry[id].treasury, unitCost: (g: SimpleGood) => importUnitCost(byCountry[id], g) }
+        }),
+        atWar,
+      )
+      for (const id of ids) {
+        const s = byCountry[id]
         const mine = worldsOf(id, worlds, owners, controllers)
-        if (steer) s = steer(s, { worlds: mine, stock, report: abstractReport(s, mine, stock) })
-        const res = tickAbstractEconomy(s, mine, stock)
-        s = res.state
-        stock = res.stock
-        r = res.report
+        // Tick with the orders as filled; the nation's standing orders stay as set.
+        const res = tickAbstractEconomy({ ...s, trade: filled[id] ?? {} }, mine, stocks[id])
+        byCountry[id] = { ...res.state, trade: s.trade }
+        stocks[id] = res.stock
+        const r = res.report
+        reports[id] = r
         for (const w of res.worlds) worlds[w.bodyName] = w
         for (const t of TECH_TREES) research[id][t] += r.researchByTree[t]
-        series.push({ gdp: s.gdp, realGdp: s.realGdp, inflation: s.inflation, debtToGdp: r.debtToGdp, rate: s.currency.rate })
+        series[id].push({ gdp: res.state.gdp, realGdp: res.state.realGdp, inflation: res.state.inflation, debtToGdp: r.debtToGdp, rate: res.state.currency.rate })
       }
-      if (series.length > HISTORY_LENGTH) series.splice(0, series.length - HISTORY_LENGTH)
-      byCountry[id] = s
-      reports[id] = r
-      history[id] = series
-      stocks[id] = stock
+    }
+    for (const id of ids) {
+      if (series[id].length > HISTORY_LENGTH) series[id].splice(0, series[id].length - HISTORY_LENGTH)
+      history[id] = series[id]
     }
     set({ byCountry, reports, history, worlds, tick: store.tick + steps })
 

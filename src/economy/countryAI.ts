@@ -18,6 +18,7 @@
 // entry point tickEconomy calls for each non-player country.
 
 import type { Country, CountryFiscal, World, Corporation, ConstructionOrder } from './economyTypes'
+import { goodIsScarce, inputsAvailable, recipeGood } from './scarcity'
 import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
 import { districtOrder, freeLandOfWorld } from './districts'
 import { economicSystemDef } from './laws'
@@ -193,6 +194,12 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
     if (placed) return placed
   }
 
+  // Scarce, and a plant for it could run (its inputs are made in the nation).
+  const scarce = (recipeId: string) => {
+    const good = recipeGood(recipeId)
+    return !!good && goodIsScarce(good, owned) && inputsAvailable(recipeId, owned)
+  }
+
   // Priority 2: BASIC PROVISION — regardless of economic system, a state keeps
   // its people fed and cared for. If a core needs tier is going unmet
   // nation-wide, build the essential that serves it (food / healthcare / power).
@@ -213,8 +220,12 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
       { tier: 'healthcare', recipe: 'clinic' },
       { tier: 'everyday', recipe: 'solarPlant' },
     ]
+    // Only when the good itself is scarce (economy/scarcity.ts): an unmet need
+    // with the good in glut is people who can't afford it, or a different good
+    // in the group missing — another plant only deepens the glut (Lalande once
+    // stacked seven clinics on one).
     for (const e of essentials) {
-      if (tierAvg(e.tier) < ESSENTIAL_NEEDS_THRESHOLD && !alreadyQueuing(e.recipe)) {
+      if (tierAvg(e.tier) < ESSENTIAL_NEEDS_THRESHOLD && scarce(e.recipe) && !alreadyQueuing(e.recipe)) {
         const placed = placeOn(e.recipe)
         if (placed) return placed
       }
@@ -231,7 +242,7 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
     // (a rough "most under-supplied" signal), that we're not already building.
     let best: { recipeId: string; price: number } | null = null
     for (const g of GROWTH_BUILDINGS) {
-      if (alreadyQueuing(g.recipeId)) continue
+      if (alreadyQueuing(g.recipeId) || !scarce(g.recipeId)) continue
       const recipe = RECIPES[g.recipeId]
       const outGood = recipe?.methods[0]?.outputs[0]?.good
       if (!outGood) continue
@@ -254,6 +265,9 @@ export interface CountryAIOptions {
   // every connected player's nation here, leaving only unclaimed nations to the
   // AI). When empty/absent, every nation is treated as AI (headless sim/tests).
   humanCountryIds?: readonly string[]
+  // Whether two nations are at war — they don't trade (internationalTrade.ts).
+  // Absent = nobody is (headless sims and tests).
+  atWar?: (a: string, b: string) => boolean
   // The current tick index, for review cadence. Managers only act on their
   // review ticks.
   tick?: number

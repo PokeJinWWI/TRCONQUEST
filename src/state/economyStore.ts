@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { atWar } from './diplomacyStore'
 import { districtOrder, freeLandOfWorld } from '../economy/districts'
 import type { DistrictType } from '../economy/recipes'
 import { usePlayerStore } from './playerStore'
@@ -420,20 +421,27 @@ interface EconomyStore {
 
 let constructionCounter = 0
 
-// Unemployment across a country's worlds: 1 − employed / labour force.
+// Unemployment across a country's worlds: 1 − employed / labour force. The
+// labour force is the working classes plus the subsistence class's formal
+// jobholders; subsistence people without a formal job are the informal sector
+// (self-provision, the grey economy), not unemployed — counting them read as
+// 60% unemployment on worlds whose working classes were nearly all in work.
+// Investors hold no jobs and aren't in it.
 export function unemploymentOf(countryId: string, worlds: World[], worldReports: Record<string, WorldReport>): number {
-  let workers = 0
+  let force = 0
   let employed = 0
   for (const w of worlds) {
     if (w.ownerId !== countryId) continue
     const labor = worldReports[w.id]?.labor
     if (!labor) continue
-    for (const cls of Object.values(labor)) {
-      workers += cls.workers
-      employed += cls.workers * cls.employmentRate
+    for (const [cls, l] of Object.entries(labor)) {
+      if (cls === 'investor') continue
+      const inWork = l.workers * l.employmentRate
+      force += cls === 'subsistence' ? inWork : l.workers
+      employed += inWork
     }
   }
-  return workers > 0 ? Math.max(0, 1 - employed / workers) : 0
+  return force > 0 ? Math.max(0, 1 - employed / force) : 0
 }
 
 function sampleOf(f: CountryFiscal, country?: Country, money?: MonetaryAggregates, unemployment?: number): FiscalSample {
@@ -499,7 +507,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const localPlayer = usePlayerStore.getState().selectedCountryId
       const humanCountryIds = localPlayer ? [localPlayer] : []
       for (let i = 0; i < steps; i++) {
-        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true }, banks)
+        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true, atWar }, banks)
         countries = res.countries
         worlds = res.worlds
         corporations = res.corporations

@@ -88,6 +88,14 @@ function WarningSigns({ s, r, growth }: { s: AbstractEconomyState; r: AbstractRe
   )
 }
 
+// Why a standing trade order didn't fully go through last month.
+function unfilledReason(order: number, done: number): string {
+  const got = Math.abs(done).toFixed(1)
+  return order > 0
+    ? `Only ${got} came in last month: no nation at peace with you could spare more, or your treasury ran short`
+    : `Only ${got} went out last month: no nation at peace with you was importing more, or your stock ran short`
+}
+
 export function AbstractEconomyPanel() {
   const [tab, setTab] = useState<Tab>('Macro')
   const countryId = usePlayerStore((s) => s.selectedCountryId)
@@ -567,13 +575,13 @@ function TradeTab({ countryId, s, r }: TabProps) {
         <div><span className="inspect-label">Trade balance</span><span className={r.tradeBalance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.tradeBalance)}/mo</span></div>
       </div>
 
-      <div className="econ-subtitle" style={{ marginTop: 10 }}>Interstellar market</div>
+      <div className="econ-subtitle" style={{ marginTop: 10 }}>Trade with other nations</div>
       <div className="abs-dim" style={{ fontSize: 10, marginBottom: 4 }}>
-        Standing monthly orders, settled from the treasury. A strong currency makes imports cheap and exports earn less. Positive imports, negative exports.
+        Standing monthly orders, settled from the treasury. Imports come from nations at peace with you that can spare the good (their exports, or stock beyond six months of their own use); exports sell only to nations importing the good. A strong currency makes imports cheap and exports earn less. Positive imports, negative exports.
       </div>
       <table className="abs-table">
         <thead>
-          <tr><th>Good</th><th>Stock</th><th title="Import price / export price per unit, in your currency">Buy / Sell</th><th>Order/mo</th></tr>
+          <tr><th>Good</th><th>Stock</th><th title="Import price / export price per unit, in your currency">Buy / Sell</th><th>Order/mo</th><th title="How much of the order went through last month">Filled</th></tr>
         </thead>
         <tbody>
           {SIMPLE_GOODS.map((g: SimpleGood) => {
@@ -591,8 +599,11 @@ function TradeTab({ countryId, s, r }: TabProps) {
                     step={5}
                     value={order}
                     onChange={(e) => setTrade(countryId, g, Number(e.target.value))}
-                    title={order !== 0 && Math.abs(done - order) > 0.01 ? `Only ${fmt(Math.abs(done), 1)} went through last month (stock or cash ran short)` : undefined}
+                    title={order !== 0 && Math.abs(done - order) > 0.01 ? unfilledReason(order, done) : undefined}
                   />
+                </td>
+                <td className={order !== 0 && Math.abs(done - order) > 0.01 ? 'econ-neg' : 'abs-dim'} title={order !== 0 && Math.abs(done - order) > 0.01 ? unfilledReason(order, done) : undefined}>
+                  {order === 0 && Math.abs(done) < 0.01 ? '—' : signed(done)}
                 </td>
               </tr>
             )

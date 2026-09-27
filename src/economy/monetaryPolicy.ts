@@ -35,11 +35,18 @@ const DEMAND_SENS = 2.5 // per unit of (neutral − real rate)
 const MONEY_SENS = 1.2 // per unit of per-tick broad-money growth
 const GAP_SPEED = 0.15 // output gap lags toward its impulse (transmission lag #1)
 
-// Inflation pressures and how fast inflation tracks them (transmission lag #2).
-const DEMAND_INFL = 0.5 // output gap → demand-pull inflation
-const IMPORT_INFL = 0.35 // currency depreciation → imported inflation
-const FIN_INFL = 0.25 // monetary deficit financing → inflation
-const INFL_SPEED = 0.2
+// Inflation is MEASURED: the price level's month-on-month change (economyTick's
+// chained CPI), annualized and smoothed by INFL_SMOOTHING. The monetary
+// pressures — demand from loose money (the output gap), a falling currency,
+// printed money — act on real prices: they set a PRICE DRIFT that economyTick
+// applies to every price next month, so they show up in measured inflation.
+// (Modeled as a number of its own, inflation drifted away from prices — it read
+// 56%/yr for a nation whose prices rose 3%.)
+const INFL_SMOOTHING = 0.25
+const DEMAND_INFL = 0.1 // output gap → drift: the extra credit-driven demand, small (real demand already moves prices in the goods markets)
+const IMPORT_INFL = 0.35 // currency depreciation (per tick, annualized) → imported drift
+const FIN_INFL = 0.25 // monetary deficit financing (share of GDP) → drift
+const DRIFT_MAX = 0.15 // the drift's bound, a year
 const EXP_SPEED = 0.15 // expectations drift toward actual, scaled by (1 − credibility)
 const INFLATION_NORM = 0.02 // the "well-anchored" inflation level
 
@@ -70,6 +77,9 @@ export interface MonetaryState {
   neutralRate: number // the bank's estimate of the neutral policy rate
   lastBroadMoney: number // previous tick's broad money, for the growth term
   lastRate: number // previous tick's exchange rate, for the imported-inflation term
+  // The yearly rate monetary pressures push every price by next month
+  // (economyTick). Absent = 0.
+  priceDrift?: number
 }
 
 export function defaultMonetaryState(): MonetaryState {
@@ -120,19 +130,18 @@ export function tickMonetary(
     const cap = monetaryFinancingCap(cb)
     const deficit = Math.max(0, -fiscal.balance)
     const monetaryFinanced = deficit * cap
-    const annualGdp = Math.max(1, fiscal.gdp * TICKS_PER_YEAR)
 
     // 1. Demand impulse → lagged output gap.
     const realRate = cb.policyRate - ms.expectation
     const impulse = (ms.neutralRate - realRate) * DEMAND_SENS + moneyGrowth * MONEY_SENS
     const outputGap = clamp(ms.outputGap + (impulse - ms.outputGap) * GAP_SPEED, -0.25, 0.25)
 
-    // 2. Inflation pressures → lagged inflation, around expectations.
-    const demandInfl = DEMAND_INFL * outputGap
-    const importedInfl = IMPORT_INFL * depreciation
-    const financeInfl = FIN_INFL * (monetaryFinanced / annualGdp)
-    const inflationTarget = ms.expectation + demandInfl + importedInfl + financeInfl
-    const inflation = ms.inflation + (inflationTarget - ms.inflation) * INFL_SPEED
+    // 2. Inflation, measured from prices (fiscal.inflation is this month's change
+    //    in the price level, before this patch), annualized and smoothed.
+    const measured = Math.pow(1 + fiscal.inflation, TICKS_PER_YEAR) - 1
+    const inflation = ms.inflation + (measured - ms.inflation) * INFL_SMOOTHING
+    //    …and the pressures that will move prices next month.
+    const priceDrift = clamp(DEMAND_INFL * outputGap + IMPORT_INFL * depreciation * TICKS_PER_YEAR + FIN_INFL * (monetaryFinanced / Math.max(1, fiscal.gdp)), -DRIFT_MAX, DRIFT_MAX)
 
     // 3. Expectations drift toward actual, less anchored the lower the credibility.
     const expectation = ms.expectation + (inflation - ms.expectation) * (1 - cb.credibility) * EXP_SPEED
@@ -159,7 +168,11 @@ export function tickMonetary(
     let policyRate = cb.policyRate
     if (!governmentControlsPolicy(cb)) {
       const inflGap = inflation - INFLATION_NORM
-      const desired = ms.neutralRate + expectation + TAYLOR_INFL * w.inflation * inflGap - TAYLOR_GAP * w.employment * outputGap
+      // A positive gap is demand running hot (loose money → positive), so it
+      // RAISES the rate, as in a Taylor rule. (Subtracted, it cut rates as the
+      // economy overheated, which widened the gap, which cut them further:
+      // Mars's rate pinned at 0%, its currency sank and its reserves ran out.)
+      const desired = ms.neutralRate + expectation + TAYLOR_INFL * w.inflation * inflGap + TAYLOR_GAP * w.employment * outputGap
       policyRate = clamp(cb.policyRate + (desired - cb.policyRate) * RATE_ADJ_SPEED, RATE_MIN, RATE_MAX)
     } else if (!humans.has(country.id)) {
       const inflGap = inflation - INFLATION_NORM
@@ -209,7 +222,7 @@ export function tickMonetary(
       treasury,
       investmentPool,
       centralBank: { ...cb, policyRate, credibility, governmentPressure, currencyInCirculation, governorName, governorTermStart },
-      monetary: { inflation, expectation, outputGap, neutralRate: ms.neutralRate, lastBroadMoney: broadMoney, lastRate: rate },
+      monetary: { inflation, expectation, outputGap, neutralRate: ms.neutralRate, lastBroadMoney: broadMoney, lastRate: rate, priceDrift },
     }
   })
 }

@@ -229,6 +229,10 @@ export interface Country {
   welfarePerCapita: number
   // National cash; negative = an unfunded overdraft (issue bonds to cover it).
   treasury: number
+  // The fiscal rule's scale on the state's purchases (economyTick), 0.3–1:
+  // eased down while it borrows beyond what its debt allows, back up when it
+  // can afford them. Absent = 1.
+  purchaseScale?: number
   // Economic-system law (laws.ts) — governs owner autonomy and the penalty for
   // the state overriding a private building's production method.
   economicSystem: EconomicSystem
@@ -291,6 +295,8 @@ export interface Country {
   // Monetary transmission/inflation state (see monetaryPolicy.ts, Stage 4).
   // Evolves each tick; defaulted on first use, so optional.
   monetary?: MonetaryState
+  // Chained consumer price index (1 at game start) — see economyTick's cpi.
+  priceIndex?: number
 }
 
 // --- Corporations, shareholding, characters (design doc Sections 3e/6) ---
@@ -468,6 +474,9 @@ export interface CountryFiscal {
   // Trade (Milestone 5): total goods shipped between the country's worlds this
   // tick, and the freight capacity available.
   tradeVolume: number
+  // What it paid other nations for imports this tick, in its own currency
+  // (internationalTrade.ts). Absent before the first trade.
+  importValue?: number
   logisticsCapacity: number
   // Government subsidies paid out to corporations + individual buildings this
   // tick — a real expenditure line, folded into `expenditure`/`balance`.

@@ -41,6 +41,8 @@ console.log('=== 1. Every capital world names its key nodes ===')
   const mars = surfaceOf('Mars', 'capital')
   const m = [...keyNamesOf(mars).values()].find((n) => n.native)
   check('Mars’s cities carry their kanji', !!m?.native, m ? `${m.name} ${m.native}` : '')
+  const akakyo = keyNamesOf(mars).get(mars.keySlots.find((k) => k.kind === 'capital')!.node)
+  check('...the capital too: Akakyō 赤京', akakyo?.native === '赤京', `${akakyo?.name} ${akakyo?.native}`)
 }
 
 console.log('\n=== 2. Names are stable and belong to the founding nation ===')

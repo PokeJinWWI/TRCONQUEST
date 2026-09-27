@@ -2,6 +2,8 @@ import { CITY_NAMES, type CityName } from '../data/cityNames'
 import { getCountry } from '../data/countryData'
 import { seedBodyOwners } from './territory'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
+import { lonLatOf } from './mapProjection'
+import { regionAt } from './bodyTopography'
 import type { BodySurface, KeySlot } from './planetTerrain'
 
 // Names and roles for a world's key nodes. A world's cities are named from its
@@ -42,7 +44,7 @@ const cache = new Map<string, Map<number, KeyName>>()
 
 // Every key node's name on this surface.
 export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
-  const key = `${surface.bodyName}|${surface.keySlots.map((k) => `${k.node}${k.kind[0]}${k.name ?? ''}`).join(',')}`
+  const key = `${surface.bodyName}|${surface.keySlots.map((k) => `${k.node}${k.kind[0]}${k.name ?? ''}${k.site ?? ''}`).join(',')}`
   const hit = cache.get(key)
   if (hit) return hit
   const out = new Map<number, KeyName>()
@@ -58,11 +60,12 @@ export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
     next++
     return c
   }
-  // Settlements first (so the names don't shift if a fortress is added later).
+  // Settlements first (so the names don't shift if a fortress or another
+  // spaceport is added later).
   for (const slot of surface.keySlots) {
-    if (slot.kind === 'fortress') continue
+    if (slot.kind === 'fortress' || slot.site) continue
     if (slot.kind === 'capital' && capitalName) {
-      out.set(slot.node, { name: capitalName, label: `${capitalName} (capital)` })
+      out.set(slot.node, { name: capitalName, native: country?.capitalCityNative, label: `${capitalName} (capital)` })
       continue
     }
     const c = take()
@@ -84,8 +87,43 @@ export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
     const name = guarded ? out.get(guarded.node)?.name : null
     out.set(slot.node, { name: null, label: name ? `${name} Fortress` : KEY_KIND_LABEL.fortress })
   }
+  // The world's other spaceports: named for the settlement they serve and the
+  // direction they lie from it ("Akakyō North Spaceport"), a strategic outlier
+  // for its region ("Tharsis Launch Complex"); a numeral where one repeats.
+  const used = new Set([...out.values()].map((n) => n.label))
+  const unique = (label: string) => {
+    let l = label
+    for (let n = 2; used.has(l); n++) l = `${label} ${ROMAN[n] ?? n}`
+    used.add(l)
+    return l
+  }
+  for (const slot of surface.keySlots) {
+    if (!slot.site) continue
+    const region = slot.site === 'outlier' ? regionAt(surface.bodyName, slot.node) : null
+    if (region) {
+      out.set(slot.node, { name: null, label: unique(`${region} Launch Complex`) })
+      continue
+    }
+    const near = nearestSettlement(surface, slot.node, Infinity)
+    const town = near ? out.get(near.node)?.name : null
+    out.set(slot.node, { name: null, label: unique(town && near ? `${town} ${compass(near.node, slot.node)} Spaceport` : KEY_KIND_LABEL.spaceport) })
+  }
   cache.set(key, out)
   return out
+}
+
+const ROMAN: Record<number, string> = { 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI' }
+
+// Which way `to` lies from `from`, as one of eight compass points.
+function compass(from: number, to: number): string {
+  const a = lonLatOf(nodePoint(from))
+  const b = lonLatOf(nodePoint(to))
+  let dLon = b.lon - a.lon
+  if (dLon > Math.PI) dLon -= 2 * Math.PI
+  if (dLon < -Math.PI) dLon += 2 * Math.PI
+  const angle = Math.atan2(b.lat - a.lat, dLon * Math.cos((a.lat + b.lat) / 2))
+  const names = ['East', 'Northeast', 'North', 'Northwest', 'West', 'Southwest', 'South', 'Southeast']
+  return names[((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8]
 }
 
 export function keyNameOf(surface: BodySurface, slot: Pick<KeySlot, 'node' | 'kind'>): KeyName {
@@ -98,7 +136,7 @@ export function nearestSettlement(surface: BodySurface, node: number, maxCells: 
   let best: KeySlot | null = null
   let bestD = Infinity
   for (const k of surface.keySlots) {
-    if (k.kind === 'fortress') continue
+    if (k.kind === 'fortress' || k.site) continue
     const d = arc(nodePoint(k.node), nodePoint(node)) / cell
     if (d <= maxCells && d < bestD) {
       best = k

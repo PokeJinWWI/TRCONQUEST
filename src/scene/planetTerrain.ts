@@ -52,6 +52,11 @@ export interface KeySlot {
   kind: KeyKind
   // A landmark installation's own name (defenseLogic.withInstallationKeys).
   name?: string
+  // A spaceport's operator, for display ("the state", a company's name).
+  operator?: string
+  // A spaceport beyond the terrain's own (scene/spaceportSites.ts): one of the
+  // world's others, or a strategic outlier (named for its region).
+  site?: 'extra' | 'outlier'
 }
 
 export interface BodySurface {

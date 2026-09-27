@@ -10,6 +10,8 @@ export interface Country {
   capitalBodyName: string
   // The capital city's name, where the setting has one (shown on its key node).
   capitalCityName?: string
+  // The capital's name in its own script (Mars's kanji), when it has one.
+  capitalCityNative?: string
   // Where on the capital world it stands (degrees east, north); the nearest
   // mainland to it. Omitted: the map picks a spot.
   capitalCityAt?: [number, number]
@@ -23,6 +25,7 @@ export const COUNTRIES: Country[] = [
     capitalStarId: 'sol',
     capitalBodyName: 'Mars',
     capitalCityName: 'Akakyō',
+    capitalCityNative: '赤京',
     capitalCityAt: [-48.1, 1.6], // Xanthe Terra (IAU centre)
   },
   {

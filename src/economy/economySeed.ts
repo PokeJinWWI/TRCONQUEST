@@ -1,9 +1,11 @@
 import { GOODS, GOOD_IDS, type GoodId } from './goods'
-import { DISTRICT_TYPES, POP_CLASSES, RECIPES, getMethod, type DistrictType, type PopClass } from './recipes'
+import { BUREAUCRACY_OUTPUT, DISTRICT_TYPES, POP_CLASSES, RECIPES, districtOfRecipe, getMethod, qualificationFraction, type DistrictType, type PopClass } from './recipes'
 import { SLOTS_PER_DISTRICT_LEVEL } from './districts'
 import { landForBody } from '../scene/bodyLand'
 import { COUNTRIES as NATIONS } from '../data/countryData'
-import { DEPLETABLE_GOODS } from './economyTick'
+import { COUNTRY_CALIBRATION, SEED_CALIBRATION, type CountryCalibration, type SeedCalibration, type WorldCalibration } from './seedCalibration'
+import { CLASS_PAY, LABOR_SHARE, WAGE_FLOOR, ADMIN_PER_BUILDING_LEVEL, BUREAUCRACY_PER_DECREE, BUREAUCRACY_PER_STATE_BUILDING_LEVEL, BUREAUCRACY_PER_STATECORP_BUILDING_LEVEL, CAPITAL_UPKEEP, DEPLETABLE_GOODS, GOVERNMENT_BASKET, JOB_SCALE, NEED_SCALE, PUBLIC_SPENDING_PER_CAPITA } from './economyTick'
+import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor } from './species'
 import { governorAppointmentDef, type CentralBank } from './centralBank'
 import type { ReligionMix } from './demographics'
 import type {
@@ -71,9 +73,12 @@ function makeBuilding(worldId: string, recipeId: string, level: number, owner: s
   buildingCounter += 1
   const method = getMethod(recipeId, methodId)
   const inventory: Building['inventory'] = {}
-  // Seeded buildings are established: full throughput and a tick of output on
-  // hand, so the starting economy is productive from tick one.
-  if (method) for (const out of method.outputs) inventory[out.good] = out.amount * level
+  // Seeded buildings are established, with a month's output on hand: the
+  // market clears BEFORE a month's production, so this is what's for sale in
+  // month 1, as last month's output is every month after. (A quarter-month
+  // left month 1 at a fifth of demand: prices jumped, firms sold little, the
+  // budget lurched. buildWorld scales it to the run the building opens at.)
+  if (method) for (const out of method.outputs) inventory[out.good] = out.amount * level * SEED_STOCK_TICKS
   return {
     id: `bld-${worldId}-${recipeId}-${buildingCounter}`,
     recipeId,
@@ -89,14 +94,36 @@ function makeBuilding(worldId: string, recipeId: string, level: number, owner: s
   }
 }
 
-function seedMarket(): Market {
+// Starting prices: base, or where a calibration found the world's markets settle.
+function seedMarket(calibrated?: Partial<Record<GoodId, number>>): Market {
   const prices = {} as Market['prices']
-  for (const g of GOOD_IDS) prices[g] = GOODS[g].basePrice
+  for (const g of GOOD_IDS) prices[g] = calibrated?.[g] ?? GOODS[g].basePrice
   return { prices }
 }
-function seedLabor(): LaborMarket {
+// Starting wages by the same rule the tick bargains them by (economyTick's
+// LABOR_SHARE and CLASS_PAY): the labour share of the value the world's
+// buildings add, of which SEED_VALUE_REALIZED is expected to sell once markets
+// settle. Wages only fall slowly (WAGE_CUT_MAX), so a seed far above this
+// left every firm losing money for years.
+const SEED_VALUE_REALIZED = 0.2
+const SEED_STOCK_TICKS = 1
+function seedLabor(spec: WorldSpec, split: Record<PopClass, number>): LaborMarket {
+  let valueAdded = 0
+  const jobs = {} as Record<PopClass, number>
+  for (const cls of POP_CLASSES) jobs[cls] = 0
+  for (const b of spec.buildings) {
+    const m = getMethod(b.recipe, b.method ?? RECIPES[b.recipe]?.methods[0]?.id ?? '')
+    if (!m) continue
+    for (const o of m.outputs) valueAdded += o.amount * b.level * GOODS[o.good].basePrice
+    for (const i of m.inputs) valueAdded -= i.amount * b.level * GOODS[i.good].basePrice
+    for (const u of CAPITAL_UPKEEP) valueAdded -= u.amount * b.level * GOODS[u.good].basePrice
+    for (const j of m.jobs) jobs[j.class] += j.count * b.level * JOB_SCALE
+  }
+  let payUnits = 0
+  for (const cls of POP_CLASSES) payUnits += CLASS_PAY[cls] * Math.min(jobs[cls], spec.population * split[cls])
+  const perUnit = payUnits > 0 ? (LABOR_SHARE * SEED_VALUE_REALIZED * Math.max(0, valueAdded)) / payUnits : 0
   const wages = {} as LaborMarket['wages']
-  for (const cls of POP_CLASSES) wages[cls] = 2
+  for (const cls of POP_CLASSES) wages[cls] = Math.max(WAGE_FLOOR, perUnit * CLASS_PAY[cls])
   return { wages }
 }
 
@@ -159,10 +186,122 @@ function seedDeposits(buildings: Building[]): Partial<Record<GoodId, number>> {
   return deposits
 }
 
-function buildWorld(spec: WorldSpec): World {
+// A world's people by class, sized to its own jobs: each working class gets
+// its jobs plus a little frictional slack, investors a small fixed share, and
+// the rest are subsistence (the informal economy). Where the jobs outnumber the
+// people, the working classes share what there is in proportion. A world with
+// no jobs falls back to CLASS_SPLIT. (One global split left Mars with 727
+// technicians for 1,601 technical jobs while half its other classes idled.)
+const WORKING_CLASSES: PopClass[] = ['labor', 'technical', 'professional', 'political']
+const FRICTIONAL_SLACK = 1.06
+const INVESTOR_SHARE = 0.04
+const MIN_SUBSISTENCE_SHARE = 0.08
+function classSplitFor(spec: WorldSpec): Record<PopClass, number> {
+  const jobs = {} as Record<PopClass, number>
+  for (const cls of POP_CLASSES) jobs[cls] = 0
+  for (const b of spec.buildings) {
+    const m = getMethod(b.recipe, b.method ?? RECIPES[b.recipe]?.methods[0]?.id ?? '')
+    for (const j of m?.jobs ?? []) jobs[j.class] += j.count * b.level * JOB_SCALE
+  }
+  const want = WORKING_CLASSES.reduce((n, c) => n + jobs[c] * FRICTIONAL_SLACK, 0) + jobs.subsistence
+  if (want <= 0 || spec.population <= 0) return CLASS_SPLIT
+  const room = 1 - INVESTOR_SHARE - MIN_SUBSISTENCE_SHARE
+  const scale = Math.min(1, (room * spec.population) / (want - jobs.subsistence))
+  const split = {} as Record<PopClass, number>
+  for (const cls of POP_CLASSES) split[cls] = 0
+  for (const cls of WORKING_CLASSES) split[cls] = (jobs[cls] * FRICTIONAL_SLACK * scale) / spec.population
+  split.investor = INVESTOR_SHARE
+  split.subsistence = Math.max(0, 1 - WORKING_CLASSES.reduce((n, c) => n + split[c], 0) - INVESTOR_SHARE)
+  return split
+}
+
+// The starting economy in balance: each producing building's level is set so
+// its NATION makes about BALANCE_HEADROOM more of each good than it uses — its
+// people's needs (at a middling standard of living), the state's purchases,
+// and other buildings' inputs and upkeep — keeping every building on the roster
+// (a good nobody uses keeps one level). Per nation, because a nation's worlds
+// ship to each other: balanced world by world, Mars was sized for its own mills
+// on top of Luna's mine that also feeds them, and its ore sat in glut. Solved by
+// iterating, since inputs depend on levels. Without it the worlds produced 4–9×
+// what their people could use: most output never sold, prices sank to their
+// floors and wages, profits and the state's accounts all went with them.
+const BALANCE_HEADROOM = 1.1
+const BALANCE_SOL = 0.7
+function balancedNation(specs: WorldSpec[]): Map<string, BuildingSpec[]> {
+  const adoption = seedAdoption()
+  const household = {} as Record<GoodId, number>
+  for (const g of GOOD_IDS) household[g] = 0
+  let population = 0
+  for (const spec of specs) {
+    population += spec.population
+    const species = SPECIES_TEMPLATES[spec.species]
+    if (!species) continue
+    for (const tier of NEED_TIERS) {
+      const wf = tierWealthFactor(tier, BALANCE_SOL)
+      for (const group of species.needs[tier]) {
+        const total = group.goods.reduce((n, x) => n + x.weight, 0) || 1
+        for (const x of group.goods) household[x.good] += ((group.base * NEED_SCALE * wf * spec.population * x.weight) / total) * (adoption[x.good] ?? 1)
+      }
+    }
+  }
+  const all = specs.flatMap((spec) => spec.buildings.map((b) => ({ spec: spec.id, b })))
+  let levels = all.map(({ b }) => b.level)
+  const methodOf = all.map(({ b }) => getMethod(b.recipe, b.method ?? RECIPES[b.recipe]?.methods[0]?.id ?? ''))
+  for (let round = 0; round < 20; round++) {
+    const demand = { ...household }
+    const totalLevels = levels.reduce((n, l) => n + l, 0)
+    const govBudget = ADMIN_PER_BUILDING_LEVEL * totalLevels + PUBLIC_SPENDING_PER_CAPITA * population
+    for (const item of GOVERNMENT_BASKET) demand[item.good] += (govBudget * item.weight) / GOODS[item.good].basePrice
+    const capacity = {} as Record<GoodId, number>
+    for (const g of GOOD_IDS) capacity[g] = 0
+    methodOf.forEach((m, i) => {
+      if (!m) return
+      for (const inp of m.inputs) demand[inp.good] += inp.amount * levels[i]
+      for (const u of CAPITAL_UPKEEP) demand[u.good] += u.amount * levels[i]
+      for (const out of m.outputs) capacity[out.good] += out.amount * levels[i]
+    })
+    const next = levels.map((l, i) => {
+      const m = methodOf[i]
+      if (!m || m.outputs.length === 0) return l
+      const ratio = Math.max(...m.outputs.map((o) => (capacity[o.good] > 0 ? (demand[o.good] * BALANCE_HEADROOM) / capacity[o.good] : 1)))
+      return Math.max(1, Math.round(l * ratio))
+    })
+    // …but no world gets more jobs than its people can fill: its producers are
+    // cut back to fit, and the nation's other worlds grow into the gap next
+    // round. (Scaled nation-wide, Proxima b got 250 jobs for 150M people and
+    // ran at a quarter.)
+    for (const spec of specs) {
+      const idx = all.map((x, i) => (x.spec === spec.id ? i : -1)).filter((i) => i >= 0)
+      const jobsOf = (i: number) => (methodOf[i]?.jobs ?? []).reduce((n, j) => n + j.count * JOB_SCALE, 0) * next[i]
+      const jobs = idx.reduce((n, i) => n + jobsOf(i), 0)
+      const room = (spec.population * (1 - INVESTOR_SHARE)) / FRICTIONAL_SLACK
+      if (jobs <= room) continue
+      const fixed = idx.filter((i) => !methodOf[i] || methodOf[i]!.outputs.length === 0).reduce((n, i) => n + jobsOf(i), 0)
+      const scale = Math.max(0, (room - fixed) / Math.max(1e-9, jobs - fixed))
+      for (const i of idx) if (methodOf[i] && methodOf[i]!.outputs.length > 0) next[i] = Math.max(1, Math.floor(next[i] * scale))
+    }
+    if (next.every((l, i) => l === levels[i])) break
+    levels = next
+  }
+  const out = new Map<string, BuildingSpec[]>()
+  all.forEach(({ spec, b }, i) => {
+    if (!out.has(spec)) out.set(spec, [])
+    out.get(spec)!.push({ ...b, level: levels[i] })
+  })
+  return out
+}
+function balancedSpecs(specs: WorldSpec[]): Map<string, BuildingSpec[]> {
+  const out = new Map<string, BuildingSpec[]>()
+  for (const owner of new Set(specs.map((s) => s.ownerId))) for (const [id, b] of balancedNation(specs.filter((s) => s.ownerId === owner))) out.set(id, b)
+  return out
+}
+
+function buildWorld(rawSpec: WorldSpec, calibration?: WorldCalibration): World {
+  const spec = { ...rawSpec, buildings: BALANCED_BUILDINGS.get(rawSpec.id) ?? rawSpec.buildings }
   const pops: Pop[] = []
+  const split = classSplitFor(spec)
   for (const cls of POP_CLASSES) {
-    const classPop = spec.population * CLASS_SPLIT[cls]
+    const classPop = spec.population * split[cls]
     if (classPop <= 0) continue
     for (const r of spec.religions) {
       const size = classPop * r.share
@@ -170,7 +309,26 @@ function buildWorld(spec: WorldSpec): World {
       pops.push(makePop(spec.id, cls, spec.species, spec.culture, r.religion, size))
     }
   }
-  const buildings = spec.buildings.map((b) => makeBuilding(spec.id, b.recipe, b.level, b.owner, b.method))
+  // Seeded buildings open at the run their staff can support (the scarcest of
+  // their job classes, by qualified workers per job) — not flat out: on an
+  // understaffed colony they used to start at full run and sink toward a
+  // quarter over the first year, reading as a slump.
+  const qualified = {} as Record<PopClass, number>
+  const jobs = {} as Record<PopClass, number>
+  for (const cls of POP_CLASSES) {
+    qualified[cls] = 0
+    jobs[cls] = 0
+  }
+  for (const p of pops) qualified[p.class] += p.populationSize * qualificationFraction(p.class, p.educationLevel)
+  for (const b of spec.buildings) for (const j of getMethod(b.recipe, b.method ?? RECIPES[b.recipe]?.methods[0]?.id ?? '')?.jobs ?? []) jobs[j.class] += j.count * b.level * JOB_SCALE
+  const staffed = (cls: PopClass) => (jobs[cls] > 0 ? Math.min(1, qualified[cls] / jobs[cls]) : 1)
+  const buildings = spec.buildings.map((b) => {
+    const built = makeBuilding(spec.id, b.recipe, b.level, b.owner, b.method)
+    const method = getMethod(built.recipeId, built.methodId)
+    const throughput = Math.min(1, ...(method?.jobs ?? []).map((j) => staffed(j.class)))
+    const inventory = Object.fromEntries(Object.entries(built.inventory).map(([g, n]) => [g, (n ?? 0) * throughput]))
+    return { ...built, throughput, inventory }
+  })
   return {
     id: spec.id,
     name: spec.id,
@@ -191,8 +349,8 @@ function buildWorld(spec: WorldSpec): World {
     pops,
     buildings,
     constructionQueue: [],
-    market: seedMarket(),
-    labor: seedLabor(),
+    market: seedMarket(calibration?.prices),
+    labor: calibration?.wages ? { wages: { ...seedLabor(spec, split).wages, ...calibration.wages } } : seedLabor(spec, split),
     importStock: {},
     resourceDeposits: seedDeposits(buildings),
     adoption: seedAdoption(),
@@ -210,9 +368,9 @@ function seedDistricts(bodyName: string, capacity: Record<DistrictType, number>)
   return { districts, districtCapacity, land: Math.max(landForBody(bodyName), total) }
 }
 
-const WORLDS: World[] = [
+const WORLD_SPECS: WorldSpec[] = [
   // Imperial State of Mars — the showcase world with the full chain.
-  buildWorld({
+  {
     id: 'Mars',
     ownerId: 'imperial-state-of-mars',
     culture: 'martian',
@@ -290,8 +448,8 @@ const WORLDS: World[] = [
       { recipe: 'corporateHq', level: 1, owner: MRA },
       { recipe: 'corporateHq', level: 2, owner: REDMINES },
     ],
-  }),
-  buildWorld({
+  },
+  {
     id: 'Luna',
     ownerId: 'imperial-state-of-mars',
     culture: 'martian',
@@ -319,9 +477,9 @@ const WORLDS: World[] = [
       { recipe: 'clinic', level: 1 },
       { recipe: 'roadNetwork', level: 1 },
     ],
-  }),
+  },
   // Republic of Venus.
-  buildWorld({
+  {
     id: 'Venus',
     ownerId: 'republic-of-venus',
     culture: 'venusian',
@@ -361,9 +519,9 @@ const WORLDS: World[] = [
       { recipe: 'constructionSector', level: 1 },
       { recipe: 'governmentOffice', level: 2 },
     ],
-  }),
+  },
   // Orion Republic.
-  buildWorld({
+  {
     id: 'Arcadia',
     ownerId: 'orion-republic',
     culture: 'arcadian',
@@ -401,8 +559,8 @@ const WORLDS: World[] = [
       { recipe: 'retailShop', level: 1 },
       { recipe: 'governmentOffice', level: 1 },
     ],
-  }),
-  buildWorld({
+  },
+  {
     id: 'Proxima b',
     ownerId: 'orion-republic',
     culture: 'arcadian',
@@ -430,9 +588,9 @@ const WORLDS: World[] = [
       { recipe: 'clinic', level: 1 },
       { recipe: 'roadNetwork', level: 1 },
     ],
-  }),
+  },
   // Kingdom of Lalande — the Tidalians.
-  buildWorld({
+  {
     id: 'Lalande 21185 d',
     ownerId: 'kingdom-of-lalande',
     culture: 'tidalian',
@@ -468,8 +626,12 @@ const WORLDS: World[] = [
       { recipe: 'retailShop', level: 2 },
       { recipe: 'governmentOffice', level: 2 },
     ],
-  }),
+  },
 ]
+const BALANCED_BUILDINGS = balancedSpecs(WORLD_SPECS)
+// The worlds as specified, their building levels from the balancer, opening at
+// the prices and wages the calibration found their markets settle at.
+const WORLDS: World[] = WORLD_SPECS.map((spec) => buildWorld(spec, SEED_CALIBRATION[spec.id]))
 
 // Seed a central bank for a country. Each of the four powers runs a distinct
 // monetary institution so the models read differently from the start — a
@@ -818,15 +980,82 @@ function makeFinancialDistricts(): FinancialDistrictSeed {
 }
 const FD = makeFinancialDistricts()
 
-export function seedWorlds(): World[] {
-  return WORLDS.map((w) => {
+// Every nation starts able to run its state: enough government offices on its
+// capital that bureaucracy made covers bureaucracy used (state buildings, state
+// companies' buildings, decrees) with ADMIN_HEADROOM to spare. Without it the
+// stock drained within months and every state-run building fell to the
+// shortage malus at once.
+const ADMIN_HEADROOM = 1.25
+const ADMIN_EXPECTED_RUN = 0.9 // offices rarely run fully staffed
+function withAdministration(worlds: World[]): World[] {
+  const stateCorps = new Set(CORPORATIONS.filter((c) => c.kind === 'state').map((c) => c.id))
+  return worlds.map((w) => {
+    const nation = NATIONS.find((n) => n.capitalBodyName === w.name)
+    const country = COUNTRIES.find((c) => c.id === w.ownerId)
+    if (!nation || !country || nation.id !== w.ownerId) return w
+    let used = country.decrees.length * BUREAUCRACY_PER_DECREE
+    let made = 0
+    for (const x of worlds) {
+      if (x.ownerId !== w.ownerId) continue
+      for (const b of x.buildings) {
+        if (b.owner.kind === 'state') used += BUREAUCRACY_PER_STATE_BUILDING_LEVEL * b.level
+        else if (b.owner.kind === 'corporation' && stateCorps.has(b.owner.corporationId)) used += BUREAUCRACY_PER_STATECORP_BUILDING_LEVEL * b.level
+        made += (BUREAUCRACY_OUTPUT[b.recipeId] ?? 0) * b.level * ADMIN_EXPECTED_RUN
+      }
+    }
+    const short = used * ADMIN_HEADROOM - made
+    if (short <= 0) return w
+    const add = Math.ceil(short / (BUREAUCRACY_OUTPUT.governmentOffice * ADMIN_EXPECTED_RUN))
+    const office = w.buildings.findIndex((b) => b.recipeId === 'governmentOffice' && b.owner.kind === 'state')
+    const buildings = office >= 0 ? w.buildings.map((b, i) => (i === office ? { ...b, level: b.level + add } : b)) : [...w.buildings, makeBuilding(w.id, 'governmentOffice', add, 'state')]
+    // Staff them: the new jobs' classes grow out of the subsistence sector.
+    const grow = {} as Record<PopClass, number>
+    for (const cls of POP_CLASSES) grow[cls] = 0
+    for (const j of getMethod('governmentOffice', undefined)?.jobs ?? []) grow[j.class] += j.count * add * JOB_SCALE * FRICTIONAL_SLACK
+    const sizeOf = (cls: PopClass) => w.pops.filter((p) => p.class === cls).reduce((n, p) => n + p.populationSize, 0)
+    const moved = POP_CLASSES.reduce((n, c) => n + (sizeOf(c) > 0 ? grow[c] : 0), 0)
+    const subsistence = sizeOf('subsistence')
+    const take = subsistence > 0 ? Math.min(1, moved / subsistence) : 0
+    const pops = w.pops.map((p) => {
+      if (p.class === 'subsistence') return { ...p, populationSize: p.populationSize * (1 - take) }
+      const size = sizeOf(p.class)
+      return size > 0 && grow[p.class] > 0 ? { ...p, populationSize: p.populationSize * (1 + (grow[p.class] * Math.min(1, subsistence / Math.max(1e-9, moved))) / size) } : p
+    })
+    // Room for them in the core district (whole levels; land grows if it must).
+    const coreUsed = buildings.reduce((n, b) => n + (districtOfRecipe(b.recipeId) === 'core' ? b.level : 0), 0)
+    const coreLevels = Math.max(w.districts?.core ?? 0, Math.ceil(coreUsed / SLOTS_PER_DISTRICT_LEVEL))
+    const districts = { ...(w.districts ?? ({} as Record<DistrictType, number>)), core: coreLevels }
+    const total = DISTRICT_TYPES.reduce((n, d) => n + (districts[d] ?? 0), 0)
+    return { ...w, pops, buildings, districts, districtCapacity: { ...w.districtCapacity, core: coreLevels * SLOTS_PER_DISTRICT_LEVEL }, land: Math.max(w.land ?? 0, total) }
+  })
+}
+const ADMINISTERED_WORLDS = withAdministration(WORLDS)
+
+function withFinancialDistricts(worlds: World[]): World[] {
+  return worlds.map((w) => {
     const fdBuilding = FD.buildingByWorld.get(w.id)
     const buildings = fdBuilding ? [...w.buildings, fdBuilding] : [...w.buildings]
     return { ...w, pops: [...w.pops], buildings, importStock: {}, resourceDeposits: { ...w.resourceDeposits } }
   })
 }
+
+export function seedWorlds(): World[] {
+  return withFinancialDistricts(ADMINISTERED_WORLDS)
+}
+
+// The starting worlds under a given calibration of their prices and wages
+// ({} = none: base prices, wages by the bargaining rule) — for
+// scripts/economy/calibrate.ts.
+export function seedWorldsWith(calibration: SeedCalibration): World[] {
+  return withFinancialDistricts(withAdministration(WORLD_SPECS.map((spec) => buildWorld(spec, calibration[spec.id]))))
+}
 export function seedCountries(): Country[] {
-  return COUNTRIES.map((c) => ({ ...c }))
+  return seedCountriesWith(COUNTRY_CALIBRATION)
+}
+// The nations under a given calibration of their starting tax rates (the rate
+// that opens their budget near balance) — for scripts/economy/calibrate.ts.
+export function seedCountriesWith(calibration: Record<string, CountryCalibration>): Country[] {
+  return COUNTRIES.map((c) => ({ ...c, ...(calibration[c.id]?.taxRate !== undefined ? { taxRate: calibration[c.id].taxRate! } : {}) }))
 }
 
 // Commercial banks (Stage 2). Each bank starts near a balanced sheet: reserves

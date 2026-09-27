@@ -21,6 +21,7 @@
 import type { Corporation, World, ConstructionOrder, Building } from './economyTypes'
 import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
 import { GOODS } from './goods'
+import { goodIsScarce, inputsAvailable, recipeGood } from './scarcity'
 
 // Review twice a year, staggered per-company so they don't all act at once.
 const INVEST_REVIEW_PERIOD = 6
@@ -129,9 +130,13 @@ export function runCorporationAI(corp: Corporation, worlds: World[], tick: numbe
     }
   }
   if (worstLoser) {
-    const salvage = worstLoser.level * BUILD_COST * SALVAGE_FRACTION
+    // Downsize by one level (closing the building only at its last): a firm
+    // trims a chronic loss-maker rather than razing it — razing a whole mill
+    // at once cut off every building downstream of it.
+    const salvage = BUILD_COST * SALVAGE_FRACTION
     nextCorp = { ...corp, cash: corp.cash + salvage }
-    nextWorlds = worlds.map((w) => (w.id === worstLoser!.worldId ? { ...w, buildings: w.buildings.filter((b) => b.id !== worstLoser!.buildingId) } : w))
+    const cut = (b: World['buildings'][number]) => (b.id !== worstLoser!.buildingId ? [b] : b.level > 1 ? [{ ...b, level: b.level - 1, unprofitableStreak: 0 }] : [])
+    nextWorlds = worlds.map((w) => (w.id === worstLoser!.worldId ? { ...w, buildings: w.buildings.flatMap(cut) } : w))
   }
 
   const invested = invest(nextCorp, nextWorlds, tick, investmentPool, openHosts)
@@ -154,6 +159,14 @@ function invest(corp: Corporation, worlds: World[], tick: number, investmentPool
     owner: { kind: 'corporation', corporationId: corp.id },
   })
 
+  // Only into a good the world is short of (economy/scarcity.ts): a company
+  // that grew its best mine while ore already piled up in the market drove
+  // Mars's ore into a glut, then had to cut the mine back again.
+  const scarce = (recipeId: string, w: World) => {
+    const good = recipeGood(recipeId)
+    return !!good && goodIsScarce(good, [w]) && inputsAvailable(recipeId, [w])
+  }
+
   // --- Option 1: EXPAND the company's most profitable existing building.
   //     A proven winner is the safest use of capital. Leveling it up needs room
   //     in its own world's district. ---
@@ -163,7 +176,7 @@ function invest(corp: Corporation, worlds: World[], tick: number, investmentPool
       if (!ownsHere(b, corp.id)) continue
       const perLevelProfit = b.lastProfit / Math.max(1, b.level)
       if (perLevelProfit <= EXPAND_PROFIT_FLOOR) continue
-      if (!districtRoom(w, b.recipeId)) continue
+      if (!districtRoom(w, b.recipeId) || !scarce(b.recipeId, w)) continue
       if (!bestExpand || perLevelProfit > bestExpand.score) bestExpand = { recipeId: b.recipeId, worldId: w.id, score: perLevelProfit }
     }
   }
@@ -178,7 +191,7 @@ function invest(corp: Corporation, worlds: World[], tick: number, investmentPool
     const home = w.ownerId === corp.countryId
     if (!home && !openHosts.has(w.ownerId)) continue // can't invest in a closed nation
     for (const recipeId of FOUNDABLE_SECTORS) {
-      if (!districtRoom(w, recipeId)) continue
+      if (!districtRoom(w, recipeId) || !scarce(recipeId, w)) continue
       const m = grossMargin(recipeId, w) * (home ? 1 : FOREIGN_BUILD_BIAS)
       if (m <= 0) continue
       if (!bestFound || m > bestFound.score) bestFound = { recipeId, worldId: w.id, score: m }
