@@ -54,20 +54,7 @@ const EXIT_DISTANCE = 36
 const HOLDER_TINT = 0.42
 // The width the nav bar and the Outliner take out of the canvas (both sit on top of it).
 const SIDE_PANELS_PX = 460
-// The grid is drawn twice so it reads on any ground: a dark, much wider stroke
-// (visible on bright land, incl. pale tundra/mountains) under a bright,
-// thinner one (visible on dark ocean). The dark stroke has to peek out by a
-// couple of pixels on each side of the light one to survive anti-aliasing —
-// a 1-2px difference in width all but disappears at these render scales.
-const GRID_STYLE = {
-  coarse: { dark: 0.85, light: 0.8, width: 1.1, darkWidth: 4.6 },
-  standard: { dark: 0.75, light: 0.65, width: 0.9, darkWidth: 4 },
-  fine: { dark: 0.6, light: 0.5, width: 0.75, darkWidth: 3.4 },
-} as const
-// Radians per segment when a grid edge is bent onto the globe.
-const GRID_STEP = 0.05
-const GRID_DARK = '#02141c'
-const GRID_LIGHT = '#b8f6ff'
+const GRID_OPACITY = { coarse: 0.35, standard: 0.22, fine: 0.14 } as const
 // A line of fire's colour, the same three space combat's engagement lines use
 // (CombatEngagementLine.tsx): yellow both sides trading fire, red the player's
 // side taking fire it isn't returning, green a free shot the player's way.
@@ -308,7 +295,7 @@ function SurfaceGrid() {
   const mesh = surfaceMesh()
   const { edges, points } = useMemo(() => {
     const r = GLOBE_RADIUS * 1.004
-    const seg: [number, number, number][] = []
+    const seg: number[] = []
     const seen = new Set<string>()
     const at = (i: number) => ({ x: mesh.positions[i * 3], y: mesh.positions[i * 3 + 1], z: mesh.positions[i * 3 + 2] })
     // On the flat map the triangles are stretched toward the poles and torn by
@@ -323,23 +310,13 @@ function SurfaceGrid() {
           const key = a < b ? `${a}|${b}` : `${b}|${a}`
           if (seen.has(key)) continue
           seen.add(key)
-          // Long (coarse) edges are chords that would sink inside the globe, so
-          // each is walked along the great circle in short steps.
-          const pa = at(a)
-          const pb = at(b)
-          const angle = Math.acos(Math.min(1, Math.max(-1, pa.x * pb.x + pa.y * pb.y + pa.z * pb.z)))
-          const steps = Math.max(1, Math.ceil(angle / GRID_STEP))
-          let prev: [number, number, number] = [pa.x * r, pa.y * r, pa.z * r]
-          for (let k = 1; k <= steps; k++) {
-            const t = k / steps
-            const q = normalize({ x: pa.x + (pb.x - pa.x) * t, y: pa.y + (pb.y - pa.y) * t, z: pa.z + (pb.z - pa.z) * t })
-            const cur: [number, number, number] = [q.x * r, q.y * r, q.z * r]
-            seg.push(prev, cur)
-            prev = cur
-          }
+          seg.push(mesh.positions[a * 3] * r, mesh.positions[a * 3 + 1] * r, mesh.positions[a * 3 + 2] * r)
+          seg.push(mesh.positions[b * 3] * r, mesh.positions[b * 3 + 1] * r, mesh.positions[b * 3 + 2] * r)
         }
       }
     }
+    const e = new BufferGeometry()
+    e.setAttribute('position', new BufferAttribute(Float32Array.from(seg), 3))
     const count = mesh.count[density]
     const pts = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
@@ -352,24 +329,19 @@ function SurfaceGrid() {
     }
     const p = new BufferGeometry()
     p.setAttribute('position', new BufferAttribute(pts, 3))
-    return { edges: seg, points: p }
+    return { edges: e, points: p }
   }, [density, mesh, flat])
-  useEffect(() => () => points.dispose(), [points])
-  const style = GRID_STYLE[density]
-  const dot = flat ? 3 : density === 'fine' ? 0.035 : 0.06
+  useEffect(() => () => {
+    edges.dispose()
+    points.dispose()
+  }, [edges, points])
   return (
     <group>
-      {edges.length > 0 && (
-        <>
-          <Line points={edges} segments color={GRID_DARK} lineWidth={style.darkWidth} transparent opacity={style.dark} frustumCulled={false} raycast={() => null} />
-          <Line points={edges} segments color={GRID_LIGHT} lineWidth={style.width} transparent opacity={style.light} frustumCulled={false} raycast={() => null} />
-        </>
-      )}
-      <points geometry={points} raycast={() => null}>
-        <pointsMaterial color={GRID_DARK} size={dot * 2.6} sizeAttenuation={!flat} transparent opacity={flat ? 0.75 : 0.9} />
-      </points>
-      <points geometry={points} raycast={() => null}>
-        <pointsMaterial color={GRID_LIGHT} size={dot} sizeAttenuation={!flat} transparent opacity={flat ? 0.9 : 0.95} />
+      <lineSegments geometry={edges}>
+        <lineBasicMaterial color="#6fe3ff" transparent opacity={GRID_OPACITY[density]} />
+      </lineSegments>
+      <points geometry={points}>
+        <pointsMaterial color="#6fe3ff" size={flat ? 3 : density === 'fine' ? 0.035 : 0.06} sizeAttenuation={!flat} transparent opacity={flat ? 0.5 : 0.7} />
       </points>
     </group>
   )
