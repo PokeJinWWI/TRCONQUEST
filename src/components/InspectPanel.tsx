@@ -202,7 +202,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
 
   if (body.kind === 'star') {
     return (
-      <DraggableWindow title={body.name} onClose={onClose}>
+      <DraggableWindow title={body.name} memoryKey="planet" onClose={onClose}>
         <OverviewRows body={body} action={action} />
       </DraggableWindow>
     )
@@ -215,7 +215,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   const current = tabs.includes(tab) ? tab : 'summary'
 
   return (
-    <DraggableWindow title={body.name} onClose={onClose} defaultSize={{ width: 520, height: 640 }}>
+    <DraggableWindow title={body.name} memoryKey="planet" onClose={onClose} defaultSize={{ width: 520, height: 640 }}>
       <PlanetHeader body={body} />
       <div className="nav-subtabs">
         {tabs.map((t) => (

@@ -247,6 +247,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   return (
     <DraggableWindow
       title={`Engagement — ${engagement.locationLabel}`}
+      memoryKey="engagement"
       initialOffset={combatPanelOffset()}
       anchor="left"
     >

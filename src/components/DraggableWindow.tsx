@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useWindowLayoutStore } from '../state/windowLayoutStore'
 
 interface DraggableWindowProps {
   title: string
@@ -35,6 +36,12 @@ interface DraggableWindowProps {
    * can still drag it larger/smaller from there; nav category windows use this so
    * a tall panel doesn't open cramped or need resizing every time. */
   defaultSize?: { width: number; height: number }
+  /** What this window's size is remembered under for the rest of the game
+   * session (state/windowLayoutStore.ts): resize it, close it, reopen it and
+   * it comes back at that size. Defaults to the title; windows whose title
+   * names a particular thing ("Mars", a ship's name) pass a stable key so one
+   * size covers them all. */
+  memoryKey?: string
   children: ReactNode
 }
 
@@ -61,7 +68,8 @@ function bringToFrontZIndex(): number {
 // the satellite-view inspection panel and the nav sidebar's category
 // windows — re-centers on whichever body is selected but stays wherever the
 // player last dragged/resized it until they select something else.
-export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, maximizable = true, defaultSize, children }: DraggableWindowProps) {
+export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, maximizable = true, defaultSize, memoryKey, children }: DraggableWindowProps) {
+  const sizeKey = memoryKey ?? title
   const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   // Collapsed to just its title bar — independent of `onClose`: a window
   // with no close button (the combat order panel, which *is* the view it
@@ -71,7 +79,18 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   // Explicit size once the player has dragged an edge/corner — null means
   // "still whatever the CSS default (or `wide`) is," so a window that's
   // never been resized keeps behaving exactly as before.
-  const [size, setSize] = useState<{ width: number; height: number } | null>(defaultSize ?? null)
+  // A size the player chose earlier this session wins over the preset.
+  const [size, setSize] = useState<{ width: number; height: number } | null>(() => useWindowLayoutStore.getState().sizes[sizeKey] ?? defaultSize ?? null)
+  const sizeRef = useRef(size)
+  sizeRef.current = size
+  // One window instance showing different things (the nav window switching
+  // category) takes each thing's own remembered size.
+  const shownKeyRef = useRef(sizeKey)
+  useEffect(() => {
+    if (shownKeyRef.current === sizeKey) return
+    shownKeyRef.current = sizeKey
+    setSize(useWindowLayoutStore.getState().sizes[sizeKey] ?? defaultSize ?? null)
+  }, [sizeKey])
   // Starts already on top of anything opened before it — a freshly opened
   // window shouldn't appear to open BEHIND an existing one until clicked.
   const [zIndex, setZIndex] = useState(bringToFrontZIndex)
@@ -156,6 +175,8 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   }
 
   const handleResizePointerUp = () => {
+    // Remember what the player dragged it to, for the rest of the session.
+    if (resizeRef.current && sizeRef.current) useWindowLayoutStore.getState().rememberSize(sizeKey, sizeRef.current)
     resizeRef.current = null
   }
 
@@ -224,7 +245,6 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     // Intentionally mount-only: this corrects the INITIAL open position, not
     // an ongoing constraint — the drag handler already keeps it on-screen
     // for every move after that.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // A window's height changes under it whenever its content does — switching
@@ -262,7 +282,6 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     observer.observe(el)
     return () => observer.disconnect()
     // cssVarPx only reads the DOM; the observer itself is set up once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Clears the maximize/restore transition timeouts if the window closes

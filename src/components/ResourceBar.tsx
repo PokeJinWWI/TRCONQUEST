@@ -53,7 +53,7 @@ export function ResourceBar() {
       })}
 
       {openResource && (
-        <DraggableWindow title={openResource.name} onClose={() => setOpenId(null)} maximizable={false}>
+        <DraggableWindow title={openResource.name} memoryKey="resource" onClose={() => setOpenId(null)} maximizable={false}>
           <div className="inspect-row">
             <span className="inspect-label">Stockpile</span>
             <span className="inspect-value">{Math.floor(amounts[openResource.id]).toLocaleString()}</span>
