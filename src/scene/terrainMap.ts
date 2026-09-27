@@ -146,8 +146,9 @@ function blur(src: Float32Array, n: number, radius: number): Float32Array {
 
 // The patch of `surface` around `frame`: each point takes the terrain of the
 // nearest world node (looked up through a little noise, so biome borders wander
-// like real ones), and its height is the blurred base of the surrounding
-// terrains plus fractal noise scaled by how rugged they are.
+// like real ones), and its height is the blurred base — the real elevation map
+// where the body has one (bodyTopography.ts), else the surrounding terrains'
+// typical heights — plus fractal noise scaled by how rugged they are.
 export function buildRelief(surface: BodySurface, frame: TerrainFrame): TerrainGrid {
   const n = gridSize()
   const perCell = TERRAIN_GRID_PER_CELL
@@ -175,8 +176,11 @@ export function buildRelief(surface: BodySurface, frame: TerrainFrame): TerrainG
       const t = surface.terrain[node]
       const id = TERRAIN_IDS[t]
       grid.terrain[j * n + i] = t
-      base[j * n + i] = TERRAIN_RELIEF[id].base
-      amp[j * n + i] = TERRAIN_RELIEF[id].amp
+      // A real elevation map sets the ground's height (and its own texture then
+      // needs only half the terrain's noise on top); otherwise the terrain's
+      // typical height.
+      base[j * n + i] = surface.reliefM ? (surface.landValue ? Math.max(0, surface.reliefM[node]) : surface.reliefM[node]) : TERRAIN_RELIEF[id].base
+      amp[j * n + i] = TERRAIN_RELIEF[id].amp * (surface.reliefM ? 0.5 : 1)
       const rough = fbm(p0, 7, 4)
       const ridged = 1 - Math.abs(2 * rough - 1)
       const ridge = Math.max(0, Math.min(1, TERRAIN_RELIEF[id].base / 2000))
@@ -187,8 +191,10 @@ export function buildRelief(surface: BodySurface, frame: TerrainFrame): TerrainG
   const smoothAmp = blur(amp, n, 3)
   for (let k = 0; k < n * n; k++) {
     const id = TERRAIN_IDS[grid.terrain[k]]
-    // Water stays level.
-    grid.height[k] = id === 'ocean' ? 0 : Math.max(0, smoothBase[k] + smoothAmp[k] * (shape[k] * 2 - 1))
+    // Water stays level; land stays above it. A dry body with a real map keeps
+    // its basins (heights there are relative to its median ground).
+    const h = smoothBase[k] + smoothAmp[k] * (shape[k] * 2 - 1)
+    grid.height[k] = id === 'ocean' ? 0 : surface.reliefM && !surface.landValue ? h : Math.max(0, h)
   }
   return grid
 }

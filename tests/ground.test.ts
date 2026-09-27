@@ -164,11 +164,12 @@ console.log('\n=== 3. Units fight only when close enough ===')
 {
   war([MARS, VENUS])
   const mars = groundSurface('Mars', owners)!
-  const start = mars.keySlots[0].node
   // Walk the neighbour graph to find a node well outside infantry range, and
-  // one inside it.
+  // one inside it, from a land node with land close by (the capital itself may
+  // sit on a coast, with only sea within reach).
   const range = CONTACT_RANGE_KM_REF / GROUND_REFERENCE_RADIUS_KM
   const walkable = [...Array(mesh.count.fine).keys()].filter((i) => passableFor(terrainAt(mars, i), 'infantry'))
+  const start = [mars.keySlots[0].node, ...walkable].find((s) => walkable.some((i) => i !== s && arc(nodePoint(i), nodePoint(s)) < range * 0.95))!
   const farNode = walkable.find((i) => arc(nodePoint(i), nodePoint(start)) > range * 3)!
   const nearNode = walkable.find((i) => i !== start && arc(nodePoint(i), nodePoint(start)) < range * 0.95)!
   check('neighbouring nodes are within line contact range', nearNode !== undefined)
@@ -319,8 +320,10 @@ console.log('\n=== 9. Performance ===')
 console.log('\n=== 10. The AI\'s invasion estimate agrees with the real fight ===')
 {
   // For each case the estimate calls a win, the real (spatial, AI-driven)
-  // fight must take the world within 800 days (run in chunks: one resolver
-  // call catches up at most MAX_GROUND_STEPS_PER_CALL steps).
+  // fight must take the world within 1,200 days (run in chunks: one resolver
+  // call catches up at most MAX_GROUND_STEPS_PER_CALL steps). Real Venus's
+  // cities are spread along a continent half-way round the planet, so taking
+  // it runs to ~900–1,100 days.
   const results: string[] = []
   let disagreements = 0
   for (const [body, garrisons] of [['Phobos', 1], ['Venus', 3]] as const) {
@@ -336,7 +339,7 @@ console.log('\n=== 10. The AI\'s invasion estimate agrees with the real fight ==
       const says = wouldTakeBody(invader, body, cargo, snap, atWar)
       const drop = defaultDropNode(surface, ['infantry', 'armour', 'artillery'], invader, defenders, owners, {}, atWar)!
       const landed = cargo.map(() => army(invader, 'assault', body, drop))
-      const r = run(world([...defenders, ...landed]), 800, [200, 200, 200, 200])
+      const r = run(world([...defenders, ...landed]), 1200, [200, 200, 200, 200, 200, 200])
       const took = r.occupations.some((o) => o.countryId === invader)
       results.push(`${body} ${n}: est ${says ? 'win' : 'lose'}, real ${took ? 'win' : 'lose'}`)
       if (says && !took) disagreements++

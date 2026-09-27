@@ -55,6 +55,9 @@ export interface ArmyScenario {
     playerTerrain: TerrainId
     // How many map cells away the enemy starts.
     gapCells: number
+    // A real place (degrees east, north) to fight near: the nearest fitting
+    // ground to it is used. Omitted: the first fitting ground on the map.
+    near?: [number, number]
   }
   description: string
   // The player's forces (owned by the player's nation, or in the sandbox the
@@ -101,7 +104,7 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     id: 'army-medium-reserve-in-the-timber',
     name: 'Reserve in the Timber',
     difficulty: 'medium',
-    battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 6 },
+    battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 6, near: [14, 52] },
     description:
       'A marine army dug into forest, its twin five cells behind it, against an assault army and a marine army. Left alone the front army is destroyed and the reserve never fights. Order the reserve up to the line and they win.',
     player: [{ kind: 'marine' }, { kind: 'marine', rearCells: 5 }],
@@ -113,17 +116,17 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     id: 'army-hard-fall-back-to-the-woods',
     name: 'Fall Back to the Woods',
     difficulty: 'hard',
-    battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 6 },
+    battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 6, near: [19, -4] },
     description:
-      'An assault army on the forest line, its twin nine cells back, against two assault armies. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is falling back onto the reserve, linking up, and counter-attacking together.',
-    player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 9 }],
+      'An assault army on the forest line in the Congo basin, its twin nine cells back in the woods, against two assault armies. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is falling back onto the reserve, linking up, and counter-attacking together.',
+    player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 9, rearTerrain: 'forest' }],
     enemy: [{ kind: 'assault' }, { kind: 'assault' }],
   },
   {
     id: 'army-medium-outnumbered-on-the-ice',
     name: 'Outnumbered on the Ice',
     difficulty: 'medium',
-    battlefield: { bodyName: 'Pluto', playerTerrain: 'tundra', gapCells: 6 },
+    battlefield: { bodyName: 'Pluto', playerTerrain: 'tundra', gapCells: 6, near: [180, -58] },
     description:
       'An assault army and a marine army on the ice of Pluto, the marines five cells back, against two assault armies and a battered third. Left alone the line falls and the reserve never gets into the fight. March the reserve up to the line before the enemy arrives and the combined force wins — with not much to spare.',
     player: [{ kind: 'assault' }, { kind: 'marine', rearCells: 5 }],

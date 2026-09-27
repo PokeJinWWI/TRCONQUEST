@@ -8,6 +8,11 @@ export interface Country {
   // body to arrive pre-selected at (see MainMenu.selectCountry).
   capitalStarId: string
   capitalBodyName: string
+  // The capital city's name, where the setting has one (shown on its key node).
+  capitalCityName?: string
+  // Where on the capital world it stands (degrees east, north); the nearest
+  // mainland to it. Omitted: the map picks a spot.
+  capitalCityAt?: [number, number]
 }
 
 export const COUNTRIES: Country[] = [
@@ -17,6 +22,8 @@ export const COUNTRIES: Country[] = [
     color: '#c9704a',
     capitalStarId: 'sol',
     capitalBodyName: 'Mars',
+    capitalCityName: 'Akakyō',
+    capitalCityAt: [-48.1, 1.6], // Xanthe Terra (IAU centre)
   },
   {
     id: 'republic-of-venus',

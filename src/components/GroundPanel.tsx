@@ -1,3 +1,4 @@
+import { keySlotLabel } from '../scene/keyNames'
 import { ARMY_KINDS } from '../data/armyData'
 import { TERRAIN, UNIT_TYPES, type TerrainId } from '../data/groundData'
 import { ownerDisplay } from '../data/countryRoster'
@@ -92,7 +93,6 @@ function bodyArmies(bodyName: string): Army[] {
   return useArmyStore.getState().armies.filter((a) => a.location.kind === 'body' && a.location.bodyName === bodyName)
 }
 
-const KEY_LABEL = { capital: 'Capital', city: 'City', spaceport: 'Spaceport', outpost: 'Outpost', fortress: 'Fortress' } as const
 
 // --- The roster/controls window ----------------------------------------------
 
@@ -131,8 +131,8 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
           {keyHolders.length === 0
             ? 'None'
             : keyHolders.map((k) => (
-                <span key={k.node} style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined, marginLeft: 6 }} title={`${KEY_LABEL[k.kind]} — ${k.holder ? ownerDisplay(k.holder).name : 'nobody'}`}>
-                  {KEY_LABEL[k.kind]}
+                <span key={k.node} style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined, marginLeft: 6 }} title={`${keySlotLabel(bodyName, k, owner)} — ${k.holder ? ownerDisplay(k.holder).name : 'nobody'}`}>
+                  {keySlotLabel(bodyName, k, owner)}
                 </span>
               ))}
         </span>

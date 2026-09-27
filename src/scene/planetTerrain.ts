@@ -1,12 +1,14 @@
-// Procedural terrain for every world's planetary map. There's no real
-// geographic data for these worlds, so each surface is generated from seeded
+// Terrain for every world's planetary map. The solar system's solid bodies
+// use real data (bodyTopography.ts: NASA/USGS/NOAA maps); every other world
+// (other star systems; the few bodies nobody has mapped) is generated from seeded
 // noise — deterministic per world (seeded by its name), and shaped by its
 // planet class (data/groundData.ts SURFACE_CLASSES): how much is land, what
 // the seas are, where the mountains, forests, deserts and ice go. Pure;
 // memoised per world.
 //
 // Guarantees the ground war relies on:
-//   - The land share is exact (sea level is set by elevation percentile).
+//   - The land share is exact (sea level is set by elevation percentile) —
+//     for procedural worlds; real ones keep their real seas.
 //   - The largest landmass ("mainland") covers at least
 //     MIN_MAINLAND_FRACTION; if the noise leaves it smaller, sea level drops
 //     step by step until it does. Every key node sits on the mainland, so an
@@ -28,8 +30,10 @@ import {
 import { PLANETS_BY_STAR, type PlanetClass } from './planetData'
 import { getMoonsForPlanet } from './moonData'
 import { estimateSize } from './bodyStats'
-import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
-import { earthBiomeAt, earthLandValues } from './earthTerrain'
+import { arc, nodePoint, surfaceMesh, type SurfacePoint } from './surfaceMesh'
+import { fromLonLat } from './mapProjection'
+import { COUNTRIES } from '../data/countryData'
+import { hasTopography, landValuesOf, realTerrain, reliefOf, topographyOf } from './bodyTopography'
 
 export const TERRAIN_IDS: TerrainId[] = ['ocean', 'plains', 'forest', 'desert', 'tundra', 'mountains', 'urban', 'rock', 'lava', 'cloud', 'aerostat']
 const TERRAIN_INDEX = Object.fromEntries(TERRAIN_IDS.map((t, i) => [t, i])) as Record<TerrainId, number>
@@ -55,10 +59,13 @@ export interface BodySurface {
   tier: SettlementTier
   // Per fine node: index into TERRAIN_IDS.
   terrain: Uint8Array
-  // Earth only: per fine node, the share of its cell that is land (0-1), from
-  // the real coastline. The map draws coasts along its half-way contour; the
-  // node is land when it is at least a half.
+  // Worlds with real seas (bodyTopography.ts: Earth, Venus, Mars, Titan): per
+  // fine node, the share of its cell that is land (0-1). The map draws coasts
+  // along its half-way contour; the node is land when it is at least a half.
   landValue?: Float32Array
+  // Bodies with a real elevation map: each fine node's height in metres above
+  // the sea (or the body's median ground) — the terrain map's base relief.
+  reliefM?: Float32Array
   // Per fine node: land-component id for walkable ground, -1 otherwise.
   landComponent: Int32Array
   mainland: number
@@ -199,19 +206,35 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
   let terrain: Uint8Array = new Uint8Array(n)
   let components: Int32Array = new Int32Array(n)
   let mainland = -1
-  for (let attempt = 0; attempt < 20; attempt++) {
-    terrain = bodyName === 'Earth' ? assignEarthTerrain() : assignTerrain(spec, landFraction, elevRank, moisture, ridge)
+  const topo = hasTopography(bodyName) ? topographyOf(bodyName) : null
+  if (topo) {
+    // Real data: the sea is where it really is (no lowering it to grow the
+    // mainland). Unmapped nodes are filled procedurally, as ice on icy bodies.
+    const fallbackSpec = topo.kind === 'icy' ? SURFACE_CLASSES.ice : spec
+    const fallback = assignTerrain(fallbackSpec, fallbackSpec.landFraction, elevRank, moisture, ridge)
+    const real = realTerrain(topo)
+    for (let i = 0; i < n; i++) terrain[i] = real[i] ? TERRAIN_INDEX[real[i]!] : fallback[i]
     ;({ components, mainland } = landComponents(terrain))
-    const mainlandSize = mainland < 0 ? 0 : countOf(components, mainland)
-    if (spec.belt !== undefined || landFraction >= 1 || mainlandSize >= MIN_MAINLAND_FRACTION * n) break
-    landFraction = Math.min(1, landFraction + 0.05)
+  } else {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      terrain = assignTerrain(spec, landFraction, elevRank, moisture, ridge)
+      ;({ components, mainland } = landComponents(terrain))
+      const mainlandSize = mainland < 0 ? 0 : countOf(components, mainland)
+      if (spec.belt !== undefined || landFraction >= 1 || mainlandSize >= MIN_MAINLAND_FRACTION * n) break
+      landFraction = Math.min(1, landFraction + 0.05)
+    }
   }
 
-  const keySlots = placeKeySlots(info.radiusKm, tier, terrain, components, mainland, elevRank, seed)
-  // Cities are urban ground: the slot and its ring of neighbours.
+  const capitalOf = COUNTRIES.find((c) => c.capitalBodyName === bodyName && c.capitalCityAt)
+  const capitalAt = capitalOf?.capitalCityAt ? fromLonLat((capitalOf.capitalCityAt[0] * Math.PI) / 180, (capitalOf.capitalCityAt[1] * Math.PI) / 180) : undefined
+  const keySlots = placeKeySlots(info.radiusKm, tier, terrain, components, mainland, elevRank, seed, capitalAt)
+  // Cities are urban ground: the slot and its ring of neighbours. The capital
+  // is the biggest city: two rings.
   for (const slot of keySlots) {
     if (slot.kind === 'outpost') continue
-    for (const node of [slot.node, ...mesh.neighbors.fine[slot.node]]) {
+    const ring = [slot.node, ...mesh.neighbors.fine[slot.node]]
+    const area = slot.kind === 'capital' ? [...new Set(ring.flatMap((k) => [k, ...mesh.neighbors.fine[k]]))] : ring
+    for (const node of area) {
       if (TERRAIN[TERRAIN_IDS[terrain[node]]].passable === 'all' && components[node] === mainland) terrain[node] = TERRAIN_INDEX.urban
     }
   }
@@ -225,18 +248,11 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
     landComponent: components,
     mainland,
     keySlots,
-    ...(bodyName === 'Earth' ? { landValue: earthLandValues() } : {}),
+    ...(topo && landValuesOf(topo) ? { landValue: landValuesOf(topo) } : {}),
+    ...(topo && reliefOf(topo) ? { reliefM: reliefOf(topo) } : {}),
   }
   cache.set(key, surface)
   return surface
-}
-
-// Earth: the real coastline, with biomes laid over the land (earthTerrain.ts).
-function assignEarthTerrain(): Uint8Array {
-  const land = earthLandValues()
-  const out = new Uint8Array(land.length)
-  for (let i = 0; i < land.length; i++) out[i] = land[i] >= 0.5 ? TERRAIN_INDEX[earthBiomeAt(nodePoint(i))] : TERRAIN_INDEX.ocean
-  return out
 }
 
 function assignTerrain(spec: SurfaceClassSpec, landFraction: number, elevRank: number[], moisture: number[], ridge: number[]): Uint8Array {
@@ -321,6 +337,9 @@ function placeKeySlots(
   mainland: number,
   elevRank: number[],
   seed: number,
+  // Where the capital must be (a real place, as a surface point): the nearest
+  // mainland node to it. Omitted: chosen by the terrain.
+  capitalAt?: SurfacePoint,
 ): KeySlot[] {
   if (tier === 'wild' || mainland < 0) return []
   const mesh = surfaceMesh()
@@ -337,7 +356,10 @@ function placeKeySlots(
   // in the same place.
   const jitter = (i: number) => hash3(i, 3, 7, seed) * 0.15
   const capitalScore = (i: number) => (coastal(i) ? 0.4 : 0) + (1 - elevRank[i]) * 0.6 + jitter(i)
-  const first = candidates.reduce((best, i) => (capitalScore(i) > capitalScore(best) ? i : best), candidates[0])
+  const first =
+    capitalAt && tier === 'capital'
+      ? candidates.reduce((best, i) => (arc(nodePoint(i), capitalAt) < arc(nodePoint(best), capitalAt) ? i : best), candidates[0])
+      : candidates.reduce((best, i) => (capitalScore(i) > capitalScore(best) ? i : best), candidates[0])
 
   const slots: KeySlot[] = []
   const districts = estimateSize(radiusKm).districts

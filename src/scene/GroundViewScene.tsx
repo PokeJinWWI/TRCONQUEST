@@ -1,3 +1,4 @@
+import { keySlotLabel } from './keyNames'
 import { useEffect, useMemo, useRef } from 'react'
 import { KeyboardPan } from './KeyboardPan'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
@@ -229,10 +230,10 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
       }}
     >
       {flat ? (
-        <FlatMapSurface nodeAt={nodeAt} version={nodeAt} glow={glow} />
+        <FlatMapSurface nodeAt={nodeAt} version={nodeAt} glow={glow} bodyName={bodyName} />
       ) : (
         <>
-          <HoloGlobe radius={GLOBE_RADIUS} nodeAt={nodeAt} version={nodeAt} glow={glow} />
+          <HoloGlobe radius={GLOBE_RADIUS} nodeAt={nodeAt} version={nodeAt} glow={glow} bodyName={bodyName} />
           <HoloHalo radius={GLOBE_RADIUS} glow={glow} />
         </>
       )}
@@ -379,7 +380,7 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
         const p = { x: mesh.positions[slot.node * 3], y: mesh.positions[slot.node * 3 + 1], z: mesh.positions[slot.node * 3 + 2] }
         return (
           <FacingHtml key={slot.node} point={p} radius={GLOBE_RADIUS * 1.01}>
-            <div className="ground-key-marker" style={{ borderColor: color, color }} title={`${slot.kind} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}`}>
+            <div className="ground-key-marker" style={{ borderColor: color, color }} title={`${keySlotLabel(bodyName, slot, owners[bodyName])} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}`}>
               {KEY_GLYPHS[slot.kind]}
             </div>
           </FacingHtml>
@@ -676,7 +677,7 @@ function HoverTooltip({ bodyName, surface }: { bodyName: string; surface: BodySu
   return (
     <div className="ground-hover">
       <strong>{terrain.name}</strong>
-      {key && <span> · {key.kind}</span>}
+      {key && <span> · {keySlotLabel(bodyName, key, owners[bodyName])}</span>}
       <span>
         {' '}
         · movement: {pace} · cover: {describeDefense(terrain.defense)}

@@ -17,6 +17,7 @@ import { makeUnits, type Army, type GroundUnit } from './armyLogic'
 import { findPath, groundSurface } from './groundLogic'
 import { passableFor, terrainAt, type BodySurface } from './planetTerrain'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
+import { fromLonLat } from './mapProjection'
 
 export interface Battlefield {
   playerNode: number
@@ -82,13 +83,22 @@ function terrainShare(surface: BodySurface, node: number, cells: number, terrain
 // The first (lowest-numbered) pair that fits, from the most uniform ground
 // down: a node of `playerTerrain` with its neighbours mostly the same, and
 // walkable ground `gapCells` away on the same landmass with an infantry route
-// between them. Deterministic — a world's surface is fixed, so a scenario
-// always lands in the same place. Null if the world has none.
-export function findBattlefield(surface: BodySurface, playerTerrain: TerrainId, gapCells: number, rear?: { cells: number; terrain: TerrainId }): Battlefield | null {
+// between them. With `near` (degrees east, north), the nearest acceptable spot
+// to it; else the most uniform, in node order. Deterministic — a world's surface is
+// fixed, so a scenario always lands in the same place. Null if the world has none.
+export function findBattlefield(surface: BodySurface, playerTerrain: TerrainId, gapCells: number, rear?: { cells: number; terrain: TerrainId }, near?: [number, number]): Battlefield | null {
   const mesh = surfaceMesh()
   const shares = new Map<number, number>()
-  for (const tier of UNIFORMITY_TIERS) {
-    for (let p = 0; p < mesh.count.fine; p++) {
+  const order = Array.from({ length: mesh.count.fine }, (_, i) => i)
+  if (near) {
+    const here = fromLonLat((near[0] * Math.PI) / 180, (near[1] * Math.PI) / 180)
+    order.sort((a, b) => arc(nodePoint(a), here) - arc(nodePoint(b), here) || a - b)
+  }
+  // Near a chosen place, the nearest acceptable ground wins (only the loosest
+  // uniformity is required); otherwise the most uniform ground on the map.
+  const tiers = near ? UNIFORMITY_TIERS.slice(-1) : UNIFORMITY_TIERS
+  for (const tier of tiers) {
+    for (const p of order) {
       if (terrainAt(surface, p) !== playerTerrain || sameTerrainNeighbours(surface, p) < MIN_SAME_TERRAIN_NEIGHBOURS) continue
       let share = shares.get(p)
       if (share === undefined) {
@@ -181,7 +191,7 @@ export function buildArmyScenario(
   const { gapCells } = scenario.battlefield
   const playerTerrain = overrides.playerTerrain ?? scenario.battlefield.playerTerrain
   const reserve = scenario.player.find((f) => f.rearCells && f.rearTerrain)
-  const field = findBattlefield(surface, playerTerrain, gapCells, reserve ? { cells: reserve.rearCells!, terrain: reserve.rearTerrain! } : undefined)
+  const field = findBattlefield(surface, playerTerrain, gapCells, reserve ? { cells: reserve.rearCells!, terrain: reserve.rearTerrain! } : undefined, scenario.battlefield.near)
   if (!field) return null
 
   const armies: Army[] = []
