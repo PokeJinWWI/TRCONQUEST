@@ -51,6 +51,10 @@ import {
   type BuildingLevels,
   type SimpleBuildingId,
   type SimpleGood,
+  type SimpleProduct,
+  AMENITIES_PER_POP,
+  CITY_AMENITIES_PER_POP,
+  AMENITIES_MIN_POP,
 } from '../data/simplisticEconomyData'
 import type { TechCategory } from '../data/techData'
 import { DEVASTATION_OUTPUT_LOSS } from '../data/defenseData'
@@ -65,13 +69,6 @@ export const MONETARY_STANCES: MonetaryStance[] = ['loose', 'neutral', 'tight']
 export const ECONOMY_TYPES: EconomyType[] = ['market', 'corporatist', 'planned']
 
 export type CreditRating = 'AAA' | 'AA' | 'A' | 'BBB' | 'BB' | 'B' | 'CCC'
-
-// How the national production pool is split (fractions, normalized to sum to 1).
-export interface Allocation {
-  civilian: number // construction points — builds new buildings
-  military: number // alloys for the war machine
-  consumer: number // consumer goods + electronics for the population
-}
 
 export type Stockpile = Record<SimpleGood, number>
 
@@ -134,8 +131,6 @@ export interface AbstractEconomyState {
   moneyCreation: number // 0..1 share of a deficit printed rather than borrowed
   warTaxes: boolean
   welfare: number // 0..1 welfare spending level — costs budget, buys stability and growth
-  allocation: Allocation
-  researchFocus: TechCategory
   monetaryStance?: MonetaryStance // default neutral
   // Productivity: output per worker, 1 at game start. Everything buildings and
   // services produce is multiplied by it; it grows every month, faster the more
@@ -151,23 +146,6 @@ export interface AbstractEconomyState {
 
 // --- Balance constants ---------------------------------------------------------
 const WORKFORCE_SHARE = 0.42 // share of a world's population in the labour force (the rest: children, retirees, carers)
-const PU_PER_FACTORY = 10
-const FARM_FOOD = 6
-const MINE_MINERALS = 25
-const POWER_ENERGY = 30
-const LAB_RESEARCH = 2.5
-const LAB_ENERGY = 3
-const LAB_ELECTRONICS = 0.5
-const REFINERY_EXOTIC = 3
-const REFINERY_HYPERIUM = 0.5
-const REFINERY_ENERGY = 10
-const MINERALS_PER_PU = 1 // military + consumer PU
-const ENERGY_PER_PU = 0.5 // every PU
-const ALLOYS_PER_PU = 1.5
-const CONSUMER_GOODS_PER_PU = 0.5
-const ELECTRONICS_PER_PU = 0.1
-const CP_PER_PU = 1
-const MINERALS_PER_CP = 0.3
 export const MAX_CP_PER_ORDER = 40 // one project can absorb at most this per month
 // --- Pops: strata, upkeep, happiness (Stellaris-style) ---------------------------
 // Everyone belongs to a stratum by the job their household works: WORKERS
@@ -180,7 +158,12 @@ export type Stratum = 'workers' | 'specialists' | 'unemployed'
 export const STRATA: Stratum[] = ['workers', 'specialists', 'unemployed']
 export type NeedGood = 'food' | 'consumerGoods' | 'electronics'
 export const NEED_GOODS: NeedGood[] = ['food', 'consumerGoods', 'electronics']
-const SPECIALIST_BUILDINGS: SimpleBuildingId[] = ['researchLab', 'exoticRefinery']
+// Amenities (Stellaris): a world's comfort, services and leisure. Its people
+// use some; urban buildings supply it. A shortfall costs happiness in
+// proportion, a surplus adds a little — up to this ratio of supply to need.
+export const AMENITIES_RATIO_CAP = 1.5
+const AMENITIES_SHORTFALL_HAPPINESS = 0.25
+const AMENITIES_SURPLUS_HAPPINESS = 0.1 // per unit of ratio above 1 (so +5% at the cap)
 export const POP_UPKEEP: Record<Stratum, Record<NeedGood, number>> = {
   workers: { food: 0.01, consumerGoods: 0.006, electronics: 0.001 },
   specialists: { food: 0.01, consumerGoods: 0.012, electronics: 0.004 },
@@ -270,12 +253,6 @@ function creditRating(debtToGdp: number): CreditRating {
   return 'CCC'
 }
 
-export function normalizeAllocation(a: Allocation): Allocation {
-  const sum = a.civilian + a.military + a.consumer
-  if (sum <= 0) return { civilian: 1 / 3, military: 1 / 3, consumer: 1 / 3 }
-  return { civilian: a.civilian / sum, military: a.military / sum, consumer: a.consumer / sum }
-}
-
 export function emptyStockpile(): Stockpile {
   return Object.fromEntries(SIMPLE_GOODS.map((g) => [g, 0])) as Stockpile
 }
@@ -357,7 +334,7 @@ export function worldStrata(w: WorldState): { workers: number; specialists: numb
     const jobs = (w.buildings[b] ?? 0) * SIMPLE_BUILDING_DEFS[b].jobs
     if (jobs <= 0) continue
     jobsByBuilding[b] = jobs
-    if (SPECIALIST_BUILDINGS.includes(b)) specialistJobs += jobs * staffing
+    if (SIMPLE_BUILDING_DEFS[b].stratum === 'specialists') specialistJobs += jobs * staffing
     else workerJobs += jobs * staffing
   }
   const perWorker = workforce > 0 ? w.population / workforce : 0
@@ -369,6 +346,28 @@ export function worldStrata(w: WorldState): { workers: number; specialists: numb
   }
 }
 
+// A world's amenities this month: what its people need (a little per million;
+// nothing on a small outpost) and what it has — the city's own services plus
+// its urban buildings (staffed, scaled by economy type and productivity but not
+// stability, so happiness doesn't feed back into itself).
+export function worldAmenities(w: WorldState, efficiency: number): { need: number; supply: number } {
+  if (w.population < AMENITIES_MIN_POP) return { need: 0, supply: 0 }
+  const need = w.population * AMENITIES_PER_POP
+  const staffing = worldStaffing(w)
+  const intact = 1 - DEVASTATION_OUTPUT_LOSS * Math.min(1, Math.max(0, w.devastation ?? 0))
+  let supply = w.population * CITY_AMENITIES_PER_POP
+  for (const b of SIMPLE_BUILDINGS) {
+    const per = SIMPLE_BUILDING_DEFS[b].outputs.amenities
+    if (per) supply += (w.buildings[b] ?? 0) * staffing * intact * per * efficiency * (1 + districtBonus(w, DISTRICT_OF_BUILDING[b]).total)
+  }
+  return { need, supply }
+}
+// Happiness from an amenities ratio (supply / need).
+export function amenitiesHappiness(ratio: number): number {
+  const r = clamp(ratio, 0, AMENITIES_RATIO_CAP)
+  return r < 1 ? -AMENITIES_SHORTFALL_HAPPINESS * (1 - r) : AMENITIES_SURPLUS_HAPPINESS * (r - 1)
+}
+
 // The ecosystem bonus a district gives the buildings in it: a cluster bonus for
 // every building beyond the first (suppliers, skilled labour, shared
 // infrastructure), capped; industry also gains from research parks (academic
@@ -377,15 +376,6 @@ export function districtBonus(w: WorldState, d: SimpleDistrictId): { cluster: nu
   const cluster = Math.min(CLUSTER_MAX, CLUSTER_PER_BUILDING * Math.max(0, buildingsInDistrict(w, d) - 1))
   const link = d === 'industrial' ? Math.min(LINK_MAX, ACADEMIC_TO_INDUSTRIAL * districtsOf(w).academic) : 0
   return { cluster, link, total: cluster + link }
-}
-
-// The consumer PU needed to cover the population's consumer goods and
-// electronics (plus the labs' electronics) at this month's input satisfaction.
-export function consumerPUNeeded(r: AbstractReport): number {
-  const sat = Math.max(0.05, r.inputSatisfaction)
-  const forGoods = r.needs.consumerGoods.demand / (CONSUMER_GOODS_PER_PU * sat)
-  const forElectronics = (r.needs.electronics.demand + r.used.electronics) / (ELECTRONICS_PER_PU * sat)
-  return Math.max(forGoods, forElectronics)
 }
 
 // --- The monthly flows ----------------------------------------------------------
@@ -399,15 +389,19 @@ export interface AbstractReport {
   productivityGrowth: number // annual rate it is growing at this month
   workforce: number
   jobs: number
-  productionUnits: number
-  civilianPU: number
-  militaryPU: number
-  consumerPU: number
-  inputSatisfaction: number // share of industry's minerals/energy needs met
+  productionUnits: number // total factory capacity (display)
+  militaryPU: number // alloy foundry capacity — what military upkeep follows
+  inputSatisfaction: number // the worst-supplied building input's share met (1 = every building fully supplied)
+  inputShortages: SimpleGood[] // building inputs not fully supplied this month
   mineralsNeeded: number // what industry + construction wanted this month
   energyNeeded: number
   constructionPoints: number
   research: number
+  researchByTree: Record<TechCategory, number>
+  // Per building type, nationally: levels built and this month's output and
+  // upkeep (after staffing, bonuses, efficiency and input shortages).
+  byBuilding: Partial<Record<SimpleBuildingId, BuildingReport>>
+  amenities: { need: number; supply: number; ratio: number } // national; ratio is pop-weighted over worlds
   // Per good, this month: produced, used by industry/labs/construction,
   // consumed by the population, traded (+ in / − out) and the net change.
   produced: Stockpile
@@ -454,6 +448,12 @@ export interface AbstractReport {
   unrest: boolean
 }
 
+export interface BuildingReport {
+  levels: number
+  output: Partial<Record<SimpleProduct, number>>
+  upkeep: Partial<Record<SimpleGood, number>>
+}
+
 export interface StratumReport {
   population: number // millions, dependants included
   happiness: number // 0..1
@@ -465,20 +465,34 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   const mods = TYPE_MODS[s.economyType]
   const productivity = s.productivity ?? 1
   const efficiency = (0.8 + 0.4 * s.stability) * mods.production * productivity
-  const alloc = normalizeAllocation(s.allocation)
+  const stance = s.monetaryStance ?? 'neutral'
 
-  // Staffed building levels, nationally.
+  // Staffed building levels, nationally, with each world's district bonus and
+  // devastation folded in; and the raw (activity) levels upkeep is paid on.
   const L = Object.fromEntries(SIMPLE_BUILDINGS.map((b) => [b, 0])) as Record<SimpleBuildingId, number>
+  const active = Object.fromEntries(SIMPLE_BUILDINGS.map((b) => [b, 0])) as Record<SimpleBuildingId, number>
   let population = 0
   let workforce = 0
   let jobs = 0
+  let amenitySupplyWeighted = 0 // Σ over worlds of pop × (their amenities ratio, capped)
+  let amenitySupply = 0
+  let amenityNeed = 0
   for (const w of worlds) {
     const staffing = worldStaffing(w)
     const intact = 1 - DEVASTATION_OUTPUT_LOSS * Math.min(1, Math.max(0, w.devastation ?? 0))
-    for (const b of SIMPLE_BUILDINGS) L[b] += (w.buildings[b] ?? 0) * staffing * intact * (1 + districtBonus(w, DISTRICT_OF_BUILDING[b]).total)
+    for (const b of SIMPLE_BUILDINGS) {
+      const levels = w.buildings[b] ?? 0
+      if (levels <= 0) continue
+      active[b] += levels * staffing
+      L[b] += levels * staffing * intact * (1 + districtBonus(w, DISTRICT_OF_BUILDING[b]).total)
+    }
     population += w.population
     workforce += worldWorkforce(w)
     jobs += worldJobs(w)
+    const am = worldAmenities(w, mods.production * productivity)
+    amenitySupply += am.supply
+    amenityNeed += am.need
+    amenitySupplyWeighted += w.population * Math.min(AMENITIES_RATIO_CAP, am.need > 0 ? am.supply / am.need : AMENITIES_RATIO_CAP)
   }
 
   const produced = emptyStockpile()
@@ -486,39 +500,68 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   const consumed = emptyStockpile()
   const traded = emptyStockpile()
 
-  // Primary goods.
-  produced.food = L.farm * FARM_FOOD * efficiency
-  produced.minerals = L.mine * MINE_MINERALS * efficiency
-  produced.energy = L.powerPlant * POWER_ENERGY * efficiency
+  // Upkeep: what every consuming building wants this month. Buildings without
+  // upkeep (farms, mines, power plants) always run; the rest slow when one of
+  // THEIR inputs runs short (a foundry doesn't care about electronics). A good's
+  // supply is the stockpile plus this month's output, and since some producers
+  // have upkeep of their own (a fusion reactor needs electronics), the shares
+  // are settled by a few rounds starting from the upkeep-free output alone.
+  const need = emptyStockpile()
+  for (const b of SIMPLE_BUILDINGS) for (const [g, n] of Object.entries(SIMPLE_BUILDING_DEFS[b].upkeep) as [SimpleGood, number][]) need[g] += active[b] * n
+  const goodSat = Object.fromEntries(SIMPLE_GOODS.map((g) => [g, 1])) as Stockpile
+  const runOf = (b: SimpleBuildingId) => {
+    let run = 1
+    for (const g of Object.keys(SIMPLE_BUILDING_DEFS[b].upkeep) as SimpleGood[]) run = Math.min(run, goodSat[g])
+    return run
+  }
+  for (let round = 0; round < 5; round++) {
+    const supply = emptyStockpile()
+    for (const g of SIMPLE_GOODS) supply[g] = Math.max(0, stock[g])
+    for (const b of SIMPLE_BUILDINGS) {
+      const def = SIMPLE_BUILDING_DEFS[b]
+      const run = round === 0 && Object.keys(def.upkeep).length > 0 ? 0 : runOf(b)
+      for (const [g, n] of Object.entries(def.outputs) as [string, number][]) if (g in supply) supply[g as SimpleGood] += L[b] * n * efficiency * run
+    }
+    for (const g of SIMPLE_GOODS) goodSat[g] = need[g] > 0 ? Math.min(1, supply[g] / need[g]) : 1
+  }
+  const runs = Object.fromEntries(SIMPLE_BUILDINGS.map((b) => [b, runOf(b)])) as Record<SimpleBuildingId, number>
+  for (const b of SIMPLE_BUILDINGS) for (const [g, n] of Object.entries(SIMPLE_BUILDING_DEFS[b].upkeep) as [SimpleGood, number][]) used[g] += active[b] * n * runs[b]
+  // The worst-supplied input, over the goods buildings need (a diagnostic).
+  const inputSatisfaction = Math.min(1, ...SIMPLE_GOODS.filter((g) => need[g] > 0).map((g) => goodSat[g]))
 
-  // Industry: PU split by allocation; inputs drawn from stock + this month's output.
-  const PU = L.factory * PU_PER_FACTORY * efficiency
-  const civilianPU = PU * alloc.civilian
-  const militaryPU = PU * alloc.military
-  const consumerPU = PU * alloc.consumer
-  const stance = s.monetaryStance ?? 'neutral'
-  const cpRaw = civilianPU * CP_PER_PU * mods.construction * STANCE_CONSTRUCTION[stance]
-  const needMinerals = (militaryPU + consumerPU) * MINERALS_PER_PU + cpRaw * MINERALS_PER_CP
-  const needEnergy = PU * ENERGY_PER_PU + L.researchLab * LAB_ENERGY + L.exoticRefinery * REFINERY_ENERGY
-  const availMinerals = Math.max(0, stock.minerals) + produced.minerals
-  const availEnergy = Math.max(0, stock.energy) + produced.energy
-  const inputSatisfaction = Math.min(1, needMinerals > 0 ? availMinerals / needMinerals : 1, needEnergy > 0 ? availEnergy / needEnergy : 1)
-  used.minerals = needMinerals * inputSatisfaction
-  used.energy = needEnergy * inputSatisfaction
-
-  produced.alloys = militaryPU * ALLOYS_PER_PU * inputSatisfaction
-  produced.consumerGoods = consumerPU * CONSUMER_GOODS_PER_PU * inputSatisfaction
-  produced.electronics = consumerPU * ELECTRONICS_PER_PU * inputSatisfaction
-  produced.exoticMatter = L.exoticRefinery * REFINERY_EXOTIC * efficiency * inputSatisfaction
-  produced.hyperium = L.exoticRefinery * REFINERY_HYPERIUM * efficiency * inputSatisfaction
-  const constructionPoints = cpRaw * inputSatisfaction
-
-  // Labs run on electronics (before the population gets any).
-  const labElectronics = L.researchLab * LAB_ELECTRONICS
-  const availElectronics = Math.max(0, stock.electronics) + produced.electronics
-  const labSat = labElectronics > 0 ? Math.min(1, availElectronics / labElectronics) : 1
-  used.electronics = labElectronics * labSat
-  const research = L.researchLab * LAB_RESEARCH * efficiency * inputSatisfaction * labSat
+  // Output.
+  const researchByTree: Record<TechCategory, number> = { physics: 0, society: 0, engineering: 0 }
+  let constructionPoints = 0
+  let amenityServices = 0 // commercial services GDP ($B a month)
+  let productionUnits = 0
+  let militaryPU = 0
+  const byBuilding: Partial<Record<SimpleBuildingId, BuildingReport>> = {}
+  for (const b of SIMPLE_BUILDINGS) {
+    const def = SIMPLE_BUILDING_DEFS[b]
+    const run = runs[b]
+    const scale = L[b] * efficiency * run
+    const built = worlds.reduce((n, w) => n + (w.buildings[b] ?? 0), 0)
+    if (built > 0) {
+      const output: Partial<Record<SimpleProduct, number>> = {}
+      for (const [prod, n] of Object.entries(def.outputs) as [SimpleProduct, number][]) output[prod] = scale * n * (prod === 'construction' ? mods.construction * STANCE_CONSTRUCTION[stance] : 1)
+      const upkeep: Partial<Record<SimpleGood, number>> = {}
+      for (const [g, n] of Object.entries(def.upkeep) as [SimpleGood, number][]) upkeep[g] = active[b] * n * run
+      byBuilding[b] = { levels: built, output, upkeep }
+    }
+    if (def.pu) {
+      productionUnits += L[b] * def.pu * efficiency
+      if (def.outputs.alloys) militaryPU += L[b] * def.pu * efficiency
+    }
+    for (const [prod, n] of Object.entries(def.outputs) as [SimpleProduct, number][]) {
+      if (prod === 'construction') constructionPoints += scale * n * mods.construction * STANCE_CONSTRUCTION[stance]
+      else if (prod === 'physics' || prod === 'society' || prod === 'engineering') researchByTree[prod as TechCategory] += scale * n
+      else if (prod === 'services') amenityServices += scale * n
+      else if (prod === 'amenities') continue // counted per world (worldAmenities)
+      else produced[prod as SimpleGood] += scale * n
+    }
+  }
+  const research = researchByTree.physics + researchByTree.society + researchByTree.engineering
+  const amenitiesRatio = population > 0 ? amenitySupplyWeighted / population : 1
 
   // Trade on the interstellar market, at fixed values through the exchange rate.
   // Exports are limited by what's on hand; imports by the treasury.
@@ -550,7 +593,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     const staffing = worldStaffing(w)
     for (const b of SIMPLE_BUILDINGS) {
       const filled = (w.buildings[b] ?? 0) * SIMPLE_BUILDING_DEFS[b].jobs * staffing
-      if (SPECIALIST_BUILDINGS.includes(b)) specialistJobs += filled
+      if (SIMPLE_BUILDING_DEFS[b].stratum === 'specialists') specialistJobs += filled
       else workerJobs += filled
     }
   }
@@ -590,6 +633,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     for (const g of NEED_GOODS) {
       if (POP_UPKEEP[st][g] > 0) add(`${g === 'food' ? 'Food' : g === 'consumerGoods' ? 'Consumer goods' : 'Electronics'} shortage`, -SHORTAGE_HAPPINESS[g] * (1 - goodSatisfaction[g]))
     }
+    add('Amenities', amenitiesHappiness(amenitiesRatio))
     add('Inflation', -Math.min(0.3, Math.max(0, s.inflation) * INFLATION_HAPPINESS))
     if (s.warTaxes) add('War taxes', -WAR_TAX_HAPPINESS)
     const happiness = clamp(0.5 + parts.reduce((n, p) => n + p.value, 0), 0, 1)
@@ -606,7 +650,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   for (const g of SIMPLE_GOODS) grossValue += produced[g] * GOOD_VALUE[g]
   let inputValue = 0
   for (const g of SIMPLE_GOODS) inputValue += used[g] * GOOD_VALUE[g]
-  const services = population * SERVICES_PER_POP * (0.5 + s.stability) * productivity
+  const services = population * SERVICES_PER_POP * (0.5 + s.stability) * productivity + amenityServices
   const productivityGrowth = productivityGrowthFor(research, population)
   const realGdp = Math.max(1, (grossValue - inputValue + services) * TICKS_PER_YEAR)
   const gdp = realGdp * s.priceLevel
@@ -651,15 +695,17 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     efficiency,
     workforce,
     jobs,
-    productionUnits: PU,
-    civilianPU,
+    productionUnits,
     militaryPU,
-    consumerPU,
     inputSatisfaction,
-    mineralsNeeded: needMinerals,
-    energyNeeded: needEnergy,
+    inputShortages: SIMPLE_GOODS.filter((g) => need[g] > 0 && goodSat[g] < 0.999),
+    mineralsNeeded: need.minerals,
+    energyNeeded: need.energy,
     constructionPoints,
     research,
+    researchByTree,
+    byBuilding,
+    amenities: { need: amenityNeed, supply: amenitySupply, ratio: amenitiesRatio },
     productivity,
     productivityGrowth,
     produced,
@@ -768,7 +814,12 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
   const growth = (POP_GROWTH * (0.5 + r.approval) * (1 + 0.3 * clamp(s.welfare, 0, 1))) / TICKS_PER_YEAR
   const starve = (STARVATION * (1 - r.foodSatisfaction)) / TICKS_PER_YEAR
   const popFactor = 1 + (r.foodSatisfaction >= 0.95 ? growth : -starve)
-  const nextWorlds = [...byName.values()].map((w) => ({ ...w, population: Math.max(0, w.population * popFactor) }))
+  const nextWorlds = [...byName.values()].map((w) => {
+    // Clinics add their own growth on their world (only while the people are fed).
+    let clinic = 0
+    if (r.foodSatisfaction >= 0.95) for (const b of SIMPLE_BUILDINGS) clinic += (w.buildings[b] ?? 0) * (SIMPLE_BUILDING_DEFS[b].popGrowth ?? 0)
+    return { ...w, population: Math.max(0, w.population * (popFactor + (clinic * worldStaffing(w)) / TICKS_PER_YEAR)) }
+  })
 
   // Stability eases toward its target.
   const stability = clamp(s.stability + (r.stabilityTarget - s.stability) * STAB_SPEED, 0, 1)

@@ -18,6 +18,7 @@ import {
   worldStrata,
   worldWorkforce,
   type ConstructionOrder,
+  type WorldState,
 } from '../../economy-abstract/abstractEconomy'
 import {
   DISTRICT_COST,
@@ -31,6 +32,8 @@ import {
   SLOTS_PER_DISTRICT,
   type SimpleBuildingId,
   type SimpleDistrictId,
+  type SimpleGood,
+  type SimpleProduct,
 } from '../../data/simplisticEconomyData'
 import { getCountry } from '../../data/countryData'
 import { formatPop } from '../../economy/format'
@@ -68,6 +71,11 @@ export function SimpleWorldSummary({ bodyName }: { bodyName: string }) {
         <div className={`pl-stat${staffing < 1 ? ' warn' : ''}`} title="Share of this world's jobs that can be filled"><span>Staffed</span><b>{pct(staffing)}</b></div>
         <div className="pl-stat" title="District levels developed / the land this world has for them"><span>Land used</span><b>{districtLevelsTotal(w)} / {landOf(w)}</b></div>
         {nation && <div className="pl-stat" title="National stability (it follows approval)"><span>Stability</span><b>{pct(nation.stability)}</b></div>}
+        {r && r.amenities.need > 0 && (
+          <div className={`pl-stat${r.amenities.ratio < 1 ? ' warn' : ''}`} title="Amenities here: supplied / needed. The city provides some; Entertainment Centers, Commercial Zones and Clinics add more. A shortfall makes this world's people unhappy, a surplus a little happier.">
+            <span>Amenities</span><b>{num(r.amenities.supply)} / {num(r.amenities.need)}</b>
+          </div>
+        )}
       </div>
       {r && (
         <div className="pl-output" title="What this world produces each month">
@@ -81,17 +89,119 @@ export function SimpleWorldSummary({ bodyName }: { bodyName: string }) {
   )
 }
 
+// "+15 Alloys, −10 Minerals" for the build picker.
+function pickerSummary(b: SimpleBuildingId): string {
+  const def = SIMPLE_BUILDING_DEFS[b]
+  const out = (Object.entries(def.outputs) as [SimpleProduct, number][]).map(([p, n]) => `+${num(n)} ${PRODUCT_NAME[p]}`)
+  const up = (Object.entries(def.upkeep) as [SimpleGood, number][]).map(([g, n]) => `−${num(n)} ${SIMPLE_GOOD_NAMES[g]}`)
+  return [...out, ...up].join(', ')
+}
+
 // --- Districts & Buildings --------------------------------------------------------
-function BuildingTile({ b, staffing, bonus }: { b: SimpleBuildingId; staffing: number; bonus: number }) {
+function BuildingTile({ b, staffing, bonus, selected, onClick }: { b: SimpleBuildingId; staffing: number; bonus: number; selected: boolean; onClick: () => void }) {
   const def = SIMPLE_BUILDING_DEFS[b]
   return (
-    <div
-      className={`pl-tile${staffing < 1 ? ' understaffed' : ''}`}
-      title={`${def.name}\n${def.description}\nJobs: ${def.jobs}M · staffed ${pct(staffing)}${bonus > 0 ? ` · district bonus +${pct(bonus, 1)}` : ''}`}
+    <button
+      type="button"
+      className={`pl-tile${staffing < 1 ? ' understaffed' : ''}${selected ? ' selected' : ''}`}
+      title={`${def.name}\n${def.description}\nJobs: ${def.jobs}M · staffed ${pct(staffing)}${bonus > 0 ? ` · district bonus +${pct(bonus, 1)}` : ''}\nClick for details`}
+      onClick={onClick}
     >
       <PlanetIcon id={b} size={22} />
       <span className="pl-tile-name">{def.name}</span>
       <span className="pl-tile-bar"><span style={{ width: pct(Math.min(1, staffing)) }} /></span>
+    </button>
+  )
+}
+
+const PRODUCT_NAME: Record<SimpleProduct, string> = {
+  ...SIMPLE_GOOD_NAMES,
+  construction: 'Construction',
+  physics: 'Physics research',
+  society: 'Society research',
+  engineering: 'Engineering research',
+  amenities: 'Amenities',
+  services: 'Services ($B)',
+}
+const num = (n: number) => n.toFixed(Math.abs(n) < 10 ? 1 : 0)
+
+// Everything about one building type on one world: what it is, how many stand
+// here, its jobs and staffing, what one level and all of them make and use this
+// month (after staffing, stability, productivity, the district bonus and any
+// devastation), their share of the world's output, its cost — and build/demolish.
+function SimpleBuildingDetail({ w, b, countryId, canBuild, onBuild, onClose }: { w: WorldState; b: SimpleBuildingId; countryId: string | null; canBuild: boolean; onBuild: () => void; onClose: () => void }) {
+  const owner = useTerritoryStore((s) => s.bodyOwner[w.bodyName])
+  const nation = useAbstractEconomyStore((s) => (owner ? s.byCountry[owner] : undefined))
+  const demolish = useAbstractEconomyStore((s) => s.demolish)
+  const [message, setMessage] = useState<string | null>(null)
+  const def = SIMPLE_BUILDING_DEFS[b]
+  const d = DISTRICT_OF_BUILDING[b]
+  const here = w.buildings[b] ?? 0
+  const staffing = worldStaffing(w)
+  const bonus = districtBonus(w, d)
+  const r = nation ? abstractReport(nation, [w], stockOf(nation.countryId)) : undefined
+  const br = r?.byBuilding[b]
+  const outputs = Object.entries(def.outputs) as [SimpleProduct, number][]
+  const upkeep = Object.entries(def.upkeep) as [SimpleGood, number][]
+  const worldTotal = (p: SimpleProduct): number => {
+    if (!r) return 0
+    if (p === 'construction') return r.constructionPoints
+    if (p === 'physics' || p === 'society' || p === 'engineering') return r.researchByTree[p]
+    if (p === 'amenities') return r.amenities.supply
+    if (p === 'services') return Object.values(r.byBuilding).reduce((n, x) => n + (x?.output.services ?? 0), 0)
+    return r.produced[p]
+  }
+  const doDemolish = () => {
+    if (!countryId) return
+    const res = demolish(countryId, w.bodyName, b)
+    setMessage(res.ok ? null : (res as { reason: string }).reason)
+    if (res.ok && here <= 1) onClose()
+  }
+  return (
+    <div className="pl-detail">
+      <div className="pl-detail-head">
+        <PlanetIcon id={b} size={28} />
+        <div>
+          <div className="pl-detail-name">{def.name} <span className="abs-dim">×{here} on {w.bodyName}</span></div>
+          <div className="abs-dim">{SIMPLE_DISTRICT_DEFS[d].name}{bonus.total > 0 ? ` · ecosystem +${pct(bonus.total, 1)}` : ''}</div>
+        </div>
+        <button type="button" className="abs-x" title="Close" onClick={onClose}>×</button>
+      </div>
+      <div className="pl-detail-desc">{def.description}</div>
+      <div className="pl-stat-grid">
+        <div className="pl-stat" title="Jobs per level, and who fills them"><span>Jobs / level</span><b>{def.jobs}M {def.stratum}</b></div>
+        <div className={`pl-stat${staffing < 1 ? ' warn' : ''}`} title="Share of this world's jobs that can be filled"><span>Staffed</span><b>{pct(staffing)}</b></div>
+        <div className="pl-stat" title="Construction points to build one level"><span>Build cost</span><b>{def.cost} CP</b></div>
+        {def.pu ? <div className="pl-stat" title="Production Units per level: factory capacity"><span>Capacity</span><b>{def.pu} PU</b></div> : null}
+        {def.popGrowth ? <div className="pl-stat" title="Extra yearly population growth on this world per level"><span>Pop growth</span><b>+{pct(def.popGrowth, 1)}/yr</b></div> : null}
+      </div>
+      <table className="abs-table pl-detail-table">
+        <thead><tr><th></th><th title="The building's base figure for one level">Base / level</th><th title="All of them here, this month, after staffing, bonuses and shortages">All here /mo</th><th title="Their share of this world's total">Share</th></tr></thead>
+        <tbody>
+          {outputs.map(([p, n]) => {
+            const got = br?.output[p] ?? 0
+            const total = worldTotal(p)
+            return (
+              <tr key={p} className="econ-pos">
+                <td>{PRODUCT_NAME[p]}</td><td>+{num(n)}</td><td>+{num(got)}</td><td>{total > 0 ? pct(got / total) : '—'}</td>
+              </tr>
+            )
+          })}
+          {upkeep.map(([g, n]) => (
+            <tr key={g} className="econ-neg">
+              <td>{SIMPLE_GOOD_NAMES[g]} (upkeep)</td><td>−{num(n)}</td><td>−{num(br?.upkeep[g] ?? 0)}</td><td></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {r && upkeep.some(([g]) => r.inputShortages.includes(g)) && <div className="econ-neg pl-message">Short of {upkeep.filter(([g]) => r.inputShortages.includes(g)).map(([g]) => SIMPLE_GOOD_NAMES[g]).join(', ')} — running slow.</div>}
+      {message && <div className="econ-neg pl-message">{message}</div>}
+      {canBuild && (
+        <div className="pl-detail-actions">
+          <button type="button" className="laws-enact-btn" onClick={onBuild} title={`Queue another level (${def.cost} construction points)`}>+ Build another</button>
+          <button type="button" className="laws-enact-btn" disabled={here <= 0} onClick={doDemolish} title="Tear down one level now — no refund, frees its slot and jobs">Demolish one</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -107,7 +217,8 @@ function QueuedTile({ o }: { o: ConstructionOrder }) {
   )
 }
 
-export function SimpleDistrictsTab({ countryId, bodyName }: { countryId: string | null; bodyName: string }) {
+// `only` shows just one district (the Buildings lens's tabs).
+export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: string | null; bodyName: string; only?: SimpleDistrictId }) {
   const w = useAbstractEconomyStore((s) => s.worlds[bodyName])
   const owner = useTerritoryStore((s) => s.bodyOwner[bodyName])
   const queue = useAbstractEconomyStore((s) => (owner ? s.byCountry[owner]?.queue : undefined))
@@ -117,14 +228,15 @@ export function SimpleDistrictsTab({ countryId, bodyName }: { countryId: string 
   const { canBuild } = useBuildRights(countryId, bodyName)
   const [picking, setPicking] = useState<SimpleDistrictId | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [selected, setSelected] = useState<SimpleBuildingId | null>(null)
   if (!w) return <div className="abs-dim">No economy on this world.</div>
 
   const q = (queue ?? []).filter((o) => o.bodyName === bodyName)
   const ds = districtsOf(w)
   const staffing = worldStaffing(w)
   const land = freeLand(w, queue ?? [])
-  const shown = SIMPLE_DISTRICTS.filter((d) => ds[d] > 0 || q.some((o) => o.district === d || (o.building && DISTRICT_OF_BUILDING[o.building] === d)))
-  const addable = SIMPLE_DISTRICTS.filter((d) => !shown.includes(d))
+  const shown = SIMPLE_DISTRICTS.filter((d) => (only ? d === only : ds[d] > 0 || q.some((o) => o.district === d || (o.building && DISTRICT_OF_BUILDING[o.building] === d))))
+  const addable = only ? [] : SIMPLE_DISTRICTS.filter((d) => !shown.includes(d))
 
   const run = (res: { ok: boolean; reason?: string }) => setMessage(res.ok ? null : res.reason ?? null)
   const build = (b: SimpleBuildingId) => {
@@ -174,7 +286,7 @@ export function SimpleDistrictsTab({ countryId, bodyName }: { countryId: string 
               <ForeignHoldingsRow bodyName={bodyName} playerId={countryId} />
             ) : (
               <div className="pl-grid">
-                {tiles.map((b, i) => <BuildingTile key={`${b}-${i}`} b={b} staffing={staffing} bonus={bonus.total} />)}
+                {tiles.map((b, i) => <BuildingTile key={`${b}-${i}`} b={b} staffing={staffing} bonus={bonus.total} selected={selected === b} onClick={() => setSelected(selected === b ? null : b)} />)}
                 {queuedHere.map((o) => <QueuedTile key={o.id} o={o} />)}
                 {Array.from({ length: Math.max(0, free) }, (_, i) =>
                   canBuild ? (
@@ -187,13 +299,16 @@ export function SimpleDistrictsTab({ countryId, bodyName }: { countryId: string 
                 )}
               </div>
             )}
+            {selected && DISTRICT_OF_BUILDING[selected] === d && (
+              <SimpleBuildingDetail w={w} b={selected} countryId={countryId} canBuild={canBuild} onBuild={() => build(selected)} onClose={() => setSelected(null)} />
+            )}
             {picking === d && (
               <div className="pl-picker">
                 {def.buildings.map((b) => (
                   <button key={b} type="button" className="pl-pick" title={SIMPLE_BUILDING_DEFS[b].description} onClick={() => build(b)}>
                     <PlanetIcon id={b} size={18} />
                     <span>{SIMPLE_BUILDING_DEFS[b].name}</span>
-                    <span className="abs-dim">{SIMPLE_BUILDING_DEFS[b].cost} CP · {SIMPLE_BUILDING_DEFS[b].jobs}M jobs</span>
+                    <span className="abs-dim">{pickerSummary(b)} · {SIMPLE_BUILDING_DEFS[b].cost} CP · {SIMPLE_BUILDING_DEFS[b].jobs}M jobs</span>
                   </button>
                 ))}
               </div>
@@ -242,8 +357,8 @@ export function SimplePopulationTab({ bodyName }: { bodyName: string }) {
   if (!w) return <div className="abs-dim">Nobody lives here.</div>
   const st = worldStrata(w)
   const rows: { key: 'workers' | 'specialists' | 'unemployed'; label: string; hint: string }[] = [
-    { key: 'workers', label: 'Workers', hint: 'Farms, mines, power plants and factories' },
-    { key: 'specialists', label: 'Specialists', hint: 'Research labs and refineries' },
+    { key: 'workers', label: 'Workers', hint: 'Farms, mines, power plants, most factories and commercial zones' },
+    { key: 'specialists', label: 'Specialists', hint: 'Research labs, electronics plants, refineries, fusion reactors, clinics and entertainment' },
     { key: 'unemployed', label: 'Unemployed', hint: 'No job here — unhappy' },
   ]
   return (

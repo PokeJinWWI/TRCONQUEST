@@ -91,10 +91,10 @@ console.log('\n=== 4. Devastation: grows, heals, hurts output ===')
   // Simple mode: devastated worlds produce less.
   const nation: AbstractEconomyState = {
     countryId: 'x', population: 0, gdp: 1, realGdp: 1, priceLevel: 1, inflation: 0.02, stability: 0.5, treasury: 100, reserves: 0, debt: 0, taxRate: 0.1,
-    economyType: 'corporatist', moneyCreation: 0, warTaxes: false, welfare: 0, allocation: { civilian: 0.5, military: 0.2, consumer: 0.3 }, researchFocus: 'physics',
+    economyType: 'corporatist', moneyCreation: 0, warTaxes: false, welfare: 0,
     queue: [], nextOrderId: 1, currency: { code: 'X', name: 'X', rate: 1, baseRate: 1 }, trade: {},
   }
-  const world: WorldState = { bodyName: 'Home', population: 2600, buildings: { factory: 12, farm: 6, mine: 4, powerPlant: 4 } }
+  const world: WorldState = { bodyName: 'Home', population: 2600, buildings: { civilianFactory: 6, alloyFoundry: 3, consumerFactory: 3, farm: 6, mine: 4, powerPlant: 4 } }
   const st = { ...emptyStockpile(), minerals: 5000, energy: 5000 }
   const intact = abstractReport(nation, [world], st)
   const ruined = abstractReport(nation, [{ ...world, devastation: 1 }], st)

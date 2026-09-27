@@ -236,8 +236,8 @@ export function TechTreeGraph({
                   transform={`translate(${x}, ${y})`}
                   className={`tech-tree-node ${stateClass}`}
                   onClick={() => !previewOnly && !isResearched && onResearch(node.id)}
+                  data-tooltip={node.description}
                 >
-                  <title>{node.description}</title>
                   <rect width={NODE_WIDTH} height={NODE_HEIGHT} rx={4} />
                   <text x={8} y={17} className="tech-tree-node-name">
                     {node.name.length > 22 ? `${node.name.slice(0, 21)}…` : node.name}

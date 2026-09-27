@@ -4,6 +4,7 @@
 
 import { glossaryLookup, normalizeTerm } from '../src/data/glossary'
 import { monthTicks, niceTicks } from '../src/components/TimeChart'
+import { resolveTooltip, type TipNode } from '../src/components/TooltipLayer'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -52,6 +53,41 @@ console.log('\n=== 3. Chart x axis: month ticks ===')
   const span = monthTicks(20, 7, 1)
   check('January is labelled with its year', span.some((t) => t.label.startsWith('Jan ')), span.map((t) => t.label).join(' | '))
   check('ticks move as months pass', monthTicks(1, 7, 1)[0].label !== monthTicks(0, 7, 1)[0].label || monthTicks(1, 7, 1).length !== monthTicks(0, 7, 1).length)
+}
+
+console.log('\n=== 4. One tooltip system: one box, never a native one beside it ===')
+{
+  // A minimal element tree (what resolveTooltip reads).
+  const node = (tagName: string, attrs: Record<string, string> = {}, text = '', children: TipNode[] = []): TipNode => {
+    const n: TipNode = { tagName, parentElement: null, childElementCount: children.length, textContent: text || children.map((c) => c.textContent).join(''), getAttribute: (a) => attrs[a] ?? null }
+    for (const c of children) (c as { parentElement: TipNode | null }).parentElement = n
+    return n
+  }
+  // The Stability meter: <div title=…><div><span>Stability</span><span>55%</span></div>…</div>
+  const label = node('SPAN', {}, 'Stability')
+  const value = node('SPAN', {}, '55%')
+  const head = node('DIV', {}, '', [label, value])
+  const meter = node('DIV', { title: 'Order and contentment — see the Social tab.' }, '', [head, node('DIV')])
+  node('DIV', { class: 'panel' }, '', [meter])
+  const src = resolveTooltip(label)
+  check('hovering "Stability" in a titled meter takes over the meter\'s title (so no native tooltip beside ours)', src?.titleEl === meter && src.title?.startsWith('Order') === true)
+  check('...and shows the glossary entry in the same box', src?.entry?.term === 'Stability')
+  check('...anchored on the meter, so moving to its value keeps the one tooltip', src?.anchor === meter && resolveTooltip(value)?.anchor === meter)
+  // A title far up the tree is still found (the browser would show it natively).
+  let deep: TipNode = node('SPAN', {}, 'x')
+  const leaf = deep
+  for (let i = 0; i < 10; i++) deep = node('DIV', {}, '', [deep])
+  const top = node('DIV', { title: 'Far away' }, '', [deep])
+  check('the nearest title is found however deep', resolveTooltip(leaf)?.titleEl === top)
+  // A title already taken over (data-tip) still counts; data-tooltip (SVG) too.
+  check('a stashed title (data-tip) still shows', resolveTooltip(node('DIV', { 'data-tip': 'Stashed' }))?.title === 'Stashed')
+  check('data-tooltip (styled-only, for SVG) shows', resolveTooltip(node('g', { 'data-tooltip': 'A tech' }))?.title === 'A tech')
+  // The glossary never climbs out of a button into its container.
+  const btn = node('BUTTON', {}, '', [node('SPAN', {}, 'Go')])
+  node('DIV', {}, 'Stability', [btn])
+  check('glossary lookup stops at a control', resolveTooltip(btn) === null)
+  check('nothing inside the tooltip box itself', resolveTooltip(node('DIV', { class: 'game-tooltip', title: 't' })) === null)
+  check('plain text with no title or term gets nothing', resolveTooltip(node('SPAN', {}, 'Mars')) === null)
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

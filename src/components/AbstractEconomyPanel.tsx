@@ -25,7 +25,7 @@ import {
   type NeedGood,
   type Stratum,
 } from '../economy-abstract/abstractEconomy'
-import { SIMPLE_GOODS, SIMPLE_GOOD_NAMES, GOOD_VALUE, type SimpleGood } from '../data/simplisticEconomyData'
+import { SIMPLE_GOODS, SIMPLE_GOOD_NAMES, GOOD_VALUE, SIMPLE_BUILDING_DEFS, type SimpleGood, type SimpleBuildingId, type SimpleProduct } from '../data/simplisticEconomyData'
 import { getCountry } from '../data/countryData'
 import type { TechCategory } from '../data/techData'
 import { formatMoney, formatPop } from '../economy/format'
@@ -115,6 +115,13 @@ interface TabProps {
   r: AbstractReport
 }
 
+const FACTORY_ROWS: { b: SimpleBuildingId; out: SimpleProduct }[] = [
+  { b: 'civilianFactory', out: 'construction' },
+  { b: 'alloyFoundry', out: 'alloys' },
+  { b: 'consumerFactory', out: 'consumerGoods' },
+  { b: 'electronicsPlant', out: 'electronics' },
+]
+
 // --- Macro ------------------------------------------------------------------------
 type MacroChart = 'inflation' | 'gdp' | 'debt'
 
@@ -127,12 +134,10 @@ function MacroTab({ countryId, s, r }: TabProps) {
   const setMoneyCreation = useAbstractEconomyStore((st) => st.setMoneyCreation)
   const setMonetaryStance = useAbstractEconomyStore((st) => st.setMonetaryStance)
   const setWarTaxes = useAbstractEconomyStore((st) => st.setWarTaxes)
-  const setAllocation = useAbstractEconomyStore((st) => st.setAllocation)
   const invest = useAbstractEconomyStore((st) => st.invest)
   const payDebt = useAbstractEconomyStore((st) => st.payDebt)
   const h = history ?? []
   const realGrowth = smoothedRealGrowth(h)
-  const alloc = s.allocation
 
   return (
     <>
@@ -239,23 +244,21 @@ function MacroTab({ countryId, s, r }: TabProps) {
         <input type="checkbox" checked={s.warTaxes} onChange={(e) => setWarTaxes(countryId, e.target.checked)} />
       </label>
 
-      <div className="econ-subtitle" style={{ marginTop: 12 }} title="Production Units come from your factories (see Industry). The split decides what they make.">
-        Production — {fmt(r.productionUnits)} PU from factories
+      <div className="econ-subtitle" style={{ marginTop: 12 }} title="Each kind of factory makes one thing. Build more of a kind (planet screen → Districts) to make more of it.">
+        Production — {fmt(r.productionUnits)} PU of factories
       </div>
-      {([
-        { leg: 'civilian' as const, label: 'Civilian', makes: `${fmt(r.constructionPoints)} construction/mo` },
-        { leg: 'military' as const, label: 'Military', makes: `${fmt(r.produced.alloys)} alloys/mo` },
-        { leg: 'consumer' as const, label: 'Consumer', makes: `${fmt(r.produced.consumerGoods)} goods + ${fmt(r.produced.electronics, 1)} elec/mo` },
-      ]).map(({ leg, label, makes }) => (
-        <label key={leg} className="econ-control-row">
-          <span className="inspect-label">{label}</span>
-          <span>
-            <input type="range" min={0} max={1} step={0.05} value={alloc[leg]} onChange={(e) => setAllocation(countryId, leg, Number(e.target.value))} />
-            <b style={{ marginLeft: 8, color: '#cdeeff' }}>{Math.round(alloc[leg] * 100)}%</b>
-            <span className="abs-dim" style={{ marginLeft: 8 }}>{makes}</span>
-          </span>
-        </label>
-      ))}
+      <table className="abs-table">
+        <thead><tr><th>Factory</th><th title="Levels built, all worlds">Levels</th><th>Makes /mo</th></tr></thead>
+        <tbody>
+          {FACTORY_ROWS.map(({ b, out }) => (
+            <tr key={b} title={SIMPLE_BUILDING_DEFS[b].description}>
+              <td>{SIMPLE_BUILDING_DEFS[b].name}</td>
+              <td>{r.byBuilding[b]?.levels ?? 0}</td>
+              <td>{fmt(r.byBuilding[b]?.output[out] ?? 0, 1)} {out === 'construction' ? 'construction' : SIMPLE_GOOD_NAMES[out as SimpleGood].toLowerCase()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <div className="abs-deficit">
         <span title="Population-weighted happiness — stability follows it (see Social)">Approval</span>
         <span className={Math.round(r.approval * 100) < 50 ? 'econ-neg' : 'econ-pos'}>{pct(r.approval, 0)}{r.upkeepMet < 0.95 ? ' · shortages!' : ''}</span>
@@ -287,16 +290,15 @@ function MacroTab({ countryId, s, r }: TabProps) {
 }
 
 // --- Industry ---------------------------------------------------------------------
-const FOCI: { id: TechCategory; label: string }[] = [
-  { id: 'physics', label: 'Physics' },
-  { id: 'society', label: 'Society' },
-  { id: 'engineering', label: 'Engineering' },
+const TREES: { id: TechCategory; label: string; lab: SimpleBuildingId }[] = [
+  { id: 'physics', label: 'Physics', lab: 'physicsLab' },
+  { id: 'society', label: 'Society', lab: 'societyLab' },
+  { id: 'engineering', label: 'Engineering', lab: 'engineeringLab' },
 ]
 
 function IndustryTab({ countryId, s, r }: TabProps) {
   const amounts = useResourceStore((st) => st.byCountry[countryId]?.amounts)
   const worlds = useAbstractEconomyStore((st) => st.worlds)
-  const setResearchFocus = useAbstractEconomyStore((st) => st.setResearchFocus)
   const cancelOrder = useAbstractEconomyStore((st) => st.cancelOrder)
   const owners = useTerritoryStore((st) => st.bodyOwner)
   const controllers = useTerritoryStore((st) => st.bodyController)
@@ -323,18 +325,18 @@ function IndustryTab({ countryId, s, r }: TabProps) {
 
       <div className="cb-facts" style={{ marginTop: 6 }}>
         <div title="Industrial capacity from factories"><span className="inspect-label">Production Units</span><span>{fmt(r.productionUnits)}</span></div>
-        <div title="Share of industry's minerals and energy that could be supplied — below 100% everything industrial slows"><span className="inspect-label">Inputs supplied</span><span className={r.inputSatisfaction < 0.95 ? 'econ-neg' : ''}>{pct(r.inputSatisfaction, 0)}</span></div>
+        <div title={`How well buildings' inputs (upkeep) are supplied — the worst one. A building short of one of its own inputs slows down.${r.inputShortages.length ? `\nShort: ${r.inputShortages.map((g) => SIMPLE_GOOD_NAMES[g]).join(', ')}` : ''}`}><span className="inspect-label">Inputs supplied</span><span className={r.inputSatisfaction < 0.95 ? 'econ-neg' : ''}>{pct(r.inputSatisfaction, 0)}</span></div>
         <div title="From the civilian share of production — spent on the queue below"><span className="inspect-label">Construction</span><span>{fmt(r.constructionPoints)}/mo</span></div>
         <div title="Output multiplier from stability and economy type"><span className="inspect-label">Efficiency</span><span>{pct(r.efficiency, 0)}</span></div>
       </div>
 
       <div className="econ-control-row">
-        <span className="inspect-label" title={`Research Labs produce points into this tree. All research also raises productivity — currently +${pct(r.productivityGrowth, 2)}/yr; more labs per person, faster growth.`}>Research {fmt(r.research, 1)}/mo</span>
+        <span className="inspect-label" title={`Each lab researches its own tree — build the labs for the trees you want. All research also raises productivity — currently +${pct(r.productivityGrowth, 2)}/yr; more labs per person, faster growth.`}>Research {fmt(r.research, 1)}/mo</span>
         <span>
-          {FOCI.map((f) => (
-            <button key={f.id} type="button" className={`laws-enact-btn${s.researchFocus === f.id ? ' abs-on' : ''}`} style={{ marginLeft: 4 }} onClick={() => setResearchFocus(countryId, f.id)}>
-              {f.label}
-            </button>
+          {TREES.map((t) => (
+            <span key={t.id} style={{ marginLeft: 8 }} title={`${SIMPLE_BUILDING_DEFS[t.lab].name}: ${r.byBuilding[t.lab]?.levels ?? 0} levels`}>
+              {t.label} <b style={{ color: '#cdeeff' }}>{fmt(r.researchByTree[t.id], 1)}</b>
+            </span>
           ))}
         </span>
       </div>
@@ -439,6 +441,7 @@ function SocialTab({ countryId, s, r }: TabProps) {
         <div title="Share of the population that works"><span className="inspect-label">Workforce</span><span>{formatPop(r.workforce)}</span></div>
         <div title="Jobs your buildings offer"><span className="inspect-label">Jobs</span><span>{formatPop(r.jobs)}</span></div>
         <div title="Workers without a job — build more to employ them"><span className="inspect-label">Unemployed</span><span className={r.workforce > r.jobs ? 'econ-neg' : ''}>{formatPop(Math.max(0, r.workforce - r.jobs))}</span></div>
+        <div title="Comfort, services and leisure: supplied / needed, all worlds. Each world's shortfall costs its people happiness; a surplus adds a little. Build Entertainment Centers, Commercial Zones or Clinics in Urban districts."><span className="inspect-label">Amenities</span><span className={r.amenities.ratio < 0.95 ? 'econ-neg' : 'econ-pos'}>{fmt(r.amenities.supply)} / {fmt(r.amenities.need)}</span></div>
       </div>
 
       <div className="econ-subtitle" style={{ marginTop: 10 }}>Strata</div>

@@ -1,13 +1,16 @@
 import type { ReactElement } from 'react'
 
-// Simple glyphs for the planet screen: districts, buildings (Simple mode's six
+// Simple glyphs for the planet screen: districts, buildings (Simple mode's roster
 // and Complex mode's building groups), defense installations and foreign
 // buildings. Hand-drawn 16×16 SVG in currentColor, the same approach as
 // ResourceIcons.tsx — no icon library. One shape per idea, readable at 14–28px.
 
 const GLYPHS: Record<string, ReactElement> = {
   // --- Buildings (Simple mode) -------------------------------------------------
-  factory: <path d="M2 14V7l4 2.5V7l4 2.5V4h4v10z M10 11h2 M6 11h2" fill="none" />,
+  civilianFactory: <path d="M2 14V7l4 2.5V7l4 2.5V4h4v10z M10 11h2 M6 11h2" fill="none" />,
+  alloyFoundry: <path d="M3 5h10l-2 4H5z M8 9v2 M4 14h8l-1-3H5z M6 2l1 2 M10 2 9 4" fill="none" />,
+  consumerFactory: <path d="M2 5l6-3 6 3-6 3-6-3zM2 5v6l6 3 6-3V5M8 8v6" fill="none" />,
+  electronicsPlant: <path d="M4 4h8v8H4z M6 4V2 M10 4V2 M6 14v-2 M10 14v-2 M4 6H2 M4 10H2 M12 6h2 M12 10h2 M6.5 6.5h3v3h-3z" fill="none" />,
   exoticRefinery: (
     <>
       <path d="M5 14V9a3 3 0 0 1 6 0v5z" fill="none" />
@@ -15,10 +18,30 @@ const GLYPHS: Record<string, ReactElement> = {
       <circle cx="8" cy="11" r="1" />
     </>
   ),
-  researchLab: <path d="M6 2h4 M7 2v4L3 13a1 1 0 0 0 1 1.5h8A1 1 0 0 0 13 13L9 6V2 M5 10h6" fill="none" />,
+  physicsLab: (
+    <>
+      <ellipse cx="8" cy="8" rx="6.5" ry="2.5" fill="none" />
+      <ellipse cx="8" cy="8" rx="2.5" ry="6.5" fill="none" />
+      <circle cx="8" cy="8" r="1" />
+    </>
+  ),
+  societyLab: <path d="M5 6a2 2 0 1 0 0-.01 M11 6a2 2 0 1 0 0-.01 M1.5 13c0-2.5 1.5-4 3.5-4s3.5 1.5 3.5 4 M7.5 13c0-2.5 1.5-4 3.5-4s3.5 1.5 3.5 4" fill="none" />,
+  engineeringLab: <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5 M8 1v2.5 M8 12.5V15 M1 8h2.5 M12.5 8H15 M3 3l1.8 1.8 M11.2 11.2 13 13 M13 3l-1.8 1.8 M4.8 11.2 3 13" fill="none" />,
   farm: <path d="M2 13h12 M4 13c0-3 1-5 4-6 M8 13V4 M8 7c2-3 4-3 5-3-1 2-2 3-5 3z M8 9C6 6 4 6 3 6c1 2 2 3 5 3z" fill="none" />,
+  hydroponicsBay: <path d="M2 14h12 M3 14V9h10v5 M5 9V6 M5 6c-1.5 0-2-1-2-2 1.5 0 2 1 2 2z M8 9V5 M8 5c1.5 0 2-1 2-2-1.5 0-2 1-2 2z M11 9V6 M11 6c1.5 0 2-1 2-2-1.5 0-2 1-2 2z M3 11.5h10" fill="none" />,
   mine: <path d="M3 14l6-6 M8 3c2 0 4 1 5 3-2-1-4-1-6 0z M11 5l-2 2 M2 14h12" fill="none" />,
+  deepCoreMine: <path d="M2 3h12 M8 3v8 M5 3l3 3 3-3 M6 11h4l-2 3z M4 7l1.5 1.5 M12 7l-1.5 1.5" fill="none" />,
   powerPlant: <path d="M9 1 4 9h4l-1 6 5-8H8l1-6z" fill="none" />,
+  fusionReactor: (
+    <>
+      <circle cx="8" cy="8" r="6" fill="none" />
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 2v2 M8 12v2 M2 8h2 M12 8h2" fill="none" />
+    </>
+  ),
+  clinic: <path d="M3 3h10v10H3z M8 5v6 M5 8h6" fill="none" />,
+  entertainmentCenter: <path d="M2 4h12v7H2z M5 14l3-3 3 3 M6 6l4 1.5L6 9z" fill="none" />,
+  commercialZone: <path d="M2 6l1-3h10l1 3z M2 6c0 1 1 1.5 2 1.5S6 7 6 6c0 1 1 1.5 2 1.5S10 7 10 6c0 1 1 1.5 2 1.5S14 7 14 6 M3 7.5V14h10V7.5 M6 14v-3h4v3" fill="none" />,
 
   // --- Districts ---------------------------------------------------------------
   industrial: <path d="M1 14V8l3 2V8l3 2V8l3 2V3h2v2h2v9z" fill="none" />,
@@ -77,8 +100,9 @@ export function PlanetIcon({ id, size = 16, className, title }: { id: string; si
       strokeLinecap="round"
       role={title ? 'img' : undefined}
       aria-hidden={title ? undefined : true}
+      aria-label={title}
+      data-tooltip={title}
     >
-      {title && <title>{title}</title>}
       {GLYPHS[id] ?? <rect x="3" y="3" width="10" height="10" rx="2" fill="none" />}
     </svg>
   )

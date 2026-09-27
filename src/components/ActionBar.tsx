@@ -4,6 +4,11 @@ import { BuildingsPanel } from './BuildingsPanel'
 import { useContextEconomy } from '../hooks/useContextEconomy'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
+import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { useTerritoryStore } from '../state/territoryStore'
+import { SimpleDistrictsTab } from './planet/SimplePlanetTabs'
+import { SIMPLE_DISTRICTS, SIMPLE_DISTRICT_DEFS, type SimpleDistrictId } from '../data/simplisticEconomyData'
+import { getCountry } from '../data/countryData'
 
 type PanelId = 'buildings' | 'politics' | 'diplomacy'
 
@@ -21,6 +26,12 @@ interface PanelDef {
 // getting its own — both are fundamentally "who controls what" views, and
 // there's no separate diplomatic-standing data to visualize yet that would
 // justify a distinct overlay.
+// Simple mode's Buildings lens shows Simple's own districts (its buildings are
+// not Complex mode's recipes): one tab per district, plus All.
+const SIMPLE_TAB_ALL = 'All'
+const simpleTabName = (d: SimpleDistrictId) => SIMPLE_DISTRICT_DEFS[d].name.replace(' District', '')
+const SIMPLE_SUBTABS = [SIMPLE_TAB_ALL, ...SIMPLE_DISTRICTS.map(simpleTabName)]
+
 const PANELS: PanelDef[] = [
   { id: 'buildings', title: 'Buildings', icon: '⚙', mapMode: 'gdp', subtabs: ['Development', 'Agriculture', 'Resources', 'Industry', 'Services'] },
   { id: 'politics', title: 'Politics', icon: '⚖', mapMode: 'political', subtabs: ['Decrees', 'Government Actions'] },
@@ -53,17 +64,28 @@ export function ActionBar() {
   const countries = useEconomyStore((s) => s.countries)
   const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
   const sandbox = usePlayerStore((s) => s.sandbox)
+  const simple = usePlayerStore((s) => s.economyModel) === 'abstract'
+  const simpleWorlds = useAbstractEconomyStore((s) => s.worlds)
+  const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
   // Every inhabited world the player's nation owns — the switcher's options.
-  const ownedWorlds = worlds.filter((w) => w.ownerId === playerCountryId)
+  const ownedNames = simple
+    ? Object.values(simpleWorlds).filter((w) => bodyOwner[w.bodyName] === playerCountryId).sort((a, b) => b.population - a.population).map((w) => w.bodyName)
+    : worlds.filter((w) => w.ownerId === playerCountryId).map((w) => w.name)
 
   // Resolve the world the panel is actually about: a pinned override wins,
   // otherwise the focus-following context.
   const overrideWorld = overrideWorldName ? worlds.find((w) => w.name === overrideWorldName) : undefined
   const scopeWorld = overrideWorld ?? context.world
-  const scopeName = overrideWorld?.name ?? context.worldName
+  const capital = playerCountryId ? getCountry(playerCountryId)?.capitalBodyName : undefined
+  const scopeName = simple
+    ? overrideWorldName ?? (context.worldName && simpleWorlds[context.worldName] ? context.worldName : capital && simpleWorlds[capital] ? capital : ownedNames[0])
+    : overrideWorld?.name ?? context.worldName
   const scopeCountry = overrideWorld ? countries.find((c) => c.id === overrideWorld.ownerId) : context.country
 
   const activePanel = PANELS.find((p) => p.id === activePanelId) ?? null
+
+  const subtabsOf = (panel: PanelDef) => (simple && panel.id === 'buildings' ? SIMPLE_SUBTABS : panel.subtabs)
+  const simpleDistrict = SIMPLE_DISTRICTS.find((d) => simpleTabName(d) === activeSubtab)
 
   // The sandbox has no economy, politics or diplomacy to open.
   if (sandbox) return null
@@ -76,7 +98,7 @@ export function ActionBar() {
       return
     }
     setActivePanelId(panel.id)
-    setActiveSubtab(panel.subtabs?.[0] ?? null)
+    setActiveSubtab(subtabsOf(panel)?.[0] ?? null)
     setMapMode(panel.mapMode)
   }
 
@@ -93,7 +115,7 @@ export function ActionBar() {
           <div className="action-dock-header">
             <span className="action-dock-title-wrap">
               {activePanel.title}
-              {ownedWorlds.length > 0 && (
+              {ownedNames.length > 0 && (
                 <span className="action-dock-switcher">
                   <button
                     type="button"
@@ -117,17 +139,17 @@ export function ActionBar() {
                           ↺ Follow selection
                         </button>
                       )}
-                      {ownedWorlds.map((w) => (
+                      {ownedNames.map((name) => (
                         <button
-                          key={w.id}
+                          key={name}
                           type="button"
-                          className={`action-dock-scope-item${w.name === scopeName ? ' active' : ''}`}
+                          className={`action-dock-scope-item${name === scopeName ? ' active' : ''}`}
                           onClick={() => {
-                            setOverrideWorldName(w.name)
+                            setOverrideWorldName(name)
                             setSwitcherOpen(false)
                           }}
                         >
-                          {w.name}
+                          {name}
                         </button>
                       ))}
                     </div>
@@ -139,9 +161,9 @@ export function ActionBar() {
               ×
             </button>
           </div>
-          {activePanel.subtabs && (
+          {subtabsOf(activePanel) && (
             <div className="action-dock-tabs">
-              {activePanel.subtabs.map((sub) => (
+              {subtabsOf(activePanel)!.map((sub) => (
                 <button
                   key={sub}
                   type="button"
@@ -154,7 +176,9 @@ export function ActionBar() {
             </div>
           )}
           <div className="action-dock-content">
-            {activePanel.id === 'buildings' ? (
+            {activePanel.id === 'buildings' && simple ? (
+              scopeName ? <SimpleDistrictsTab key={`${scopeName}-${activeSubtab}`} countryId={playerCountryId} bodyName={scopeName} only={simpleDistrict} /> : <div className="nav-placeholder">No world selected</div>
+            ) : activePanel.id === 'buildings' ? (
               <BuildingsPanel subtab={activeSubtab} worldName={scopeName} world={scopeWorld} country={scopeCountry} />
             ) : (
               <div className="nav-placeholder">Not yet available</div>

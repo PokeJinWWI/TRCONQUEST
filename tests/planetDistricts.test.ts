@@ -33,14 +33,14 @@ function mk(over: Partial<AbstractEconomyState> = {}): AbstractEconomyState {
   return {
     countryId: 'x', population: 0, gdp: 6000, realGdp: 6000, priceLevel: 1, inflation: 0.02, stability: 0.5,
     treasury: 100, reserves: 40, debt: 1000, taxRate: 0.1, economyType: 'corporatist', moneyCreation: 0, warTaxes: false,
-    welfare: 0.3, allocation: { civilian: 0.5, military: 0.2, consumer: 0.3 }, researchFocus: 'physics', queue: [], nextOrderId: 1,
+    welfare: 0.3, queue: [], nextOrderId: 1,
     currency: { code: 'X', name: 'X', rate: 1, baseRate: 1 }, trade: {}, ...over,
   }
 }
 const stock = () => ({ ...emptyStockpile(), food: 500, minerals: 3000, energy: 3000, electronics: 200, consumerGoods: 500 })
 const home = (over: Partial<WorldState> = {}): WorldState => ({
   bodyName: 'Home', population: 2600, land: 15,
-  buildings: { factory: 12, farm: 6, mine: 4, powerPlant: 4, researchLab: 2 },
+  buildings: { civilianFactory: 6, alloyFoundry: 3, consumerFactory: 3, farm: 6, mine: 4, powerPlant: 4, physicsLab: 2 },
   districts: { industrial: 3, academic: 1, agricultural: 2, mining: 1, generator: 1, urban: 1 },
   ...over,
 })
@@ -54,7 +54,7 @@ console.log('=== 1. Simple: districts house buildings ===')
   check('queued buildings take their slots', freeSlots(w, [{ id: 1, bodyName: 'Home', building: 'farm', progress: 0 }], 'agricultural') === 1)
   check('land limits district levels', freeLand(w, []) === 15 - 9)
   check('queued district levels use land', freeLand(w, [{ id: 1, bodyName: 'Home', district: 'industrial', progress: 0 }]) === 15 - 10)
-  const legacy: WorldState = { bodyName: 'Old', population: 100, buildings: { factory: 5, farm: 1 } }
+  const legacy: WorldState = { bodyName: 'Old', population: 100, buildings: { civilianFactory: 5, farm: 1 } }
   check('a world without districts gets just enough to house its buildings', districtsOf(legacy).industrial === 2 && districtsOf(legacy).agricultural === 1 && landOf(legacy) >= 3)
 }
 
@@ -79,19 +79,19 @@ console.log('\n=== 2. Simple: developing a district, then building in it ===')
 
 console.log('\n=== 3. Ecosystem: clustered buildings boost each other ===')
 {
-  const small = home({ buildings: { factory: 2, farm: 6, mine: 4, powerPlant: 4, researchLab: 2 } })
+  const small = home({ buildings: { civilianFactory: 2, farm: 6, mine: 4, powerPlant: 4, physicsLab: 2 } })
   const big = home()
   check('more buildings in a district, bigger cluster bonus', districtBonus(big, 'industrial').cluster > districtBonus(small, 'industrial').cluster)
-  check('a single building gets no cluster bonus', districtBonus(home({ buildings: { factory: 1 } }), 'industrial').cluster === 0)
-  check('the cluster bonus is capped', districtBonus(home({ buildings: { factory: 400 } }), 'industrial').cluster === CLUSTER_MAX)
+  check('a single building gets no cluster bonus', districtBonus(home({ buildings: { civilianFactory: 1 } }), 'industrial').cluster === 0)
+  check('the cluster bonus is capped', districtBonus(home({ buildings: { civilianFactory: 400 } }), 'industrial').cluster === CLUSTER_MAX)
   check('research parks lift industry on the same world', districtBonus(home({ districts: { industrial: 3, academic: 4 } }), 'industrial').link > districtBonus(big, 'industrial').link)
   check('...but not farms', districtBonus(big, 'agricultural').link === 0)
   const r0 = abstractReport(mk(), [home({ districts: { industrial: 3, academic: 0, agricultural: 2, mining: 1, generator: 1 } })], stock())
   const r1 = abstractReport(mk(), [home()], stock())
   check('the bonus shows up as production', r1.productionUnits > r0.productionUnits, `${r0.productionUnits.toFixed(1)} → ${r1.productionUnits.toFixed(1)} PU`)
   check('two cities with the same factories: the clustered one out-produces a split one',
-    abstractReport(mk(), [home({ buildings: { factory: 12 } })], stock()).productionUnits >
-      abstractReport(mk(), [home({ bodyName: 'A', buildings: { factory: 6 } }), home({ bodyName: 'B', buildings: { factory: 6 } })], stock()).productionUnits)
+    abstractReport(mk(), [home({ buildings: { civilianFactory: 12 } })], stock()).productionUnits >
+      abstractReport(mk(), [home({ bodyName: 'A', buildings: { civilianFactory: 6 } }), home({ bodyName: 'B', buildings: { civilianFactory: 6 } })], stock()).productionUnits)
 }
 
 console.log('\n=== 4. Simple: seeds, land from planet size, store and AI ===')
@@ -105,14 +105,14 @@ console.log('\n=== 4. Simple: seeds, land from planet size, store and AI ===')
   }
   check('every seeded world houses its buildings within its land', everyFits)
   check('inhabited worlds start with an urban district, outposts without', districtsOf(st.worlds['Mars']).urban === 1 && districtsOf(st.worlds['Phobos']).urban === 0)
-  const q = st.queueBuilding('imperial-state-of-mars', 'Mars', 'factory')
+  const q = st.queueBuilding('imperial-state-of-mars', 'Mars', 'civilianFactory')
   check('building into a full district is refused with a reason', !q.ok && /develop the district/.test((q as { reason: string }).reason))
   const qd = st.queueDistrict('imperial-state-of-mars', 'Mars', 'industrial')
   check('developing a district is queued', qd.ok && useAbstractEconomyStore.getState().byCountry['imperial-state-of-mars'].queue.some((o) => o.district === 'industrial'))
   useAbstractEconomyStore.getState().reset()
   // AI: when its building's district is full, it develops the district first.
-  const nation = mk({ allocation: { civilian: 0.6, military: 0.1, consumer: 0.3 } })
-  const crowded = home({ population: 4000, buildings: { factory: 12, farm: 8, mine: 4, powerPlant: 4, researchLab: 2 } })
+  const nation = mk()
+  const crowded = home({ population: 4000, buildings: { civilianFactory: 6, alloyFoundry: 3, consumerFactory: 3, farm: 8, mine: 4, powerPlant: 4, physicsLab: 2, entertainmentCenter: 2 } })
   const env = { worlds: [crowded], stock: stock(), report: abstractReport(nation, [crowded], stock()), atWar: false }
   const planned = applyAbstractEconomyAI(nation, env)
   check('the AI queues a district level when the district it needs is full', planned.queue.some((o) => o.district !== undefined), JSON.stringify(planned.queue.map((o) => o.district ?? o.building)))

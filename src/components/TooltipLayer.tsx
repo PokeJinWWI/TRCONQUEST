@@ -10,7 +10,12 @@ import { glossaryLookup, type GlossaryEntry } from '../data/glossary'
 //   • any short label whose text is a glossary term ("Tax rate", "GDP",
 //     "Stability", a nav button…) — the concept's plain-language explanation
 //     (data/glossary.ts), shown under the title when both apply.
-// Pure DOM event delegation: nothing else has to opt in.
+// Pure DOM event delegation: nothing else has to opt in. This is the ONE
+// tooltip system: whatever is under the cursor gets exactly one box. The
+// nearest `title` anywhere up the tree is always taken over (else the browser
+// would show it natively beside ours) and merged with the glossary entry of the
+// label hovered. For SVG, use `data-tooltip` (styled only) rather than a
+// <title> child, which the browser would show natively.
 
 const SHOW_DELAY_MS = 450
 const MAX_GLOSSARY_TEXT = 40 // only short labels are matched against the glossary
@@ -23,19 +28,55 @@ interface Tip {
   y: number
 }
 
-// The element (target or an ancestor) that explains what's under the cursor.
-function findSource(start: Element | null): { el: Element; title: string | null; entry: GlossaryEntry | null } | null {
-  let el: Element | null = start
-  for (let depth = 0; el && depth < MAX_DEPTH; depth++, el = el.parentElement) {
-    if (el.closest('.game-tooltip')) return null
-    const title = el.getAttribute('title') || el.getAttribute('data-tip')
-    const text = el.childElementCount <= 2 ? (el.textContent ?? '') : ''
-    const entry = text && text.length <= MAX_GLOSSARY_TEXT ? (glossaryLookup(text) ?? null) : null
-    if (title || entry) return { el, title: title || null, entry }
-    // Don't climb out of an interactive control into its container.
-    if (el instanceof HTMLButtonElement || el instanceof HTMLInputElement || el instanceof HTMLSelectElement) return null
+// The bits of a DOM element resolveTooltip reads (a real Element fits; tests pass fakes).
+export interface TipNode {
+  tagName: string
+  parentElement: TipNode | null
+  childElementCount: number
+  textContent: string | null
+  getAttribute(name: string): string | null
+}
+
+export interface TooltipSource {
+  anchor: TipNode // the tooltip lasts while the pointer stays inside this
+  titleEl: TipNode | null // the element whose title/data-tip/data-tooltip is shown
+  title: string | null
+  entry: GlossaryEntry | null
+}
+
+const CONTROLS = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'])
+const titleOf = (el: TipNode) => el.getAttribute('title') || el.getAttribute('data-tip') || el.getAttribute('data-tooltip') || null
+
+// What explains the element under the cursor: the NEAREST titled element up the
+// whole tree (exactly what the browser would show natively — so ours replaces
+// it), plus the glossary entry of the nearest short label within a few levels
+// (not climbing out of a control into its container). One box shows both.
+export function resolveTooltip(start: TipNode | null): TooltipSource | null {
+  let titleEl: TipNode | null = null
+  let glossEl: TipNode | null = null
+  let entry: GlossaryEntry | null = null
+  let glossDone = false
+  let el = start
+  for (let depth = 0; el; depth++, el = el.parentElement) {
+    if ((el.getAttribute('class') ?? '').split(/\s+/).includes('game-tooltip')) return null
+    if (!titleEl && titleOf(el)) titleEl = el
+    if (!glossDone && depth < MAX_DEPTH) {
+      const text = el.childElementCount <= 2 ? (el.textContent ?? '') : ''
+      const found = text && text.length <= MAX_GLOSSARY_TEXT ? glossaryLookup(text) : undefined
+      if (found) {
+        entry = found
+        glossEl = el
+        glossDone = true
+      } else if (CONTROLS.has(el.tagName.toUpperCase())) glossDone = true
+    } else glossDone = true
+    if (titleEl && glossDone) break
   }
-  return null
+  if (!titleEl && !entry) return null
+  // Anchor on the outer of the two, so moving between them keeps one tooltip.
+  let anchor = titleEl ?? glossEl!
+  if (titleEl && glossEl) for (let a: TipNode | null = titleEl; a; a = a.parentElement) if (a === glossEl) anchor = glossEl
+  const title = titleEl ? titleOf(titleEl) : null
+  return { anchor, titleEl, title, entry: entry && entry.text !== title ? entry : null }
 }
 
 export function TooltipLayer() {
@@ -45,6 +86,7 @@ export function TooltipLayer() {
 
   useEffect(() => {
     let anchor: Element | null = null
+    let stashed: Element | null = null // the element whose title we took over
     let timer: ReturnType<typeof setTimeout> | null = null
     let mouse = { x: 0, y: 0 }
 
@@ -59,31 +101,34 @@ export function TooltipLayer() {
     const hide = () => {
       if (timer) clearTimeout(timer)
       timer = null
-      restoreTitle(anchor)
+      restoreTitle(stashed)
+      stashed = null
       anchor = null
       setTip(null)
     }
 
     const onOver = (e: PointerEvent) => {
-      const src = findSource(e.target as Element | null)
+      const src = resolveTooltip(e.target as Element | null)
       if (!src) {
         if (anchor) hide()
         return
       }
-      if (src.el === anchor) return
+      if (src.anchor === anchor && src.titleEl === stashed) return
       hide()
-      anchor = src.el
-      // Keep the browser's own tooltip from appearing over ours.
-      const title = src.el.getAttribute('title')
-      if (title) {
-        src.el.setAttribute('data-tip', title)
-        src.el.removeAttribute('title')
+      anchor = src.anchor as Element
+      // Keep the browser's own tooltip from appearing beside ours.
+      const titled = src.titleEl as Element | null
+      const own = titled?.getAttribute('title')
+      if (titled && own) {
+        titled.setAttribute('data-tip', own)
+        titled.removeAttribute('title')
+        stashed = titled
       }
       const text = src.title
       const entry = src.entry
       timer = setTimeout(() => {
         timer = null
-        setTip({ title: text, entry: entry && entry.text !== text ? entry : null, x: mouse.x, y: mouse.y })
+        setTip({ title: text, entry, x: mouse.x, y: mouse.y })
       }, SHOW_DELAY_MS)
     }
     const onMove = (e: PointerEvent) => {

@@ -18,7 +18,7 @@ import { formatMoney, formatPop } from '../../economy/format'
 import type { Building, BuildingOwner, ConstructionOrder, Country, World } from '../../economy/economyTypes'
 import { PlanetIcon } from './PlanetIcons'
 import { ForeignHoldingsRow } from './ForeignHoldings'
-import { BuildingsPanel } from '../BuildingsPanel'
+import { BuildingsPanel, ComplexBuildingCard } from '../BuildingsPanel'
 
 // Complex mode's planet screen tabs (Stellaris-style), over the deep sim: the
 // world's districts — each a card of building tiles with its level, slots and
@@ -51,19 +51,21 @@ export function ComplexWorldSummary({ world }: { world: World }) {
   )
 }
 
-function BuildingTile({ b, corpName }: { b: Building; corpName: (id: string) => string }) {
+function BuildingTile({ b, corpName, selected, onClick }: { b: Building; corpName: (id: string) => string; selected: boolean; onClick: () => void }) {
   const r = RECIPES[b.recipeId]
   const run = Math.max(0, Math.min(1, b.throughput))
   return (
-    <div
-      className={`pl-tile owner-${b.owner.kind}${run < 0.6 ? ' understaffed' : ''}`}
-      title={`${r?.label ?? b.recipeId} — level ${b.level}\nOwner: ${ownerLabel(b.owner, corpName)}\nRunning at ${pct(run)} · last profit ${formatMoney(b.lastProfit)}`}
+    <button
+      type="button"
+      className={`pl-tile owner-${b.owner.kind}${run < 0.6 ? ' understaffed' : ''}${selected ? ' selected' : ''}`}
+      title={`${r?.label ?? b.recipeId} — level ${b.level}\nOwner: ${ownerLabel(b.owner, corpName)}\nRunning at ${pct(run)} · last profit ${formatMoney(b.lastProfit)}\nClick for details`}
+      onClick={onClick}
     >
       <PlanetIcon id={buildingGroup(b.recipeId)} size={22} />
       <span className="pl-tile-name">{r?.label ?? b.recipeId}</span>
       {b.level > 1 && <span className="pl-tile-level">×{b.level}</span>}
       <span className="pl-tile-bar"><span style={{ width: pct(run) }} /></span>
-    </div>
+    </button>
   )
 }
 
@@ -87,6 +89,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
   const [picking, setPicking] = useState<DistrictType | null>(null)
   const [funder, setFunder] = useState('state')
   const [manage, setManage] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const canBuildHere = !!playerId && world.ownerId === playerId && controller === playerId
   const corpName = (id: string) => corporations.find((c) => c.id === id)?.name ?? 'Company'
@@ -141,7 +144,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
               )}
             </div>
             <div className="pl-grid">
-              {inDistrict.map((b) => <BuildingTile key={b.id} b={b} corpName={corpName} />)}
+              {inDistrict.map((b) => <BuildingTile key={b.id} b={b} corpName={corpName} selected={selectedId === b.id} onClick={() => setSelectedId(selectedId === b.id ? null : b.id)} />)}
               {queued.map((o) => <QueuedTile key={o.id} o={o} />)}
               {free > 0 &&
                 (canBuildHere ? (
@@ -153,6 +156,10 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
                   <div className="pl-tile empty" title={`${free} empty slots`}><span className="pl-tile-name">{free} free</span></div>
                 ))}
             </div>
+            {(() => {
+              const sel = inDistrict.find((b) => b.id === selectedId)
+              return sel ? <ComplexBuildingCard b={sel} world={world} country={country} owned={!!playerId && world.ownerId === playerId} onClose={() => setSelectedId(null)} /> : null
+            })()}
             {d === 'urban' && (
               <div className="pl-foreign">
                 <div className="abs-dim">Foreign embassies & firms</div>

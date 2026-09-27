@@ -5601,6 +5601,54 @@ div.fleet-row .combat-density-row {
   color: rgba(255, 255, 255, 0.35);
   justify-content: center;
 }
+button.pl-tile {
+  cursor: pointer;
+}
+button.pl-tile:not(.empty):hover {
+  border-color: rgba(111, 227, 255, 0.7);
+  background: linear-gradient(180deg, rgba(111, 227, 255, 0.16), rgba(111, 227, 255, 0.04));
+}
+.pl-tile.selected {
+  border-color: #6fe3ff;
+  box-shadow: 0 0 0 1px #6fe3ff inset, 0 0 8px rgba(111, 227, 255, 0.35);
+}
+/* Building detail card (both modes), opened by clicking a tile */
+.pl-detail {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  border-radius: 5px;
+  background: rgba(8, 20, 32, 0.85);
+  font-size: 10.5px;
+}
+.pl-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9fe8ff;
+}
+.pl-detail-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.pl-detail-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #dff4ff;
+}
+.pl-detail-desc {
+  margin: 5px 0 6px;
+  color: rgba(223, 244, 255, 0.75);
+  line-height: 1.35;
+}
+.pl-detail-table {
+  margin-top: 6px;
+}
+.pl-detail-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
 button.pl-tile.empty {
   cursor: pointer;
 }

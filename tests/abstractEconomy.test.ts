@@ -1,17 +1,16 @@
 // Verification of Simple mode's economy (economyModel 'abstract'): worlds
-// with buildings, factories as Production Units, stockpile goods, value-added
+// with buildings (a dedicated factory per product), stockpile goods, value-added
 // GDP, budget, construction, trade and currency.
 // Run:  npx tsx tests/abstractEconomy.test.ts
 
 import {
   tickAbstractEconomy,
   abstractReport,
-  normalizeAllocation,
+  worldJobs,
   emptyStockpile,
   fundamentalRate,
   productivityGrowthFor,
   type AbstractEconomyState,
-  type Allocation,
   type Stockpile,
   type WorldState,
 } from '../src/economy-abstract/abstractEconomy'
@@ -48,8 +47,6 @@ function mk(over: Partial<AbstractEconomyState> = {}): AbstractEconomyState {
     moneyCreation: 0,
     warTaxes: false,
     welfare: 0.3,
-    allocation: { civilian: 0.5, military: 0.2, consumer: 0.3 },
-    researchFocus: 'physics',
     queue: [],
     nextOrderId: 1,
     currency: { code: 'X', name: 'X', rate: 1, baseRate: 1 },
@@ -57,8 +54,10 @@ function mk(over: Partial<AbstractEconomyState> = {}): AbstractEconomyState {
     ...over,
   }
 }
+const HOME = { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, exoticRefinery: 1, entertainmentCenter: 1 }
+const noneOf = (b: keyof typeof HOME) => ({ ...HOME, [b]: 0 })
 function world(over: Partial<WorldState> = {}): WorldState {
-  return { bodyName: 'Home', population: 3000, slots: 80, buildings: { factory: 15, farm: 6, mine: 6, powerPlant: 6, researchLab: 2, exoticRefinery: 1 }, ...over }
+  return { bodyName: 'Home', population: 3000, slots: 80, buildings: { ...HOME }, ...over }
 }
 function stock(over: Partial<Stockpile> = {}): Stockpile {
   return { ...emptyStockpile(), food: 200, minerals: 300, energy: 600, alloys: 400, electronics: 60, consumerGoods: 150, exoticMatter: 30, hyperium: 6, ...over }
@@ -86,34 +85,37 @@ console.log('=== 1. Finiteness & bounds over ten years ===')
   check('report numbers finite', Object.values(r).every((v) => typeof v !== 'number' || Number.isFinite(v)))
 }
 
-console.log('\n=== 2. Factories are Production Units; workers cap them ===')
+console.log('\n=== 2. Factories add capacity; workers cap them ===')
 {
   const base = abstractReport(mk(), [world()], stock())
-  const more = abstractReport(mk(), [world({ buildings: { ...world().buildings, factory: 20 } })], stock())
+  const more = abstractReport(mk(), [world({ buildings: { ...world().buildings, civilianFactory: 13 } })], stock())
   check('more factories → more PU', more.productionUnits > base.productionUnits, `${base.productionUnits.toFixed(0)} → ${more.productionUnits.toFixed(0)}`)
   check('...and more GDP', more.realGdp > base.realGdp, `${base.realGdp.toFixed(0)} → ${more.realGdp.toFixed(0)}`)
   // A world with no spare workers: extra factories only dilute staffing.
-  const full = world({ population: 2 * 15 * 40 + 2 * (6 * 30 + 6 * 20 + 6 * 15 + 2 * 20 + 20), buildings: { ...world().buildings } })
+  const full = world({ population: 2 * worldJobs(world()) })
   const fullR = abstractReport(mk(), [full], stock())
-  const overR = abstractReport(mk(), [{ ...full, buildings: { ...full.buildings, factory: 25 } }], stock())
+  const overR = abstractReport(mk(), [{ ...full, buildings: { ...full.buildings, civilianFactory: 18 } }], stock())
   check('on a fully staffed world, new factories pull workers off the farms', overR.produced.food < fullR.produced.food, `food ${fullR.produced.food.toFixed(1)} → ${overR.produced.food.toFixed(1)}`)
   check('...because the world is now understaffed', overR.jobs > overR.workforce)
   check('...so total staffed jobs stay at the workforce', Math.abs(overR.workforce - fullR.workforce) < 1e-9)
 }
 
-console.log('\n=== 3. The allocation decides what factories make ===')
+console.log('\n=== 3. Each factory makes its own product ===')
 {
-  const mil = abstractReport(mk({ allocation: { civilian: 0.2, military: 0.7, consumer: 0.1 } }), [world()], stock())
-  const civ = abstractReport(mk({ allocation: { civilian: 0.7, military: 0.1, consumer: 0.2 } }), [world()], stock())
-  const con = abstractReport(mk({ allocation: { civilian: 0.2, military: 0.1, consumer: 0.7 } }), [world()], stock())
-  check('military → alloys', mil.produced.alloys > civ.produced.alloys, `${mil.produced.alloys.toFixed(0)} vs ${civ.produced.alloys.toFixed(0)}`)
-  check('civilian → construction points', civ.constructionPoints > mil.constructionPoints)
-  check('consumer → consumer goods and electronics', con.produced.consumerGoods > civ.produced.consumerGoods && con.produced.electronics > civ.produced.electronics)
+  const base = abstractReport(mk(), [world()], stock())
+  const more = (b: keyof typeof HOME) => abstractReport(mk(), [world({ population: 6000, buildings: { ...HOME, [b]: HOME[b] + 3 } })], stock())
+  const big = abstractReport(mk(), [world({ population: 6000 })], stock())
+  check('alloy foundries → alloys', more('alloyFoundry').produced.alloys > big.produced.alloys * 1.5)
+  check('civilian factories → construction points', more('civilianFactory').constructionPoints > big.constructionPoints * 1.2)
+  check('consumer goods factories → consumer goods', more('consumerFactory').produced.consumerGoods > big.produced.consumerGoods)
+  check('electronics plants → electronics', more('electronicsPlant').produced.electronics > big.produced.electronics)
+  check('military upkeep follows the foundries', more('alloyFoundry').expMilitary > big.expMilitary * 1.5 && abstractReport(mk(), [world({ buildings: noneOf('alloyFoundry') })], stock()).expMilitary === 0)
+  check('the report breaks output down per building', (base.byBuilding.alloyFoundry?.levels ?? 0) === 3 && Math.abs((base.byBuilding.alloyFoundry?.output.alloys ?? 0) - base.produced.alloys) < 1e-6)
 }
 
 console.log('\n=== 4. Industry needs minerals and energy ===')
 {
-  const noInputs = world({ buildings: { factory: 15 } })
+  const noInputs = world({ buildings: { alloyFoundry: 15 } })
   const starved = abstractReport(mk(), [noInputs], stock({ minerals: 0, energy: 0 }))
   const fed = abstractReport(mk(), [noInputs], stock({ minerals: 10000, energy: 10000 }))
   check('with no minerals/energy, industry stops', starved.inputSatisfaction === 0 && starved.produced.alloys === 0)
@@ -122,7 +124,7 @@ console.log('\n=== 4. Industry needs minerals and energy ===')
 
 console.log('\n=== 5. Needs: food shortage costs stability and population ===')
 {
-  const hungry = run(mk(), [world({ buildings: { factory: 15, mine: 6, powerPlant: 6 } })], stock({ food: 0 }), 24)
+  const hungry = run(mk(), [world({ buildings: noneOf('farm') })], stock({ food: 0 }), 24)
   const fed = run(mk(), [world()], stock(), 24)
   check('food shortage lowers stability', hungry.s.stability < fed.s.stability, `${hungry.s.stability.toFixed(2)} vs ${fed.s.stability.toFixed(2)}`)
   check('food shortage shrinks the population', hungry.ws[0].population < 3000, hungry.ws[0].population.toFixed(0))
@@ -139,14 +141,14 @@ console.log('\n=== 5b. Pops: strata, upkeep, happiness, approval, stability (Ste
   check('approval is the population-weighted happiness', Math.abs(r.approval - (r.strata.workers.population * r.strata.workers.happiness + r.strata.specialists.population * r.strata.specialists.happiness + r.strata.unemployed.population * r.strata.unemployed.happiness) / r.population) < 1e-9)
   check('stability heads for approval', Math.abs(r.stabilityTarget - r.approval) < 1e-9)
   // Specialists want more consumer goods than workers, per head.
-  const onlyLabs = abstractReport(mk(), [world({ population: 400, buildings: { researchLab: 10 } })], stock())
+  const onlyLabs = abstractReport(mk(), [world({ population: 400, buildings: { physicsLab: 10 } })], stock())
   const onlyFarms = abstractReport(mk(), [world({ population: 400, buildings: { farm: 6, mine: 1 } })], stock())
   check('specialists consume more consumer goods per head', onlyLabs.needs.consumerGoods.demand > onlyFarms.needs.consumerGoods.demand)
   // A consumer goods shortage hurts happiness but kills nobody; a food shortage kills.
-  const noGoods = abstractReport(mk({ allocation: { civilian: 0.7, military: 0.3, consumer: 0 } }), [world()], stock({ consumerGoods: 0 }))
+  const noGoods = abstractReport(mk(), [world({ buildings: noneOf('consumerFactory') })], stock({ consumerGoods: 0 }))
   check('a consumer goods shortage lowers happiness', noGoods.strata.workers.happiness < r.strata.workers.happiness, `${r.strata.workers.happiness.toFixed(2)} → ${noGoods.strata.workers.happiness.toFixed(2)}`)
   check('...and the shortage shows in the breakdown', noGoods.strata.workers.parts.some((p) => p.label === 'Consumer goods shortage' && p.value < 0))
-  const cgOnly = run(mk({ allocation: { civilian: 0.7, military: 0.3, consumer: 0 } }), [world()], stock({ consumerGoods: 0, electronics: 0 }), 24)
+  const cgOnly = run(mk(), [world({ buildings: noneOf('consumerFactory') })], stock({ consumerGoods: 0 }), 24)
   check('...but the population still grows', cgOnly.ws[0].population > 3000)
   // Full employment beats mass unemployment.
   const jobless = abstractReport(mk(), [world({ population: 6000 })], stock())
@@ -188,7 +190,7 @@ console.log('\n=== 6. Construction builds buildings ===')
 
 console.log('\n=== 7. Budget: deficits are printed or borrowed; welfare costs money and buys stability ===')
 {
-  const base = mk({ taxRate: 0.01, treasury: 5, allocation: { civilian: 0.2, military: 0.7, consumer: 0.1 } })
+  const base = mk({ taxRate: 0.01, treasury: 5 })
   const printed = run({ ...base, moneyCreation: 1 }, [world()], stock(), 24).s
   const borrowed = run({ ...base, moneyCreation: 0 }, [world()], stock(), 24).s
   check('printing a deficit raises inflation', printed.inflation > borrowed.inflation, `${(printed.inflation * 100).toFixed(1)}% vs ${(borrowed.inflation * 100).toFixed(1)}%`)
@@ -213,10 +215,13 @@ console.log('\n=== 9. Research labs ===')
 {
   const r = abstractReport(mk(), [world()], stock())
   check('labs produce research', r.research > 0, r.research.toFixed(1))
-  const noLabs = abstractReport(mk(), [world({ buildings: { ...world().buildings, researchLab: 0 } })], stock())
+  const noLabs = abstractReport(mk(), [world({ buildings: { ...world().buildings, physicsLab: 0 } })], stock())
   check('no labs, no research', noLabs.research === 0)
-  const noElec = abstractReport(mk({ allocation: { civilian: 0.6, military: 0.4, consumer: 0 } }), [world()], stock({ electronics: 0 }))
+  const noElec = abstractReport(mk(), [world({ buildings: noneOf('electronicsPlant') })], stock({ electronics: 0 }))
   check('labs without electronics stall', noElec.research === 0)
+  check('each lab researches its own tree', r.researchByTree.physics > 0 && r.researchByTree.society === 0 && r.researchByTree.engineering === 0)
+  const eng = abstractReport(mk(), [world({ buildings: { ...HOME, physicsLab: 0, engineeringLab: 2 } })], stock())
+  check('...an engineering lab feeds engineering', eng.researchByTree.engineering > 0 && eng.researchByTree.physics === 0 && Math.abs(eng.research - r.research) < 1e-6)
 }
 
 console.log('\n=== 10. Trade and the exchange rate ===')
@@ -242,14 +247,6 @@ console.log('\n=== 10. Trade and the exchange rate ===')
   check('...and the currency depreciates over time', weak.currency.rate < 1, weak.currency.rate.toFixed(3))
 }
 
-console.log('\n=== 11. Allocation normalization ===')
-{
-  const n = normalizeAllocation({ civilian: 2, military: 1, consumer: 1 } as Allocation)
-  check('allocation normalizes to sum 1', Math.abs(n.civilian + n.military + n.consumer - 1) < 1e-9 && Math.abs(n.civilian - 0.5) < 1e-9)
-  const z = normalizeAllocation({ civilian: 0, military: 0, consumer: 0 } as Allocation)
-  check('all-zero falls back to thirds', Math.abs(z.civilian - 1 / 3) < 1e-9)
-}
-
 console.log('\n=== 12. Store: seeds, stockpile sync, research, construction, territory ===')
 {
   const store = useAbstractEconomyStore.getState()
@@ -272,10 +269,11 @@ console.log('\n=== 12. Store: seeds, stockpile sync, research, construction, ter
   check('a month writes production into the resource stockpile', after.amounts.alloys > alloys0, `${alloys0} → ${after.amounts.alloys.toFixed(1)}`)
   check('...and the monthly figure', after.monthlyDelta.alloys > 0, `+${after.monthlyDelta.alloys}`)
   check('research reaches the tech tree', useTechStore.getState().stateFor(mars).researchPoints.physics > research0)
+  check('...each tree from its own labs (Mars has no society labs)', useTechStore.getState().stateFor(mars).researchPoints.society === 0 && useTechStore.getState().stateFor(mars).researchPoints.engineering > 0)
 
   const q1 = useAbstractEconomyStore.getState().queueBuilding(mars, 'Mars', 'farm') // agricultural district has room
   check('queueing on an owned world works', q1.ok && useAbstractEconomyStore.getState().byCountry[mars].queue.length === 1)
-  const q2 = useAbstractEconomyStore.getState().queueBuilding(mars, 'Venus', 'factory')
+  const q2 = useAbstractEconomyStore.getState().queueBuilding(mars, 'Venus', 'civilianFactory')
   check("can't build on someone else's world", !q2.ok)
   useAbstractEconomyStore.getState().cancelOrder(mars, useAbstractEconomyStore.getState().byCountry[mars].queue[0].id)
   check('cancel removes the order', useAbstractEconomyStore.getState().byCountry[mars].queue.length === 0)
@@ -357,7 +355,7 @@ console.log('\n=== 15. Inflation responds to the economy (not stuck at 2%) ===')
   const tight = abstractReport(mk(), [world({ population: 2400 })], stock()) // jobs ≈ workforce
   const slack = abstractReport(mk(), [world({ population: 5000 })], stock()) // mass unemployment
   check('a tight jobs market pushes inflation up, mass unemployment pulls it down', tight.inflationTarget > base.inflationTarget && slack.inflationTarget < base.inflationTarget, `${(tight.inflationTarget * 100).toFixed(2)}% / ${(slack.inflationTarget * 100).toFixed(2)}%`)
-  const short = abstractReport(mk({ allocation: { civilian: 0.7, military: 0.3, consumer: 0 } }), [world()], stock({ consumerGoods: 0, electronics: 0 }))
+  const short = abstractReport(mk(), [world({ buildings: { ...HOME, consumerFactory: 0, electronicsPlant: 0 } })], stock({ consumerGoods: 0, electronics: 0 }))
   check('shortages raise inflation', short.inflationTarget > base.inflationTarget + 0.02)
   const deficit = abstractReport(mk({ taxRate: 0.01 }), [world()], stock())
   check('a deficit raises it, a surplus cools it', deficit.inflationTarget > abstractReport(mk({ taxRate: 0.3 }), [world()], stock()).inflationTarget)

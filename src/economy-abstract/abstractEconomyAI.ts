@@ -3,27 +3,24 @@
 //
 // Pure and headless: takes a nation's state plus what it can see (its worlds,
 // stockpile, this month's report, whether it's at war) and returns the state
-// with its levers moved. Levers move GRADUALLY (the allocation eases toward a
-// target, tax and welfare step) so a nation doesn't whipsaw month to month.
+// with its levers moved. Levers move GRADUALLY (tax and welfare step, the
+// stance holds with hysteresis) so a nation doesn't whipsaw month to month.
 // Economy type is left alone — it's the nation's identity, not a dial.
 
 import {
-  consumerPUNeeded,
   debtCeiling,
   freeSlots,
   freeLand,
-  normalizeAllocation,
   worldJobs,
   worldWorkforce,
   MAX_CP_PER_ORDER,
   type AbstractEconomyState,
   type AbstractReport,
-  type Allocation,
   type Stockpile,
   type TradeOrders,
   type WorldState,
 } from './abstractEconomy'
-import { DISTRICT_OF_BUILDING, SIMPLE_BUILDING_DEFS, type SimpleBuildingId } from '../data/simplisticEconomyData'
+import { DISTRICT_OF_BUILDING, SIMPLE_BUILDING_DEFS, type SimpleBuildingId, type SimpleGood } from '../data/simplisticEconomyData'
 
 export interface AbstractAIContext {
   atWar: boolean
@@ -33,14 +30,12 @@ export interface AbstractAIContext {
 }
 
 // --- Tuning ---------------------------------------------------------------------
-const MILITARY_SHARE_PEACE = 0.15
-const MILITARY_SHARE_WAR = 0.35
-const CONSUMER_MARGIN = 1.05 // aim consumer output this far above need
-const CONSUMER_SHARE_MIN = 0.1
-const CONSUMER_SHARE_MAX = 0.6
-const UNREST_CONSUMER_BONUS = 0.1 // extra consumer share when stability is low
-const CIVILIAN_SHARE_MIN = 0.1
-const ALLOCATION_EASE = 0.25 // fraction of the gap to the target closed per month
+// Alloy foundries per civilian factory the nation keeps (a war economy wants many more).
+const FOUNDRIES_PER_CIVILIAN_PEACE = 0.35
+const FOUNDRIES_PER_CIVILIAN_WAR = 0.8
+const GOODS_MARGIN = 1.05 // build another consumer/electronics plant below this cover of demand
+const MAX_QUEUED_FOR_NEED = 3 // at most this many projects queued for one shortage at a time
+const TIGHT_LAND = 2 // free district levels left nationally under which the AI builds dense (hydroponics, deep mines, fusion)
 const LOW_STABILITY = 0.35
 const WAR_TAX_MIN_STABILITY = 0.45
 const TAX_STEP = 0.005
@@ -65,7 +60,7 @@ const EXPORT_ABOVE = 3000 // export part of a bulk good's surplus once stockpile
 const EXPORT_SHARE = 0.25
 const EXOTIC_TARGET = 2 // keep at least this much exotic matter coming in per month
 const FACTORIES_PER_LAB = 6
-const JOB_HEADROOM = 0.05
+const JOB_HEADROOM = 0.02
 const TIGHTEN_ABOVE = 0.04 // inflation above this → tight money…
 const UNTIGHTEN_BELOW = 0.025 // …held until it's back under this
 const LOOSEN_BELOW = 0.01 // below this → loose money…
@@ -76,38 +71,63 @@ function clamp(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x
 }
 
-// The production split the nation wants.
-export function targetAllocation(s: AbstractEconomyState, ctx: Pick<AbstractAIContext, 'atWar' | 'report'>): Allocation {
-  const r = ctx.report
-  let consumer = r.productionUnits > 0 ? (consumerPUNeeded(r) * CONSUMER_MARGIN) / r.productionUnits : CONSUMER_SHARE_MAX
-  if (s.stability < LOW_STABILITY) consumer += UNREST_CONSUMER_BONUS
-  consumer = clamp(consumer, CONSUMER_SHARE_MIN, CONSUMER_SHARE_MAX)
-  let military = ctx.atWar ? MILITARY_SHARE_WAR : MILITARY_SHARE_PEACE
-  military = Math.min(military, 1 - consumer - CIVILIAN_SHARE_MIN)
-  return normalizeAllocation({ civilian: 1 - consumer - military, military, consumer })
-}
-
 function levels(worlds: WorldState[], b: SimpleBuildingId): number {
   return worlds.reduce((n, w) => n + (w.buildings[b] ?? 0), 0)
 }
 
-// What to build next, by need: feed people, then keep industry's inputs
-// flowing, then strategic fuel and research, then more industry.
+// What to build next, by need: feed people, keep industry's inputs flowing,
+// keep the people's goods and amenities up, then alloys (many more at war),
+// strategic fuel and research spread over the three trees, then more civilian
+// industry. When land runs short it builds the dense versions (hydroponics,
+// deep core mines, fusion) that yield more per slot for an upkeep.
 export function nextBuilding(s: AbstractEconomyState, ctx: AbstractAIContext): SimpleBuildingId {
   const r = ctx.report
-  const queued = (b: SimpleBuildingId) => s.queue.some((o) => o.building === b || (o.district && o.district === DISTRICT_OF_BUILDING[b]))
-  const factories = levels(ctx.worlds, 'factory')
-  // A drained stockpile shows a net of 0, not a deficit — so compare this
-  // month's output against what's wanted too.
-  const energyShort = r.net.energy < 0 || r.produced.energy < r.energyNeeded
-  const mineralsShort = r.net.minerals < 0 || r.produced.minerals < r.mineralsNeeded
-  if ((r.net.food < 0 || r.produced.food < r.needs.food.demand) && !queued('farm')) return 'farm'
-  if (energyShort && !queued('powerPlant')) return 'powerPlant'
-  if (mineralsShort && !queued('mine')) return 'mine'
-  if (r.net.exoticMatter < EXOTIC_TARGET && levels(ctx.worlds, 'exoticRefinery') * FACTORIES_PER_REFINERY < factories && !queued('exoticRefinery')) return 'exoticRefinery'
-  if (levels(ctx.worlds, 'researchLab') * FACTORIES_PER_LAB < factories && !queued('researchLab')) return 'researchLab'
-  return 'factory'
+  // Projects already under way for a building (its own orders, plus district
+  // levels being developed for its district).
+  const queuedFor = (b: SimpleBuildingId) => s.queue.filter((o) => o.building === b || (o.district && o.district === DISTRICT_OF_BUILDING[b])).length
+  const queued = (b: SimpleBuildingId) => queuedFor(b) > 0
+  const lv = (b: SimpleBuildingId) => levels(ctx.worlds, b)
+  const tight = ctx.worlds.reduce((n, w) => n + Math.max(0, freeLand(w, s.queue)), 0) < TIGHT_LAND
+  const pick = (plain: SimpleBuildingId, dense: SimpleBuildingId) => (tight ? dense : plain)
+  // A good's monthly shortfall: what the people and buildings want minus this
+  // month's output (a drained stockpile shows a net of 0, not a deficit).
+  const gap = (g: 'food' | 'energy' | 'minerals' | 'consumerGoods' | 'electronics', margin = 1) => {
+    const want = (g === 'food' || g === 'consumerGoods' || g === 'electronics' ? r.needs[g].demand : g === 'minerals' ? r.mineralsNeeded : r.energyNeeded) + (g === 'food' || g === 'consumerGoods' || g === 'electronics' ? r.used[g] : 0)
+    return Math.max(want * margin - r.produced[g], r.net[g] < 0 ? -r.net[g] : 0)
+  }
+  // Build for a shortfall: as many levels as it takes (at about this nation's
+  // output per level), counting those already queued.
+  const covers = (b: SimpleBuildingId, g: SimpleGood, shortfall: number) => {
+    if (shortfall <= 0) return false
+    const per = (SIMPLE_BUILDING_DEFS[b].outputs[g] ?? 1) * Math.max(0.3, r.efficiency)
+    return queuedFor(b) < Math.min(MAX_QUEUED_FOR_NEED, Math.ceil(shortfall / per))
+  }
+  const food = pick('farm', 'hydroponicsBay')
+  if (covers(food, 'food', gap('food'))) return food
+  const energy = pick('powerPlant', 'fusionReactor')
+  if (covers(energy, 'energy', gap('energy'))) return energy
+  const minerals = pick('mine', 'deepCoreMine')
+  if (covers(minerals, 'minerals', gap('minerals'))) return minerals
+  if (r.amenities.ratio < 1) {
+    const urban: SimpleBuildingId = lv('commercialZone') < lv('entertainmentCenter') ? 'commercialZone' : 'entertainmentCenter'
+    if (!queued(urban)) return urban
+  }
+  if (covers('consumerFactory', 'consumerGoods', gap('consumerGoods', GOODS_MARGIN))) return 'consumerFactory'
+  if (covers('electronicsPlant', 'electronics', gap('electronics', GOODS_MARGIN))) return 'electronicsPlant'
+  const civilian = lv('civilianFactory')
+  const foundriesWanted = civilian * (ctx.atWar ? FOUNDRIES_PER_CIVILIAN_WAR : FOUNDRIES_PER_CIVILIAN_PEACE)
+  if (lv('alloyFoundry') < foundriesWanted && !queued('alloyFoundry')) return 'alloyFoundry'
+  const factories = civilian + lv('alloyFoundry') + lv('consumerFactory') + lv('electronicsPlant')
+  if (r.net.exoticMatter < EXOTIC_TARGET && lv('exoticRefinery') * FACTORIES_PER_REFINERY < factories && !queued('exoticRefinery')) return 'exoticRefinery'
+  const labs = lv('physicsLab') + lv('societyLab') + lv('engineeringLab')
+  if (labs * FACTORIES_PER_LAB < factories) {
+    // Spread over the trees, physics favoured: the tree furthest below its share.
+    const lab = LAB_WEIGHTS.map(([b, w]) => [b, lv(b) / w] as const).sort((a, b) => a[1] - b[1])[0][0]
+    if (!queued(lab)) return lab
+  }
+  return 'civilianFactory'
 }
+const LAB_WEIGHTS: [SimpleBuildingId, number][] = [['physicsLab', 1], ['engineeringLab', 0.8], ['societyLab', 0.6]]
 
 // The world with the most spare workers that can take the building — one with a
 // free slot in the building's district, or land to develop that district first.
@@ -137,8 +157,9 @@ export function tradeOrders(ctx: AbstractAIContext): TradeOrders {
   const r = ctx.report
   const trade: TradeOrders = {}
   for (const g of ['food', 'consumerGoods', 'electronics'] as const) {
-    const netWithoutTrade = r.net[g] - r.traded[g]
-    if (netWithoutTrade < 0 && ctx.stock[g] < -netWithoutTrade * IMPORT_COVER_MONTHS) trade[g] = Math.ceil(-netWithoutTrade * IMPORT_MARGIN)
+    // What the month wants beyond its own output (a drained stockpile hides it in the net).
+    const shortfall = r.needs[g].demand + r.used[g] - r.produced[g]
+    if (shortfall > 0 && ctx.stock[g] < shortfall * IMPORT_COVER_MONTHS) trade[g] = Math.ceil(shortfall * IMPORT_MARGIN)
   }
   for (const g of ['food', 'minerals', 'energy'] as const) {
     if (trade[g]) continue
@@ -151,16 +172,6 @@ export function tradeOrders(ctx: AbstractAIContext): TradeOrders {
 // One month of AI policy for one nation. Returns a new state.
 export function applyAbstractEconomyAI(s: AbstractEconomyState, ctx: AbstractAIContext): AbstractEconomyState {
   const r = ctx.report
-
-  // Production split — ease toward the target.
-  const cur = normalizeAllocation(s.allocation)
-  const tgt = targetAllocation(s, ctx)
-  const ease = (a: number, b: number) => a + (b - a) * ALLOCATION_EASE
-  const allocation = normalizeAllocation({
-    civilian: ease(cur.civilian, tgt.civilian),
-    military: ease(cur.military, tgt.military),
-    consumer: ease(cur.consumer, tgt.consumer),
-  })
 
   // Budget — aim for a small surplus. A deficit raises taxes (and, when calm,
   // trims welfare); a big surplus buys welfare first, then cuts taxes. Unrest
@@ -229,5 +240,5 @@ export function applyAbstractEconomyAI(s: AbstractEconomyState, ctx: AbstractAIC
     }
   }
 
-  return { ...s, allocation, taxRate, welfare, moneyCreation, monetaryStance, warTaxes, treasury, reserves, debt, queue, nextOrderId, trade: tradeOrders(ctx) }
+  return { ...s, taxRate, welfare, moneyCreation, monetaryStance, warTaxes, treasury, reserves, debt, queue, nextOrderId, trade: tradeOrders(ctx) }
 }
