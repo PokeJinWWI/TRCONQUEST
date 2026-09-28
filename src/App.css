@@ -4990,7 +4990,7 @@ div.fleet-row .combat-density-row {
 }
 
 .dip-card-clickable {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: border-color 0.1s, background-color 0.1s;
 }
 
