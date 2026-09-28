@@ -58,3 +58,25 @@ export const COUNTRIES: Country[] = [
 export function getCountry(id: string): Country | undefined {
   return COUNTRIES.find((c) => c.id === id)
 }
+
+// Nations carved at runtime (a released subject/vassal) join COUNTRIES itself
+// — the single roster every panel, army homecoming, and AI already reads —
+// rather than a parallel list only some call sites would remember to check.
+// See scene/subjects.ts's releaseAsSubject. Tracked separately so a game
+// reset can strip them back out (gameReset.resetGame calls
+// resetDynamicCountries) without touching the four founding nations.
+const dynamicCountryIds = new Set<string>()
+
+export function registerCountry(country: Country): void {
+  if (COUNTRIES.some((c) => c.id === country.id)) return
+  COUNTRIES.push(country)
+  dynamicCountryIds.add(country.id)
+}
+
+export function resetDynamicCountries(): void {
+  for (const id of dynamicCountryIds) {
+    const idx = COUNTRIES.findIndex((c) => c.id === id)
+    if (idx >= 0) COUNTRIES.splice(idx, 1)
+  }
+  dynamicCountryIds.clear()
+}

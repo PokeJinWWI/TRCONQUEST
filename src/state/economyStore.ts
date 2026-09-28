@@ -25,6 +25,7 @@ import { convertBetween } from '../economy/fx'
 import { RECIPES, constructionWork } from '../economy/recipes'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, MonetaryAggregates, World, WorldReport } from '../economy/economyTypes'
 import type { GoodId } from '../economy/goods'
+import { hasInvestmentRights } from './treatyStore'
 
 // Shares held by the corporation's OWN (home) government — foreign-state stakes
 // don't count toward domestic state ownership.
@@ -975,7 +976,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const target = corp ? state.countries.find((c) => c.id === corp.countryId) : undefined
       if (!corp || !investor || !target) return state
       if (corp.countryId === investorCountryId) return state // this is domestic — use tradeShares
-      if (target.foreignInvestmentPolicy === 'closed') return state // host bars foreign capital
+      if (target.foreignInvestmentPolicy === 'closed' && !hasInvestmentRights(target.id, investorCountryId)) return state // host bars foreign capital, unless a treaty grants an exception
       const price = sharePrice(corp, state.worlds)
       const held = corp.shares.filter((s) => s.holder.kind === 'state' && s.holder.countryId === investorCountryId).reduce((n, s) => n + s.shares, 0)
       const publicHolding = corp.shares.find((s) => s.holder.kind === 'public')?.shares ?? 0
@@ -1009,7 +1010,7 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       const crossBorder = holder.countryId !== target.countryId
       if (crossBorder) {
         const host = state.countries.find((c) => c.id === target.countryId)
-        if (host?.foreignInvestmentPolicy === 'closed') return state // host bars foreign capital
+        if (host?.foreignInvestmentPolicy === 'closed' && !hasInvestmentRights(target.countryId, holder.countryId)) return state // host bars foreign capital, unless a treaty grants an exception
       }
       const price = sharePrice(target, state.worlds)
       const held = target.shares.filter((s) => s.holder.kind === 'corporation' && s.holder.id === holdingCorpId).reduce((n, s) => n + s.shares, 0)

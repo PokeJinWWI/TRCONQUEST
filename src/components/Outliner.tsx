@@ -14,13 +14,16 @@ import { RELATION_COLORS } from '../data/shipData'
 import { useArmyStore } from '../state/armyStore'
 import { useCombatStore } from '../state/combatStore'
 import { atWar } from '../state/diplomacyStore'
+import { useTreatyStore, treatiesOf } from '../state/treatyStore'
+import { ARTICLE_LABELS } from '../data/treatyData'
+import { ownerDisplay } from '../data/countryRoster'
 import { BATTLE_KIND_LABELS, groundBattleDetail, spaceBattleDetail, terrainBattleDetail, type PlayerBattle } from '../scene/battleList'
 import { useTerrainStore } from '../state/terrainStore'
 import { openBattle } from '../scene/battleNav'
 import { playerArmyGroups, type ArmyGroup } from '../scene/armyOutliner'
 import { useBattleStore } from '../state/battleStore'
 
-type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship'
+type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship' | 'treaty'
 // The filter offers a "black holes" toggle even though nothing in the game
 // can be that kind yet — reserving the spot the same way the empty
 // Colonies/Starbases sections do.
@@ -143,6 +146,28 @@ function useColonyEntries(): OutlinerEntry[] {
       return { key: b.name, name: b.name, color: color ?? '#ffffff', kind: b.kind, parentPlanet: b.parentPlanet, starId: b.starId, detail }
     })
   }, [selectedCountryId, bodyOwner])
+}
+
+// Every article of every treaty (embassy, non-aggression pact, trade
+// agreement, alliance, guarantee of independence, treaty port) the player's
+// nation is party to — see components/DiplomacyPanel's per-nation profile
+// for proposing/cancelling one. One row per article, since a single treaty
+// can bundle several.
+function useTreatyEntries(): OutlinerEntry[] {
+  const playerId = usePlayerStore((s) => s.selectedCountryId)
+  const treaties = useTreatyStore((s) => s.treaties)
+  return useMemo(() => {
+    if (!playerId) return []
+    return treatiesOf(treaties, playerId).flatMap((t) => {
+      const otherId = t.a === playerId ? t.b : t.a
+      return t.articles.map((a, i) => ({
+        key: `${t.id}-${i}`,
+        name: `${ARTICLE_LABELS[a.kind]} — ${ownerDisplay(otherId).name}`,
+        color: ownerDisplay(otherId).color,
+        kind: 'treaty' as const,
+      }))
+    })
+  }, [playerId, treaties])
 }
 
 // The player's armies, grouped by world / transport — right below Fleets.
@@ -360,6 +385,7 @@ export function Outliner() {
   const inViewEntries = useInViewEntries()
   const fleetEntries = useFleetEntries()
   const colonyEntries = useColonyEntries()
+  const treatyEntries = useTreatyEntries()
   const inViewSelection = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
   const ships = useShipStore((s) => s.ships)
@@ -502,7 +528,7 @@ export function Outliner() {
         <OutlinerSection title="Interest Groups" entries={[]} emptyText="No interest groups formed" />
         <OutlinerSection title="Political Movements" entries={[]} emptyText="No political movements active" />
         <OutlinerSection title="Political Lobbies" entries={[]} emptyText="No political lobbies formed" />
-        <OutlinerSection title="Treaties" entries={[]} emptyText="No treaties signed" />
+        <OutlinerSection title="Treaties" entries={treatyEntries} emptyText="No treaties signed" />
         <OutlinerSection title="Companies" entries={[]} emptyText="No companies chartered" />
       </div>
     </div>

@@ -12,6 +12,11 @@ import { useCombatStore } from '../state/combatStore'
 import { useConfirmStore } from '../state/confirmStore'
 import { useDebugConsoleStore } from '../state/debugConsoleStore'
 import { useDiplomacyStore } from '../state/diplomacyStore'
+import { useSubjectStore } from '../state/subjectStore'
+import { useInternationalOrgStore } from '../state/internationalOrgStore'
+import { useTradePolicyStore } from '../state/tradePolicyStore'
+import { useTreatyStore } from '../state/treatyStore'
+import { resetDynamicCountries } from '../data/countryData'
 import { useEconomyStore } from '../state/economyStore'
 import { useFleetStore } from '../state/fleetStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -54,6 +59,10 @@ const GAME_STORES: Resettable[] = [
   useConfirmStore,
   useDebugConsoleStore,
   useDiplomacyStore,
+  useSubjectStore,
+  useInternationalOrgStore,
+  useTradePolicyStore,
+  useTreatyStore,
   useEconomyStore,
   useFleetStore,
   useGameTimeStore,
@@ -75,4 +84,5 @@ const GAME_STORES: Resettable[] = [
 export function resetGame(): void {
   for (const store of GAME_STORES) store.setState(store.getInitialState() as never, true)
   resetFightPace()
+  resetDynamicCountries()
 }
