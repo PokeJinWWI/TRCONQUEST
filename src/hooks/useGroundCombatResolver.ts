@@ -6,9 +6,8 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { usePlayerStore } from '../state/playerStore'
 import { atWar, useDiplomacyStore } from '../state/diplomacyStore'
 import { playerFightLive, reapLostCargo } from '../scene/armyLogic'
-import { groundSurface } from '../scene/groundLogic'
 import { simDaysToGroundStep, stepGroundWar } from '../scene/groundResolution'
-import { useDefenseStore } from '../state/defenseStore'
+import { groundPortSurface, useDefenseStore } from '../state/defenseStore'
 import { withFortressKeys } from '../scene/defenseLogic'
 import { DEFENSE_DEFS } from '../data/defenseData'
 import { engagedUnitIds, stepTerrainWar } from '../scene/terrainWar'
@@ -93,7 +92,9 @@ export function resolveGroundWar(simDays: number): void {
     atWar,
     isAutonomous: (countryId: string) => countryId !== player,
     surfaceOf: (bodyName: string) => {
-      const surface = groundSurface(bodyName, territory.bodyOwner)
+      // Every key node the war recognises: the terrain's, the economy's
+      // spaceports and the installations' (state/defenseStore.groundKeySurface).
+      const surface = groundPortSurface(bodyName, territory.bodyOwner)
       return surface && installations.length > 0 ? withFortressKeys(surface, installations, simDays) : surface
     },
   }

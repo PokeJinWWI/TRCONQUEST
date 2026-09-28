@@ -2,7 +2,7 @@
 // exists yet (see resourceStore) — this is the data layer for the readout
 // itself, the same "reserve the spot with real empty state, not fake
 // numbers" pattern Outliner already uses for Colonies/Starbases.
-export type ResourceId = 'energy' | 'minerals' | 'food' | 'consumerGoods' | 'alloys' | 'electronics' | 'exoticMatter' | 'hyperium' | 'special'
+export type ResourceId = 'energy' | 'minerals' | 'food' | 'consumerGoods' | 'alloys' | 'electronics' | 'exoticMatter' | 'hyperium' | 'spaceships' | 'rockets' | 'special'
 
 export interface ResourceType {
   id: ResourceId
@@ -66,6 +66,18 @@ export const RESOURCE_TYPES: ResourceType[] = [
     name: 'Hyperium',
     short: 'HYPER',
     description: "Extremely rare, yields effectively infinite energy, and can't be subdivided — fuels hyperdrives, making every hyperdrive-equipped hull valuable in its own right.",
+  },
+  {
+    id: 'spaceships',
+    name: 'Spaceships',
+    short: 'SHIPS',
+    description: 'Civilian freighters and liners: the merchant fleet that carries trade between worlds and nations, worked from spaceports.',
+  },
+  {
+    id: 'rockets',
+    name: 'Rockets',
+    short: 'RKT',
+    description: 'Launch vehicles and boosters that lift cargo from a spaceport to orbit, where the freighters take it on.',
   },
   {
     id: 'special',

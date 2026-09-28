@@ -18,9 +18,10 @@
 // append to worlds (funded from the company's own cash by the tick loop); it
 // does not mutate cash itself.
 
-import type { Corporation, World, ConstructionOrder, Building } from './economyTypes'
+import type { Corporation, World, WorldReport, ConstructionOrder, Building } from './economyTypes'
 import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
 import { GOODS } from './goods'
+import { downsized, mayDownsize } from './downsizing'
 import { goodIsScarce, inputsAvailable, recipeGood } from './scarcity'
 
 // Review twice a year, staggered per-company so they don't all act at once.
@@ -56,6 +57,7 @@ const SALVAGE_FRACTION = 0.3
 // exploitation, made concrete as a list rather than hidden in the numbers.
 const FOUNDABLE_SECTORS: string[] = [
   'consumerGoodsFactory',
+  'textileMill',
   'luxuryFactory',
   'automobilePlant',
   'aircraftFactory',
@@ -113,7 +115,7 @@ function ownsHere(building: Building, corpId: string): boolean {
 // appended (owned by, and funded from, this company). Financial districts don't
 // operate ordinary industry — they're institutional investors, not operating
 // companies — so they're left alone here.
-export function runCorporationAI(corp: Corporation, worlds: World[], tick: number, investmentPool = Infinity, openHosts: Set<string> = new Set()): { corp: Corporation; worlds: World[] } {
+export function runCorporationAI(corp: Corporation, worlds: World[], tick: number, investmentPool = Infinity, openHosts: Set<string> = new Set(), worldReports?: Record<string, WorldReport>): { corp: Corporation; worlds: World[] } {
   if (corp.kind === 'financial') return { corp, worlds }
   if (tick % INVEST_REVIEW_PERIOD !== phase(corp.id, INVEST_REVIEW_PERIOD)) return { corp, worlds }
 
@@ -124,28 +126,26 @@ export function runCorporationAI(corp: Corporation, worlds: World[], tick: numbe
   let worstLoser: { worldId: string; buildingId: string; level: number; loss: number } | null = null
   for (const w of worlds) {
     for (const b of w.buildings) {
-      if (!ownsHere(b, corp.id)) continue
+      if (!ownsHere(b, corp.id) || !mayDownsize(b)) continue
       if ((b.unprofitableStreak ?? 0) < DIVEST_STREAK) continue
       if (!worstLoser || b.lastProfit < worstLoser.loss) worstLoser = { worldId: w.id, buildingId: b.id, level: b.level, loss: b.lastProfit }
     }
   }
   if (worstLoser) {
-    // Downsize by one level (closing the building only at its last): a firm
-    // trims a chronic loss-maker rather than razing it — razing a whole mill
-    // at once cut off every building downstream of it.
-    const salvage = BUILD_COST * SALVAGE_FRACTION
-    nextCorp = { ...corp, cash: corp.cash + salvage }
-    const cut = (b: World['buildings'][number]) => (b.id !== worstLoser!.buildingId ? [b] : b.level > 1 ? [{ ...b, level: b.level - 1, unprofitableStreak: 0 }] : [])
-    nextWorlds = worlds.map((w) => (w.id === worstLoser!.worldId ? { ...w, buildings: w.buildings.flatMap(cut) } : w))
+    // Cut back by one level, or mothball more at the last (economy/downsizing.ts):
+    // razing a whole mill at once cut off every building downstream of it.
+    // Salvage only for a level actually sold off.
+    if (worstLoser.level > 1) nextCorp = { ...corp, cash: corp.cash + BUILD_COST * SALVAGE_FRACTION }
+    nextWorlds = worlds.map((w) => (w.id === worstLoser!.worldId ? { ...w, buildings: w.buildings.map((b) => (b.id === worstLoser!.buildingId ? downsized(b) : b)) } : w))
   }
 
-  const invested = invest(nextCorp, nextWorlds, tick, investmentPool, openHosts)
+  const invested = invest(nextCorp, nextWorlds, tick, investmentPool, openHosts, worldReports)
   return { corp: nextCorp, worlds: invested }
 }
 
 // The investment half of the decision: expand a winner or found a new venture,
 // financed from the country's investment pool (the capital market).
-function invest(corp: Corporation, worlds: World[], tick: number, investmentPool: number, openHosts: Set<string>): World[] {
+function invest(corp: Corporation, worlds: World[], tick: number, investmentPool: number, openHosts: Set<string>, worldReports?: Record<string, WorldReport>): World[] {
   if (investmentPool < INVEST_CASH_BUFFER) return worlds // the capital market is dry — no financing available
   // One order at a time: don't stack up spend it can't cover.
   const alreadyBuilding = worlds.some((w) => w.constructionQueue.some((o) => o.owner.kind === 'corporation' && o.owner.corporationId === corp.id))
@@ -162,9 +162,13 @@ function invest(corp: Corporation, worlds: World[], tick: number, investmentPool
   // Only into a good the world is short of (economy/scarcity.ts): a company
   // that grew its best mine while ore already piled up in the market drove
   // Mars's ore into a glut, then had to cut the mine back again.
+  // Nor into a good someone is already building a plant for on that world:
+  // every company once piled into the same opening at once (six data centres
+  // on Arcadia in eight months) and ran the world out of power.
   const scarce = (recipeId: string, w: World) => {
     const good = recipeGood(recipeId)
-    return !!good && goodIsScarce(good, [w]) && inputsAvailable(recipeId, [w])
+    if (!good || w.constructionQueue.some((o) => !o.district && recipeGood(o.recipeId) === good)) return false
+    return goodIsScarce(good, [w], worldReports) && inputsAvailable(recipeId, [w])
   }
 
   // --- Option 1: EXPAND the company's most profitable existing building.

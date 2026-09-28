@@ -503,7 +503,9 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                           </span>
                         )}
                       </td>
-                      <td title={`Throughput ${runPct}% — ramps toward full as labor, inputs and demand allow`}>{runPct}%</td>
+                      <td title={`Throughput ${runPct}% — ramps toward full as labor, inputs and demand allow${b.idle ? `\n${Math.round(b.idle * 100)}% mothballed: kept idle until its good runs short` : ''}`}>
+                        {runPct}%{b.idle ? <span style={{ opacity: 0.6 }}> · {Math.round(b.idle * 100)}% mothballed</span> : null}
+                      </td>
                       <td title={`${formatPop(b.employed)} employed of ${formatPop(b.jobsPosted)} jobs posted`}>
                         {b.jobsPosted > 0 ? `${formatPop(b.employed)} (${jobPct}%)` : '—'}
                       </td>

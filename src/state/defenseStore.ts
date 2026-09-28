@@ -3,7 +3,8 @@ import { DEFENSE_DEFS, isMilitaryKind, type DefenseKind } from '../data/defenseD
 import { controllerOf } from '../scene/territory'
 import { groundSurface } from '../scene/groundLogic'
 import { holderOfInstallation, hostileBatteries, placeInstallation, shieldBlocksLanding, withInstallationKeys, type Installation } from '../scene/defenseLogic'
-import { militarySlotsOf, syncMilitarySlots } from './nationEconomy'
+import { militarySlotsOf, spaceportSitesOf, syncMilitarySlots } from './nationEconomy'
+import { withSpaceportKeys } from '../scene/spaceportSites'
 import type { BodySurface } from '../scene/planetTerrain'
 import { atWar } from './diplomacyStore'
 import { useGameTimeStore } from './gameTimeStore'
@@ -63,14 +64,25 @@ function militaryByBody(installations: Installation[]): Record<string, number> {
   return out
 }
 
-// A world's ground map as the war sees it now: its key nodes plus those its
-// installations add (active fortresses, a built spaceport — where new armies
-// muster).
-export function liveGroundSurface(bodyName: string): BodySurface | null {
-  const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
+// A world's ground map as the war sees it now: the terrain's key nodes, one
+// for every spaceport its economy runs (scene/spaceportSites.ts), and those its
+// installations add (active fortresses, a built spaceport). The ONE surface the
+// ground war, the map, the planet screen and the AI use.
+export function groundKeySurface(bodyName: string, owners = useTerritoryStore.getState().bodyOwner): BodySurface | null {
+  const withPorts = groundPortSurface(bodyName, owners)
+  if (!withPorts) return null
   const installations = useDefenseStore.getState().installations
-  return surface && installations.length > 0 ? withInstallationKeys(surface, installations, useGameTimeStore.getState().simDays) : surface
+  return installations.length > 0 ? withInstallationKeys(withPorts, installations, useGameTimeStore.getState().simDays) : withPorts
 }
+// The terrain's key nodes plus the economy's spaceports (no installations yet).
+export function groundPortSurface(bodyName: string, owners = useTerritoryStore.getState().bodyOwner): BodySurface | null {
+  const surface = groundSurface(bodyName, owners)
+  if (!surface) return null
+  const sites = spaceportSitesOf(bodyName)
+  return sites.length > 0 ? withSpaceportKeys(surface, sites) : surface
+}
+// Kept for callers written before spaceport sites: the same surface.
+export const liveGroundSurface = groundKeySurface
 
 export function canBuildDefense(countryId: string, bodyName: string, kind: DefenseKind, installations: Installation[]): DefenseResult {
   const { bodyOwner, bodyController } = useTerritoryStore.getState()

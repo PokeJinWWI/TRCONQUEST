@@ -28,6 +28,7 @@ export interface KeyBuilding {
   holder: string | undefined // who holds the node now
   captured: boolean // held by someone other than the world's owner
   building: boolean // a spaceport still under construction (no key node yet)
+  operator?: string // a spaceport's operator ("Mars (state)", a company)
 }
 
 export const KEY_BUILDING_ICON: Record<KeyBuildingKind, string> = { seat: 'seat', landmark: 'seat', cityHall: 'cityHall', spaceport: 'spaceport', outpostStation: 'outpostStation' }
@@ -55,7 +56,8 @@ export function keyBuildingsOf(surface: BodySurface, installations: Installation
     } else if (slot.kind === 'city') {
       out.push({ ...base, id: `key-${slot.node}-hall`, kind: 'cityHall', name: town ? `${town} City Hall` : 'City Hall', description: `The civic centre of ${town || 'this city'}.` })
     } else if (slot.kind === 'spaceport') {
-      out.push({ ...base, id: `key-${slot.node}-port`, kind: 'spaceport', name: n.label, description: 'The world’s spaceport: its landing fields and orbital lift.' })
+      const what = slot.site === 'outlier' ? 'A launch complex out on its own' : slot.site ? 'One of the world’s spaceports' : 'The world’s main spaceport'
+      out.push({ ...base, id: `key-${slot.node}-port`, kind: 'spaceport', name: n.label, operator: slot.operator, description: `${what}: landing fields and orbital lift.${slot.operator ? ` Run by ${slot.operator}.` : ''}` })
     } else {
       out.push({ ...base, id: `key-${slot.node}-station`, kind: 'outpostStation', name: town ? `${town} Outpost Station` : 'Outpost Station', description: 'The settlement’s station: habitat, landing pad and relay.' })
     }

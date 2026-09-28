@@ -18,7 +18,7 @@ import { useTerrainStore } from '../state/terrainStore'
 import { usePlayerStore } from '../state/playerStore'
 import { atWar } from '../state/diplomacyStore'
 import { relationColorOf, useRelationKey } from '../state/shipRelations'
-import { groundSurface, holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
+import { holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
 import { classifyFireLine } from './armyLogic'
 import { bodyGroundInfo, TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, nodePoint, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
@@ -29,12 +29,13 @@ import { ProjectionSwitch } from '../components/ProjectionSwitch'
 import { PlanetIcon } from '../components/planet/PlanetIcons'
 import { useDefenseStore } from '../state/defenseStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { holderOfInstallation, isActive, withInstallationKeys } from './defenseLogic'
+import { holderOfInstallation, isActive } from './defenseLogic'
 import { DEFENSE_DEFS } from '../data/defenseData'
 import { FLAT_HEIGHT, FLAT_WIDTH, crossesSeam, flatPos, fromFlat } from './mapProjection'
 import { HOLO_TERRAIN } from './holoTerrain'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { isAdditiveClick } from './selectionInput'
+import { useGroundKeySurface } from '../hooks/useGroundKeySurface'
 import { GroundPanel, UnitCard, describeDefense, describeMoveCost, handleGroundClick, orderSelectedUnitsTo, targetWithSelection } from '../components/GroundPanel'
 
 // The planetary map: a world's surface as a globe of terrain, its front lines
@@ -69,20 +70,9 @@ function toVec(p: SurfacePoint, r: number): [number, number, number] {
 export function GroundViewScene({ bodyName }: { bodyName: string }) {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const exitGround = useViewStore((s) => s.exitGround)
-  const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
-  // With the key nodes installations add (active fortresses, a built
-  // spaceport) — keyed on which are active, so the map re-derives only then.
-  const installations = useDefenseStore((s) => s.installations)
-  const activeKeys = useGameTimeStore((t) =>
-    installations
-      .filter((i) => i.bodyName === bodyName && (i.kind === 'fortress' || i.kind === 'spaceport') && isActive(i, t.simDays))
-      .map((i) => i.id)
-      .join(),
-  )
-  const surface = useMemo(() => {
-    const s = groundSurface(bodyName, bodyOwner)
-    return s && activeKeys ? withInstallationKeys(s, useDefenseStore.getState().installations, useGameTimeStore.getState().simDays) : s
-  }, [bodyName, bodyOwner, activeKeys])
+  // Every key node the war recognises: the terrain's, the economy's
+  // spaceports, the installations' (hooks/useGroundKeySurface).
+  const surface = useGroundKeySurface(bodyName)
 
   // Leaving the map ends any landing/spawn pick, and drops the selection.
   // Only once the view has really changed — React's dev StrictMode runs this

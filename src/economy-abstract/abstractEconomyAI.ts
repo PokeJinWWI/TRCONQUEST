@@ -20,7 +20,7 @@ import {
   type TradeOrders,
   type WorldState,
 } from './abstractEconomy'
-import { DISTRICT_OF_BUILDING, SIMPLE_BUILDING_DEFS, type SimpleBuildingId, type SimpleGood } from '../data/simplisticEconomyData'
+import { DISTRICT_OF_BUILDING, GOOD_VALUE, SIMPLE_BUILDING_DEFS, SIMPLE_BUILDINGS, takesSlot, type SimpleBuildingId, type SimpleGood } from '../data/simplisticEconomyData'
 
 export interface AbstractAIContext {
   atWar: boolean
@@ -114,6 +114,13 @@ export function nextBuilding(s: AbstractEconomyState, ctx: AbstractAIContext): S
   }
   if (covers('consumerFactory', 'consumerGoods', gap('consumerGoods', GOODS_MARGIN))) return 'consumerFactory'
   if (covers('electronicsPlant', 'electronics', gap('electronics', GOODS_MARGIN))) return 'electronicsPlant'
+  // Trade runs through spaceports: another level once the standing orders
+  // outgrow what they can move; and the rockets and spaceships they run on.
+  const orderValue = Object.entries(s.trade).reduce((n, [g, q]) => n + Math.abs(q ?? 0) * GOOD_VALUE[g as SimpleGood], 0)
+  if (orderValue > r.tradeCapacity && !queued('spaceport')) return 'spaceport'
+  const upkeepGap = (g: SimpleGood) => SIMPLE_BUILDINGS.reduce((n, b) => n + lv(b) * (SIMPLE_BUILDING_DEFS[b].upkeep[g] ?? 0), 0) * GOODS_MARGIN - r.produced[g]
+  if (covers('rocketWorks', 'rockets', upkeepGap('rockets'))) return 'rocketWorks'
+  if (covers('spaceyard', 'spaceships', upkeepGap('spaceships'))) return 'spaceyard'
   const civilian = lv('civilianFactory')
   const foundriesWanted = civilian * (ctx.atWar ? FOUNDRIES_PER_CIVILIAN_WAR : FOUNDRIES_PER_CIVILIAN_PEACE)
   if (lv('alloyFoundry') < foundriesWanted && !queued('alloyFoundry')) return 'alloyFoundry'
@@ -142,7 +149,7 @@ export function worldFor(s: AbstractEconomyState, worlds: WorldState[], b: Simpl
   for (const w of worlds) {
     const queuedJobs = s.queue.filter((o) => o.bodyName === w.bodyName && o.building).reduce((n, o) => n + SIMPLE_BUILDING_DEFS[o.building!].jobs, 0)
     const spare = worldWorkforce(w) * (1 + JOB_HEADROOM) - worldJobs(w) - queuedJobs
-    if (spare < need || (freeSlots(w, s.queue, d) <= 0 && freeLand(w, s.queue) <= 0)) continue
+    if (spare < need || (takesSlot(b) && freeSlots(w, s.queue, d) <= 0 && freeLand(w, s.queue) <= 0)) continue
     if (spare > bestSpare) {
       bestSpare = spare
       best = w
@@ -234,7 +241,7 @@ export function applyAbstractEconomyAI(s: AbstractEconomyState, ctx: AbstractAIC
       // No free slot in its district yet: develop the district first; the
       // building follows once the district level stands.
       const d = DISTRICT_OF_BUILDING[building]
-      const order = freeSlots(world, queue, d) > 0 ? { building } : { district: d }
+      const order = !takesSlot(building) || freeSlots(world, queue, d) > 0 ? { building } : { district: d }
       queue = [...queue, { id: nextOrderId, bodyName: world.bodyName, ...order, progress: 0 }]
       nextOrderId++
     }

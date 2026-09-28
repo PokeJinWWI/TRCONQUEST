@@ -21,6 +21,8 @@ const ICON_PATHS: Record<ResourceId, ReactElement> = {
     </>
   ),
   hyperium: <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7L8 1zM8 5l2.5 1.5v3L8 11l-2.5-1.5v-3L8 5z" fill="none" />,
+  spaceships: <path d="M1 9h10l4-2-4-2H4L1 7zM4 9l-1 3h4l1-3" fill="none" />,
+  rockets: <path d="M8 1c2 2 3 5 3 8H5c0-3 1-6 3-8zM5 9l-2 3h2M11 9l2 3h-2M7 11v3M9 11v3" fill="none" />,
   special: <path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2" fill="none" />,
 }
 

@@ -54,6 +54,7 @@ export const BASELINE_ORGANIC: SpeciesTemplate = {
       { id: 'protein', label: 'Protein', base: 0.22, goods: [{ good: 'meat', weight: 1 }, { good: 'fish', weight: 1 }] },
     ],
     everyday: [
+      { id: 'clothing', label: 'Clothing', base: 0.12, goods: [{ good: 'textiles', weight: 1 }] },
       { id: 'household-goods', label: 'Household Goods', base: 0.3, goods: [{ good: 'consumerGoods', weight: 3 }, { good: 'furniture', weight: 1 }] },
       { id: 'energy', label: 'Energy', base: 0.15, goods: [{ good: 'electricity', weight: 1 }] },
       { id: 'everyday-services', label: 'Services', base: 0.12, goods: [{ good: 'retail', weight: 1 }] },
@@ -87,6 +88,7 @@ export const TIDALIAN: SpeciesTemplate = {
       { id: 'protein', label: 'Protein', base: 0.26, goods: [{ good: 'fish', weight: 3 }, { good: 'meat', weight: 1 }] },
     ],
     everyday: [
+      { id: 'clothing', label: 'Clothing', base: 0.12, goods: [{ good: 'textiles', weight: 1 }] },
       { id: 'household-goods', label: 'Household Goods', base: 0.25, goods: [{ good: 'consumerGoods', weight: 3 }, { good: 'furniture', weight: 1 }] },
       { id: 'energy', label: 'Energy', base: 0.12, goods: [{ good: 'electricity', weight: 1 }] },
       { id: 'everyday-services', label: 'Services', base: 0.1, goods: [{ good: 'retail', weight: 1 }] },

@@ -92,8 +92,8 @@ function WarningSigns({ s, r, growth }: { s: AbstractEconomyState; r: AbstractRe
 function unfilledReason(order: number, done: number): string {
   const got = Math.abs(done).toFixed(1)
   return order > 0
-    ? `Only ${got} came in last month: no nation at peace with you could spare more, or your treasury ran short`
-    : `Only ${got} went out last month: no nation at peace with you was importing more, or your stock ran short`
+    ? `Only ${got} came in last month: no nation at peace with you could spare more, your treasury ran short, or your (or their) spaceports were full`
+    : `Only ${got} went out last month: no nation at peace with you was importing more, your stock ran short, or your (or their) spaceports were full`
 }
 
 export function AbstractEconomyPanel() {
@@ -560,6 +560,7 @@ function TradeTab({ countryId, s, r }: TabProps) {
   const h = history ?? []
   const rate = s.currency.rate
   const fund = fundamentalRate(s, r)
+  const traded = SIMPLE_GOODS.reduce((n, g) => n + Math.abs(r.traded[g]) * GOOD_VALUE[g], 0)
 
   return (
     <>
@@ -573,6 +574,10 @@ function TradeTab({ countryId, s, r }: TabProps) {
         <div><span className="inspect-label">Imports / mo</span><span>{formatMoney(r.importCost)}</span></div>
         <div><span className="inspect-label">Exports / mo</span><span>{formatMoney(r.exportRevenue)}</span></div>
         <div><span className="inspect-label">Trade balance</span><span className={r.tradeBalance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.tradeBalance)}/mo</span></div>
+        <div title="Trade capacity: what your spaceports can move a month, bought and sold together, in TSC of goods at base value. Short of rockets or spaceships they carry less; with no spaceport you trade nothing. Build spaceports (urban district) for more.">
+          <span className="inspect-label">Spaceports</span>
+          <span className={traded > r.tradeCapacity * 0.95 ? 'econ-neg' : undefined}>{Math.round(traded).toLocaleString()} / {Math.round(r.tradeCapacity).toLocaleString()} TSC</span>
+        </div>
       </div>
 
       <div className="econ-subtitle" style={{ marginTop: 10 }}>Trade with other nations</div>

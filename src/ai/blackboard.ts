@@ -5,6 +5,7 @@
 import type { ResourceId } from '../data/resourceData'
 import type { Relation, War } from '../data/diplomacyData'
 import type { ShipInstance } from '../state/shipStore'
+import type { BodySurface } from '../scene/planetTerrain'
 import { atWarFrom, relationIn, type AtWarFn } from '../state/diplomacyStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { overallHealthFraction, totalHitPoints } from '../scene/combatResolution'
@@ -59,6 +60,9 @@ export interface AiSnapshot {
   hostileDefensesAt?: (countryId: string, bodyName: string) => number
   // Nodes an enemy planetary shield covers, for a nation landing here.
   shieldedFor?: (countryId: string, bodyName: string) => (node: number) => boolean
+  // A body's ground map with every key node (the economy's spaceports,
+  // installations). Optional: absent = the terrain's own.
+  surfaceOf?: (bodyName: string) => BodySurface | null
 }
 
 export interface Threat {
