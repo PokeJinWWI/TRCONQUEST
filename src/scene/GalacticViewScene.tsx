@@ -161,6 +161,8 @@ export function GalacticViewScene() {
   }
 
   const handleUnfocus = (event: MouseEvent) => {
+    // A right-click on empty space is an order, not a deselect.
+    if (event.type === 'contextmenu') return
     if (event.target instanceof Element && event.target.closest('.planet-marker')) return
     deselectShipsOnEmptyClick(event)
     selectInView(null)

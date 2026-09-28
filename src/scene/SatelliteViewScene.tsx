@@ -255,6 +255,8 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   // misses that actually landed on a marker, the prominent focused label, or
   // a ship marker.
   const handleUnfocus = (event: MouseEvent) => {
+    // A right-click on empty space is an order, not a deselect.
+    if (event.type === 'contextmenu') return
     if (event.target instanceof Element && event.target.closest('.planet-marker, .focused-label, .ship-marker')) return
     deselectShipsOnEmptyClick(event)
     selectInView(null)

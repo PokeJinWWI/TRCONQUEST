@@ -109,7 +109,9 @@ console.log('\n=== Click away deselects ===')
   useShipStore.setState({ ships: [ship('a1', 'fa'), ship('a2', 'fa')], selectedShipId: 'a1', selectedShipIds: ['a1', 'a2'] })
   deselectShipsOnEmptyClick({ shiftKey: true, ctrlKey: false, metaKey: false })
   check('a Shift-click on empty space leaves the selection alone', useShipStore.getState().selectedShipIds.length === 2)
-  deselectShipsOnEmptyClick({ shiftKey: false, ctrlKey: false, metaKey: false })
+  deselectShipsOnEmptyClick({ shiftKey: false, ctrlKey: false, metaKey: false, type: 'contextmenu', button: 2 })
+  check('a right-click on empty space (a move order) leaves the selection alone', useShipStore.getState().selectedShipIds.length === 2)
+  deselectShipsOnEmptyClick({ shiftKey: false, ctrlKey: false, metaKey: false, type: 'click', button: 0 })
   check('a plain click on empty space drops it', useShipStore.getState().selectedShipIds.length === 0 && useShipStore.getState().selectedShipId === null)
 }
 

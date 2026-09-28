@@ -289,6 +289,8 @@ export function SolarSystemScene() {
   // wins, silently undoing the selection. Ignore misses that actually landed
   // on a marker; the marker's own onClick already handled them.
   const handleUnfocus = (event: MouseEvent) => {
+    // A right-click on empty space is an order, not a deselect.
+    if (event.type === 'contextmenu') return
     if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
     deselectShipsOnEmptyClick(event)
     selectInView(null)

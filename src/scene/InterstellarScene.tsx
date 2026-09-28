@@ -466,6 +466,8 @@ export function InterstellarScene() {
   // markers (they share the canvas's event container). Ignore misses that
   // actually landed on a marker so its own onClick isn't immediately undone.
   const handleUnfocus = (event: MouseEvent) => {
+    // A right-click on empty space is an order, not a deselect.
+    if (event.type === 'contextmenu') return
     if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
     deselectShipsOnEmptyClick(event)
     selectInView(null)
