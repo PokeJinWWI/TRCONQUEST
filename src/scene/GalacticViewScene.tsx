@@ -1,11 +1,12 @@
+import { wasDrag } from './dragGuard'
+import { GalaxyMarkers } from './GalaxyMarkers'
 import { useStarbaseActivityKey } from '../hooks/useStarbaseActivity'
 import { deselectShipsOnEmptyClick } from './deselect'
 import { usePlayerIntel } from './intel'
-import { BattleBadge } from '../components/BattleBadge'
 import { KeyboardPan } from './KeyboardPan'
 import { useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Html, OrbitControls, Stars } from '@react-three/drei'
+import { OrbitControls, Stars } from '@react-three/drei'
 import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { NeighborhoodData } from '../data/neighborhoodData'
@@ -16,14 +17,12 @@ import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
-import { forwardWheelToCanvas } from '../utils/forwardWheel'
 import { DraggableWindow } from '../components/DraggableWindow'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { systemClaim, type SystemClaim } from './territory'
 import { starbaseOwnersOf, type Starbase } from './starbaseLogic'
-import { claimRingStyle } from './InterstellarScene'
 import type { OwnerMap } from './territory'
 
 const MAX_DISTANCE = 6000
@@ -41,13 +40,6 @@ const ENTER_INTERSTELLAR_DISTANCE = 6
 // already uses one level down.
 const DEFAULT_CAMERA_OFFSET: [number, number, number] = [40, 60, 110]
 const FAR_START: [number, number, number] = [0, 900, 1600]
-
-interface NeighborhoodNodeProps {
-  neighborhood: NeighborhoodData
-  selected: boolean
-  onSelect: (neighborhood: NeighborhoodData) => void
-  claim: SystemClaim
-}
 
 // Whoever holds ground in this neighbourhood's charted systems — the union
 // of every one of its stars' own systemClaim (bodies plus Starbases, see
@@ -68,33 +60,6 @@ function neighborhoodClaim(neighborhood: NeighborhoodData, bodyOwner: OwnerMap, 
   if (present.size === 0) return { kind: 'unclaimed' }
   if (present.size === 1) return { kind: 'owned', countryId: [...present][0] }
   return { kind: 'contested', countryIds: [...present].sort() }
-}
-
-// A neighborhood is just a point here, exactly the way a star is just a
-// point in interstellar view — no attempt to render the systems inside it at
-// this scale.
-function NeighborhoodNode({ neighborhood, selected, onSelect, claim }: NeighborhoodNodeProps) {
-  const [hovered, setHovered] = useState(false)
-  const pos = neighborhoodScenePosition(neighborhood)
-
-  return (
-    <group position={pos}>
-      <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
-        <div
-          className={`planet-marker star-node neighborhood-node${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
-          onPointerEnter={() => setHovered(true)}
-          onPointerLeave={() => setHovered(false)}
-          onClick={() => onSelect(neighborhood)}
-          onWheel={forwardWheelToCanvas}
-        >
-          {claimRingStyle(claim) && <span className={`owner-ring${claim.kind === 'contested' ? ' contested' : ''}`} style={claimRingStyle(claim)!} />}
-          <span className="marker-dot" style={{ borderColor: neighborhood.color }} />
-          {(hovered || selected) && <span className="marker-label">{neighborhood.name}</span>}
-          <BattleBadge scope={{ neighborhood: neighborhood.id }} />
-        </div>
-      </Html>
-    </group>
-  )
 }
 
 export function GalacticViewScene() {
@@ -160,10 +125,20 @@ export function GalacticViewScene() {
     if (selected?.hasInterstellarData) setFocusedId(selected.id)
   }
 
+  // A click on a marker selects it (markers are one point cloud, so it is picked by
+  // screen distance); anywhere else it is a click on empty space.
+  const pickerRef = useRef<((clientX: number, clientY: number) => NeighborhoodData | null) | null>(null)
+  const pickedByClick = (event: MouseEvent): boolean => {
+    const hit = pickerRef.current?.(event.clientX, event.clientY)
+    if (!hit) return false
+    handleSelect(hit)
+    return true
+  }
   const handleUnfocus = (event: MouseEvent) => {
     // A right-click on empty space is an order, not a deselect.
-    if (event.type === 'contextmenu') return
+    if (event.type === 'contextmenu' || wasDrag(event)) return
     if (event.target instanceof Element && event.target.closest('.planet-marker')) return
+    if (pickedByClick(event)) return
     deselectShipsOnEmptyClick(event)
     selectInView(null)
   }
@@ -176,17 +151,9 @@ export function GalacticViewScene() {
         <ambientLight intensity={0.3} />
         <Stars radius={4000} depth={1000} count={6000} factor={6} fade speed={0.1} />
 
-        <DeepSpaceClickPlane onDeselect={() => selectInView(null)} onOrderTo={() => {}} size={200000} />
+        <DeepSpaceClickPlane onDeselect={() => selectInView(null)} onOrderTo={() => {}} size={200000} consumeClick={pickedByClick} />
 
-        {NEIGHBORHOODS.map((neighborhood) => (
-          <NeighborhoodNode
-            key={neighborhood.id}
-            neighborhood={neighborhood}
-            selected={neighborhood.id === selectedId}
-            onSelect={handleSelect}
-            claim={claimsByNeighborhood.get(neighborhood.id) ?? { kind: 'unclaimed' }}
-          />
-        ))}
+        <GalaxyMarkers claims={claimsByNeighborhood} selectedId={selectedId} pickerRef={pickerRef} />
 
         {focused && (
           <CameraFocusRig

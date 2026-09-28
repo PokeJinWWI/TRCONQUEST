@@ -1,3 +1,4 @@
+import { wasDrag } from './dragGuard'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, Line, OrbitControls } from '@react-three/drei'
@@ -642,7 +643,7 @@ function TerrainBattleView({ battleId }: { battleId: string }) {
       <Canvas
         camera={{ position: [0, 7.5, 10.5], fov: 45, near: 0.1, far: 200 }}
         onPointerMissed={(e) => {
-          if (e.type === 'click' && !isAdditiveClick(e)) useGroundViewStore.getState().selectUnits([])
+          if (e.type === 'click' && !isAdditiveClick(e) && !wasDrag(e)) useGroundViewStore.getState().selectUnits([])
         }}
       >
         <color attach="background" args={['#020409']} />

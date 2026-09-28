@@ -1,3 +1,4 @@
+import { wasDrag } from './dragGuard'
 import { cityOfNode, KEY_HOLD_BONUS, KEY_ROLE, keyNameOf } from './keyNames'
 import { regionAt } from './bodyTopography'
 import { useEffect, useMemo, useRef } from 'react'
@@ -92,7 +93,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
   const flat = useGroundViewStore((s) => s.projection === 'flat')
   // A plain click on empty space clears the selection.
   const clearOnMiss = (e: MouseEvent) => {
-    if (e.type === 'click' && !isAdditiveClick(e)) useGroundViewStore.getState().selectUnits([])
+    if (e.type === 'click' && !isAdditiveClick(e) && !wasDrag(e)) useGroundViewStore.getState().selectUnits([])
   }
 
   if (!surface) {

@@ -1,3 +1,4 @@
+import { wasDrag } from './dragGuard'
 import { useMemo, useRef, useState } from 'react'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { KeyboardPan } from './KeyboardPan'
@@ -43,7 +44,7 @@ export function MoonDetailScene({ moon, parentOrbitAU, onExit }: MoonDetailScene
 
   const handleUnfocus = (event: MouseEvent) => {
     // A right-click on empty space is an order, not a deselect.
-    if (event.type === 'contextmenu') return
+    if (event.type === 'contextmenu' || wasDrag(event)) return
     if (event.target instanceof Element && event.target.closest('.planet-marker, .focused-label')) return
     setInspected(false)
   }

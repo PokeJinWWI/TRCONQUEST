@@ -1,4 +1,5 @@
 import { useShipStore } from '../state/shipStore'
+import { wasDrag } from './dragGuard'
 import { isAdditiveClick } from './selectionInput'
 
 // A right-click is an order (move here), never a deselect — r3f also reports a
@@ -11,8 +12,9 @@ export function isSecondaryClick(event: { type?: string; button?: number }): boo
 // body selection (each scene's own handler does that). Shift/Ctrl/Cmd-click
 // leaves it alone — that's the "add to the selection" gesture, so a slipped
 // modifier click doesn't wipe a selection built up on purpose.
-export function deselectShipsOnEmptyClick(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; type?: string; button?: number }): void {
-  if (isAdditiveClick(event) || isSecondaryClick(event)) return
+export function deselectShipsOnEmptyClick(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; type?: string; button?: number; clientX?: number; clientY?: number }): void {
+  // Only a still, single, plain left click: not a drag, a right-click or a modifier click.
+  if (isAdditiveClick(event) || isSecondaryClick(event) || wasDrag(event)) return
   const store = useShipStore.getState()
   if (store.selectedShipIds.length > 0) store.selectShip(null)
 }

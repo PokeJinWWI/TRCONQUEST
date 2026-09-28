@@ -1,3 +1,4 @@
+import { wasDrag } from './dragGuard'
 import { deselectShipsOnEmptyClick } from './deselect'
 import { useMemo, useRef, useState } from 'react'
 import { KeyboardPan } from './KeyboardPan'
@@ -290,7 +291,7 @@ export function SolarSystemScene() {
   // on a marker; the marker's own onClick already handled them.
   const handleUnfocus = (event: MouseEvent) => {
     // A right-click on empty space is an order, not a deselect.
-    if (event.type === 'contextmenu') return
+    if (event.type === 'contextmenu' || wasDrag(event)) return
     if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
     deselectShipsOnEmptyClick(event)
     selectInView(null)

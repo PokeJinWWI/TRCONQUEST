@@ -1,10 +1,14 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import { deselectShipsOnEmptyClick } from './deselect'
+import { wasDrag } from './dragGuard'
 
 interface DeepSpaceClickPlaneProps {
   onDeselect: () => void
   onOrderTo: (point: [number, number, number]) => void
   size?: number
+  // Gets the click first; returning true means it was on something else (a
+  // marker drawn without its own click handler), so nothing is deselected.
+  consumeClick?: (event: MouseEvent) => boolean
 }
 
 // An invisible ground-plane covering the whole navigable area — the
@@ -23,9 +27,13 @@ interface DeepSpaceClickPlaneProps {
 // still reaches whatever the ray hits beneath it) — without the same
 // `.planet-marker`/`.ship-marker` guard, that would immediately undo the
 // marker's own onClick selection.
-export function DeepSpaceClickPlane({ onDeselect, onOrderTo, size = 100000 }: DeepSpaceClickPlaneProps) {
+export function DeepSpaceClickPlane({ onDeselect, onOrderTo, size = 100000, consumeClick }: DeepSpaceClickPlaneProps) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    // A drag (turning or panning the camera) that ends over empty space is not a
+    // click on it: only a still, single left click deselects.
+    if (e.delta > 3 || e.nativeEvent.button !== 0 || wasDrag(e.nativeEvent)) return
     if (e.nativeEvent.target instanceof Element && e.nativeEvent.target.closest('.planet-marker, .ship-marker')) return
+    if (consumeClick?.(e.nativeEvent)) return
     onDeselect()
     deselectShipsOnEmptyClick(e.nativeEvent)
   }

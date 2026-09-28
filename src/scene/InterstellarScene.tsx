@@ -1,3 +1,4 @@
+import { wasDrag } from './dragGuard'
 import { useStarbaseActivityKey } from '../hooks/useStarbaseActivity'
 import { SHIP_ICON_SIZE, ShipIcon, roleOfClass } from './ShipIcon'
 import { deselectShipsOnEmptyClick } from './deselect'
@@ -467,7 +468,7 @@ export function InterstellarScene() {
   // actually landed on a marker so its own onClick isn't immediately undone.
   const handleUnfocus = (event: MouseEvent) => {
     // A right-click on empty space is an order, not a deselect.
-    if (event.type === 'contextmenu') return
+    if (event.type === 'contextmenu' || wasDrag(event)) return
     if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
     deselectShipsOnEmptyClick(event)
     selectInView(null)
