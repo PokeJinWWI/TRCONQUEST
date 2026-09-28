@@ -577,6 +577,8 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
           <button
             type="button"
             className={`ground-unit-marker${selected ? ' selected' : ''}${hostile ? ' hostile' : ''}`}
+            // Shift+drag box selection picks the player's own units by this (components/BoxSelectLayer).
+            data-select-unit={player && ownerId === player ? unitId : undefined}
             style={{ borderColor: color, color }}
             title={`${ownerDisplay(ownerId).name} — ${UNIT_TYPES[type].name}`}
             // Select on press, not on click: a click needs the chip to still

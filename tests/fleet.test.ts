@@ -5,6 +5,8 @@
 //
 // Run:  npx tsx tests/fleet.test.ts
 
+import { viewShip } from '../src/scene/shipNav'
+import { useViewStore } from '../src/state/viewStore'
 import { SHIP_CLASSES } from '../src/data/shipData'
 import { pristineCombatState, useShipStore, type MoveOrder, type ShipInstance } from '../src/state/shipStore'
 import { usePlayerStore } from '../src/state/playerStore'
@@ -125,7 +127,9 @@ console.log('\n=== 4. Fleets keep their identity; merges are explicit ===')
   spawn('b', 'cruiser')
   const ships = () => useShipStore.getState().ships
   const fleetOf = (id: string) => ships().find((s) => s.id === id)!.fleetId
-  check('new ships at the same spot join one fleet', fleetOf('a') === fleetOf('b'))
+  check('new ships at the same spot do NOT join a fleet by themselves', fleetOf('a') !== fleetOf('b'))
+  useShipStore.getState().mergeFleets(fleetOf('a'), fleetOf('b'))
+  check('the player forms a fleet by merging', fleetOf('a') === fleetOf('b'))
 
   spawn('z', 'frigate', 'Venus')
   const venusFleet = fleetOf('z')
@@ -148,6 +152,48 @@ console.log('\n=== 4. Fleets keep their identity; merges are explicit ===')
   // either way it's this ship's alone.
   const commanded = (s: ShipInstance) => !!s.order || !!s.pendingMoveOrder
   check('...and moves on its own', commanded(ships().find((s) => s.id === 'b')!) && ships().filter((s) => s.id !== 'b').every((s) => !commanded(s)))
+}
+
+console.log('\n=== 4b. Civilian ships never join fleets; every ship starts alone ===')
+{
+  useShipStore.setState({ ships: [] })
+  const spawn = (id: string, classId: string, bodyName = 'Mars') => {
+    const { fleetId: _unused, ...rest } = makeShip(classId, id, bodyName)
+    void _unused
+    useShipStore.getState().spawnShip(rest)
+  }
+  spawn('w1', 'corvette')
+  spawn('w2', 'corvette')
+  spawn('sci', 'science-ship')
+  spawn('con', 'construction-ship')
+  spawn('car', 'cargo-ship')
+  spawn('tr', 'troop-transport')
+  const ships = () => useShipStore.getState().ships
+  const fleetOf = (id: string) => ships().find((s) => s.id === id)!.fleetId
+  check('six ships spawned together are six fleets', new Set(ships().map((s) => s.fleetId)).size === 6)
+  useShipStore.getState().mergeFleets(fleetOf('w1'), fleetOf('sci'))
+  check('a science ship cannot be merged into a war fleet', fleetOf('sci') !== fleetOf('w1'))
+  useShipStore.getState().mergeFleets(fleetOf('sci'), fleetOf('w1'))
+  check('...nor a war fleet into a science ship', fleetOf('w1') !== fleetOf('sci'))
+  useShipStore.getState().mergeFleets(fleetOf('con'), fleetOf('car'))
+  check('civilians do not group with each other either', fleetOf('con') !== fleetOf('car'))
+  useShipStore.getState().mergeFleets(fleetOf('w1'), fleetOf('w2'))
+  check('warships still merge', fleetOf('w1') === fleetOf('w2'))
+  useShipStore.getState().mergeFleets(fleetOf('w1'), fleetOf('tr'))
+  check('a troop transport may travel with the fleet', fleetOf('w1') === fleetOf('tr'))
+}
+
+console.log('\n=== 4c. Going to a ship from anywhere ===')
+{
+  const at = (location: ShipInstance['location']) => ({ order: null, location }) as Pick<ShipInstance, 'order' | 'location'>
+  const view = useViewStore.getState
+  useViewStore.setState({ level: 'interstellar', selectedStarId: 'sol' })
+  viewShip(at({ kind: 'orbiting', systemId: 'alpha-centauri', bodyName: 'Rigil Kentaurus', periodDays: 1, phaseDeg: 0, inclinationDeg: 0 }))
+  check('a ship in another system opens that system', view().level === 'system' && view().selectedStarId === 'alpha-centauri')
+  viewShip(at({ kind: 'orbiting', systemId: 'alpha-centauri', bodyName: 'Rigil Kentaurus', periodDays: 1, phaseDeg: 0, inclinationDeg: 0 }))
+  check('...and does not reopen a system already in view', view().level === 'system')
+  viewShip(at({ kind: 'interstellar-point', position: [1, 2, 3] }))
+  check('a ship in deep space opens the interstellar map', view().level === 'interstellar')
 }
 
 console.log('\n=== 5. Multi-selection ===')

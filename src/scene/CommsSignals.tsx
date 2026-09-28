@@ -6,7 +6,7 @@ import type { ShipInstance } from '../state/shipStore'
 import { pendingSignalsOf, signalProgress, type PendingSignal } from './commsSignal'
 import { useShipStore } from '../state/shipStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { playerVisualShipRenderPosition } from './commsVisual'
+import { playerShipRenderPosition } from './commsVisual'
 
 // A signal on its way to a ship is drawn as a small pulsing dot travelling from
 // the capital toward it — see commsSignal.ts for what counts as one.
@@ -28,7 +28,7 @@ function SignalDot({ signal, resolveOrigin, resolveShipPosition }: { signal: Pen
     }
     if (wrapRef.current) wrapRef.current.style.display = ''
     origin.copy(from)
-    const to = resolveShipPosition ? resolveShipPosition(ship, simDays) : playerVisualShipRenderPosition(ship, simDays).position
+    const to = resolveShipPosition ? resolveShipPosition(ship, simDays) : playerShipRenderPosition(ship, simDays).position
     if (!to) {
       if (wrapRef.current) wrapRef.current.style.display = 'none'
       return

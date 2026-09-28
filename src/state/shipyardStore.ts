@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { resolveShipClass } from './shipClassResolver'
 import { useResourceStore } from './resourceStore'
+import { useTechStore } from './techStore'
+import { findTech } from '../data/techData'
 import { MAX_QUEUED_BUILDS, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
 import { missingResources, spendCost, refundCost } from '../scene/shipyardLogic'
 
@@ -59,6 +61,9 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
   queueBuild: (countryId, classId, simDays) => {
     const shipClass = resolveShipClass(classId)
     if (!shipClass) return { ok: false, reason: 'Unknown ship class.' }
+    if (shipClass.requiresTech && !useTechStore.getState().stateFor(countryId).researched.has(shipClass.requiresTech)) {
+      return { ok: false, reason: `Needs ${findTech(shipClass.requiresTech)?.name ?? shipClass.requiresTech} researched.` }
+    }
     if (get().ordersFor(countryId).length >= MAX_QUEUED_BUILDS) return { ok: false, reason: 'The build queue is full.' }
 
     const cost = shipBuildCost(shipClass)

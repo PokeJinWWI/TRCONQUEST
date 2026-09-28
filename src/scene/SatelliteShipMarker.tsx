@@ -58,7 +58,8 @@ export function SatelliteShipMarker({
   const fleets = useFleetStore((s) => s.fleets)
   const lead = ships[0]
   const selected = useShipStore((st) => ships.some((s) => st.selectedShipIds.includes(s.id)))
-  const color = RELATION_COLORS[useRelationTo(lead.ownerId)]
+  const relation = useRelationTo(lead.ownerId)
+  const color = RELATION_COLORS[relation]
   const multi = ships.length > 1
   const fleetName = multi ? fleets.find((f) => f.id === lead.fleetId)?.name : undefined
 
@@ -74,6 +75,8 @@ export function SatelliteShipMarker({
       <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
         <div
           className={`ship-marker${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
+          // Shift+drag box selection picks the player's own markers by this (components/BoxSelectLayer).
+          data-select-ship={relation === 'own' ? lead.id : undefined}
           style={
             stackIndex > 0
               ? { transform: `translate(${BASE_OFFSET_PX.x}px, ${BASE_OFFSET_PX.y - stackIndex * STACK_STEP_PX}px)` }

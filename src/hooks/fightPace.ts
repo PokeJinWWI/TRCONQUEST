@@ -11,6 +11,9 @@ import type { TimeMode } from '../state/gameTimeStore'
 // whichever pace it was on (however it got there).
 export const fightPace = {
   spaceLive: false,
+  // True while the player knows of a space fight (see commsVisual.
+  // engagementKnownToPlayer): the clock only follows a fight it has heard of.
+  spaceAware: false,
   // True from a ground fight starting until a couple of days after its last
   // shot (see GROUND_FIGHT_COOLDOWN_DAYS), so a moment's lull isn't an end.
   groundLive: false,
@@ -21,6 +24,7 @@ export const fightPace = {
 // Back to "no fights" — a fresh game (see scene/gameReset.ts).
 export function resetFightPace(): void {
   fightPace.spaceLive = false
+  fightPace.spaceAware = false
   fightPace.groundLive = false
   fightPace.lastGroundFightSimDays = -Infinity
 }

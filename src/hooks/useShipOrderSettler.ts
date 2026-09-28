@@ -3,6 +3,8 @@ import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore } from '../state/shipStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { dispatchQueuedLegs } from '../scene/orderQueue'
+import { applyShipCommand } from '../scene/shipCommands'
+import { restingStarId } from '../scene/surveyLogic'
 import { planMoveUnchecked, resolveArrivalLocation, restingDestinationOf, destinationsEqual, warpCooldownAfterArrival } from '../scene/shipPhysics'
 
 // Settles any ship whose order has completed (simDays past arrivalSimDays)
@@ -27,104 +29,114 @@ import { planMoveUnchecked, resolveArrivalLocation, restingDestinationOf, destin
 // firing, a follow directive re-targeting) is a *manual* player override,
 // so none of it should cancel a standing follow directive the way an actual
 // right-click order does.
-export function useShipOrderSettler() {
-  useEffect(() => {
-    const settle = (simDays: number) => {
-      const { ships, setShipOrder, setShipLocation, setPendingHyperdriveJump, setFollowing, removeShip } =
-        useShipStore.getState()
-      const { addHyperlane } = useHyperlaneStore.getState()
-      // A queued jump can only actually fire once the drive's cooldown has
-      // cleared *and* time isn't paused (see planMove's 'paused' result) —
-      // this can't happen from a real simDays tick (ticking itself requires
-      // !paused), but this hook's own mount-time settle() call below runs
-      // regardless of pause state, so it's checked explicitly rather than
-      // assumed.
-      const paused = useGameTimeStore.getState().paused
+// One settling pass at `simDays` (exported so tests can run it headless).
+export function settleShips(simDays: number): void {
+  const { ships, setShipOrder, setShipLocation, setPendingHyperdriveJump, setFollowing, removeShip } =
+    useShipStore.getState()
+  const { addHyperlane } = useHyperlaneStore.getState()
+  // A queued jump can only actually fire once the drive's cooldown has
+  // cleared *and* time isn't paused (see planMove's 'paused' result) —
+  // this can't happen from a real simDays tick (ticking itself requires
+  // !paused), but this hook's own mount-time settle() call below runs
+  // regardless of pause state, so it's checked explicitly rather than
+  // assumed.
+  const paused = useGameTimeStore.getState().paused
 
-      for (const ship of ships) {
-        if (ship.order && simDays >= ship.order.arrivalSimDays) {
-          const warpReadySimDays = warpCooldownAfterArrival(ship)
-          setShipLocation(
-            ship.id,
-            resolveArrivalLocation(ship.order.destination, ship.id),
-            warpReadySimDays !== undefined ? { warpReadySimDays } : undefined,
-            true,
-          )
-        }
-
-        // "Jump when ready" — a hyperdrive jump ordered while still on
-        // cooldown, or while paused, queues here (see InterstellarScene's
-        // handleOrderToStar) instead of being refused outright; fire it the
-        // instant both conditions clear, regardless of which view is
-        // mounted. The optional third condition is FTL comms delay (see
-        // ShipInstance.pendingHyperdriveJumpArrivesSimDays and
-        // commsVisual.ts's queueMoveOrder) — absent for a plain
-        // cooldown-only queue, in which case `?? 0` makes it a no-op check,
-        // exactly as if this clause weren't here at all.
-        if (
-          ship.pendingHyperdriveJump &&
-          simDays >= ship.hyperdriveReadySimDays &&
-          simDays >= (ship.pendingHyperdriveJumpArrivesSimDays ?? 0) &&
-          !paused
-        ) {
-          // The ship's own queued jump firing — acting for its owner nation, not
-          // a fresh player click, so the ownership gate doesn't apply.
-          const result = planMoveUnchecked(ship, { kind: 'star', starId: ship.pendingHyperdriveJump }, simDays)
-          if (result.kind === 'instant') {
-            setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
-            if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
-          } else if (result.kind === 'lost-in-hyperspace') {
-            removeShip(ship.id)
-          } else {
-            // Something changed between queuing and firing (ownership,
-            // class) that makes the jump no longer plannable — drop the
-            // queue rather than retry every tick forever.
-            setPendingHyperdriveJump(ship.id, null)
-          }
-        }
-
-        // "Follow" — re-target this ship at whatever its leader is currently
-        // ordered to (or, if the leader itself is at rest, wherever it's
-        // currently resting), whenever that destination changes. Not a
-        // continuous position-chase (see ShipInstance.followingShipId's own
-        // comment for why) — just re-issuing a fresh order when the
-        // *intended* destination actually changes, so a leader sitting
-        // still doesn't cause a follower to endlessly re-order itself to
-        // the same spot every tick.
-        if (ship.followingShipId) {
-          const leader = ships.find((s) => s.id === ship.followingShipId)
-          if (!leader) {
-            setFollowing(ship.id, null)
-          } else {
-            const targetDestination = leader.order ? leader.order.destination : restingDestinationOf(leader.location)
-            const alreadyChasing = ship.order && destinationsEqual(ship.order.destination, targetDestination)
-            const alreadyThere = !ship.order && destinationsEqual(restingDestinationOf(ship.location), targetDestination)
-            if (!alreadyChasing && !alreadyThere) {
-              const result = planMoveUnchecked(ship, targetDestination, simDays)
-              if (result.kind === 'order') {
-                setShipOrder(ship.id, result.order, result.warpReadyOverride, true)
-              } else if (result.kind === 'instant') {
-                setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
-                if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
-              } else if ((result.kind === 'on-cooldown' || result.kind === 'paused') && targetDestination.kind === 'star') {
-                setPendingHyperdriveJump(ship.id, targetDestination.starId)
-              } else if (result.kind === 'lost-in-hyperspace') {
-                removeShip(ship.id)
-              }
-              // 'not-owned'/'unknown-class': shouldn't realistically happen
-              // for a player-owned follower — silently ignored, same as
-              // every other caller of planMove already does.
-            }
-          }
-        }
+  for (const ship of ships) {
+    if (ship.order && simDays >= ship.order.arrivalSimDays) {
+      const warpReadySimDays = warpCooldownAfterArrival(ship)
+      setShipLocation(
+        ship.id,
+        resolveArrivalLocation(ship.order.destination, ship.id),
+        warpReadySimDays !== undefined ? { warpReadySimDays } : undefined,
+        true,
+      )
+      // A right-click "go and do this" fires now that the ship is there.
+      const arrival = ship.arrivalCommand
+      if (arrival) {
+        useShipStore.getState().setArrivalCommand(ship.id, null)
+        const landed = useShipStore.getState().ships.find((s) => s.id === ship.id)
+        const there = arrival.bodyName ? landed?.location.kind === 'orbiting' && landed.location.bodyName === arrival.bodyName : !!landed && restingStarId(landed) === arrival.starId
+        if (landed && there) applyShipCommand(ship.id, arrival.command, simDays)
       }
-
-      // Fleets that have arrived (or are idle) and have a queued order move on
-      // to the next one — see scene/orderQueue.ts.
-      dispatchQueuedLegs(simDays)
     }
 
-    settle(useGameTimeStore.getState().simDays)
-    return useGameTimeStore.subscribe((state) => settle(state.simDays))
+    // "Jump when ready" — a hyperdrive jump ordered while still on
+    // cooldown, or while paused, queues here (see InterstellarScene's
+    // handleOrderToStar) instead of being refused outright; fire it the
+    // instant both conditions clear, regardless of which view is
+    // mounted. The optional third condition is FTL comms delay (see
+    // ShipInstance.pendingHyperdriveJumpArrivesSimDays and
+    // commsVisual.ts's queueMoveOrder) — absent for a plain
+    // cooldown-only queue, in which case `?? 0` makes it a no-op check,
+    // exactly as if this clause weren't here at all.
+    if (
+      ship.pendingHyperdriveJump &&
+      simDays >= ship.hyperdriveReadySimDays &&
+      simDays >= (ship.pendingHyperdriveJumpArrivesSimDays ?? 0) &&
+      !paused
+    ) {
+      // The ship's own queued jump firing — acting for its owner nation, not
+      // a fresh player click, so the ownership gate doesn't apply.
+      const result = planMoveUnchecked(ship, { kind: 'star', starId: ship.pendingHyperdriveJump }, simDays)
+      if (result.kind === 'instant') {
+        setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
+        if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
+      } else if (result.kind === 'lost-in-hyperspace') {
+        removeShip(ship.id)
+      } else {
+        // Something changed between queuing and firing (ownership,
+        // class) that makes the jump no longer plannable — drop the
+        // queue rather than retry every tick forever.
+        setPendingHyperdriveJump(ship.id, null)
+      }
+    }
+
+    // "Follow" — re-target this ship at whatever its leader is currently
+    // ordered to (or, if the leader itself is at rest, wherever it's
+    // currently resting), whenever that destination changes. Not a
+    // continuous position-chase (see ShipInstance.followingShipId's own
+    // comment for why) — just re-issuing a fresh order when the
+    // *intended* destination actually changes, so a leader sitting
+    // still doesn't cause a follower to endlessly re-order itself to
+    // the same spot every tick.
+    if (ship.followingShipId) {
+      const leader = ships.find((s) => s.id === ship.followingShipId)
+      if (!leader) {
+        setFollowing(ship.id, null)
+      } else {
+        const targetDestination = leader.order ? leader.order.destination : restingDestinationOf(leader.location)
+        const alreadyChasing = ship.order && destinationsEqual(ship.order.destination, targetDestination)
+        const alreadyThere = !ship.order && destinationsEqual(restingDestinationOf(ship.location), targetDestination)
+        if (!alreadyChasing && !alreadyThere) {
+          const result = planMoveUnchecked(ship, targetDestination, simDays)
+          if (result.kind === 'order') {
+            setShipOrder(ship.id, result.order, result.warpReadyOverride, true)
+          } else if (result.kind === 'instant') {
+            setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
+            if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
+          } else if ((result.kind === 'on-cooldown' || result.kind === 'paused') && targetDestination.kind === 'star') {
+            setPendingHyperdriveJump(ship.id, targetDestination.starId)
+          } else if (result.kind === 'lost-in-hyperspace') {
+            removeShip(ship.id)
+          }
+          // 'not-owned'/'unknown-class': shouldn't realistically happen
+          // for a player-owned follower — silently ignored, same as
+          // every other caller of planMove already does.
+        }
+      }
+    }
+  }
+
+  // Fleets that have arrived (or are idle) and have a queued order move on
+  // to the next one — see scene/orderQueue.ts.
+  dispatchQueuedLegs(simDays)
+
+}
+
+export function useShipOrderSettler() {
+  useEffect(() => {
+    settleShips(useGameTimeStore.getState().simDays)
+    return useGameTimeStore.subscribe((state) => settleShips(state.simDays))
   }, [])
 }

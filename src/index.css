@@ -2,6 +2,29 @@
   box-sizing: border-box;
 }
 
+/* The cursors: a command-deck pointer everywhere, a targeting reticle over
+   anything you can act on, and a slashed reticle where you can't. `cursor` is
+   inherited, so setting the default on the root covers every element that
+   doesn't ask for something else; controls ask through these variables (never
+   the bare `pointer` / `not-allowed` keywords, which would bring the system
+   arrow's cousins back). Resize/grab/help keep the system ones — they say
+   something a reticle wouldn't. */
+:root {
+  --cursor-default: url('./assets/cursors/pointer.svg') 2 2, default;
+  --cursor-pointer: url('./assets/cursors/target.svg') 11 11, pointer;
+  --cursor-blocked: url('./assets/cursors/blocked.svg') 11 11, not-allowed;
+}
+
+html {
+  cursor: var(--cursor-default);
+}
+
+a[href],
+summary,
+select {
+  cursor: var(--cursor-pointer);
+}
+
 html,
 body,
 #root {
@@ -25,4 +48,15 @@ body,
 body {
   font: 16px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
+  /* A game, not a document: dragging over the UI never highlights text. Only
+     things you actually type into are selectable. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
 }

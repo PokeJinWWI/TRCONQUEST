@@ -31,7 +31,7 @@ interface PlayerState {
 export const usePlayerStore = create<PlayerState>((set) => ({
   selectedCountryId: null,
   sandbox: false,
-  economyModel: 'complex',
+  economyModel: 'abstract',
   setEconomyModel: (m) => set({ economyModel: m }),
   selectCountry: (id) => set({ selectedCountryId: id, sandbox: false }),
   startSandbox: () => set({ selectedCountryId: SANDBOX_PLAYER_ID, sandbox: true }),

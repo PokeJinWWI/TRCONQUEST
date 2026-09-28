@@ -1,9 +1,7 @@
 // The Diplomat: how this empire feels about its neighbours, and when to seek
-// peace. Friction with nations sharing its systems builds hostility over time
-// (that's what eventually gives the Strategist a reason for war); in a war it
-// takes what its war score can buy, or cuts its losses.
+// peace. Opinion mellows back toward neutral over time from a real grievance;
+// in a war it takes what its war score can buy, or cuts its losses.
 import {
-  AI_NEIGHBOUR_FRICTION,
   AI_OPINION_RECOVERY,
   AI_PEACE_OFFER_COOLDOWN_DAYS,
   AI_PRESS_ON_DAYS,
@@ -22,14 +20,19 @@ import type { AgentOutput, AiMemory, Intent } from './types'
 export function diplomat(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): AgentOutput {
   const intents: Intent[] = []
 
-  // Opinion drift. Only this empire's half of the friction — the neighbour's
-  // own Diplomat (or nobody, for the player) supplies the other half.
-  const neighbours = new Set(bb.neighbours)
+  // Opinion drift: a nation with a grudge (opinion already negative, from a
+  // past war or other real event) mellows back toward neutral over time.
+  // Neighbours used to also grind each other's opinion down every cycle just
+  // for sharing a border, with nothing pulling it back the other way — that
+  // made war with any neighbour a inevitability on a long enough clock,
+  // unprovoked, which read as the AI turning hostile out of nowhere. Removed;
+  // an empire's Strategist still goes to war for a real reason (an opinion
+  // already driven down by an actual grievance, or its own opportunism), it
+  // just doesn't happen on proximity alone anymore.
   for (const other of snap.countries) {
     if (other.id === bb.countryId || bb.enemies.includes(other.id)) continue
     const opinion = bb.opinionOf(other.id)
-    if (neighbours.has(other.id)) intents.push({ kind: 'adjust-opinion', otherId: other.id, delta: AI_NEIGHBOUR_FRICTION })
-    else if (opinion < 0) intents.push({ kind: 'adjust-opinion', otherId: other.id, delta: Math.min(AI_OPINION_RECOVERY, -opinion) })
+    if (opinion < 0) intents.push({ kind: 'adjust-opinion', otherId: other.id, delta: Math.min(AI_OPINION_RECOVERY, -opinion) })
   }
 
   const lastOffers = { ...memory.lastPeaceOfferSimDays }

@@ -1,8 +1,11 @@
 import { create } from 'zustand'
+import type { ResourceId } from '../data/resourceData'
+import type { SurveyJob } from '../scene/surveyLogic'
+import type { ResourceCost } from '../data/shipyardData'
 import type { BombardStance } from '../data/defenseData'
 import { CHAFF_CHARGES, type CombatProfile, type CombatStance, type ComponentKind, type FleetStrategy } from '../data/combatData'
 import { deployChaff as deployChaffState } from '../scene/combatResolution'
-import { combatLocationKey } from './combatStore'
+import { anyCivilian } from '../scene/fleetRules'
 import { useFleetStore, nextFleetName } from './fleetStore'
 import { useGameTimeStore } from './gameTimeStore'
 
@@ -48,6 +51,29 @@ export type MoveDestination =
   | { kind: 'point'; systemId: string; position: [number, number, number] }
   | { kind: 'star'; starId: string }
   | { kind: 'interstellar-point'; position: [number, number, number] }
+
+// A non-move command to a ship (survey, load, transfer, build…) — issued by
+// the player from ShipPanel, and carried out by scene/shipCommands.ts either
+// at once or, out of comms contact, when its signal arrives (see
+// ShipInstance.pendingCommands).
+export type ShipCommand =
+  // Reveal the star this ship rests at (its owner, bodies, borders).
+  | { kind: 'explore' }
+  // Survey every body at the star this ship rests at. Needs no exploring first.
+  | { kind: 'survey' }
+  // Take goods from the nation's stockpile aboard (at an owned world).
+  | { kind: 'load'; want: ResourceCost }
+  // Hand goods to another of the nation's ships in the same place.
+  | { kind: 'transfer'; toShipId: string; want: ResourceCost }
+  // A Construction Ship builds a Starbase at the star it rests at, paid from
+  // its hold.
+  | { kind: 'build-starbase' }
+
+export interface PendingShipCommand {
+  command: ShipCommand
+  arrivesSimDays: number
+  sentSimDays: number
+}
 
 export interface MoveOrder {
   destination: MoveDestination
@@ -241,6 +267,10 @@ export interface ShipInstance {
   // actually arrives and planMove sees the ship's true state then, not
   // whatever was true back when the player clicked. Cleared (set to null)
   // once applied, or superseded by a fresh manual order.
+  // Non-move commands still travelling behind FTL comms delay (see
+  // scene/shipCommands.queueShipCommand and useCommsResolver). Each is its own
+  // signal.
+  pendingCommands?: PendingShipCommand[]
   pendingMoveOrder?: { destination: MoveDestination; arrivesSimDays: number; sentSimDays?: number } | null
   // Destinations to fly to, in order, after the current order finishes — what
   // Shift + right-click adds (see commsVisual.orderSelectedFleets and
@@ -283,6 +313,19 @@ export interface ShipInstance {
   // itself since there's no fixed arrival time to compute up front — the
   // target can keep moving.
   followingShipId: string | null
+  // Goods carried in this hull's hold (see ShipClass.cargoCapacity and
+  // scene/cargoLogic.ts). Optional: absent = empty, so no existing ShipInstance
+  // literal needs updating.
+  cargo?: Partial<Record<ResourceId, number>>
+  // A science ship's standing survey job (scene/surveyLogic.ts): while set and
+  // the ship stays at that star, it works through the system's bodies. Cleared
+  // when the ship leaves or the system is fully surveyed.
+  surveyJob?: SurveyJob | null
+  // "Go there and do this": set by a star's right-click menu (explore, survey,
+  // build a Starbase). Fires once when the ship arrives at that star
+  // (useShipOrderSettler); cleared by any order to somewhere else.
+  // `bodyName` set: it fires at that world instead (a refill at a station).
+  arrivalCommand?: { starId: string; bodyName?: string; command: ShipCommand } | null
   // Persistent battle damage + any in-progress FTL escape charge. Always
   // present (see pristineCombatState) — a ship that has never fought simply
   // has one at full health.
@@ -359,6 +402,11 @@ interface ShipState {
   // useShipOrderSettler's own follow-recompute calls pass true, since that's
   // the mechanism keeping the directive alive, not overriding it.
   setShipOrder: (id: string, order: MoveOrder, warpReadySimDays?: number, keepFollowing?: boolean) => void
+  // Replaces a ship's whole hold (scene/cargoLogic computes the new contents).
+  setPendingCommands: (id: string, commands: PendingShipCommand[]) => void
+  setSurveyJob: (id: string, job: SurveyJob | null) => void
+  setArrivalCommand: (id: string, arrival: { starId: string; bodyName?: string; command: ShipCommand } | null) => void
+  setShipCargo: (id: string, cargo: Partial<Record<ResourceId, number>>) => void
   setWarpEnabled: (id: string, enabled: boolean) => void
   setWarpWhenReady: (id: string, whenReady: boolean) => void
   setChaffAutoDeploy: (id: string, auto: boolean) => void
@@ -454,26 +502,10 @@ function appendHistory(ship: ShipInstance, simDays: number): ShipInstance {
   }
 }
 
-// Picks the fleet a ship now resting at `location` should belong to: an
-// existing same-nation fleet already resting at that exact spot (see
-// combatLocationKey — a ship still traveling, or resting at a bare point in
-// space rather than a named anchor, never matches), or a freshly created
-// solo fleet otherwise. `excludeShipId` keeps a ship already in `ships` from
-// matching itself (setShipLocation's case); spawnShip has no such ship yet
-// to exclude.
-function resolveFleetId(
-  ships: ShipInstance[],
-  ownerId: string,
-  location: ShipLocation,
-  excludeShipId?: string,
-): string {
-  const locKey = combatLocationKey(location)
-  if (locKey) {
-    const mate = ships.find(
-      (s) => s.id !== excludeShipId && s.ownerId === ownerId && !s.order && combatLocationKey(s.location) === locKey,
-    )
-    if (mate) return mate.fleetId
-  }
+// A brand-new one-ship fleet. Fleets are defined by the player (mergeFleets /
+// splitFleet), never formed automatically — a ship spawned or built beside
+// another of the same nation is still its own fleet.
+function createSoloFleet(ownerId: string): string {
   const fleetState = useFleetStore.getState()
   const id = `fleet-${Date.now()}-${Math.round(Math.random() * 1e6)}`
   fleetState.createFleet({ id, name: nextFleetName(fleetState.fleets, ownerId), ownerId, strategy: null })
@@ -507,7 +539,7 @@ export const useShipStore = create<ShipState>((set) => ({
   selectedShipIds: [],
   spawnShip: (ship) =>
     set((s) => ({
-      ships: [...s.ships, { ...ship, fleetId: resolveFleetId(s.ships, ship.ownerId, ship.location) }],
+      ships: [...s.ships, { ...ship, fleetId: createSoloFleet(ship.ownerId) }],
     })),
   removeShip: (id) =>
     set((s) => {
@@ -542,6 +574,15 @@ export const useShipStore = create<ShipState>((set) => ({
                 {
                   ...ship,
                   order,
+                  // An order to somewhere else cancels a "go and do this"; the
+                  // order that carries it (same star) leaves it be.
+                  arrivalCommand:
+                    ship.arrivalCommand &&
+                    (ship.arrivalCommand.bodyName
+                      ? order.destination.kind === 'body' && order.destination.bodyName === ship.arrivalCommand.bodyName
+                      : order.destination.kind === 'star' && order.destination.starId === ship.arrivalCommand.starId)
+                      ? ship.arrivalCommand
+                      : null,
                   pendingHyperdriveJump: null,
                   // A real order actually taking effect supersedes any
                   // still-queued comms-delayed command — same "the newest
@@ -565,6 +606,22 @@ export const useShipStore = create<ShipState>((set) => ({
         ),
       }
     }),
+  setPendingCommands: (id, commands) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingCommands: commands } : ship)),
+    })),
+  setArrivalCommand: (id, arrival) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, arrivalCommand: arrival } : ship)),
+    })),
+  setSurveyJob: (id, job) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, surveyJob: job } : ship)),
+    })),
+  setShipCargo: (id, cargo) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, cargo } : ship)),
+    })),
   setWarpEnabled: (id, enabled) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, warpEnabled: enabled } : ship)),
@@ -714,6 +771,8 @@ export const useShipStore = create<ShipState>((set) => ({
   mergeFleets: (intoFleetId, fromFleetId) =>
     set((s) => {
       if (intoFleetId === fromFleetId) return s
+      // Civilian hulls (science, construction, cargo…) never join a fleet.
+      if (anyCivilian(s.ships.filter((sh) => sh.fleetId === intoFleetId || sh.fleetId === fromFleetId))) return s
       const ships = s.ships.map((sh) => (sh.fleetId === fromFleetId ? { ...sh, fleetId: intoFleetId } : sh))
       useFleetStore.getState().removeFleet(fromFleetId)
       return { ships }

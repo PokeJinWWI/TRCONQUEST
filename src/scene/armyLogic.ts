@@ -96,7 +96,7 @@ export function makeUnits(kind: ArmyKind, strengthFraction = 1): GroundUnit[] {
   })
 }
 
-type ShipLike = Pick<ShipInstance, 'id' | 'ownerId' | 'classId' | 'location'>
+export type ShipLike = Pick<ShipInstance, 'id' | 'ownerId' | 'classId' | 'location'>
 
 export function armyCapacityOf(ship: Pick<ShipInstance, 'classId'>): number {
   return resolveShipClass(ship.classId)?.armyCapacity ?? 0

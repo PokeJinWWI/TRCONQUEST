@@ -416,6 +416,8 @@ function UnitMarker({ battleId, unitId, ownerId, type }: { battleId: string; uni
           <button
             type="button"
             className={`ground-unit-marker${selected ? ' selected' : ''}${hostile ? ' hostile' : ''}`}
+            // Shift+drag box selection picks the player's own units by this (components/BoxSelectLayer).
+            data-select-unit={player && ownerId === player ? unitId : undefined}
             style={{ borderColor: color, color }}
             title={`${ownerDisplay(ownerId).name} — ${UNIT_TYPES[type].name}`}
             onPointerDown={(e) => {

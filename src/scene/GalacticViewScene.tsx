@@ -1,3 +1,4 @@
+import { usePlayerIntel } from './intel'
 import { BattleBadge } from '../components/BattleBadge'
 import { KeyboardPan } from './KeyboardPan'
 import { useMemo, useRef, useState } from 'react'
@@ -7,6 +8,7 @@ import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { NeighborhoodData } from '../data/neighborhoodData'
 import { NEIGHBORHOODS, neighborhoodScenePosition } from '../data/neighborhoodData'
+import { getStarsForNeighborhood } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
@@ -14,6 +16,13 @@ import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 import { DraggableWindow } from '../components/DraggableWindow'
+import { useTerritoryStore } from '../state/territoryStore'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { systemClaim, type SystemClaim } from './territory'
+import { starbaseOwnersOf, type Starbase } from './starbaseLogic'
+import { claimRingStyle } from './InterstellarScene'
+import type { OwnerMap } from './territory'
 
 const MAX_DISTANCE = 6000
 const FOCUS_ARRIVE_DISTANCE = 5
@@ -35,12 +44,34 @@ interface NeighborhoodNodeProps {
   neighborhood: NeighborhoodData
   selected: boolean
   onSelect: (neighborhood: NeighborhoodData) => void
+  claim: SystemClaim
+}
+
+// Whoever holds ground in this neighbourhood's charted systems — the union
+// of every one of its stars' own systemClaim (bodies plus Starbases, see
+// scene/territory.systemClaim), folded up one level the same way a star's
+// own claim folds up from its bodies. Only the Solar Neighbourhood has
+// charted stars today (see data/starData.getStarsForNeighborhood); every
+// other neighbourhood always reads unclaimed, which is honest — there's
+// nothing there yet to claim.
+function neighborhoodClaim(neighborhood: NeighborhoodData, bodyOwner: OwnerMap, starbases: Starbase[], simDays: number, knownStar: (starId: string) => boolean): SystemClaim {
+  const present = new Set<string>()
+  for (const star of getStarsForNeighborhood(neighborhood.id)) {
+    // Only systems the player has explored contribute (scene/intel.ts).
+    if (!knownStar(star.id)) continue
+    const claim = systemClaim(star.id, bodyOwner, starbaseOwnersOf(star.id, starbases, simDays))
+    if (claim.kind === 'owned') present.add(claim.countryId)
+    else if (claim.kind === 'contested') for (const id of claim.countryIds) present.add(id)
+  }
+  if (present.size === 0) return { kind: 'unclaimed' }
+  if (present.size === 1) return { kind: 'owned', countryId: [...present][0] }
+  return { kind: 'contested', countryIds: [...present].sort() }
 }
 
 // A neighborhood is just a point here, exactly the way a star is just a
 // point in interstellar view — no attempt to render the systems inside it at
 // this scale.
-function NeighborhoodNode({ neighborhood, selected, onSelect }: NeighborhoodNodeProps) {
+function NeighborhoodNode({ neighborhood, selected, onSelect, claim }: NeighborhoodNodeProps) {
   const [hovered, setHovered] = useState(false)
   const pos = neighborhoodScenePosition(neighborhood)
 
@@ -54,6 +85,7 @@ function NeighborhoodNode({ neighborhood, selected, onSelect }: NeighborhoodNode
           onClick={() => onSelect(neighborhood)}
           onWheel={forwardWheelToCanvas}
         >
+          {claimRingStyle(claim) && <span className={`owner-ring${claim.kind === 'contested' ? ' contested' : ''}`} style={claimRingStyle(claim)!} />}
           <span className="marker-dot" style={{ borderColor: neighborhood.color }} />
           {(hovered || selected) && <span className="marker-label">{neighborhood.name}</span>}
           <BattleBadge scope={{ neighborhood: neighborhood.id }} />
@@ -73,6 +105,15 @@ export function GalacticViewScene() {
 
   const selected = useMemo(() => NEIGHBORHOODS.find((n) => n.id === selectedId) ?? null, [selectedId])
   const focused = useMemo(() => NEIGHBORHOODS.find((n) => n.id === focusedId) ?? null, [focusedId])
+
+  const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
+  const starbases = useStarbaseStore((s) => s.starbases)
+  const simDays = useGameTimeStore((s) => s.simDays)
+  const intel = usePlayerIntel()
+  const claimsByNeighborhood = useMemo(
+    () => new Map(NEIGHBORHOODS.map((n) => [n.id, neighborhoodClaim(n, bodyOwner, starbases, simDays, intel.known)])),
+    [bodyOwner, starbases, simDays, intel.known],
+  )
 
   // If we're arriving here because the player zoomed out of a neighborhood's
   // interstellar view, inViewSelection is already seeded to that
@@ -136,6 +177,7 @@ export function GalacticViewScene() {
             neighborhood={neighborhood}
             selected={neighborhood.id === selectedId}
             onSelect={handleSelect}
+            claim={claimsByNeighborhood.get(neighborhood.id) ?? { kind: 'unclaimed' }}
           />
         ))}
 

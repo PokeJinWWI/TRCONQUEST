@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { isCivilianClass } from '../scene/fleetRules'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
@@ -22,11 +23,14 @@ import { useTerrainStore } from '../state/terrainStore'
 import { openBattle } from '../scene/battleNav'
 import { playerArmyGroups, type ArmyGroup } from '../scene/armyOutliner'
 import { useBattleStore } from '../state/battleStore'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { engagementIntel, unknownShipsMessage } from '../scene/commsVisual'
 
-type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship' | 'treaty'
+type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship' | 'treaty' | 'starbase'
 // The filter offers a "black holes" toggle even though nothing in the game
 // can be that kind yet — reserving the spot the same way the empty
-// Colonies/Starbases sections do.
+// Colonies section did before it had real data.
 type FilterKind = EntryKind | 'blackhole'
 
 interface OutlinerEntry {
@@ -44,7 +48,12 @@ interface OutlinerEntry {
   starId?: string
   /** A dim second label (a colony's system, when the list spans several). */
   detail?: string
+  /** Fleet entries only — a civilian hull (science, construction, cargo…),
+   * listed under the Fleets section's Civilian tab. */
+  civilian?: boolean
 }
+
+type FleetTab = 'military' | 'civilian'
 
 const FILTERS: { kind: FilterKind; label: string }[] = [
   { kind: 'neighborhood', label: 'Neighborhoods' },
@@ -120,7 +129,9 @@ function useFleetEntries(): OutlinerEntry[] {
     return Array.from(byFleet.entries()).map(([fleetId, members]) => {
       const fleet = fleets.find((f) => f.id === fleetId)
       const name = members.length > 1 ? `${fleet?.name ?? 'Fleet'} (${members.length})` : members[0].name
-      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id }
+      // Civilians never share a fleet with warships (fleetRules), so the lead
+      // ship says which tab the whole row belongs on.
+      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id, civilian: isCivilianClass(members[0].classId) }
     })
   }, [ships, fleets, playerCountryId])
 }
@@ -168,6 +179,22 @@ function useTreatyEntries(): OutlinerEntry[] {
       }))
     })
   }, [playerId, treaties])
+}
+
+// The player's own Starbases, wherever they are — the same "list them all,
+// name their system, click to go there" shape useColonyEntries already uses.
+function useStarbaseEntries(): OutlinerEntry[] {
+  const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
+  const starbases = useStarbaseStore((s) => s.starbases)
+  return useMemo(() => {
+    if (!selectedCountryId) return []
+    return starbases
+      .filter((sb) => sb.ownerId === selectedCountryId)
+      .map((sb) => {
+        const star = STARS.find((s) => s.id === sb.starId)
+        return { key: sb.id, name: star?.name ?? sb.starId, color: star?.color ?? '#ffffff', kind: 'starbase' as const, starId: sb.starId }
+      })
+  }, [selectedCountryId, starbases])
 }
 
 // The player's armies, grouped by world / transport — right below Fleets.
@@ -249,6 +276,15 @@ function BattleRow({ battle }: { battle: PlayerBattle }) {
   const terrainDetail = useTerrainStore((s) =>
     battle.kind === 'terrain' && playerId ? terrainBattleDetail(s.battles.find((b) => b.id === battle.terrainBattleId), playerId, atWar) : '',
   )
+  // A space battle is entered only when every ship in it is known to the player
+  // (commsVisual.shipsIntel); until then the row says what is missing.
+  const unknownMsg = useCombatStore((s) => {
+    if (battle.kind !== 'space') return ''
+    const e = s.engagements.find((x) => x.id === battle.engagementId)
+    if (!e) return ''
+    const intel = engagementIntel(e, useShipStore.getState().ships, useGameTimeStore.getState().simDays)
+    return intel.allKnown ? '' : unknownShipsMessage(intel)
+  })
   const level = useViewStore((s) => s.level)
   const terrainBattleId = useViewStore((s) => s.terrainBattleId)
   const engagementId = useViewStore((s) => s.combatEngagementId)
@@ -261,10 +297,12 @@ function BattleRow({ battle }: { battle: PlayerBattle }) {
         : level === 'ground' && selectedBody === battle.bodyName
   return (
     <li
-      className={`outliner-entry clickable outliner-battle${here ? ' selected' : ''}`}
-      onClick={() => openBattle(battle)}
+      className={`outliner-entry clickable outliner-battle${here ? ' selected' : ''}${unknownMsg ? ' disabled' : ''}`}
+      onClick={() => !unknownMsg && openBattle(battle)}
       title={
-        here
+        unknownMsg
+          ? `Can't enter yet: ${unknownMsg}`
+          : here
           ? 'You are viewing this battle'
           : battle.kind === 'terrain'
             ? `Units are at close quarters at ${battle.place} — open the terrain map`
@@ -276,7 +314,7 @@ function BattleRow({ battle }: { battle: PlayerBattle }) {
       <span className={`outliner-battle-tag ${battle.kind}`}>{BATTLE_KIND_LABELS[battle.kind]}</span>
       <span className="outliner-battle-body">
         <span className="outliner-entry-name">{battle.place}</span>
-        <span className="outliner-battle-detail">{detail || spaceDetail || terrainDetail}</span>
+        <span className="outliner-battle-detail">{unknownMsg || detail || spaceDetail || terrainDetail}</span>
       </span>
     </li>
   )
@@ -321,6 +359,9 @@ function OutlinerSection({
   selectedKey,
   selectedKeys,
   onEntryClick,
+  tabs,
+  activeTab,
+  onTab,
 }: {
   title: string
   entries: OutlinerEntry[]
@@ -334,6 +375,11 @@ function OutlinerSection({
   /** Omitted for sections with nothing real to select yet (Colonies,
    * Starbases) — entries stay inert rather than clickable-but-no-op. */
   onEntryClick?: (entry: OutlinerEntry, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void
+  // Sub-tabs under the title (Fleets: Military / Civilian). `entries` is
+  // already the active tab's list.
+  tabs?: { id: string; label: string; count: number }[]
+  activeTab?: string
+  onTab?: (id: string) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -348,6 +394,23 @@ function OutlinerSection({
         <span className={`outliner-section-caret${collapsed ? ' collapsed' : ''}`}>▾</span>
         {title}
       </button>
+      {!collapsed && tabs && (
+        <div className="outliner-subtabs" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={t.id === activeTab}
+              className={`outliner-subtab${t.id === activeTab ? ' active' : ''}`}
+              onClick={() => onTab?.(t.id)}
+            >
+              {t.label}
+              {t.count > 0 ? ` (${t.count})` : ''}
+            </button>
+          ))}
+        </div>
+      )}
       {!collapsed &&
         (entries.length === 0 ? (
           <div className="outliner-empty">{emptyText}</div>
@@ -372,12 +435,11 @@ function OutlinerSection({
 
 // Stellaris-style right-side outliner: what's currently in view and which of
 // it the player's own country owns (both real, derived from viewStore +
-// planetData's ownerId), plus a placeholder Starbases section for a nation
-// asset this project doesn't have a gameplay system for yet — reserving its
-// spot the same way ChatPlaceholder reserves the comms panel's, rather than
-// inventing fake data.
+// planetData's ownerId, plus the player's own Starbases from starbaseStore —
+// see scene/starbaseLogic.ts for what one is).
 export function Outliner() {
   const [collapsed, setCollapsed] = useState(false)
+  const [fleetTab, setFleetTab] = useState<FleetTab>('military')
   const [search, setSearch] = useState('')
   const [visibleKinds, setVisibleKinds] = useState<Set<FilterKind>>(
     () => new Set(FILTERS.map((f) => f.kind)),
@@ -386,6 +448,7 @@ export function Outliner() {
   const fleetEntries = useFleetEntries()
   const colonyEntries = useColonyEntries()
   const treatyEntries = useTreatyEntries()
+  const starbaseEntries = useStarbaseEntries()
   const inViewSelection = useViewStore((s) => s.inViewSelection)
   const selectInView = useViewStore((s) => s.selectInView)
   const ships = useShipStore((s) => s.ships)
@@ -427,12 +490,29 @@ export function Outliner() {
       view.enterSystem(entry.starId, entry.key)
     }
   }
+  // A Starbase has no body of its own to enter — it stands at its system's
+  // own star, so this just opens the interstellar view there. Every charted
+  // star lives in the Solar Neighbourhood today (see
+  // data/starData.getStarsForNeighborhood), so that's the one this jumps
+  // into; a future second charted neighbourhood would need this to look the
+  // star's neighbourhood up instead of assuming it.
+  const handleStarbaseClick = (entry: OutlinerEntry) => {
+    selectShip(null)
+    const view = useViewStore.getState()
+    if (view.level !== 'interstellar' || view.selectedNeighborhoodId !== 'solar-neighborhood') view.enterInterstellar('solar-neighborhood')
+    if (entry.starId) selectInView(entry.starId)
+  }
   // Shift/Ctrl/Cmd-click adds or removes the fleet from the selection, so
   // several fleets can be ordered at once.
   const handleFleetClick = (entry: OutlinerEntry, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
     if (!entry.leadShipId) return
-    if (isAdditiveClick(e)) useShipStore.getState().toggleShipSelection(entry.leadShipId)
-    else selectShip(entry.leadShipId)
+    if (isAdditiveClick(e)) {
+      useShipStore.getState().toggleShipSelection(entry.leadShipId)
+      return
+    }
+    // Just select it. The view type never changes on a selection: with lock-on
+    // on, the scene pans towards the ship where it is (scene/SelectionTracker).
+    selectShip(entry.leadShipId)
   }
 
   const toggleKind = (kind: FilterKind) => {
@@ -455,6 +535,8 @@ export function Outliner() {
     () => fleetEntries.filter((entry) => query === '' || entry.name.toLowerCase().includes(query)),
     [fleetEntries, query],
   )
+  const militaryFleets = filteredFleets.filter((e) => !e.civilian)
+  const civilianShips = filteredFleets.filter((e) => e.civilian)
 
   return (
     <div className={`outliner${collapsed ? ' collapsed' : ''}`}>
@@ -510,14 +592,20 @@ export function Outliner() {
         />
         <OutlinerSection
           title="Fleets"
-          entries={filteredFleets}
-          emptyText="No fleets deployed"
+          entries={fleetTab === 'military' ? militaryFleets : civilianShips}
+          emptyText={fleetTab === 'military' ? 'No fleets deployed' : 'No civilian ships'}
+          tabs={[
+            { id: 'military', label: 'Military', count: militaryFleets.length },
+            { id: 'civilian', label: 'Civilian', count: civilianShips.length },
+          ]}
+          activeTab={fleetTab}
+          onTab={(id) => setFleetTab(id as FleetTab)}
           selectedKey={selectedFleetId}
           selectedKeys={selectedFleetIds}
           onEntryClick={handleFleetClick}
         />
         <ArmiesSection />
-        <OutlinerSection title="Starbases" entries={[]} emptyText="No starbases built" />
+        <OutlinerSection title="Starbases" entries={starbaseEntries} emptyText="No starbases built" onEntryClick={handleStarbaseClick} />
         {/* Reserved sections below, matching categories this game doesn't
             have a system for yet but that the new bottom ActionBar
             (Politics/Diplomacy/Buildings) and left NavBar (Economy/Military)

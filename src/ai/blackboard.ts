@@ -13,6 +13,9 @@ import { armiesAboard, armyCapacityOf, orbitedBody, type ArmyUnit } from '../sce
 import { bodiesOwnedBy, bodyStarId, controllerOf, type OwnerMap } from '../scene/territory'
 import type { BodyValueFn } from '../scene/warScore'
 import type { NodeHolderMap } from '../scene/groundLogic'
+import type { Starbase } from '../scene/starbaseLogic'
+import type { NationIntel } from '../scene/surveyLogic'
+import type { TechCategory } from '../data/techData'
 
 export interface CountryInfo {
   id: string
@@ -37,8 +40,17 @@ export interface AiSnapshot {
   nodeHolders: NodeHolderMap
   relations: Record<string, Relation>
   wars: War[]
+  starbases: Starbase[]
   resourcesOf: (countryId: string) => Record<ResourceId, number>
+  researchedOf: (countryId: string) => Set<string>
   buildQueueLengthOf: (countryId: string) => number
+  // Class ids waiting or building in a nation's shipyard.
+  queuedClassesOf: (countryId: string) => string[]
+  // What a nation's ships have actually explored and surveyed (the truth
+  // layer — the AI has no comms delay).
+  discoveredOf: (countryId: string) => NationIntel | undefined
+  // A nation's research points per tree.
+  researchPointsOf: (countryId: string) => Record<TechCategory, number>
   valueOf: BodyValueFn
   // Something on the ground (enemy defense batteries) denies this nation the
   // orbit of this body. Optional: absent = nothing does.
@@ -91,6 +103,14 @@ export interface Blackboard {
   assaultArmiesHome: ArmyUnit[]
   // All assault armies, wherever they are (including training/aboard).
   assaultArmyCount: number
+  hasResearched: (techId: string) => boolean
+  myStarbaseCount: number
+  // This empire's own ships, whatever they are.
+  mine: ShipInstance[]
+  // Class ids in its shipyard queue.
+  queuedClassIds: string[]
+  intel: NationIntel | undefined
+  researchPoints: Record<TechCategory, number>
 }
 
 export function shipPower(ship: ShipInstance): number {
@@ -103,8 +123,15 @@ function isArmedShip(ship: ShipInstance): boolean {
   return (resolveShipClass(ship.classId)?.combat.weapons.length ?? 0) > 0
 }
 
+// An order or command the empire has already sent that hasn't reached the ship
+// yet (FTL comms delay): the ship isn't free to be tasked again, or the resend
+// would restart the signal's clock and it would never arrive.
+export function hasOrderInFlight(ship: ShipInstance): boolean {
+  return !!ship.pendingMoveOrder || (ship.pendingCommands?.length ?? 0) > 0 || (ship.pendingQueueAdds?.length ?? 0) > 0
+}
+
 export function isIdle(ship: ShipInstance, snap: AiSnapshot): boolean {
-  return !ship.order && !ship.pendingHyperdriveJump && !snap.engagedShipIds.has(ship.id) && ship.location.kind === 'orbiting'
+  return !ship.order && !ship.pendingHyperdriveJump && !hasOrderInFlight(ship) && !snap.engagedShipIds.has(ship.id) && ship.location.kind === 'orbiting'
 }
 
 export function buildBlackboard(countryId: string, snap: AiSnapshot): Blackboard {
@@ -177,6 +204,12 @@ export function buildBlackboard(countryId: string, snap: AiSnapshot): Blackboard
     buildQueueLength: snap.buildQueueLengthOf(countryId),
     assaultArmiesHome: assault.filter((a) => a.location.kind === 'body' && a.location.bodyName === capital.capitalBodyName),
     assaultArmyCount: assault.length,
+    hasResearched: (techId) => snap.researchedOf(countryId).has(techId),
+    myStarbaseCount: snap.starbases.filter((sb) => sb.ownerId === countryId).length,
+    mine,
+    queuedClassIds: snap.queuedClassesOf(countryId),
+    intel: snap.discoveredOf(countryId),
+    researchPoints: snap.researchPointsOf(countryId),
   }
 }
 

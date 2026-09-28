@@ -51,12 +51,20 @@ function shipStarId(ship: Pick<ShipInstance, 'location'>): string | undefined {
 }
 
 // Space battles the player has a ship in.
-export function playerSpaceBattles(engagements: Engagement[], ships: Pick<ShipInstance, 'id' | 'ownerId' | 'location'>[], playerId: string | null): PlayerBattle[] {
+// `known`, when given, hides fights the player hasn't heard about yet (their
+// news is still travelling — see commsVisual.engagementKnownToPlayer).
+export function playerSpaceBattles(
+  engagements: Engagement[],
+  ships: Pick<ShipInstance, 'id' | 'ownerId' | 'location'>[],
+  playerId: string | null,
+  known?: (e: Engagement) => boolean,
+): PlayerBattle[] {
   if (!playerId) return []
   const byId = new Map(ships.map((s) => [s.id, s]))
   const out: PlayerBattle[] = []
   for (const e of engagements) {
     if (!engagementIsContested(e, (id) => byId.has(id))) continue
+    if (known && !known(e)) continue
     const mine = e.participants.map((p) => byId.get(p.shipId)).filter((s): s is NonNullable<typeof s> => !!s && s.ownerId === playerId)
     if (mine.length === 0) continue
     out.push({ key: `space:${e.id}`, kind: 'space', place: e.locationLabel, starId: shipStarId(mine[0]), engagementId: e.id })

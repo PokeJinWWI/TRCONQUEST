@@ -116,7 +116,7 @@ export function LawsPanel() {
       </div>
       {country.foreignInvestmentPolicy === 'approval' && (
         <>
-          <label className="econ-control-row" style={{ cursor: 'pointer' }} title="When on, incoming foreign investments are approved automatically instead of waiting in the queue below.">
+          <label className="econ-control-row" style={{ cursor: 'var(--cursor-pointer)' }} title="When on, incoming foreign investments are approved automatically instead of waiting in the queue below.">
             <span className="inspect-label">Auto-approve foreign investments</span>
             <input type="checkbox" checked={country.foreignInvestmentAutoApprove} onChange={(e) => setForeignInvestmentAutoApprove(country.id, e.target.checked)} />
           </label>

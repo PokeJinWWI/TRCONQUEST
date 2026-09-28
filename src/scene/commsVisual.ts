@@ -29,11 +29,12 @@ import {
   KM_PER_SYSTEM_UNIT,
   LY_IN_KM,
   planMove,
+  planMoveUnchecked,
   type MoveResult,
   type ShipRenderInfo,
 } from './shipPhysics'
 import { planFleetMove } from './fleetMove'
-import { useCombatStore } from '../state/combatStore'
+import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { findEngagementFor } from './combatResolution'
 import { isPlayerOwned } from '../state/shipRelations'
 import { getShipRenderPosition } from './shipPhysics'
@@ -173,6 +174,27 @@ export function playerCommsDelayToShip(ship: ShipInstance, simDays: number): num
   return shipCommsDelayDays(ship, country.capitalStarId, country.capitalBodyName, simDays, tier)
 }
 
+// Signal time for an ORDER to reach a ship: from the capital of whoever owns
+// it, at that nation's own comms tech. The player's orders and the strategic
+// AI's go through the same rule — a nation without Hyper Comms waits on light
+// (or warp) speed to command a distant fleet, AI or not. A player ship in the
+// arena the player is watching is in direct contact (0). A nation with no
+// capital (a sandbox faction, the rogue powers) has no signal to wait on.
+export function ownerCommsDelayToShip(ship: ShipInstance, simDays: number): number {
+  if (isPlayerOwned(ship)) return playerCommsDelayToShip(ship, simDays)
+  const country = getCountry(ship.ownerId)
+  if (!country) return 0
+  const tier = commsTierFor(useTechStore.getState().stateFor(ship.ownerId).researched)
+  return shipCommsDelayDays(ship, country.capitalStarId, country.capitalBodyName, simDays, tier)
+}
+
+// The move planner for a ship's own orders: the player-gated one for the
+// player's ships, the unchecked one for every other nation's (the strategic AI
+// only ever commands its own).
+export function plannerFor(ship: ShipInstance): typeof planMove {
+  return isPlayerOwned(ship) ? planMove : planMoveUnchecked
+}
+
 // delayDays <= 0 (only really possible at the 'hyper' tier, or a location
 // exactly at the capital) — treated as "real-time contact." Used to gate
 // manual combat micromanagement (see CombatPanel.tsx).
@@ -218,12 +240,87 @@ export function visualShipRenderPosition(ship: ShipInstance, delayDays: number, 
   return getShipRenderPosition({ ...ship, location: snap.location, order: snap.order }, asOf)
 }
 
-// The actual one-line swap every marker/camera-tracking call site uses in
-// place of a plain getShipRenderPosition(ship, simDays) — resolves the
-// player's own comms delay to `ship`'s current location and folds it in,
-// so a caller never has to plumb playerCommsDelayToShip itself.
-export function playerVisualShipRenderPosition(ship: ShipInstance, simDays: number): ShipRenderInfo {
-  return visualShipRenderPosition(ship, playerCommsDelayToShip(ship, simDays), simDays)
+// Where the player SEES a ship: its real position, right now, for every ship
+// and every comms tier. Signal time never staggers the view; it only delays what
+// the player can DO (orders, ship commands) and what they get to KNOW (reports,
+// news of ships and fights). (The delayed reconstruction, visualShipRenderPosition,
+// is no longer used for placing anything: it ran time backwards for a ship
+// faster than its own comms.)
+export function playerShipRenderPosition(ship: ShipInstance, simDays: number): ShipRenderInfo {
+  return getShipRenderPosition(ship, simDays)
+}
+
+// What the player knows of the ships in one place — who is there and whether
+// news of them has reached the capital. A ship of the player's own is always
+// known. Anyone else is known once the signal from the player's ships there
+// (or, with none there, from anywhere the ships are) has had time to arrive
+// since the ship came to rest at that place. A ship with no record of arriving
+// (spawned by a scenario, or resting here since the log began) is known at once.
+export interface ShipsIntel {
+  // Every ship present is known: the one condition for entering the combat view.
+  allKnown: boolean
+  // The player knows there is something to fight about: everything is known, or
+  // at least one ship that isn't theirs is. Drives the battle list and the clock.
+  aware: boolean
+  // Ships present that the player doesn't know yet, and how long (sim-days) until
+  // the last of that news arrives.
+  unknownCount: number
+  waitDays: number
+}
+
+// When `ship` last came to rest where it is now, from its own history log:
+// -Infinity if the log shows no arrival (so it has always been known).
+function restingSince(ship: ShipInstance): number {
+  const key = combatLocationKey(ship.location)
+  const history = ship.history ?? []
+  let i = history.length - 1
+  while (i >= 0 && combatLocationKey(history[i].location) === key) i--
+  return i === history.length - 1 || i < 0 ? -Infinity : history[i + 1].simDays
+}
+
+export function shipsIntel(present: ShipInstance[], simDays: number): ShipsIntel {
+  if (present.length === 0) return { allKnown: true, aware: true, unknownCount: 0, waitDays: 0 }
+  const mine = present.filter((s) => isPlayerOwned(s))
+  const informants = mine.length > 0 ? mine : present
+  const delay = Math.min(...informants.map((s) => playerCommsDelayToShip(s, simDays)))
+  let unknownCount = 0
+  let waitDays = 0
+  let foreignKnown = 0
+  for (const s of present) {
+    if (isPlayerOwned(s)) continue
+    const knownAt = restingSince(s) + delay
+    if (simDays >= knownAt) foreignKnown++
+    else {
+      unknownCount++
+      waitDays = Math.max(waitDays, knownAt - simDays)
+    }
+  }
+  const allKnown = unknownCount === 0
+  return { allKnown, aware: allKnown || foreignKnown > 0, unknownCount, waitDays }
+}
+
+// The same for an engagement's roster. Watching it in the arena already counts
+// as knowing everything in it (the arena is direct contact), so a fight never
+// throws the player out of a view they are in.
+export function engagementIntel(engagement: { id: string; participants: { shipId: string }[] }, ships: ShipInstance[], simDays: number): ShipsIntel {
+  const view = useViewStore.getState()
+  if (view.level === 'combat' && view.combatEngagementId === engagement.id) return { allKnown: true, aware: true, unknownCount: 0, waitDays: 0 }
+  const present = engagement.participants.map((p) => ships.find((s) => s.id === p.shipId)).filter((s): s is ShipInstance => !!s)
+  return shipsIntel(present, simDays)
+}
+
+// Whether the player has heard of a fight at all (see ShipsIntel.aware): it is
+// listed in the Outliner and the clock drops to tactical pace for it. Entering it
+// needs more — every ship known (ShipsIntel.allKnown).
+export function engagementKnownToPlayer(engagement: { id: string; participants: { shipId: string }[] }, ships: ShipInstance[], simDays: number): boolean {
+  return engagementIntel(engagement, ships, simDays).aware
+}
+
+// The message a disabled Enter Combat button gives.
+export function unknownShipsMessage(intel: ShipsIntel): string {
+  const n = intel.unknownCount
+  const wait = intel.waitDays >= 1 ? `${Math.ceil(intel.waitDays)} days` : `${Math.max(1, Math.ceil(intel.waitDays * 24))} hours`
+  return `${n} ship${n === 1 ? '' : 's'} present ${n === 1 ? "isn't" : "aren't"} known to you yet — intel arrives in about ${wait}`
 }
 
 // --- Command latency -----------------------------------------------------
@@ -330,9 +427,9 @@ export function orderSelectedFleets(destination: MoveDestination, queue: boolean
 export function queueFleetMoveOrder(ships: ShipInstance[], destination: MoveDestination): void {
   if (ships.length === 0) return
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ships[0], simDays)
+  const delay = ownerCommsDelayToShip(ships[0], simDays)
   if (commsInstantContact(delay)) {
-    applyFleetMove(ships, destination, simDays)
+    applyFleetMove(ships, destination, simDays, plannerFor(ships[0]))
     return
   }
   for (const ship of ships) useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays })
@@ -354,7 +451,7 @@ export function queueFleetMoveAppend(ships: ShipInstance[], destination: MoveDes
   if (ships.length === 0) return
   const store = useShipStore.getState()
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ships[0], simDays)
+  const delay = ownerCommsDelayToShip(ships[0], simDays)
   for (const ship of ships) {
     if (commsInstantContact(delay)) store.setOrderQueue(ship.id, [...(ship.orderQueue ?? []), destination])
     else store.setPendingQueueAdds(ship.id, [...(ship.pendingQueueAdds ?? []), { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays }])
@@ -363,9 +460,9 @@ export function queueFleetMoveAppend(ships: ShipInstance[], destination: MoveDes
 
 export function queueMoveOrder(ship: ShipInstance, destination: MoveDestination): void {
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ship, simDays)
+  const delay = ownerCommsDelayToShip(ship, simDays)
   if (commsInstantContact(delay)) {
-    applyMoveDestination(ship, destination, simDays)
+    applyMoveDestination(ship, destination, simDays, plannerFor(ship))
     return
   }
   useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays })
@@ -374,7 +471,7 @@ export function queueMoveOrder(ship: ShipInstance, destination: MoveDestination)
 // A bombardment stance change, comms-delayed the same way (scene/bombardment.ts).
 export function queueBombard(ship: ShipInstance, stance: BombardStance): void {
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ship, simDays)
+  const delay = ownerCommsDelayToShip(ship, simDays)
   if (commsInstantContact(delay)) {
     useShipStore.getState().setBombardStance(ship.id, stance)
     return
@@ -386,7 +483,7 @@ export function queueBombard(ship: ShipInstance, stance: BombardStance): void {
 // directly rather than needing planMove-style re-resolution at arrival.
 export function queueStance(ship: ShipInstance, stance: ShipInstance['stance']): void {
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ship, simDays)
+  const delay = ownerCommsDelayToShip(ship, simDays)
   if (commsInstantContact(delay)) {
     useShipStore.getState().setStance(ship.id, stance)
     return

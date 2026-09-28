@@ -23,7 +23,7 @@ import { QueuedRouteLine } from './QueuedRouteLine'
 import { CommsSignals } from './CommsSignals'
 import { ShipPanel } from './ShipPanel'
 import { shipSystemId, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
-import { orderSelectedFleets, playerVisualShipRenderPosition } from './commsVisual'
+import { orderSelectedFleets, playerShipRenderPosition } from './commsVisual'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 import { DraggableWindow } from '../components/DraggableWindow'
@@ -33,6 +33,17 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { systemClaim, type SystemClaim } from './territory'
 import { getCountry } from '../data/countryData'
 import { usePlayerStore } from '../state/playerStore'
+import { canBuildStarbase, useStarbaseStore } from '../state/starbaseStore'
+import { starbaseOwnersOf, starbasesAt } from './starbaseLogic'
+import { TerritoryDiscs } from './TerritoryDiscs'
+import { ContextMenu, type ContextMenuItem } from './StarContextMenu'
+import { HoverTip } from '../components/HoverTip'
+import { orderSelectedToDoAt } from './shipCommands'
+import { isPlayerOwned } from '../state/shipRelations'
+import { resolveShipClass } from '../state/shipClassResolver'
+import { surveyProgress } from './surveyLogic'
+import { useSurveyStore } from '../state/surveyStore'
+import { unidentifiedStarbaseStars, usePlayerIntel, visibleClaims } from './intel'
 
 const ENTER_DISTANCE = 6
 const UNCLAIMED: SystemClaim = { kind: 'unclaimed' }
@@ -90,18 +101,22 @@ function resolveInterstellarSignalOrigin(): Vector3 | null {
 // position in deep space, or its star (where its system's badge sits) if it's
 // inside a system.
 function resolveInterstellarShipPosition(ship: ShipInstance, simDays: number): Vector3 | null {
-  const render = playerVisualShipRenderPosition(ship, simDays)
+  const render = playerShipRenderPosition(ship, simDays)
   if (render.space === 'interstellar') return render.position
   const star = render.systemId ? STARS.find((s) => s.id === render.systemId) : undefined
   return star ? new Vector3(...starScenePosition(star)) : null
 }
 
 interface StarNodeProps {
+  /** A live Starbase stands here but the system is unexplored to the player. */
+  unidentifiedBase?: boolean
+  /** Whether the player has explored this system (its information shows). */
+  explored?: boolean
   star: StarData
   selected: boolean
   onSelect: (star: StarData) => void
   /** Right-click — orders the currently-selected ship (if any) here. */
-  onOrderTo: (star: StarData) => void
+  onOrderTo: (star: StarData, at: { x: number; y: number }) => void
   /** One representative ship per distinct relation (yours / neutral /
    * hostile) currently nested
    * somewhere inside this star's system (e.g. orbiting a planet) — those
@@ -120,8 +135,9 @@ interface StarNodeProps {
 
 // The border ring's colors for a claim: one color all the way round for an
 // owned system, the claimants' colors split around the ring for a contested
-// one (top/right/bottom/left, cycling), nothing for an unclaimed one.
-function claimRingStyle(claim: SystemClaim): React.CSSProperties | null {
+// one (top/right/bottom/left, cycling), nothing for an unclaimed one. Reused
+// one level out by GalacticViewScene for the neighbourhood-level indicator.
+export function claimRingStyle(claim: SystemClaim): React.CSSProperties | null {
   if (claim.kind === 'unclaimed') return null
   if (claim.kind === 'owned') return { borderColor: getCountry(claim.countryId)?.color ?? '#888' }
   const colors = claim.countryIds.map((id) => getCountry(id)?.color ?? '#888')
@@ -131,7 +147,7 @@ function claimRingStyle(claim: SystemClaim): React.CSSProperties | null {
 
 // Stars are just labels here, same as planets in system view — no 3D sphere
 // model, just a fixed-size marker anchored at the star's true position.
-function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelectFleet, claim }: StarNodeProps) {
+function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelectFleet, claim, unidentifiedBase, explored }: StarNodeProps) {
   const [hovered, setHovered] = useState(false)
   const pos = starScenePosition(star)
 
@@ -145,13 +161,14 @@ function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelect
           onClick={() => onSelect(star)}
           onContextMenu={(e) => {
             e.preventDefault()
-            onOrderTo(star)
+            onOrderTo(star, { x: e.clientX, y: e.clientY })
           }}
           onWheel={forwardWheelToCanvas}
         >
           {claimRingStyle(claim) && <span className={`owner-ring${claim.kind === 'contested' ? ' contested' : ''}`} style={claimRingStyle(claim)!} />}
           <span className="marker-dot" style={{ borderColor: star.color }} />
-          <span className="marker-label">{star.name}</span>
+          <span className="marker-label">{star.name}{explored === false ? ' (unexplored)' : ''}</span>
+          {unidentifiedBase && <span className="unidentified-base" title="A Starbase: owner unknown until you explore this system" />}
           <BattleBadge scope={{ star: star.id }} />
           {fleetPresence.map(({ ship, relation }) => (
             <span
@@ -259,6 +276,17 @@ export function InterstellarScene() {
     () => (selectedShipId ? interstellarShips.find((s) => s.id === selectedShipId) ?? null : null),
     [selectedShipId, interstellarShips],
   )
+  // A selected ship nested inside a system has no interstellar position of its
+  // own, so the camera pans to its star instead — the view never changes.
+  const nestedShipStarId = useMemo(() => {
+    if (!selectedShipId || trackedShip) return null
+    const ship = ships.find((s) => s.id === selectedShipId)
+    return ship ? shipSystemId(ship) : null
+  }, [selectedShipId, trackedShip, ships])
+  const nestedShipStar = useMemo(() => (nestedShipStarId ? STARS.find((s) => s.id === nestedShipStarId) ?? null : null), [nestedShipStarId])
+  const shipFocus = trackedShip ?? nestedShipStar
+  const shipFocusPosition = (): Vector3 =>
+    trackedShip ? playerShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position : new Vector3(...starScenePosition(nestedShipStar!))
   // One representative ship per distinct relation to the player (yours /
   // neutral / hostile) present in each star's system, for the no-text
   // presence badges — the complementary set to interstellarShips above (a
@@ -270,7 +298,22 @@ export function InterstellarScene() {
   // Each star system's territorial claim, from live ownership — recomputed
   // only when a body changes hands (a peace cession), not every render.
   const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
-  const claimsByStar = useMemo(() => new Map(STARS.map((star) => [star.id, systemClaim(star.id, bodyOwner)])), [STARS, bodyOwner])
+  const starbases = useStarbaseStore((s) => s.starbases)
+  const simDays = useGameTimeStore((s) => s.simDays)
+  // Only what the player has explored: an unexplored system shows no owner or
+  // border (scene/intel.ts), and a Starbase there is just an unidentified mark.
+  const intel = usePlayerIntel()
+  const [starMenu, setStarMenu] = useState<{ x: number; y: number; star: StarData } | null>(null)
+  const knownSurvey = useSurveyStore((s) => (playerCountryId ? s.known[playerCountryId] : undefined))
+  const claimsByStar = useMemo(
+    () =>
+      visibleClaims(
+        new Map(STARS.map((star) => [star.id, systemClaim(star.id, bodyOwner, starbaseOwnersOf(star.id, starbases, simDays))])),
+        intel.known,
+      ),
+    [STARS, bodyOwner, starbases, simDays, intel.known],
+  )
+  const unidentifiedBaseStars = useMemo(() => new Set(unidentifiedStarbaseStars(starbases, intel.known, simDays)), [starbases, intel.known, simDays])
   const fleetPresenceByStar = useMemo(() => {
     const map = new Map<string, { ship: ShipInstance; relation: ShipRelation }[]>()
     for (const ship of ships) {
@@ -299,7 +342,7 @@ export function InterstellarScene() {
   }
 
   const handleEnterSystem = () => {
-    if (selectedStar?.hasSystemData) setFocusedId(selectedStar.id)
+    if (selectedStar?.hasSystemData && intel.known(selectedStar.id)) setFocusedId(selectedStar.id)
   }
 
   // Right-clicking a star orders the selected ship there (warp/hyperdrive,
@@ -315,10 +358,20 @@ export function InterstellarScene() {
   // hyperlane it just charted (hyperlaneEstablished), same "physics layer
   // computes it, caller applies it" split every other MoveResult already
   // follows.
-  const handleOrderToStar = (star: StarData) => {
+  const handleOrderToStar = (star: StarData, at: { x: number; y: number }) => {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
+    // With a science or construction ship selected the right-click offers what
+    // it can do there (explore, survey, build a Starbase); otherwise it is just
+    // the move order.
+    const roles = new Set(
+      useShipStore.getState().ships.filter((s) => useShipStore.getState().selectedShipIds.includes(s.id) && isPlayerOwned(s)).map((s) => resolveShipClass(s.classId)?.role),
+    )
+    if (roles.has('science') || roles.has('construction')) {
+      setStarMenu({ x: at.x, y: at.y, star })
+      return
+    }
     // Goes through orderSelectedFleets (every selected fleet, each moving
     // together) rather than planMove/setShipOrder directly
     // — under FTL comms delay (see commsVisual.ts), the jump doesn't even
@@ -326,6 +379,40 @@ export function InterstellarScene() {
     // actually reach the ship. Instant contact behaves exactly as before,
     // 'on-cooldown'/'lost-in-hyperspace'/etc. included.
     orderSelectedFleets({ kind: 'star', starId: star.id })
+  }
+
+  // What the right-click menu offers for this star, given the selected ships.
+  // Exploring IS moving to an unexplored system (the intel comes on arrival), so
+  // "Move to" is for systems already explored; Build Starbase is greyed out,
+  // with the reason, unless a selected Construction Ship could build there.
+  const starMenuItems = (star: StarData): ContextMenuItem[] => {
+    const store = useShipStore.getState()
+    const selected = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s))
+    const ofRole = (role: string) => selected.filter((s) => resolveShipClass(s.classId)?.role === role)
+    const science = ofRole('science')
+    const builders = ofRole('construction')
+    const explored = intel.known(star.id)
+    const items: ContextMenuItem[] = []
+    if (!explored && science.length > 0) {
+      items.push({ label: 'Explore system', title: 'Fly there and reveal its owner, borders and worlds on arrival', onClick: () => orderSelectedToDoAt(star.id, { kind: 'explore' }) })
+    } else {
+      items.push({ label: `Move to ${star.name}`, onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }) })
+    }
+    if (science.length > 0) {
+      items.push({ label: 'Survey system', title: 'Fly there and survey every body (no exploring needed first)', onClick: () => orderSelectedToDoAt(star.id, { kind: 'survey' }) })
+    }
+    if (builders.length > 0) {
+      const checks = builders.map((b) => canBuildStarbase(b.ownerId, star.id, useStarbaseStore.getState().starbases, b.id, { anywhere: true }))
+      const ok = checks.some((c) => c.ok)
+      const firstReason = checks.find((c) => !c.ok)
+      items.push({
+        label: 'Build Starbase',
+        disabled: !ok,
+        title: ok ? 'Fly there and build a Starbase from the hold' : firstReason && !firstReason.ok ? firstReason.reason : undefined,
+        onClick: () => orderSelectedToDoAt(star.id, { kind: 'build-starbase' }),
+      })
+    }
+    return items
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
@@ -379,6 +466,8 @@ export function InterstellarScene() {
           return <HyperlaneLine key={key} from={starScenePosition(a)} to={starScenePosition(b)} />
         })}
 
+        <TerritoryDiscs claimsByStar={claimsByStar} />
+
         {STARS.map((star) => (
           <StarNode
             key={star.id}
@@ -389,6 +478,8 @@ export function InterstellarScene() {
             fleetPresence={fleetPresenceByStar.get(star.id) ?? []}
             onSelectFleet={selectShip}
             claim={claimsByStar.get(star.id) ?? UNCLAIMED}
+            unidentifiedBase={unidentifiedBaseStars.has(star.id)}
+            explored={intel.known(star.id)}
           />
         ))}
 
@@ -462,24 +553,20 @@ export function InterstellarScene() {
             independent of lockOnEnabled. Only reachable when the ship is
             actually out in interstellar space (trackedShip) — a ship nested
             inside a system has no interstellar-scale position to fly to. */}
-        {flyingToShip && trackedShip && (
+        {flyingToShip && shipFocus && (
           <CameraFocusRig
-            key={trackedShip.id}
+            key={selectedShipId ?? 'ship'}
             controlsRef={controlsRef}
             arriveDistance={SHIP_FOCUS_ARRIVE_DISTANCE}
-            getTargetPosition={() => playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
+            getTargetPosition={shipFocusPosition}
             onArrive={() => setFlyingToShip(false)}
           />
         )}
 
-        {(selectedStar || trackedShip) && !focusedStar && !flyingToShip && lockOnEnabled && (
+        {(selectedStar || shipFocus) && !focusedStar && !flyingToShip && lockOnEnabled && (
           <SelectionTracker
             controlsRef={controlsRef}
-            getPosition={() =>
-              trackedShip
-                ? playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
-                : new Vector3(...starScenePosition(selectedStar!))
-            }
+            getPosition={() => (shipFocus ? shipFocusPosition() : new Vector3(...starScenePosition(selectedStar!)))}
           />
         )}
 
@@ -509,7 +596,7 @@ export function InterstellarScene() {
                 getStarsForNeighborhood), so this shortcut doesn't apply
                 there; a populated neighborhood would need its own primary
                 star, not necessarily named 'sol'. */}
-            {selectedNeighborhoodId === 'solar-neighborhood' && (
+            {selectedNeighborhoodId === 'solar-neighborhood' && intel.known('sol') && (
               <DistanceThresholdWatcher mode="min" threshold={ENTER_DISTANCE} onTrigger={() => enterSystem('sol', 'Sol')} />
             )}
             <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitInterstellarToGalactic} controlsRef={controlsRef} />
@@ -528,8 +615,12 @@ export function InterstellarScene() {
         />
       </Canvas>
 
+      <HoverTip />
+
+      {starMenu && <ContextMenu x={starMenu.x} y={starMenu.y} title={starMenu.star.name} items={starMenuItems(starMenu.star)} onClose={() => setStarMenu(null)} />}
+
       {selectedShipId ? (
-        <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />
+        <ShipPanel onGoTo={shipFocus ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />
       ) : (
         selectedStar && (
           <DraggableWindow title={selectedStar.name} memoryKey="star" onClose={() => selectInView(null)}>
@@ -539,6 +630,22 @@ export function InterstellarScene() {
             </div>
             {(() => {
               const claim = claimsByStar.get(selectedStar.id) ?? UNCLAIMED
+              if (!intel.known(selectedStar.id)) {
+                return (
+                  <>
+                    <div className="inspect-row">
+                      <span className="inspect-label">System</span>
+                      <span className="inspect-value">Unexplored — send a Science Ship</span>
+                    </div>
+                    {unidentifiedBaseStars.has(selectedStar.id) && (
+                      <div className="inspect-row">
+                        <span className="inspect-label">Starbase</span>
+                        <span className="inspect-value">Detected — owner unknown</span>
+                      </div>
+                    )}
+                  </>
+                )
+              }
               if (claim.kind === 'unclaimed') {
                 return (
                   <div className="inspect-row">
@@ -572,18 +679,50 @@ export function InterstellarScene() {
                 </div>
               )
             })()}
+            {playerCountryId && (() => {
+              const progress = surveyProgress(knownSurvey, playerCountryId, selectedStar.id, bodyOwner)
+              // Surveying needs no exploring, so bodies can be surveyed in a
+              // system whose owner and worlds are still unknown.
+              if (!intel.known(selectedStar.id) && progress.done === 0) return null
+              return (
+                <div className="inspect-row">
+                  <span className="inspect-label">Survey</span>
+                  <span className="inspect-value">
+                    {progress.total > 0 && progress.done === progress.total ? `Fully surveyed (${progress.total} bodies)` : `${progress.done} / ${progress.total} bodies`}
+                  </span>
+                </div>
+              )
+            })()}
             <div className="inspect-divider" />
             {selectedStar.hasSystemData ? (
               focusedStar ? (
                 <div className="inspect-status ok">Entering system…</div>
               ) : (
-                <button type="button" className="detail-view-btn" onClick={handleEnterSystem}>
+                <button
+                  type="button"
+                  className="detail-view-btn"
+                  onClick={handleEnterSystem}
+                  disabled={!intel.known(selectedStar.id)}
+                  title={intel.known(selectedStar.id) ? undefined : 'Unexplored: a Science Ship has to visit first'}
+                >
                   Enter System
                 </button>
               )
             ) : (
               <div className="inspect-status">No system data available</div>
             )}
+            <div className="inspect-divider" />
+            {(() => {
+              const mine = starbasesAt(selectedStar.id, starbases).find((sb) => sb.ownerId === playerCountryId)
+              if (!mine) return null
+              const building = simDays < mine.readySimDays
+              return (
+                <div className="inspect-row">
+                  <span className="inspect-label">Your Starbase</span>
+                  <span className="inspect-value">{building ? `Building (${Math.ceil(mine.readySimDays - simDays)}d left)` : `Holding — ${Math.round(mine.integrity)} integrity`}</span>
+                </div>
+              )
+            })()}
           </DraggableWindow>
         )
       )}

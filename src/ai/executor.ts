@@ -1,18 +1,23 @@
 // The only part of the strategic AI that changes the world: carries out one
 // empire's intents through the same store actions and rules the player's UI
-// uses. Anything a rule refuses (unaffordable, orbit not clear, …) is simply
+// uses — including the signal delay: orders to ships go out from the capital at
+// the empire's own comms tier (scene/commsVisual.ownerCommsDelayToShip), so an
+// empire without Hyper Comms waits on its distant fleets like the player does.
+// Anything a rule refuses (unaffordable, orbit not clear, …) is simply
 // dropped — the agents will reassess next pass.
 import { ownerDisplay } from '../data/countryRoster'
 import type { PeaceTerms } from '../data/diplomacyData'
 import { AI_PLAYER_OFFER_COOLDOWN_DAYS, AI_PLAYER_OFFER_MAX_COOLDOWN_DAYS, AI_PLAYER_OFFER_MIN_GAP_DAYS } from '../data/aiData'
 import { useDiplomacyStore } from '../state/diplomacyStore'
 import { useShipyardStore } from '../state/shipyardStore'
+import { useTechStore } from '../state/techStore'
+import { queueShipCommand } from '../scene/shipCommands'
+import type { MoveDestination } from '../state/shipStore'
 import { useArmyStore } from '../state/armyStore'
 import { useShipStore } from '../state/shipStore'
 import { useConfirmStore } from '../state/confirmStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { applyFleetMove, fleetMembersOf } from '../scene/commsVisual'
-import { planMoveUnchecked } from '../scene/shipPhysics'
+import { fleetMembersOf, queueBombard, queueFleetMoveOrder } from '../scene/commsVisual'
 import { declareWarOn, makePeace, proposePeace } from '../scene/peace'
 import { useAiStore } from './aiStore'
 import type { Intent } from './types'
@@ -95,6 +100,35 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
       case 'build-ship':
         useShipyardStore.getState().queueBuild(countryId, intent.classId, simDays)
         break
+      case 'build-starbase': {
+        // The ship builds where it rests, paid from its hold.
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) queueShipCommand(ship.id, { kind: 'build-starbase' })
+        break
+      }
+      case 'research-tech':
+        useTechStore.getState().researchNode(countryId, intent.techId)
+        break
+      case 'explore-system': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) queueShipCommand(ship.id, { kind: 'explore' })
+        break
+      }
+      case 'survey-system': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) queueShipCommand(ship.id, { kind: 'survey' })
+        break
+      }
+      case 'load-cargo': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) queueShipCommand(ship.id, { kind: 'load', want: intent.want })
+        break
+      }
+      case 'transfer-cargo': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.fromShipId)
+        if (ship?.ownerId === countryId) queueShipCommand(ship.id, { kind: 'transfer', toShipId: intent.toShipId, want: intent.want })
+        break
+      }
       case 'recruit-army':
         useArmyStore.getState().recruitArmy(countryId, intent.bodyName, 'assault', simDays)
         break
@@ -105,8 +139,11 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
         // The whole fleet goes, together; once per fleet per pass.
         if (movedFleets.has(ship.fleetId)) break
         movedFleets.add(ship.fleetId)
-        const destination = { kind: 'body' as const, systemId: intent.systemId, bodyName: intent.bodyName }
-        applyFleetMove(fleetMembersOf(ship, ships), destination, simDays, planMoveUnchecked)
+        const destination: MoveDestination = intent.bodyName ? { kind: 'body', systemId: intent.systemId, bodyName: intent.bodyName } : { kind: 'star', starId: intent.systemId }
+        // The order goes out as a signal from the capital (queueFleetMoveOrder):
+        // instant at Hyper Comms or when the fleet is at home, else it lands
+        // after the delay to wherever the fleet is.
+        queueFleetMoveOrder(fleetMembersOf(ship, ships), destination)
         break
       }
       case 'split-fleet': {
@@ -127,9 +164,11 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
       case 'land':
         useArmyStore.getState().land(intent.shipId, intent.dropNode)
         break
-      case 'set-bombard':
-        useShipStore.getState().setBombardStance(intent.shipId, intent.stance)
+      case 'set-bombard': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) queueBombard(ship, intent.stance)
         break
+      }
     }
   }
 }

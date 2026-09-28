@@ -90,13 +90,18 @@ export type SystemClaim =
   | { kind: 'unclaimed' }
 
 // A whole system's claim, from ownership (see this file's header for why
-// occupation doesn't redraw it).
-export function systemClaim(starId: string, owners: OwnerMap): SystemClaim {
+// occupation doesn't redraw it) plus, optionally, whoever holds a live
+// Starbase there (scene/starbaseLogic.starbaseOwnersOf) — the one way a
+// system with no colonized body can still be claimed. Every existing call
+// site keeps working unchanged; only a caller that actually cares about
+// Starbases needs to pass them.
+export function systemClaim(starId: string, owners: OwnerMap, starbaseOwnerIds: string[] = []): SystemClaim {
   const present = new Set<string>()
   for (const body of systemBodies(starId)) {
     const owner = owners[body]
     if (owner) present.add(owner)
   }
+  for (const owner of starbaseOwnerIds) present.add(owner)
   if (present.size === 0) return { kind: 'unclaimed' }
   if (present.size === 1) return { kind: 'owned', countryId: [...present][0] }
   return { kind: 'contested', countryIds: [...present].sort() }

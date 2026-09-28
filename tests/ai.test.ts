@@ -5,7 +5,7 @@
 // Run:  npx tsx tests/ai.test.ts
 
 import { COUNTRIES } from '../src/data/countryData'
-import { AI_WAR_GRACE_DAYS, AI_WAR_RATIO, AI_WAR_RATIO_AT_HATRED } from '../src/data/aiData'
+import { AI_MAX_STARBASES, AI_WAR_GRACE_DAYS, AI_WAR_RATIO, AI_WAR_RATIO_AT_HATRED } from '../src/data/aiData'
 import { usePlayerStore } from '../src/state/playerStore'
 import { useShipStore, type ShipInstance } from '../src/state/shipStore'
 import { useArmyStore } from '../src/state/armyStore'
@@ -28,6 +28,11 @@ import { captureSnapshot } from '../src/ai/snapshot'
 import { requiredWarRatio, strategist } from '../src/ai/strategist'
 import { diplomat } from '../src/ai/diplomat'
 import { shipwright } from '../src/ai/shipwright'
+import { expander } from '../src/ai/expander'
+import { useSurveyStore } from '../src/state/surveyStore'
+import { resolveSurvey } from '../src/hooks/useSurveyResolver'
+import { resolveCommsSignals } from '../src/hooks/useCommsResolver'
+import { systemBodies } from '../src/scene/territory'
 import { admiral } from '../src/ai/admiral'
 import { marshal, wouldTakeBody } from '../src/ai/marshal'
 import { runStrategicAI } from '../src/ai/runStrategicAI'
@@ -39,6 +44,8 @@ import { resolveBombardment } from '../src/hooks/useBombardmentResolver'
 import { useDefenseStore } from '../src/state/defenseStore'
 import { useBombardmentStore } from '../src/state/bombardmentStore'
 import { resolveShipyards } from '../src/hooks/useShipyardResolver'
+import { useTechStore } from '../src/state/techStore'
+import { useStarbaseStore } from '../src/state/starbaseStore'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -66,6 +73,9 @@ function freshWorld() {
   useResourceStore.setState({ byCountry: {} })
   useDefenseStore.setState({ installations: [] })
   useBombardmentStore.setState({ devastation: {}, strikes: [] })
+  useTechStore.setState({ byCountry: {} })
+  useSurveyStore.setState({ discovered: {}, known: {}, reports: [] })
+  useStarbaseStore.setState({ starbases: [] })
   usePlayerStore.setState({ selectedCountryId: LALANDE })
   setUpNewGame()
   for (const c of COUNTRIES) seedStrategicResources(c.id)
@@ -146,9 +156,20 @@ console.log('\n=== 2. The Strategist ===')
 console.log('\n=== 3. The Diplomat ===')
 {
   freshWorld()
-  const out = diplomat(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), INITIAL_AI_MEMORY)
-  check('friction with the neighbour sharing its system', out.intents.some((i) => i.kind === 'adjust-opinion' && i.otherId === VENUS && i.delta < 0))
-  check('none with nations elsewhere', !out.intents.some((i) => i.kind === 'adjust-opinion' && i.otherId === ORION))
+  const fresh = diplomat(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), INITIAL_AI_MEMORY)
+  check(
+    "sharing a system alone isn't a grievance — no opinion drift for anyone at a fresh start",
+    !fresh.intents.some((i) => i.kind === 'adjust-opinion'),
+  )
+
+  freshWorld()
+  useDiplomacyStore.getState().adjustOpinion(MARS, VENUS, -10)
+  const recovering = diplomat(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), INITIAL_AI_MEMORY)
+  check(
+    'a real grievance (already negative) mellows back toward neutral',
+    recovering.intents.some((i) => i.kind === 'adjust-opinion' && i.otherId === VENUS && i.delta > 0),
+  )
+  check('...capped so recovery never overshoots past neutral', recovering.intents.every((i) => i.kind !== 'adjust-opinion' || i.delta <= 10))
 
   freshWorld()
   declareWarOn(MARS, VENUS, 0)
@@ -181,7 +202,95 @@ console.log('\n=== 4. The Shipwright ===')
   useResourceStore.setState({ byCountry: {} })
   const broke = shipwright(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, posture: 'war' })
   check('with an empty stockpile it builds nothing', broke.intents.length === 0)
+
+  freshWorld()
+  useTechStore.setState({ byCountry: { [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory', 'orbital-construction']) } } })
+  check('the Shipwright no longer plans Starbases (the Expander does)', !has(shipwright(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), INITIAL_AI_MEMORY).intents, 'build-starbase'))
 }
+
+console.log('\n=== 4b. The Expander ===')
+{
+  const plan = (id: string, memory = INITIAL_AI_MEMORY) => expander(buildBlackboard(id, captureSnapshot(0)), captureSnapshot(0), memory)
+  const setTech = (id: string, extra: string[], points = 0) =>
+    useTechStore.setState({ byCountry: { [id]: { researchPoints: { physics: points, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory', ...extra]) } } })
+
+  freshWorld()
+  setTech(MARS, [])
+  check('with no science ship it queues one', plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'science-ship'))
+  check('...but not a Construction Ship before Orbital Construction', !plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'construction-ship'))
+  check('with no research points it researches nothing', !has(plan(MARS).intents, 'research-tech'))
+  setTech(MARS, [], 90)
+  check('with the points it researches Warp Comms first (its orders and reports cross the same signal delay the player\'s do)', plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'warp-comms'))
+  setTech(MARS, ['warp-comms'], 40)
+  check('...then the first step on the road to Orbital Construction', plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'classical-mechanics'))
+  setTech(MARS, ['warp-comms', 'classical-mechanics'], 40)
+  check('...and will not skip ahead to a step it cannot afford', !plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'orbital-construction'))
+
+  spawnExtra(MARS, 'science-ship', 1)
+  check('with a science ship queued or owned it builds no second', !plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'science-ship'))
+  const sci = plan(MARS).intents.find((i) => i.kind === 'move-ship')
+  check('the science ship heads for the nearest star it has not surveyed (Alpha Centauri)', sci?.kind === 'move-ship' && sci.systemId === 'alpha-centauri' && sci.bodyName === null, JSON.stringify(sci))
+
+  // At an unexplored star it orders both, independently: explore, then survey.
+  {
+    const sciShip = useShipStore.getState().ships.find((s) => s.ownerId === MARS && s.classId === 'science-ship')!
+    useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === sciShip.id ? { ...s, location: { kind: 'star' as const, starId: 'alpha-centauri', offset: [0, 0, 0] as [number, number, number] } } : s)) })
+    const there = plan(MARS).intents
+    check('at an unexplored star it orders an explore', there.some((i) => i.kind === 'explore-system' && i.shipId === sciShip.id))
+    check('...and a survey, without waiting for the exploring', there.some((i) => i.kind === 'survey-system' && i.shipId === sciShip.id))
+    useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === sciShip.id ? { ...s, location: { kind: 'orbiting' as const, systemId: 'sol', bodyName: 'Mars', periodDays: 1, phaseDeg: 0, inclinationDeg: 0 } } : s)) })
+  }
+
+  setTech(MARS, ['orbital-construction'])
+  check('once it can build Starbases it wants a Construction Ship', plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'construction-ship'))
+
+  // A surveyed, unclaimed star with a Construction Ship at home: it loads a kit.
+  freshWorld()
+  setTech(MARS, ['orbital-construction'])
+  spawnExtra(MARS, 'science-ship', 1)
+  spawnExtra(MARS, 'construction-ship', 1)
+  spawnExtra(MARS, 'cargo-ship', 1)
+  for (const id of ['alloys', 'energy', 'exoticMatter'] as const) useResourceStore.getState().setAmount(MARS, id, 1000)
+  const sv = useSurveyStore.getState()
+  sv.discover(MARS, { kind: 'explored', starId: 'barnards-star' }, 0, 0)
+  for (const body of systemBodies('barnards-star')) sv.discover(MARS, { kind: 'surveyed', bodyName: body }, 0, 0)
+  const claim = plan(MARS)
+  check('it picks the surveyed, unclaimed star as its target', claim.memory?.expansionTarget === 'barnards-star')
+  const conShip = useShipStore.getState().ships.find((s) => s.ownerId === MARS && s.classId === 'construction-ship')!
+  check('the Construction Ship at the capital loads a Starbase kit', claim.intents.some((i) => i.kind === 'load-cargo' && i.shipId === conShip.id))
+  useShipStore.getState().setShipCargo(conShip.id, { alloys: 220, energy: 120, exoticMatter: 5 })
+  const go = expander(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: 'barnards-star' })
+  check('...once loaded it flies to the star', go.intents.some((i) => i.kind === 'move-ship' && i.shipId === conShip.id && i.systemId === 'barnards-star' && i.bodyName === null))
+  useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === conShip.id ? { ...s, location: { kind: 'star' as const, starId: 'barnards-star', offset: [0, 0, 0] as [number, number, number] } } : s)) })
+  const build = expander(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: 'barnards-star' })
+  check('...and builds the Starbase when it arrives', build.intents.some((i) => i.kind === 'build-starbase' && i.shipId === conShip.id))
+  // Resupply: the Construction Ship is away and empty, the Cargo Ship hauls the kit.
+  {
+    const ships = useShipStore.getState().ships
+    const con = ships.find((s) => s.ownerId === MARS && s.classId === 'construction-ship')!
+    const car = ships.find((s) => s.ownerId === MARS && s.classId === 'cargo-ship')!
+    const at = (id: string, starId: string, cargo: Record<string, number> = {}) =>
+      useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === id ? { ...s, cargo: cargo as never, location: { kind: 'star' as const, starId, offset: [0, 0, 0] as [number, number, number] } } : s)) })
+    const kit = { alloys: 220, energy: 120, exoticMatter: 5 }
+    const run = () => expander(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: 'barnards-star' }).intents
+    at(con.id, 'wolf-359') // away, empty
+    useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === car.id ? { ...s, cargo: {} as never } : s)) })
+    check('empty Cargo Ship at the capital loads a kit for it', run().some((i) => i.kind === 'load-cargo' && i.shipId === car.id))
+    at(car.id, 'sol', kit)
+    check('a loaded Cargo Ship flies to where the Construction Ship waits', run().some((i) => i.kind === 'move-ship' && i.shipId === car.id && i.systemId === 'wolf-359'))
+    at(car.id, 'wolf-359', kit)
+    check('...and hands the kit over when they meet', run().some((i) => i.kind === 'transfer-cargo' && i.fromShipId === car.id && i.toShipId === con.id))
+    useShipStore.setState({ ships: useShipStore.getState().ships.filter((s) => s.id !== car.id) })
+    check('with no Cargo Ship, an empty Construction Ship goes home to load', run().some((i) => i.kind === 'move-ship' && i.shipId === con.id && i.bodyName === 'Mars'))
+  }
+  // A star somebody already claims is not a target.
+  check('it will not target its own capital system', pickTargetFor('sol') === false)
+  function pickTargetFor(starId: string): boolean {
+    const bbx = buildBlackboard(MARS, captureSnapshot(0))
+    return expander(bbx, captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: starId }).memory?.expansionTarget === starId
+  }
+}
+
 
 console.log('\n=== 5. The Admiral ===')
 {
@@ -189,7 +298,7 @@ console.log('\n=== 5. The Admiral ===')
   declareWarOn(MARS, VENUS, 0)
   spawnExtra(MARS, 'cruiser', 3)
   const attack = admiral(buildBlackboard(MARS, captureSnapshot(1)), captureSnapshot(1), INITIAL_AI_MEMORY)
-  check('stronger, it sends the navy at Venus', attack.memory?.targetBody === 'Venus' && attack.intents.every((i) => i.kind === 'move-ship' && i.bodyName === 'Venus') && attack.intents.length > 0)
+  check('stronger, it sends the navy at Venus', attack.memory?.targetBody === 'Venus' && attack.intents.filter((i) => i.kind === 'move-ship').every((i) => i.kind === 'move-ship' && i.bodyName === 'Venus') && has(attack.intents, 'move-ship'))
 
   const venusSide = admiral(buildBlackboard(VENUS, captureSnapshot(1)), captureSnapshot(1), INITIAL_AI_MEMORY)
   check("the weaker side doesn't throw its navy at Mars's main fleet", venusSide.memory?.targetBody !== 'Mars' && !venusSide.intents.some((i) => i.kind === 'move-ship' && i.bodyName === 'Mars'))
@@ -203,11 +312,11 @@ console.log('\n=== 5. The Admiral ===')
     ),
   })
   const defend = admiral(buildBlackboard(MARS, captureSnapshot(2)), captureSnapshot(2), INITIAL_AI_MEMORY)
-  check('an attack on its own world comes first: it defends Luna', defend.intents.length > 0 && defend.intents.every((i) => i.kind === 'move-ship' && i.bodyName === 'Luna'))
+  check('an attack on its own world comes first: it defends Luna', has(defend.intents, 'move-ship') && defend.intents.filter((i) => i.kind === 'move-ship').every((i) => i.kind === 'move-ship' && i.bodyName === 'Luna'))
 
   freshWorld()
   const home = admiral(buildBlackboard(MARS, captureSnapshot(1)), captureSnapshot(1), INITIAL_AI_MEMORY)
-  check('at peace, a navy already home stays put', home.intents.length === 0)
+  check('at peace, a navy already home stays put (it only gathers itself into one fleet)', !has(home.intents, 'move-ship') && has(home.intents, 'merge-fleets'))
 }
 
 console.log('\n=== 6. The Marshal ===')
@@ -317,6 +426,7 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
   for (let day = 1; day <= (Number(process.env.AI_STOP) || 1100); day++) {
     if (day % 30 === 0) for (const c of COUNTRIES) applyStrategicIncome(c.id, 1)
     runStrategicAI(day)
+    resolveCommsSignals(day)
     resolveShipyards(day)
     marsArmiesOnVenus = Math.max(marsArmiesOnVenus, useArmyStore.getState().armies.filter((a) => a.ownerId === MARS && a.location.kind === 'body' && a.location.bodyName === 'Venus').length)
     for (const s of useShipStore.getState().ships) {
@@ -369,6 +479,59 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
   check('...and the war ended in a peace', events.some((e) => e.kind === 'peace-signed' && e.countryIds.includes(MARS) && e.countryIds.includes(VENUS)))
   check('Orion, with no neighbours, stayed at peace', !events.some((e) => e.kind === 'war-declared' && e.countryIds.includes(ORION)))
   check('Lalande (the player here, sharing no system) was left alone', !events.some((e) => e.kind === 'war-declared' && e.countryIds.includes(LALANDE)))
+}
+
+console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and build Starbases ===')
+{
+  const runExpansion = (label: string, grantResearch: boolean, days: number) => {
+    freshWorld()
+    const settle = (simDays: number) => {
+      for (const s of useShipStore.getState().ships) {
+        if (s.order && simDays >= s.order.arrivalSimDays) {
+          useShipStore.getState().setShipLocation(s.id, resolveArrivalLocation(s.order.destination, s.id), undefined, true)
+        }
+      }
+    }
+    const aiIds = [MARS, VENUS, ORION]
+    let firstStarbaseDay = -1
+    let surveyedBodies = 0
+    for (let day = 1; day <= days; day++) {
+      if (day % 30 === 0) {
+        for (const c of COUNTRIES) applyStrategicIncome(c.id, 1)
+        // Simple mode's labs feed every nation's tech trees; Complex mode has none.
+        if (grantResearch) for (const id of aiIds) useTechStore.getState().grantResearch(id, 'physics', 25)
+      }
+      runStrategicAI(day)
+      resolveCommsSignals(day)
+      resolveShipyards(day)
+      settle(day)
+      resolveSurvey(day)
+      if (firstStarbaseDay < 0 && useStarbaseStore.getState().starbases.length > 0) firstStarbaseDay = day
+      if (process.env.AI_TRACE && day % 180 === 0) {
+        const sv = useSurveyStore.getState().discovered
+        console.log(`    ${label} d${day}: starbases=${useStarbaseStore.getState().starbases.map((b) => `${b.ownerId.slice(0, 5)}@${b.starId}`).join(',') || '-'} surveyed=${aiIds.map((id) => `${id.slice(0, 5)}:${sv[id]?.surveyed.size ?? 0}`).join(' ')} tech=${aiIds.map((id) => [...useTechStore.getState().stateFor(id).researched].filter((t) => !['warp-theory', 'hyperspace-theory'].includes(t)).join('+') || '-').join(' | ')}`)
+      }
+    }
+    const sv = useSurveyStore.getState().discovered
+    for (const id of aiIds) surveyedBodies += sv[id]?.surveyed.size ?? 0
+    const commandsInFlight = useShipStore.getState().ships.reduce((n, sh) => n + (sh.pendingCommands?.length ?? 0), 0)
+    return { firstStarbaseDay, surveyedBodies, starbases: useStarbaseStore.getState().starbases, commandsInFlight }
+  }
+
+  const simple = runExpansion('simple', true, 3000)
+  check('with research income, an AI empire surveys other systems', simple.surveyedBodies > 10, `${simple.surveyedBodies} bodies`)
+  check('...and ends up with a Starbase of its own building', simple.starbases.length > 0, `first on day ${simple.firstStarbaseDay}: ${simple.starbases.map((b) => `${b.ownerId}@${b.starId}`).join(', ')}`)
+  check('...no two empires pile onto the same system', new Set(simple.starbases.map((b) => b.starId)).size === simple.starbases.length, simple.starbases.map((b) => b.starId).join(','))
+  check('...never more than the cap per empire', ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic'].every((id) => simple.starbases.filter((b) => b.ownerId === id).length <= AI_MAX_STARBASES))
+  check('...each in a system nobody else owned', simple.starbases.every((b) => !systemBodies(b.starId).some((body) => useTerritoryStore.getState().bodyOwner[body])))
+
+  // No research income, so no Warp Comms either: every order to a ship in
+  // another system crosses light-years at light speed, like the player's.
+  const complex = runExpansion('complex', false, 1200)
+  check('with no research income (Complex mode) nothing is built and nothing breaks', complex.starbases.length === 0)
+  check('...its science ships fly out, but their orders crawl at light speed (commands still in flight)', complex.commandsInFlight > 0, `${complex.commandsInFlight} in flight, ${complex.surveyedBodies} bodies surveyed`)
+  const complexLong = runExpansion('complex-long', false, 3600)
+  check('...and given years, they arrive and its science ships explore and survey', complexLong.surveyedBodies > 0, `${complexLong.surveyedBodies} bodies`)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

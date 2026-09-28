@@ -756,59 +756,106 @@ Update this file with relevant, useful information as you go.
 
 ---
 
-# Project Context — Combat/Navy track handoff (ships, armies, sandbox, controls, terrain battles)
+# Project Context — Combat/Navy track handoff (starbases & borders, AI diplomacy, comms/travel diagnostics)
 
-(Updated by /newchat, 2026-09-25. `Context.md` == `CONTEXT.md` on this case-insensitive FS — edit only this section, never overwrite the file. Standing rules and architecture live in `CLAUDE.md` (read it first; it has bullets for Sandbox, Scenarios, Comms & the arena, Controls, Time & interruptions, Terrain battles).)
+(Updated by /newchat, 2026-09-27. `Context.md` == `CONTEXT.md` on this case-insensitive FS — edit only this section, never overwrite the file. Standing rules and architecture live in `CLAUDE.md`.)
 
 ## Objective
-Web grand-strategy game (Vite + React + TS + r3f + zustand). User owns combat/tech/ships; a collaborator owns economy/politics (only sanctioned edit there: `economyStore.setWorldOwner`). This track: nations own ships/armies, war/peace + AI, the spatial ground war, the no-nation sandbox, scenarios, pacing, controls, and (this session) the **holographic map look, real Earth, and the new terrain-battle layer**.
+Web grand-strategy game (Vite + React + TS + r3f + zustand). User owns combat/tech/ships; a collaborator owns economy/politics (only sanctioned edit there: `economyStore.setWorldOwner`). This session: a diagnostic pass on FTL travel/comms/AI-diplomacy mechanics the user found confusing or broken, then a full **Starbases + Stellaris-style border** feature (their own request: "work on expansion... make sure they work with war... claiming planets... Stellaris-style border").
 
 ## Current State
-Everything below is built, live-verified in the browser, and green (last sweep: `npx tsc -b` clean, every `tests/*.test.ts` 0 fails, `npm run build` ok). **Nothing is committed** (user rule; large uncommitted diff). No probe left in `src/main.tsx`.
+Green: `npx tsc -b` clean, every `tests/*.test.ts` 0 fails, `npm run build` ok. **Nothing committed this session** (user rule) — git status has the Starbase feature's new/modified files uncommitted. An in-progress merge from before this session was resolved/committed by the user outside this session; the tree was clean when this session's own edits began.
 
-**This session's work**
-- Small UI fixes: Outliner **Colonies** now under Battles and lists every owned world in every system (click navigates); Settings label contrast; Esc from Settings then Esc reopens the main menu (`menuStore.view`).
-- **Contests**: hostile armies on one body with no shooting = Battles kind `'contest'` (red ◆ badge, rolls up to system/star/neighbourhood).
-- **Ground speed/pace**: unit speeds cut ~4x (infantry 37.5 km/day ref) and fight rates (damage 0.02, regen 0.005, entrench 8d, AI rethink 64 steps) cut to match, so a campaign takes months; `AI_STALEMATE_DAYS` 730; a single `stepGroundWar` call is capped at `MAX_GROUND_STEPS_PER_CALL` (4096 steps ~256 days — long test runs must be chunked).
-- **Holographic look**: ground map = crisp per-node shader globe (`scene/HoloGlobe.tsx`, `holoTerrain.ts`, node-colour texture, contour coasts, hatch, rim glow, halo) glowing in the world's own colour; **flat rectangular map** (`FlatMap.tsx`, `mapProjection.ts`, `flatLookup.ts` baked lookup) with a top-right live-thumbnail **projection switch** (`components/ProjectionSwitch.tsx`, `projectionThumb.ts`); satellite view planets/moons are terrain-lit holograms in the planet's colour (`HoloPlanet.tsx`, `HologramBody.tsx`), control shell drawn as crisp cells.
-- **Real Earth**: Natural Earth 110m coastline embedded (`data/earthLand.ts`, `scene/earthTerrain.ts`), biomes hand-placed regions (approximate), `BodySurface.landValue` for smooth coasts. This changed army scenarios: Woods reserve 9 cells back; **Outnumbered on the Ice moved to Pluto, now medium**, enemy third army 20% (falling back can't win on uniform ice); `findBattlefield` prefers uniform ground.
-- **Terrain battles (new, plan-approved, all 4 milestones + polish done)**: `scene/terrainMap.ts` (local gnomonic frame, relief grid 56x56 over 7 cells), `terrainBattle.ts` (pure fine-scale sim: same ranges/speeds/damage, fine terrain, height advantage, slope slowing, A*, AI advance, end rules), `terrainWar.ts` (trigger/group/join/write-back), `state/terrainStore.ts`, view level `'terrain'` (`TerrainViewScene.tsx`, `TerrainPanel.tsx`), Battles kind `'terrain'` (violet ◈, Outliner row, ground-map chip). Trigger: hostile pair within 1.5 cells, at least one non-artillery; units within 2.5 cells join; ends when a side is gone or apart >3 cells for 2 days. `GroundWorld.engagedUnitIds` freezes engaged units in `stepGroundWar` (default undefined = old behaviour); strength/position/route/`firingAtId` written back to `armyStore` each resolve; survivors get `objectiveNode: null` (else coarse AI never replans). Coarse orders to engaged units are refused; player orders on the terrain map. Relief rendered as a glowing **point cloud with a height colour gradient** (blue→teal→green→yellow→orange→gold, gamma 0.55, legend bottom-right), contour lines coloured by height. Scenario tiers verified through the whole resolver (`tests/terrainWar.test.ts` §5). New tests: `terrain`, `terrainWar`, `earth`, `flatMap`; `battles`/`controls`/`workspace` extended.
+**This session's work, in order**
+1. **Ground-map grid visibility**: fixed low-contrast grid → user asked to remove the whole grid + free movement → user said stop, revert → net result: **fully reverted to the original pre-session grid** (thin `#6fe3ff` lines/dots, `GRID_OPACITY`), confirmed by screenshot match. No grid/movement change survived.
+2. **Sandbox landing bug**: `landingCheck` (`scene/armyLogic.ts`) refused to land troops on any body with no owner/controller — blocked the sandbox's core premise. Fixed narrowly: `isRogueFaction` nations can land freely on an unclaimed system; nation-game invasion rule unchanged. Verified live end-to-end.
+3. **Outliner**: idle troop transports now get a row (`playerArmyGroups`, `scene/armyOutliner.ts`) even with no cargo.
+4. **Fire-line colours**: ground/terrain fire lines now use space combat's yellow(mutual)/red(hostile-unreturned)/green(friendly-free-shot) scheme, via new pure `classifyFireLine` (`scene/armyLogic.ts`), tested.
+5. **Terrain-view recenter** button added (`TerrainPanel`/`TerrainViewScene`).
+6. **Diagnostics (explained + live-tested, mostly not code-fixed)**: (a) warp travel is genuinely slow by design (real sub-light-multiple flight; hyperdrive is the instant option) — confirmed live + by math. (b) **gravity-well escape time varies hugely by body mass** (resting at Sol itself ≈55d vs a planet <1d) — not a bug, flagged as a likely balance surprise since ships often rest "at a star"; not fixed. (c) **Warp Comms tech exists, unlocked by Warp Theory, but not auto-granted** — light-speed comms by design until researched; not changed. (d) **"ship teleports" bug root-caused**: `commsVisual.ts`'s delayed "visual" position is reconstructed from a delay recomputed every frame off *current* distance; when a ship outruns its own comms tier (any warp ship before Warp Comms is researched) the reconstructed time runs backward faster than real time, swinging the displayed position wildly — diagnosed, not yet hardened/fixed.
+7. **AI diplomacy — Venus's automatic opinion decline removed**: `diplomat.ts`'s `AI_NEIGHBOUR_FRICTION` (-0.5/cycle, unconditional, uncapped, nothing recovering it) made any two neighbours *inevitably* go to war eventually with zero real trigger — explained the near-instant unprovoked wars the user saw. Removed (constant deleted too); opinion now only recovers toward neutral from a real grievance. `tests/ai.test.ts`'s headless campaign still shows a *deliberately seeded* rivalry leading to war as before.
+8. **Comms-signal indicator resized**: was a fixed 8–13px CSS dot+glow (`App.css` `.comms-signal-dot`), oversized at interstellar zoom since it doesn't scale with camera distance — shrunk to ~4px.
+9. **Starbases + Stellaris-style borders** (plan-approved, all 6 milestones done — see below).
+
+### Starbases + borders — what was built
+- **`data/starbaseData.ts`**: 220 alloys/120 energy/5 exotic matter, 90-day build, 50 integrity, 1.5 armor, 25/day siege damage, loss-value 40. New tech **`orbital-construction`** (`data/techData.ts`, child of `orbital-mechanics`, NOT pre-seeded).
+- **`state/starbaseStore.ts`** + **`scene/starbaseLogic.ts`** (pure): `Starbase { id, starId, ownerId, integrity, readySimDays }`, keyed by **starId**, stands at its system's own primary star. One per nation per system; refuses mid-war against whoever's Starbase already claims it; refuses uncharted systems. Economy-mode-agnostic (draws `resourceStore` directly, like ships/defenses).
+- **Territory**: `scene/territory.ts` `systemClaim(starId, owners, starbaseOwnerIds?)` — optional 3rd param folds Starbase owners into the claim, the one piece letting a nation hold a system with **zero colonized planets**. All existing call sites unaffected.
+- **War**: `hooks/useStarbaseResolver.ts` (mirrors `useDefenseResolver`) — hostile armed warships *at that star* (reuses `armyLogic.hostileWarshipsAt`) grind integrity down daily, no return fire; destruction pushes a diplomacy event + calls `recordLoss` (feeds war score/exhaustion like a ship/army kill). No occupation state — a Starbase is destroy-it-or-not, never ceded by treaty (deliberate simplification).
+- **Rendering**: `scene/TerritoryDiscs.tsx` — soft owner-coloured additive-blend glow per claimed star, interstellar view (cheap technique, no Voronoi/polygon lib). `GalacticViewScene.tsx`'s neighbourhood marker gets the same ring one level out via new `neighborhoodClaim` (only Solar Neighbourhood has charted stars today, so only it will ever show one). `claimRingStyle` exported from `InterstellarScene.tsx` for reuse.
+- **Outliner**: real Starbase list in the previously-always-empty section (`useStarbaseEntries`, `'starbase'` EntryKind, diamond icon), click jumps to interstellar view (hardcoded `'solar-neighborhood'`).
+- **Player UI**: a "Build Starbase" button was missing from the original plan — caught during live verification and added to the interstellar star-inspector panel, gated by `canBuildStarbase`.
+- **AI**: `build-starbase` Intent (`ai/types.ts`), `shipwright.ts` queues one (capped at 1) once `bb.hasResearched('orbital-construction')` and affordable; `executor.ts` calls `starbaseStore.build`. New `AiSnapshot.starbases`/`researchedOf`, `Blackboard.hasResearched`/`myStarbaseCount`. **Dormant in practice**: no AI empire researches anything beyond the two seeded techs (`warp-theory`, `hyperspace-theory`) — there's no AI tech-research agent at all. Flagged, not built.
+- New `tests/starbase.test.ts` + additions to `tests/territory.test.ts`, `tests/ai.test.ts`.
 
 ## Decisions
-- Terrain map is the SAME war at finer resolution (honest scale, ~3,400 km wide at Earth size), not a magnified/different game; opens automatically like ship combat (pace to OPS, Battles entry/badge/chip; player opens it); no new time mode.
-- Every engagement (incl. AI vs AI) uses the terrain sim; fallback if it hurts the AI campaign: only when the player is in the group (not needed so far; AI campaign takes Venus ~d708).
-- Satellite/ground holograms use each world's own colour; ground-map land palette stays teal (user hasn't asked to change it).
-- Sandbox = four no-nation factions; hostile sandbox armies hold and fire (ground AI untouched); queueable = movement orders only; Quit resets every store via `getInitialState()`.
+- Starbase role is territory-claim only — no weapons, no resource output (user's explicit pick over "fights"/"economic output").
+- Starbase destruction is combat-only, never via treaty/occupation.
+- Borders render at both Interstellar (glow) and Galactic/neighbourhood (ring) level — user's explicit choice, not the narrower "Interstellar only" I'd proposed.
+- Sandbox factions (`isRogueFaction`) can land troops on unclaimed systems; nations still cannot (regression test locks this in).
 - Never call a hook after an early return in a component (tests scan for it).
 
 ## Constraints
 - Never commit unless asked. Full sweep after any change: `npx tsc -b`, every `tests/*.test.ts` via `npx tsx`, `npm run build`.
 - `Context.md`==`CONTEXT.md` (case-insensitive); don't read it whole, edit only this last section.
-- r3f scenes: Vite HMR does not re-run effects in a Canvas — reload/re-enter the view before judging; browser screenshots lag (use DOM/JS); the browser tool can't drive canvas right-click on the globe reliably (it did work on the terrain map); scenario starts unpaused — pause with Space. Temporary store probes on `window.__probe` in `src/main.tsx` must be reverted (backup pattern: copy main.tsx to the scratchpad first).
+- Dynamic `import()` of a store module from the browser JS tool **often resolves to a different instance than the one the running app uses** (seen repeatedly this session; likely Vite dev-server URL/cache-busting divergence). Don't trust a dynamic-import store read/write for verification unless it's the first thing done right after a fresh full reload — and even then be suspicious of any store that imports another store. Prefer driving the real UI (clicks, the dev Debug Console, real panels) and reading back via `get_page_text`/`read_page`.
+- The Browser pane's `read_page`/`ref`-click coordinate frame can drift from the `computer`-tool screenshot frame (seen as 1024x768 vs 800x600) after a `resize_window` call earlier in a session, even after `resize_window({preset:'desktop'})` — causes ref-clicks to land wrong (e.g. a DraggableWindow close button "not working"). Re-call `resize_window({preset:'desktop'})` and re-screenshot if ref-clicks keep missing.
+- Screenshots lag; verify via `get_page_text`/`read_page` text, not just the visual frame.
+- A debug-spawned armed ship under an AI-controlled nation (Mars/Venus/Orion, `STRATEGIC_AI_COUNTRY_IDS`) gets **immediately reassigned by that nation's own strategic AI** — confounds live tests expecting an "enemy" ship to sit still. Use sandbox rogue factions (no strategic AI) for that, or accept test-only coverage.
 - macOS: no `timeout`; python heredoc for multi-line edits; don't `pgrep -f` in a Monitor.
-- Nation ids: `imperial-state-of-mars`, `republic-of-venus`, `orion-republic`, `kingdom-of-lalande`. Sandbox ids in `countryRoster`.
+- Nation ids: `imperial-state-of-mars`, `republic-of-venus`, `orion-republic`, `kingdom-of-lalande`. Sandbox ids in `countryRoster` (`SANDBOX_PLAYER_ID`, `PIRATES_ID`, etc.), `isRogueFaction(id)` checks membership.
 
 ## Important Details
-- Terrain constants live in `data/groundData.ts` (`TERRAIN_*`, `HIGH_GROUND_BONUS`, `SLOPE_*`, `TERRAIN_RELIEF`). Relief is a property of the globe point (noise), sim uses only the grid; the point cloud adds visual-only detail.
-- Earth site for the easy/medium scenarios is where the terrain battle was checked; one dominant peak there (heights 0–3980 m).
-- Plan file for the terrain feature: `/Users/pikaj/.claude/plans/concurrent-dazzling-wilkinson.md`.
+- Plan file for Starbases/borders: `/Users/pikaj/.claude/plans/starry-sparking-wave.md`.
+- Debug Console (backtick, or `useDebugConsoleStore.setState({open:true})` right after a fresh reload) has "Free Research"/"Grant Research" cheats — used to research Orbital Construction live; no resource-grant cheat exists (used the real stockpile/`setAmount`, or just waited for income).
+- `hostileWarshipsAt`/orbital-superiority already treats a ship "orbiting" a star (bodyName = the star's own primary-component name, via `getSystemStars(starId)[0].name`) the same as orbiting a planet — let Starbase siege reuse it directly, no new location-matching code needed.
 
 ## Open Questions
-- Terrain map visuals are a first pass (relief exaggerated ×0.0011, one big hill on the checked site, small unit chips, camera framing); user may want tuning toward the reference images (glowing ridge lines, city blocks).
-- No line-of-sight blocking by ridges yet; no regen inside battles; ground balance untuned beyond scenario tiers.
-- Should the ground-map land palette also take each planet's colour? Comms signals in satellite/arena views? Should hostile sandbox armies hunt on wild ground? A manually chosen OPS/TAC revert after a while? (older open items)
-- Moon close-up (`MoonDetailScene`) has no army markers; declined AI peace offers aren't logged.
+- Should gravity-well escape time be capped/reworked so resting "at a star" isn't a disproportionate ~55-day tax vs. a planet's <1 day?
+- Should Warp Comms auto-unlock alongside Warp Theory (or be cheaper), or is the light-speed-until-researched gap intentional friction to keep?
+- Should the comms-visual backward-drift ("ship teleports") be hardened (clamp so reconstructed time can't run backward), independent of the Warp Comms balance question?
+- Should an AI tech-research agent be built at all (currently AI never researches past the two seeded techs, so `build-starbase`'s tech gate is dormant for every AI empire)?
+- Terrain-map visuals still a first pass (relief exaggerated, camera framing); no line-of-sight blocking by ridges; ground balance untuned beyond scenario tiers — all carried over, untouched this session.
 
 ## Next Steps
-1. Ask the user for the next request; likely: terrain-map visual tuning, line of sight / more relief effects, cities/key nodes as solid blocks, more scenarios that exercise terrain, satellite-view army chips, balance.
+1. Ask the user for the next request — likely: a real live playtest of the Starbase siege/destruction path (not cleanly verified live this session — spawned enemy ship got reassigned by its own AI before the siege could be observed), a decision on the open balance/design questions above, or back to terrain-map visual tuning.
 2. If touching scenes: reload/re-enter the view before verifying; run the full sweep before finishing.
-3. Commit only if asked.
+3. Commit only if asked — current tree has this session's Starbase feature uncommitted.
 
 ## User Preferences
-- Short mid-task corrections are authoritative; wants plain-language UI text; direct control in combat views; cheats in the sandbox in any build.
-- Ask (AskUserQuestion) before big architectural commitments and use plan mode for big features; no invented mechanics; report findings honestly (incl. "no bug found").
+- Short mid-task corrections are authoritative (e.g. the grid revert-then-clarify sequence this session).
+- Ask (AskUserQuestion) before big architectural commitments and use plan mode for big features (Starbases/borders went through plan mode as instructed).
+- No invented mechanics; report findings honestly, including "no bug found" / "diagnosed but not fixed, here's why."
+- Wants concrete live browser verification for anything UI-observable, but accepts automated-test-only coverage when a live repro is genuinely blocked by tooling/AI confounds (disclosed for the siege-destruction step).
+- Prefers root-cause explanations backed by actual code/math (e.g. the travel-time and gravity-well diagnostics) over reassurance without evidence.
+- Also wants plain-language UI text, direct control in combat views, and cheats available in the sandbox in any build.
 - Wants the maps to look like the holographic reference images (bright glowing teal/planet-coloured, crisp not blurry), colours that match each planet, relief with a gradient; terrain accuracy for Earth.
-- Live browser verification for anything UI-observable, plus tests for each new mechanic and bug.
+
+## Update: warp fix, borders, survey/construction/cargo, knowledge-based comms (same day, after the section above)
+User asked for four things; all done, full sweep green (`tsc -b`, all 46 `tests/*.test.ts`, `npm run build`), nothing committed.
+1. **Warp When Ready**: greyed out unless Use Warp Drive is on; switching it on (or re-enabling warp with it on) re-plans an in-flight reaction order to engage warp when ready (`scene/warpReplan.ts`; `planMove` now carries an unfinished gravity-well escape and records it even on warp-off orders). `tests/warpReplan.test.ts`.
+2. **Borders** (`scene/TerritoryDiscs.tsx`): shader bubbles per claimed star, merged for one nation, cut with a bright seam between nations, striped + "Contested: A / B" label for disputed systems, nation name labels. Live-checked in the browser.
+3. **Science / Construction / Cargo ships** (plan `/Users/pikaj/.claude/plans/snuggly-singing-elephant.md`, user decisions inside): see CLAUDE.md "Exploration, survey, cargo & Starbases". Star inspector "Build Starbase" button REMOVED; building is a Construction Ship command from the ship panel. `starbaseStore.canBuildStarbase/build` now take a `shipId`. Fixed an old bug: `starbaseStore` was missing from `gameReset`.
+4. **Knowledge-based comms** (`scene/commsVisual.ts`): live position for every ship, hollow "predicted" marker out of contact, fights unknown until their news arrives (`engagementKnownToPlayer`, gates the battle list, ShipPanel Enter Combat and the auto-TAC pace via `fightPace.spaceAware`). `visualShipRenderPosition` is kept (tested) but no longer places anything, so the comms "teleport" drift bug is gone from the scenes.
+5. **AI expands** (user correction: AI nations must do this too): `ai/expander.ts` (research → science ship → survey outward → claim nearest surveyed star via construction ship + kit). Headless proof in `tests/ai.test.ts` section 8 (Simple mode: several Starbases by day ~2900, never two empires on one system; Complex: explores and surveys, builds nothing since no research income exists there).
+Live-verified in the browser: science ship flight, panel text (survey row, "exploring… report has not reached you yet", 4.4y signal delay), unexplored stars labelled "(unexplored)" with Orion's border hidden, Enter System disabled with a tooltip, hollow predicted markers, Construction Ship hold/load/build panel with reasons.
+Not live-verified (test-covered only): a full survey completing and the Starbase build via UI, the cargo Load/Transfer buttons on an owned world, the fight-intel gate in a real fight, the mid-flight Warp When Ready re-plan.
+Open: Warp Comms still isn't auto-granted (light-speed comms until researched: a 4 ly trip means ~4 year signals both ways); gravity-well escape at a star is still ~46-55 days; the Explore step needs a Science Ship specifically (a warship arriving at an unexplored star does NOT explore it).
+
+## Update: tooltip fix, Stellaris-style explore/survey, right-click star menu (later still)
+- **Double tooltip**: `TooltipLayer` only lifted the NEAREST `title`, so the browser then showed the next titled ancestor's plain tooltip a moment later (and a re-render that rewrote a `title` did the same). It now lifts every titled ancestor (`titledChain`) and re-lifts via a MutationObserver. Verified live with a nested titled DOM; `tests/tooltips.test.ts`.
+- **Explore vs survey**: two independent science-ship commands (`explore`, `survey`), enabled by the ship being at the star (not by what the player has heard back); surveying needs no exploring; nothing explores automatically any more (the AI Expander issues `explore-system` + `survey-system`). Survey results still reach the player after signal delay.
+- **Right-click a star** with a science/construction ship selected: menu Move / Explore / Survey / Build Starbase; the ship flies there and acts on arrival (`arrivalCommand`), or acts at once if already there. `settleShips` is now an exported function (testable headless). Live-verified: menu, flight, arrival, survey job running.
+
+## Update: combat entry by known ships, fleets, live view (latest)
+- **Enter Combat** is allowed iff every ship present is known (`commsVisual.shipsIntel/engagementIntel`: own ships always; a stranger once the signal from your ships there has arrived since it came to rest; a ship with no arrival in its history, e.g. scenario-spawned, is known at once). Otherwise the button (ShipPanel, Outliner battle row) stays visible but disabled with `unknownShipsMessage`. Never kicks you out of a view you are in. I could not reproduce the "scenario load kicks me out" report; with a scenario at another body, loading while in the arena does drop you (that engagement is gone).
+- **Fleets are the player's to form**: `spawnShip` always makes a solo fleet, `mergeFleets` refuses civilians (`scene/fleetRules.ts`: civilian/science/construction/cargo; troop transports may join). AI gathers its own navy via `merge-fleets`.
+- **Go To**: ShipPanel always has Go To (flies the camera in-view, else opens the ship's map via `scene/shipNav.viewShip`); an Outliner click only selects (superseded below: selecting never changes the view).
+- **View delay removed** (user): ship panels, fleet list health/status and route lines show live state. Signal time still delays orders, ship commands, discovery reports and news of ships/fights.
+
+## Update: selection/menus/HUD pass (latest)
+Selecting a ship no longer changes the view (Outliner just selects; lock-on pans); star right-click menu: Explore (unexplored) vs Move to (explored), Build Starbase disabled with reason; "Refill at nearest station" for haulers (`scene/refill.ts`, arrival command now can name a body); text selection disabled; Map Modes moved to the bottom-right with a names toggle + border hover tooltip; bottom bar re-laid out (fixed height, no overlap at ~1000px). Verified live: bar geometry at galaxy/interstellar/system, Map Modes menu on top, names off + hover tooltip. Not live-verified: the nested-ship camera pan, Refill via the button (tests cover it), Build menu item states.
+- **Predicted markers removed** (user: obsolete once the view is live): no hollow triangle, no `isShipPredicted`; every ship marker is solid and at its real position.
 
 ## Session 2026-09-27 — Spaceports everywhere, goods with buyers, mothballing (both modes)
 Plan: `/Users/hopak/.claude/plans/tingly-coalescing-pnueli.md` (all sections done).
@@ -817,3 +864,47 @@ Plan: `/Users/hopak/.claude/plans/tingly-coalescing-pnueli.md` (all sections don
 - **Simple:** resources `spaceships`/`rockets` (resourceData + icons), buildings `spaceyard`, `rocketWorks`, `spaceport` (urban, `noSlot`, jobs 5, rockets 1 + spaceships 0.2 upkeep, `TRADE_PER_SPACEPORT` 60 TSC). Seeds: 2 per billion people; Mars's space industry sits on Luna (Mars's land is 15 and was otherwise full). `matchTrade` capped by `tradeCapacity` (buyer and seller); AI builds spaceports when its standing orders outgrow capacity and rocket works/spaceyards on an upkeep gap. Trade tab shows "Spaceports used / capacity TSC". Glossary entries added.
 - **Findings:** Simple AI nations trade little (~30 TSC/mo of orders vs 175–419 capacity), so the cap binds mainly for the player. Complex month-4 Mars market still shows big surpluses in dyes, sulfur, ocean-going ships, glass (1748 vs 10) and concrete — the dead-end goods now have buyers but aren't balanced to them. Invasion times with more key nodes were deliberately NOT tuned (user: tech will change them); ai/ground tests pass as is.
 - Tests: `tests/spaceports.test.ts` (new, both modes); updated simpleBuildings (20 buildings). Full sweep clean.
+
+# Project Context — Combat/Navy track handoff #2 (survey/construction/cargo, knowledge-based comms, HUD pass)
+
+(Updated by /newchat, 2026-09-27. `Context.md` == `CONTEXT.md` on this case-insensitive FS — edit only this last section, never overwrite the file. Standing rules and architecture live in `CLAUDE.md`, which already documents everything below.)
+
+## Objective
+Web grand-strategy game (Vite + React + TS + r3f + zustand). User owns combat/tech/ships; a collaborator (mr1noobfatfish) owns economy/politics. This session grew Starbases into a Stellaris-style expansion loop and moved comms to a "live view, delayed knowledge" model, plus many UX fixes.
+
+## Current State
+- Last full sweep I ran (`tsc -b`, all 46+ `tests/*.test.ts`, `npm run build`) was green BEFORE the merge below. The user then merged `origin/main` (collaborator's spaceports / mothballing work) via GitHub Desktop and resolved/committed it; git status is now clean and up to date with origin. **I resolved the CLAUDE.md and Context.md conflicts (collaborator's economy bullet + my tooltip bullet; Context sections concatenated) but did NOT run the sweep on the merged tree** — my sweep call was interrupted. Run it first.
+- Built and live-verified this session (details in CLAUDE.md): Science/Construction/Cargo ships; per-body survey; explore/survey as independent orders; explored-only star info and borders (`known` vs `discovered` survey layers); Starbases built from a Construction Ship's hold; AI `Expander` agent; shader-bubble borders + nation labels; right-click star menu (Explore/Move to/Survey/Build) with `arrivalCommand`; Refill at nearest station; live view for all ships (no predicted marker, no delayed snapshot); Enter Combat only when every ship present is known (`shipsIntel`), button disabled with reason; fleets are player-formed and civilians can't join; selecting a ship never changes the view; Map Modes moved to the bottom-right with a "Border & nation names" toggle and border hover tooltip; bottom bar fixed 54px, no overlap; text selection off; Simple economy mode is the menu default; double-tooltip fix (lift every titled ancestor); Warp When Ready re-plans in-flight orders and needs Use Warp Drive.
+- Unused leftovers: `visualShipSnapshot` / `visualShipRenderPosition` in `scene/commsVisual.ts` (only tests call them) — offered for deletion, user hasn't answered.
+
+## Decisions
+- Signal time delays orders, ship commands (explore/survey/load/transfer/build), discovery reports and news of ships/fights; it never delays what panels/markers/route lines show.
+- AI nations expand for real (research → science ship → survey → haul → Starbase) using the same commands, no comms delay, reading `discovered` truth. Research income exists only in Simple mode, so in Complex an AI explores/surveys but never builds.
+- Construction Ship is not consumed; explore needs a Science Ship specifically.
+- Starbases: territory claim only, destroyed by combat only.
+
+## Constraints
+- Never commit unless asked. Full sweep after any change (`tsc -b`, every test via `npx tsx`, `npm run build`); a helper script is at `/private/tmp/claude-501/-Users-pikaj-Documents-Terra-Relicta-TRCONQUEST/b48e001a-06d4-4d8b-9f58-0e61cf07e7b1/scratchpad/sweep.sh` (may be gone in a new session — recreate).
+- Don't read Context.md whole; macOS `sed -i ''`, no `timeout`; python heredocs for multi-line edits.
+- Browser verification: HMR after editing often reloads to the nation picker (redo setup: Simple mode default, click Mars at ~(180,320) in the 800x600 frame); dynamic `import()` of stores gives a different instance than the app; screenshots lag; drive the real UI or dispatch DOM events.
+- Never call a hook after an early return (tests scan for it).
+
+## Important Details
+- Plan file for this feature set: `/Users/pikaj/.claude/plans/snuggly-singing-elephant.md`.
+- Debug Console (backtick) spawns any ship class (incl. the new ones) and loads scenarios (Mars/Earth bodies only); Free/Grant Research cheats exist, no resource cheat.
+- Reports at light-speed comms are long (Alpha Centauri ≈ 4.4 years each way); Warp Comms still isn't auto-granted.
+
+## Open Questions
+- Delete the now-unused `visualShipSnapshot`/`visualShipRenderPosition` and their tests?
+- User reported "loading a scenario instantly kicks me out of combat"; I could not reproduce (only happens if the scenario is at a different body than the open arena). Ask for the exact steps if it recurs.
+- Not live-verified (test-covered only): full survey→Starbase build through the UI, the Refill button, nested-ship camera pan, the Build menu item states, mid-flight Warp When Ready.
+- Carried over: gravity-well escape time at stars (~46-55 d), Warp Comms auto-unlock, terrain visuals / line of sight.
+
+## Next Steps
+1. Run the full sweep on the merged tree; fix anything the merge broke.
+2. Ask the user for the next request (likely playtesting the expansion loop, more UI polish, or the open balance questions).
+
+## User Preferences
+- Short mid-task corrections are authoritative; wants plain-language UI text.
+- Ask (AskUserQuestion) before big commitments, plan mode for big features; no invented mechanics; honest reporting incl. "not verified".
+- Wants live browser verification for anything UI-observable, tests for each mechanic; wants AI nations to obey the same rules as the player.

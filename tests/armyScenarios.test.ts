@@ -1,20 +1,27 @@
 // Proves the difficulty label on every ground-battle scenario in
-// src/data/armyScenarios.ts against the REAL ground resolver
-// (`stepGroundWar`), not author judgment — see that file's own header for what
+// src/data/armyScenarios.ts against the REAL ground war — the coarse resolver
+// (`stepGroundWar`) AND the terrain battles it hands close fights to
+// (`stepTerrainWar`), chained exactly as hooks/useGroundCombatResolver.ts
+// chains them — not author judgment — see that file's own header for what
 // each tier means. The ground war has no randomness, so each configuration is
 // run once; what the suite guards is that a balance change to unit stats,
 // terrain or the ground AI can't silently make a scenario easier, harder, or
 // unwinnable.
 //
 // The "player" here is a scripted pilot issuing the same orders the UI does
-// (a unit's path with orderedMove, exactly what armyStore.orderUnits writes):
+// (a unit's path with orderedMove, exactly what armyStore.orderUnits writes;
+// once a unit is in a terrain battle the store refuses coarse orders, so the
+// pilot orders it on the terrain map instead, as terrainStore.orderUnits does):
 //   hold      no orders — units hold, dig in, and fire on what's in range
 //   bring up  order the reserve up to the front army's position, once, at the
 //             start (the one order the medium scenarios are about)
 //   link up   once a day: while the front army and the reserve are apart, the
-//             front army falls back onto the reserve; once they're together,
-//             every unit advances on the nearest enemy and halts to fire
-//             whenever one is in range (the plan the hard scenarios need)
+//             front army falls back and the reserve marches forward to meet
+//             it; once they're together, every unit advances on the nearest
+//             enemy and halts to fire whenever one is in range (the plan the
+//             hard scenarios need). It has to start on day 0: a front army
+//             caught by the enemy inside a terrain battle can't get away — the
+//             battle's patch is 7 cells across and its edge is a wall
 //
 // Run:  npx tsx tests/armyScenarios.test.ts
 //
@@ -28,7 +35,10 @@ import { armyStrength, type Army } from '../src/scene/armyLogic'
 import { buildArmyScenario, type ArmyScenarioOwners } from '../src/scene/armyScenario'
 import { findPath, groundSurface, landedUnits, unitRangeRad } from '../src/scene/groundLogic'
 import { stepGroundWar } from '../src/scene/groundResolution'
-import { arc, nearestNode } from '../src/scene/surfaceMesh'
+import { haltUnits, orderUnitsTo, type TerrainBattle } from '../src/scene/terrainBattle'
+import { toLocal } from '../src/scene/terrainMap'
+import { engagedUnitIds, stepTerrainWar } from '../src/scene/terrainWar'
+import { arc, nearestNode, nodePoint } from '../src/scene/surfaceMesh'
 import { atWar } from '../src/state/diplomacyStore'
 import { usePlayerStore } from '../src/state/playerStore'
 import { setUpTestNations, TEST_ENEMY, TEST_PLAYER } from './testNations'
@@ -47,7 +57,7 @@ function check(label: string, cond: boolean, detail = '') {
 usePlayerStore.getState().startSandbox()
 const SANDBOX: ArmyScenarioOwners = { player: SANDBOX_PLAYER_ID, enemy: PIRATES_ID }
 
-type Plan = 'hold' | 'bring-up' | 'link-up'
+type Plan = 'hold' | 'bring-up' | 'link-up' | 'late-link-up'
 
 interface Outcome {
   winner: 'player' | 'enemy' | 'draw' | 'stalemate'
@@ -88,11 +98,35 @@ function simulate(scenario: ArmyScenario, plan: Plan, owners: ArmyScenarioOwners
   const theirs = (list: Army[]) => list.filter((a) => a.ownerId === owners.enemy)
   const auto = isAutonomous ?? ((id: string) => id !== owners.player)
 
+  let lateStarted = false
+  // The terrain battles going on, carried between days like terrainStore does.
+  let battles: TerrainBattle[] = []
+  let step = 0
+  const battleOf = (unitId: string) => battles.find((b) => b.units.some((u) => u.id === unitId))
+  const editBattle = (b: TerrainBattle, fn: (b: TerrainBattle) => TerrainBattle) => {
+    battles = battles.map((x) => (x === b ? fn(b) : x))
+  }
+
   const order = (unit: (typeof armies)[number]['units'][number], toNode: number) => {
+    const inFight = battleOf(unit.id)
+    if (inFight) {
+      const goal = toLocal(inFight.frame, nodePoint(toNode))
+      const r = orderUnitsTo(inFight, [unit.id], goal, false, step)
+      if (r.ok) editBattle(inFight, () => r.battle)
+      return
+    }
     const path = unit.position ? findPath(surface, unit.position, toNode, unit.type) : null
     if (path) {
       unit.path = path
       unit.orderedMove = true
+    }
+  }
+  const halt = (unit: (typeof armies)[number]['units'][number]) => {
+    const inFight = battleOf(unit.id)
+    if (inFight) editBattle(inFight, (b) => haltUnits(b, [unit.id], step))
+    else {
+      unit.path = []
+      unit.orderedMove = false
     }
   }
 
@@ -109,20 +143,24 @@ function simulate(scenario: ArmyScenario, plan: Plan, owners: ArmyScenarioOwners
       for (const r of reserve) if (!UNIT_TYPES[r.unit.type].holdsPosition) order(r.unit, goal)
       return
     }
-    // link-up
+    // link-up (the late version waits until the enemy is on the front army in a
+    // terrain battle before it starts)
+    if (plan === 'late-link-up' && battles.length === 0 && !lateStarted) return
+    if (plan === 'late-link-up') lateStarted = true
     if (enemy.length === 0) return
     const apart = front.length > 0 && reserve.length > 0 && arc(front[0].unit.position!, reserve[0].unit.position!) >= LINKED_UP_RAD
     if (apart) {
-      const goal = nearestNode(reserve[0].unit.position!, 'fine')
-      for (const f of front) if (!UNIT_TYPES[f.unit.type].holdsPosition) order(f.unit, goal)
+      const toReserve = nearestNode(reserve[0].unit.position!, 'fine')
+      for (const f of front) if (!UNIT_TYPES[f.unit.type].holdsPosition) order(f.unit, toReserve)
+      const toFront = nearestNode(front[0].unit.position!, 'fine')
+      for (const r of reserve) if (!UNIT_TYPES[r.unit.type].holdsPosition) order(r.unit, toFront)
       return
     }
     for (const p of player) {
       if (UNIT_TYPES[p.unit.type].holdsPosition) continue
       const range = unitRangeRad(p.unit.type)
       if (enemy.some((e) => arc(e.unit.position!, p.unit.position!) <= range)) {
-        p.unit.path = []
-        p.unit.orderedMove = false
+        halt(p.unit)
         continue
       }
       const nearest = [...enemy].sort((a, b) => arc(a.unit.position!, p.unit.position!) - arc(b.unit.position!, p.unit.position!))[0]
@@ -130,17 +168,23 @@ function simulate(scenario: ArmyScenario, plan: Plan, owners: ArmyScenarioOwners
     }
   }
 
-  let step = 0
   for (let day = 0; day < MAX_DAYS; day++) {
     // Orders go onto copies — stepGroundWar never mutates its input.
     armies = armies.map((a) => ({ ...a, units: a.units.map((u) => ({ ...u })) }))
     act(day)
     const result = stepGroundWar(
-      { armies, owners: {}, controllers: {}, nodeHolders: {}, atWar, isAutonomous: auto, surfaceOf },
+      { armies, owners: {}, controllers: {}, nodeHolders: {}, atWar, isAutonomous: auto, surfaceOf, engagedUnitIds: engagedUnitIds(battles) },
       step,
       day + 1,
     )
-    armies = result.armies
+    // Close fights move onto terrain maps and the ones there are played out.
+    const terrain = stepTerrainWar(
+      { armies: result.armies, battles, owners: {}, holders: {}, atWar, isAutonomous: auto, surfaceOf },
+      result.resolvedThroughStep,
+      (b, at, n) => `terrain-${b}-${at}-${n}`,
+    )
+    armies = terrain.armies
+    battles = terrain.battles
     step = result.resolvedThroughStep
     const p = mine(armies)
     const e = theirs(armies)
@@ -237,7 +281,7 @@ for (const sc of ARMY_SCENARIOS.filter((s) => s.difficulty === 'medium')) {
   check(`${sc.name}: ...by a real margin`, bring.playerLeft / bring.playerMax >= MIN_WIN_MARGIN, `${((bring.playerLeft / bring.playerMax) * 100).toFixed(0)}% of strength left`)
 }
 
-console.log('\n=== 5. Hard: hold loses, bringing up the reserve loses, falling back and linking up wins ===')
+console.log('\n=== 5. Hard: hold loses, bringing up the reserve loses, meeting the reserve halfway and linking up wins ===')
 for (const sc of ARMY_SCENARIOS.filter((s) => s.difficulty === 'hard')) {
   const hold = simulate(sc, 'hold')!
   check(`${sc.name}: hold does not win`, hold.winner !== 'player', fmt(hold))
@@ -245,7 +289,9 @@ for (const sc of ARMY_SCENARIOS.filter((s) => s.difficulty === 'hard')) {
   const bring = simulate(sc, 'bring-up')!
   check(`${sc.name}: bringing up the reserve does not win`, bring.winner !== 'player', fmt(bring))
   const link = simulate(sc, 'link-up')!
-  check(`${sc.name}: falling back, linking up and counter-attacking wins`, link.winner === 'player', fmt(link))
+  const late = simulate(sc, 'late-link-up')!
+  check(`${sc.name}: the same plan started only once the enemy is on the front army does not win`, late.winner !== 'player', fmt(late))
+  check(`${sc.name}: falling back, meeting the reserve, linking up and counter-attacking wins`, link.winner === 'player', fmt(link))
   check(`${sc.name}: ...by a real margin`, link.playerLeft / link.playerMax >= MIN_WIN_MARGIN, `${((link.playerLeft / link.playerMax) * 100).toFixed(0)}% of strength left`)
 }
 

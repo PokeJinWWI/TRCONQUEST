@@ -156,10 +156,10 @@ export function HologramBody({ color, radius, variant = 'planet', bodyName, onSe
             onOrderTo?.()
           }}
           onPointerOver={() => {
-            document.body.style.cursor = 'pointer'
+            document.body.style.cursor = 'var(--cursor-pointer)'
           }}
           onPointerOut={() => {
-            document.body.style.cursor = 'auto'
+            document.body.style.cursor = ''
           }}
         >
           <sphereGeometry args={[radius * 1.15, 24, 24]} />

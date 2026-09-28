@@ -74,7 +74,7 @@
   font-size: 10px;
   letter-spacing: 0.06em;
   padding: 3px 8px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .hud-swap-toggle:hover {
@@ -103,7 +103,7 @@
   font-size: 11px;
   letter-spacing: 0.02em;
   padding: 3px 6px 3px 9px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   white-space: nowrap;
   flex: 0 0 auto;
 }
@@ -127,7 +127,7 @@
   font-size: 12px;
   line-height: 1;
   padding: 0 2px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tab-bar-tab-close:hover {
@@ -158,7 +158,7 @@
   width: 20px;
   height: 20px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tab-bar-add:hover {
@@ -169,6 +169,16 @@
 
 .hud-bottom {
   bottom: 0;
+  /* One height at every zoom level: the location label (system view and below)
+     used to make the bar taller than it is at interstellar/galactic level, which
+     left the centred buttons hanging over its top edge there. */
+  /* Above the side panels (z 12) so the Map Modes menu, which opens upward from
+     here, is not hidden behind the Outliner. */
+  z-index: 13;
+  height: 54px;
+  padding-top: 0;
+  padding-bottom: 0;
+  gap: 12px;
   justify-content: space-between;
   border-top: 1px solid rgba(111, 227, 255, 0.25);
 }
@@ -261,7 +271,7 @@
   font: inherit;
   font-weight: 400;
   letter-spacing: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 1px 6px;
   border-radius: 4px;
 }
@@ -297,7 +307,7 @@
   font-weight: 400;
   letter-spacing: normal;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 5px 9px;
   border-radius: 3px;
 }
@@ -322,7 +332,7 @@
   color: #9fe8ff;
   font-size: 16px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 0 2px;
 }
 
@@ -348,7 +358,7 @@
   padding: 6px 16px;
   font: inherit;
   font-size: 12px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .action-dock-tab:hover {
@@ -376,10 +386,11 @@
    the footer's true horizontal center regardless of how wide the left
    (fleet comms + time controls) and right (location label) groups are. */
 .map-action-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
+  /* An ordinary flex child of the footer, sitting in the room between the left
+     (comms + time controls) and right (map modes + location) groups. It used to be
+     pinned to the exact centre, which put it on top of the time controls whenever
+     the window was narrower than the three groups need. */
+  flex: none;
   display: flex;
   gap: 10px;
 }
@@ -396,7 +407,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-family: inherit;
 }
 
@@ -434,7 +445,7 @@
   border-radius: 3px;
   background: rgba(111, 227, 255, 0.04);
   opacity: 0.45;
-  cursor: default;
+  cursor: var(--cursor-default);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -472,7 +483,7 @@
   padding: 0;
   margin: 0;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .resource-item:hover {
@@ -514,7 +525,7 @@
   font-size: 11px;
   color: #6fe3ff;
   letter-spacing: 0.08em;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0.6;
 }
 
@@ -545,7 +556,7 @@
   color: #6fe3ff;
   text-shadow: 0 0 6px rgba(111, 227, 255, 0.6);
   letter-spacing: 0.08em;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0.6;
 }
 
@@ -556,7 +567,7 @@
 .crumb:disabled {
   color: #fff;
   opacity: 1;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .crumb-sep {
@@ -586,7 +597,7 @@
   border-radius: 3px;
   font: inherit;
   font-size: 12px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -598,7 +609,7 @@
 
 .time-btn:disabled {
   opacity: 0.3;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .time-btn.time-pause.active {
@@ -637,7 +648,7 @@
   font: inherit;
   font-size: 10px;
   letter-spacing: 0.08em;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .time-mode-btn:hover {
@@ -936,7 +947,7 @@
   font: inherit;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -1039,7 +1050,7 @@
   border-radius: 3px;
   font: inherit;
   font-size: 10px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .combat-density-btn:hover {
@@ -1080,7 +1091,7 @@
   padding: 3px 9px;
   font: inherit;
   font-size: 11px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .fleet-tab:hover {
@@ -1124,7 +1135,7 @@
 
 .fleet-group-header-row input[type='checkbox'] {
   accent-color: #6fe3ff;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .fleet-group-toggle {
@@ -1134,7 +1145,7 @@
   font-size: 10px;
   line-height: 1;
   padding: 2px 4px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .fleet-group-toggle:hover {
@@ -1161,7 +1172,7 @@
   font: inherit;
   font-size: 11px;
   padding: 4px 10px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .fleet-merge-btn:hover:not(:disabled) {
@@ -1170,7 +1181,7 @@
 
 .fleet-merge-btn:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
+  cursor: var(--cursor-blocked);
 }
 
 .fleet-merge-hint {
@@ -1189,7 +1200,7 @@
   border-radius: 3px;
   font: inherit;
   color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .fleet-row:hover {
@@ -1350,7 +1361,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   padding: 6px 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .builder-create-btn:hover {
@@ -1360,7 +1371,7 @@
 .builder-delete-btn {
   color: rgba(255, 255, 255, 0.4);
   padding: 0 2px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .builder-delete-btn:hover {
@@ -1423,7 +1434,7 @@
   font-size: 10px;
   padding: 1px 2px;
   max-width: 108px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .econ-method-select:hover {
   background: rgba(111, 227, 255, 0.18);
@@ -1462,7 +1473,7 @@
   border: 1px solid rgba(255, 207, 143, 0.4);
   color: #ffcf8f;
   border-radius: 3px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-size: 11px;
   line-height: 1;
   padding: 0 3px;
@@ -1553,7 +1564,7 @@
   font: inherit;
   font-size: 11px;
   padding: 3px 10px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .corp-btn:hover:not(:disabled) {
   background: rgba(111, 227, 255, 0.2);
@@ -1561,7 +1572,7 @@
 }
 .corp-btn:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
+  cursor: var(--cursor-blocked);
 }
 .corp-btn-danger {
   border-color: rgba(255, 107, 74, 0.5);
@@ -1602,11 +1613,11 @@
   font: inherit;
   font-size: 10px;
   padding: 1px 7px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .stock-btn:disabled {
   opacity: 0.35;
-  cursor: not-allowed;
+  cursor: var(--cursor-blocked);
 }
 .stock-buy:hover:not(:disabled) {
   background: rgba(74, 222, 128, 0.2);
@@ -1698,7 +1709,7 @@
   background: none;
   border: none;
   padding: 2px 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font: inherit;
   text-align: left;
 }
@@ -1741,7 +1752,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 4px;
   padding: 4px 8px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   color: rgba(255, 255, 255, 0.8);
 }
 .char-list-item.active {
@@ -1825,7 +1836,7 @@
   font: inherit;
   font-size: 10px;
   padding: 2px 7px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .char-member-chip:hover {
   background: rgba(111, 227, 255, 0.2);
@@ -1851,7 +1862,7 @@
   margin: 0;
   font: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0.9;
 }
 
@@ -1878,7 +1889,7 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.75);
   margin-top: 4px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .debt-offer {
   display: flex;
@@ -1900,7 +1911,7 @@
 
 /* Market buyers/sellers expansion */
 .market-row {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .market-row:hover td {
   color: #fff;
@@ -1929,7 +1940,7 @@
   border: none;
   color: inherit;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 0;
   text-align: left;
 }
@@ -2042,7 +2053,7 @@
   border: 1px solid rgba(120, 200, 255, 0.4);
   color: #7fd0ff;
   border-radius: 3px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-size: 12px;
   line-height: 1;
   width: 16px;
@@ -2058,7 +2069,7 @@
 }
 .bld-level-btn:disabled {
   opacity: 0.3;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 /* Keeps the level number + "+" aligned on rows that have no "−" (non-state). */
 .bld-level-btn-empty {
@@ -2101,7 +2112,7 @@
   border: 1px solid rgba(111, 227, 255, 0.35);
   color: #9fe8ff;
   border-radius: 3px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-size: 10px;
   padding: 2px 6px;
 }
@@ -2166,7 +2177,7 @@
   font: inherit;
   font-size: 12px;
   padding: 5px 14px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.85);
@@ -2267,7 +2278,7 @@
   font: inherit;
   font-size: 10px;
   padding: 2px 8px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .laws-enact-btn:hover {
   background: rgba(111, 227, 255, 0.2);
@@ -2467,12 +2478,12 @@
 }
 .welfare-service-detail .laws-enact-btn:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 /* --- Per-cohort consumption drill-down --- */
 .pops-cohort-row {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .pops-cohort-row:hover {
   background: rgba(111, 227, 255, 0.06);
@@ -2526,7 +2537,7 @@
 }
 
 .tech-node .inspect-label {
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .tech-node-done .inspect-label {
@@ -2542,7 +2553,7 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   padding: 2px 7px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tech-research-btn:hover:not(:disabled) {
@@ -2551,7 +2562,7 @@
 
 .tech-research-btn:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
+  cursor: var(--cursor-blocked);
 }
 
 .tech-tree-view-btn {
@@ -2565,7 +2576,7 @@
   font-size: 11px;
   letter-spacing: 0.04em;
   padding: 5px 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tech-tree-view-btn:hover {
@@ -2622,7 +2633,7 @@
   line-height: 1;
   width: 24px;
   height: 24px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tech-tree-close:hover {
@@ -2682,7 +2693,7 @@
 }
 
 .tech-tree-node.eligible {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tech-tree-node.eligible rect {
@@ -2730,7 +2741,7 @@
   background: rgba(111, 227, 255, 0.08);
   color: #9fe8ff;
   border-radius: 3px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font: inherit;
   padding: 0;
 }
@@ -2807,7 +2818,7 @@
   background: none;
   border: none;
   color: #ff6b4a;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-size: 13px;
   line-height: 1;
   padding: 0 2px;
@@ -2836,7 +2847,7 @@
   font: inherit;
   font-size: 11px;
   padding: 3px 8px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .econ-build-btn:hover:not(:disabled) {
   background: rgba(111, 227, 255, 0.2);
@@ -2844,7 +2855,7 @@
 }
 .econ-build-btn:disabled {
   opacity: 0.4;
-  cursor: not-allowed;
+  cursor: var(--cursor-blocked);
 }
 
 /* Finance headline + graphs */
@@ -2927,7 +2938,7 @@
 
 .planet-marker {
   position: relative;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -3008,6 +3019,32 @@
   border-style: dashed;
 }
 
+.unidentified-base {
+  position: absolute;
+  top: -12px;
+  left: 6px;
+  width: 7px;
+  height: 7px;
+  background: #8a95a3;
+  border: 1px solid #c9d2dc;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.territory-label {
+  transform: translate(-50%, 22px);
+  white-space: nowrap;
+  padding: 1px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1px solid;
+  background: rgba(6, 12, 18, 0.55);
+  pointer-events: none;
+  opacity: 0.95;
+}
+
 .owner-ring.contested {
   border-width: 2px;
   border-style: solid;
@@ -3023,7 +3060,7 @@
    regardless of zoom. */
 .ship-marker {
   position: relative;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   user-select: none;
   -webkit-user-select: none;
   transform: translate(4px, -18px);
@@ -3101,7 +3138,7 @@
   border-right: 4px solid transparent;
   border-bottom: 7px solid;
   filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 /* The prominent label for whichever body is currently focused/inspected in
@@ -3114,7 +3151,7 @@
   color: #fff;
   text-shadow: 0 0 6px rgba(159, 232, 255, 0.9), 0 0 16px rgba(159, 232, 255, 0.4);
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   user-select: none;
   -webkit-user-select: none;
   padding-bottom: 5px;
@@ -3140,7 +3177,7 @@
   font-family: 'Courier New', monospace;
   font-size: 11px;
   letter-spacing: 0.08em;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .detail-view-btn:hover {
@@ -3285,7 +3322,7 @@
   color: #9fe8ff;
   font-size: 16px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 0 2px;
 }
 
@@ -3379,12 +3416,12 @@
   gap: 6px;
   font-size: 11px;
   padding: 3px 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   user-select: none;
 }
 
 .ship-panel-checkbox-row input {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 /* FTL comms delay indicator (ShipPanel) — amber/warning-colored, same as
@@ -3404,7 +3441,7 @@
   background: rgba(255, 176, 59, 0.1);
   border: 1px solid rgba(255, 176, 59, 0.35);
   border-radius: 3px;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 /* Tactics get their own emphasis pair, layered over the shared
@@ -3430,7 +3467,7 @@
   border: 1px solid rgba(111, 227, 255, 0.4);
   color: #6fe3ff;
   border-radius: 2px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .ship-panel-unfollow-btn:hover {
@@ -3444,7 +3481,7 @@
 }
 
 .ship-panel-unfollow-btn:disabled {
-  cursor: not-allowed;
+  cursor: var(--cursor-blocked);
   opacity: 0.35;
 }
 
@@ -3469,7 +3506,7 @@
   width: 11px;
   height: 11px;
   accent-color: #6fe3ff;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .ship-panel-fleet-mate {
@@ -3479,7 +3516,7 @@
   border: 1px solid rgba(111, 227, 255, 0.3);
   color: rgba(255, 255, 255, 0.75);
   border-radius: 2px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .ship-panel-fleet-mate:hover {
@@ -3568,7 +3605,7 @@
   border-left: 1px solid rgba(111, 227, 255, 0.2);
   color: #6fe3ff;
   font-size: 14px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .nav-sidebar-toggle:hover {
@@ -3602,7 +3639,7 @@
   font-size: 12px;
   letter-spacing: 0.05em;
   padding: 7px 10px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .nav-category-btn:hover {
@@ -3641,7 +3678,7 @@
   padding: 3px 9px;
   font: inherit;
   font-size: 11px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .nav-subtab:hover {
@@ -3685,7 +3722,7 @@
   border-right: 1px solid rgba(111, 227, 255, 0.2);
   color: #6fe3ff;
   font-size: 14px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .outliner-toggle:hover {
@@ -3765,7 +3802,7 @@
   font-size: 10px;
   letter-spacing: 0.04em;
   padding: 3px 8px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .outliner-filter-pill:hover {
@@ -3775,6 +3812,37 @@
 .outliner-filter-pill.active {
   background: rgba(111, 227, 255, 0.18);
   border-color: rgba(111, 227, 255, 0.6);
+  color: #fff;
+  opacity: 1;
+}
+
+.outliner-subtabs {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 4px;
+}
+
+.outliner-subtab {
+  flex: 1;
+  background: rgba(111, 227, 255, 0.04);
+  border: 1px solid rgba(111, 227, 255, 0.18);
+  color: #9fe8ff;
+  opacity: 0.55;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 4px;
+  cursor: var(--cursor-pointer);
+}
+
+.outliner-subtab:hover {
+  opacity: 0.85;
+}
+
+.outliner-subtab.active {
+  background: rgba(111, 227, 255, 0.16);
+  border-color: rgba(111, 227, 255, 0.55);
   color: #fff;
   opacity: 1;
 }
@@ -3799,7 +3867,7 @@
   opacity: 0.85;
   padding: 0 0 6px 0;
   margin-bottom: 6px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -3841,7 +3909,7 @@
 }
 
 .outliner-entry.clickable {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .outliner-entry.clickable:hover .outliner-entry-name {
@@ -3881,6 +3949,15 @@
   border-right: 4px solid transparent;
   border-bottom: 7px solid;
   border-radius: 0;
+}
+
+/* A Starbase reads as a small station, not a body — a diamond, distinct from
+   a ship's triangle and a world's circle. */
+.outliner-icon-starbase {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  transform: rotate(45deg);
 }
 
 .outliner-entry-name {
@@ -3961,7 +4038,7 @@
   color: #ffd9a0;
   font-size: 16px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 0 2px;
 }
 
@@ -4005,12 +4082,12 @@
   gap: 6px;
   margin-bottom: 8px;
   font-size: 11px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .debug-console-checkbox-row input[type='checkbox'] {
   accent-color: #ffb03b;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .debug-console-spawn-btn {
@@ -4024,7 +4101,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   padding: 6px 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   margin-top: 4px;
 }
 
@@ -4071,7 +4148,7 @@
   color: #ff8a8a;
   font-size: 14px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 0 2px;
 }
 
@@ -4153,7 +4230,7 @@
   font: inherit;
   font-size: 11px;
   color: #fff;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -4231,7 +4308,7 @@ div.fleet-row .combat-density-row {
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.02);
   color: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .main-menu-econ-option:hover {
   border-color: rgba(111, 227, 255, 0.4);
@@ -4264,7 +4341,7 @@ div.fleet-row .combat-density-row {
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.02);
   color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .abs-tab.active {
   border-color: rgba(111, 227, 255, 0.7);
@@ -4300,7 +4377,7 @@ div.fleet-row .combat-density-row {
   background: rgba(255, 255, 255, 0.02);
   font: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .abs-statcard.active {
   border-color: rgba(111, 227, 255, 0.6);
@@ -4324,7 +4401,7 @@ div.fleet-row .combat-density-row {
   font: inherit;
   font-size: 9px;
   padding: 0 4px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .tchart-range.active {
   border-color: rgba(111, 227, 255, 0.6);
@@ -4472,7 +4549,7 @@ div.fleet-row .combat-density-row {
   background: none;
   border: none;
   color: rgba(255, 120, 120, 0.8);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-size: 12px;
   line-height: 1;
   padding: 0 2px;
@@ -4518,7 +4595,7 @@ div.fleet-row .combat-density-row {
   height: 100%;
 }
 .abs-click {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .abs-click:hover td {
   background: rgba(111, 227, 255, 0.05);
@@ -4567,7 +4644,7 @@ div.fleet-row .combat-density-row {
   border-radius: 4px;
   color: #fff;
   font-family: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: background 150ms ease, transform 150ms ease;
 }
 
@@ -4615,7 +4692,7 @@ div.fleet-row .combat-density-row {
   border-radius: 8px;
   font-size: 10px;
   line-height: 14px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   vertical-align: middle;
   animation: battle-badge-pulse 1.2s ease-in-out infinite;
 }
@@ -4709,7 +4786,7 @@ div.fleet-row .combat-density-row {
 
 .sandbox-btn:disabled {
   opacity: 0.4;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .sandbox-gap {
@@ -4773,7 +4850,7 @@ div.fleet-row .combat-density-row {
 
 .detail-view-btn:disabled {
   opacity: 0.45;
-  cursor: not-allowed;
+  cursor: var(--cursor-blocked);
 }
 
 .army-group {
@@ -5087,7 +5164,7 @@ div.fleet-row .combat-density-row {
   font-family: 'Courier New', monospace;
   font-size: 11px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   pointer-events: auto;
 }
 
@@ -5145,7 +5222,7 @@ div.fleet-row .combat-density-row {
   color: #dff4ff;
   font: inherit;
   font-size: 11px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .ground-key-row:hover {
   border-color: rgba(111, 227, 255, 0.6);
@@ -5218,7 +5295,7 @@ div.fleet-row .combat-density-row {
   font-size: 11px;
   opacity: 0.8;
   padding: 2px 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .ground-unit-row {
@@ -5234,7 +5311,7 @@ div.fleet-row .combat-density-row {
   font-family: inherit;
   font-size: 11px;
   padding: 2px 4px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -5343,33 +5420,33 @@ div.fleet-row .combat-density-row {
 
 .comms-signal-dot {
   display: block;
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: #ffd23f;
-  box-shadow: 0 0 8px #ffd23f;
+  box-shadow: 0 0 3px #ffd23f;
   animation: comms-signal-pulse 0.9s ease-in-out infinite;
 }
 
 .comms-signal.queue .comms-signal-dot {
   background: #ffb03b;
-  box-shadow: 0 0 8px #ffb03b;
+  box-shadow: 0 0 3px #ffb03b;
 }
 
 .comms-signal.stance .comms-signal-dot {
   background: #6fe3ff;
-  box-shadow: 0 0 8px #6fe3ff;
+  box-shadow: 0 0 3px #6fe3ff;
 }
 
 .comms-signal-time {
-  font-size: 9px;
+  font-size: 8px;
   color: #ffe9a8;
   text-shadow: 0 0 3px #000;
 }
 
 @keyframes comms-signal-pulse {
-  0%, 100% { transform: scale(0.8); opacity: 0.7; }
-  50% { transform: scale(1.3); opacity: 1; }
+  0%, 100% { transform: scale(0.85); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 1; }
 }
 
 /* The globe / flat map switch, top right of the planetary map: a live thumbnail
@@ -5387,7 +5464,7 @@ div.fleet-row .combat-density-row {
   background: rgba(4, 10, 20, 0.88);
   border: 1px solid rgba(111, 227, 255, 0.4);
   border-radius: 4px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-family: 'Courier New', monospace;
   color: #9fe8ff;
 }
@@ -5428,7 +5505,7 @@ div.fleet-row .combat-density-row {
   color: #c79bff;
   font-family: 'Courier New', monospace;
   font-size: 10px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   white-space: nowrap;
   animation: battle-badge-pulse 1.2s ease-in-out infinite;
 }
@@ -5508,7 +5585,7 @@ div.fleet-row .combat-density-row {
   color: #6fe3ff;
   font: inherit;
   font-size: 10px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 0;
 }
 .eco-details:hover {
@@ -5643,11 +5720,11 @@ div.fleet-row .combat-density-row {
   font: inherit;
   font-size: 10px;
   padding: 1px 6px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .pl-develop:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 .pl-grid {
   display: grid;
@@ -5683,7 +5760,7 @@ div.fleet-row .combat-density-row {
   justify-content: center;
 }
 button.pl-tile {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 button.pl-tile:not(.empty):hover {
   border-color: rgba(111, 227, 255, 0.7);
@@ -5731,7 +5808,7 @@ button.pl-tile:not(.empty):hover {
   margin-top: 6px;
 }
 button.pl-tile.empty {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 button.pl-tile.empty:hover {
   border-color: rgba(111, 227, 255, 0.6);
@@ -5765,7 +5842,7 @@ button.pl-tile.empty:hover {
   float: right;
   font-size: 10px;
   color: rgba(223, 244, 255, 0.75);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 .pl-group-toggle input {
   vertical-align: middle;
@@ -5794,7 +5871,7 @@ button.pl-tile.empty:hover {
   font: inherit;
   font-size: 10px;
   padding: 3px 6px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 .pl-pick:hover {
@@ -5802,7 +5879,7 @@ button.pl-tile.empty:hover {
 }
 .pl-pick:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 .pl-pick.small {
   padding: 2px 5px;
@@ -5876,7 +5953,7 @@ button.pl-tile.empty:hover {
   font: inherit;
   font-size: 11px;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   padding: 0 0 4px;
 }
 .pl-district-c-core { border-left-color: #c77dff; }
@@ -6029,4 +6106,149 @@ button.pl-tile.empty:hover {
   width: 6px;
   height: 6px;
   border-radius: 1px;
+}
+
+.ship-panel-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+/* Right-click menu (scene/StarContextMenu.tsx). */
+.context-menu {
+  position: fixed;
+  z-index: 9000;
+  min-width: 170px;
+  padding: 4px;
+  background: rgba(8, 16, 26, 0.97);
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+}
+
+.context-menu-title {
+  padding: 3px 8px 5px;
+  color: #6fe3ff;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+  margin-bottom: 3px;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  color: #dff4ff;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: var(--cursor-pointer);
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.16);
+}
+
+.context-menu-item:disabled {
+  color: #6b7a88;
+  cursor: var(--cursor-default);
+}
+
+/* A battle in the Outliner whose ships aren't all known yet — shown, but not enterable. */
+.outliner-battle.disabled {
+  opacity: 0.6;
+  cursor: var(--cursor-blocked);
+}
+
+
+/* Bottom-right group: Map Modes and the location label. */
+.hud-bottom-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.map-modes {
+  position: relative;
+}
+
+.map-modes-btn {
+  height: 26px;
+  padding: 0 12px;
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: var(--cursor-pointer);
+  white-space: nowrap;
+}
+
+.map-modes-btn:hover,
+.map-modes-btn.active {
+  background: rgba(111, 227, 255, 0.2);
+  color: #fff;
+}
+
+.map-modes-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: rgba(8, 16, 26, 0.97);
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  text-shadow: none;
+}
+
+.map-modes-title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6fe3ff;
+  padding-bottom: 4px;
+}
+
+.map-modes-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(111, 227, 255, 0.2);
+  color: #dff4ff;
+  font-size: 12px;
+  cursor: var(--cursor-pointer);
+}
+
+
+/* Narrow windows: the fleet-comms placeholder (not functional yet) is the first
+   thing to give way, so the time controls, action buttons and map modes all fit. */
+@media (max-width: 1240px) {
+  .chat-placeholder {
+    display: none;
+  }
+}
+
+/* Shift+drag box selection (components/BoxSelectLayer.tsx). */
+.box-select-rect {
+  position: fixed;
+  z-index: 9000;
+  pointer-events: none;
+  border: 1px solid rgba(111, 227, 255, 0.9);
+  background: rgba(111, 227, 255, 0.08);
+  box-shadow: 0 0 8px rgba(111, 227, 255, 0.35) inset;
 }
