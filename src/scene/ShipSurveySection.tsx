@@ -1,9 +1,9 @@
+import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { resolveShipClass } from '../state/shipClassResolver'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
 import { useSurveyStore } from '../state/surveyStore'
 import { useTerritoryStore } from '../state/territoryStore'
-import { useGameTimeStore } from '../state/gameTimeStore'
 import { STARS } from '../data/starData'
 import { SURVEY_DAYS_PER_BODY } from '../data/surveyData'
 import { queueShipCommand } from './shipCommands'
@@ -16,7 +16,7 @@ import { restingStarId, surveyProgress, systemIntelStatus } from './surveyLogic'
 export function ShipSurveySection({ ship }: { ship: ShipInstance }) {
   const known = useSurveyStore((s) => s.known[ship.ownerId])
   const owners = useTerritoryStore((s) => s.bodyOwner)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  const simDays = useThrottledSimDays()
   const setSurveyJob = useShipStore((s) => s.setSurveyJob)
 
   if (resolveShipClass(ship.classId)?.role !== 'science') return null

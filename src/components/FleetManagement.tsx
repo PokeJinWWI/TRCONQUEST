@@ -1,3 +1,4 @@
+import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useMemo, useState } from 'react'
 import {
   COMBAT_STANCES,
@@ -24,7 +25,6 @@ import { isArmed } from '../scene/armyLogic'
 import { fleetLocationKey } from '../scene/fleetRules'
 import { useCombatStore } from '../state/combatStore'
 import { useFleetStore, type Fleet } from '../state/fleetStore'
-import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { HULL_CHASSES, designPowerBudget, designPowerUsed, designToShipClass, type HullChassis, type ShipDesign } from '../data/hullChassis'
 import { POWER_TIER_BUDGET, POWER_TIER_LABELS, SLOT_SIZE_LABELS, modulesForSlot, powerTiersAvailable, type SlotCategory } from '../data/shipModules'
@@ -85,7 +85,7 @@ function FleetManager() {
   const selectShip = useShipStore((s) => s.selectShip)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const engagements = useCombatStore((s) => s.engagements)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  const simDays = useThrottledSimDays()
   const [expandedFleetIds, setExpandedFleetIds] = useState<Set<string>>(new Set())
   const [selectedFleetIds, setSelectedFleetIds] = useState<Set<string>>(new Set())
 
@@ -606,7 +606,7 @@ function ShipStrategyRow({
   selectShip: (id: string | null) => void
 }) {
   const shipClass = resolveShipClass(ship.classId)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  const simDays = useThrottledSimDays()
   const stanceOptions = fleet?.strategy != null ? [...COMBAT_STANCES, 'fleet' as const] : COMBAT_STANCES
   return (
     <div className={`fleet-row${ship.id === selectedShipId ? ' selected' : ''}`}>

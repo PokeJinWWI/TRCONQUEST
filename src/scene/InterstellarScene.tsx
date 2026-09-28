@@ -1,3 +1,4 @@
+import { useStarbaseActivityKey } from '../hooks/useStarbaseActivity'
 import { SHIP_ICON_SIZE, ShipIcon, roleOfClass } from './ShipIcon'
 import { deselectShipsOnEmptyClick } from './deselect'
 import { BattleBadge } from '../components/BattleBadge'
@@ -202,6 +203,19 @@ function isShipInInterstellarSpace(order: { space: 'system' | 'interstellar' } |
   return locationKind === 'star' || locationKind === 'interstellar-point'
 }
 
+// The one place in this view that needs the live clock (the build countdown), so
+// only this row re-renders with it, and only while a star's window is open.
+function OwnStarbaseRow({ starbase }: { starbase: { readySimDays: number; integrity: number } }) {
+  const simDays = useGameTimeStore((s) => Math.floor(s.simDays))
+  const building = simDays < starbase.readySimDays
+  return (
+    <div className="inspect-row">
+      <span className="inspect-label">Your Starbase</span>
+      <span className="inspect-value">{building ? `Building (${Math.ceil(starbase.readySimDays - simDays)}d left)` : `Holding — ${Math.round(starbase.integrity)} integrity`}</span>
+    </div>
+  )
+}
+
 export function InterstellarScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const enterSystem = useViewStore((s) => s.enterSystem)
@@ -303,21 +317,30 @@ export function InterstellarScene() {
   // only when a body changes hands (a peace cession), not every render.
   const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
   const starbases = useStarbaseStore((s) => s.starbases)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  // Not the clock itself: subscribing this whole scene to it re-rendered every
+  // star, border and marker each frame. Claims change only when a Starbase finishes.
+  const starbaseActivity = useStarbaseActivityKey()
   // Only what the player has explored: an unexplored system shows no owner or
   // border (scene/intel.ts), and a Starbase there is just an unidentified mark.
   const intel = usePlayerIntel()
   const [starMenu, setStarMenu] = useState<{ x: number; y: number; star: StarData } | null>(null)
   const knownSurvey = useSurveyStore((s) => (playerCountryId ? s.known[playerCountryId] : undefined))
   const claimsByStar = useMemo(
-    () =>
-      visibleClaims(
+    () => {
+      const simDays = useGameTimeStore.getState().simDays
+      return visibleClaims(
         new Map(STARS.map((star) => [star.id, systemClaim(star.id, bodyOwner, starbaseOwnersOf(star.id, starbases, simDays))])),
         intel.known,
-      ),
-    [STARS, bodyOwner, starbases, simDays, intel.known],
+      )
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [STARS, bodyOwner, starbases, starbaseActivity, intel.known],
   )
-  const unidentifiedBaseStars = useMemo(() => new Set(unidentifiedStarbaseStars(starbases, intel.known, simDays)), [starbases, intel.known, simDays])
+  const unidentifiedBaseStars = useMemo(
+    () => new Set(unidentifiedStarbaseStars(starbases, intel.known, useGameTimeStore.getState().simDays)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [starbases, intel.known, starbaseActivity],
+  )
   const fleetPresenceByStar = useMemo(() => {
     const map = new Map<string, { ship: ShipInstance; relation: ShipRelation }[]>()
     for (const ship of ships) {
@@ -719,14 +742,7 @@ export function InterstellarScene() {
             <div className="inspect-divider" />
             {(() => {
               const mine = starbasesAt(selectedStar.id, starbases).find((sb) => sb.ownerId === playerCountryId)
-              if (!mine) return null
-              const building = simDays < mine.readySimDays
-              return (
-                <div className="inspect-row">
-                  <span className="inspect-label">Your Starbase</span>
-                  <span className="inspect-value">{building ? `Building (${Math.ceil(mine.readySimDays - simDays)}d left)` : `Holding — ${Math.round(mine.integrity)} integrity`}</span>
-                </div>
-              )
+              return mine ? <OwnStarbaseRow starbase={mine} /> : null
             })()}
           </DraggableWindow>
         )

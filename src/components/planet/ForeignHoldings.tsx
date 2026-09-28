@@ -1,8 +1,8 @@
+import { useThrottledSimDays } from '../../hooks/useThrottledSimDays'
 import { useState } from 'react'
 import { HOLDING_DEFS, HOLDING_KINDS, type HoldingKind } from '../../data/holdingsData'
 import { ownerDisplay } from '../../data/countryRoster'
 import { useHoldingsStore } from '../../state/holdingsStore'
-import { useGameTimeStore } from '../../state/gameTimeStore'
 import { useTerritoryStore } from '../../state/territoryStore'
 import { canOpen } from '../../scene/holdings'
 import { holdingContext, worldGdpYearOf } from '../../state/nationEconomy'
@@ -19,7 +19,7 @@ export function ForeignHoldingsRow({ bodyName, playerId }: { bodyName: string; p
   const holdings = useHoldingsStore((s) => s.holdings)
   const open = useHoldingsStore((s) => s.open)
   const close = useHoldingsStore((s) => s.close)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  const simDays = useThrottledSimDays()
   const host = useTerritoryStore((s) => s.bodyOwner[bodyName])
   const [message, setMessage] = useState<string | null>(null)
   const here = holdings.filter((h) => h.bodyName === bodyName)

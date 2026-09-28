@@ -20,6 +20,14 @@ export interface Starbase {
   readySimDays: number
 }
 
+// Which Starbases are live right now, as a string ('1'/'0' each, in list order).
+// The only thing a map needs the clock for where Starbases are concerned is
+// WHEN one finishes building, so a view subscribes to this instead of the
+// clock: it changes a handful of times a game, not every frame.
+export function starbaseActivityKey(starbases: Starbase[], simDays: number): string {
+  return starbases.map((sb) => (isStarbaseActive(sb, simDays) ? '1' : '0')).join('')
+}
+
 export function isStarbaseActive(sb: Starbase, simDays: number): boolean {
   return simDays >= sb.readySimDays && sb.integrity > 0
 }

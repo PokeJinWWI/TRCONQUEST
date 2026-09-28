@@ -1,3 +1,4 @@
+import { useStarbaseActivityKey } from '../hooks/useStarbaseActivity'
 import { deselectShipsOnEmptyClick } from './deselect'
 import { usePlayerIntel } from './intel'
 import { BattleBadge } from '../components/BattleBadge'
@@ -109,11 +110,13 @@ export function GalacticViewScene() {
 
   const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
   const starbases = useStarbaseStore((s) => s.starbases)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  // Not the clock: see useStarbaseActivityKey (a scene subscribed to simDays re-rendered every frame).
+  const starbaseActivity = useStarbaseActivityKey()
   const intel = usePlayerIntel()
   const claimsByNeighborhood = useMemo(
-    () => new Map(NEIGHBORHOODS.map((n) => [n.id, neighborhoodClaim(n, bodyOwner, starbases, simDays, intel.known)])),
-    [bodyOwner, starbases, simDays, intel.known],
+    () => new Map(NEIGHBORHOODS.map((n) => [n.id, neighborhoodClaim(n, bodyOwner, starbases, useGameTimeStore.getState().simDays, intel.known)])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bodyOwner, starbases, starbaseActivity, intel.known],
   )
 
   // If we're arriving here because the player zoomed out of a neighborhood's

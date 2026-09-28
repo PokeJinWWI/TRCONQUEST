@@ -1,3 +1,4 @@
+import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useMemo, useState } from 'react'
 import { getCountry } from '../data/countryData'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
@@ -8,7 +9,6 @@ import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerResources } from '../hooks/usePlayerResources'
 import { usePlayerStore } from '../state/playerStore'
 import { useShipyardStore } from '../state/shipyardStore'
-import { useGameTimeStore } from '../state/gameTimeStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { shipyardSlotsForWorld } from '../scene/shipyardLogic'
 import { useTechStore } from '../state/techStore'
@@ -60,7 +60,7 @@ export function ShipyardPanel() {
   const queueBuild = useShipyardStore((s) => s.queueBuild)
   const cancelBuild = useShipyardStore((s) => s.cancelBuild)
   const designs = useShipDesignStore((s) => s.designs)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  const simDays = useThrottledSimDays()
   const researched = useTechStore((s) => s.stateFor(countryId).researched)
   const [message, setMessage] = useState<string | null>(null)
   const [onlyAffordable, setOnlyAffordable] = useState(false)

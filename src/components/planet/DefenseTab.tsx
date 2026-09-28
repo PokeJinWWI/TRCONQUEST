@@ -1,10 +1,10 @@
+import { useThrottledSimDays } from '../../hooks/useThrottledSimDays'
 import { useState } from 'react'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS, DEFENSE_DEFS, DEFENSE_KINDS, type DefenseKind } from '../../data/defenseData'
 import { RESOURCE_TYPES, type ResourceId } from '../../data/resourceData'
 import { ownerDisplay } from '../../data/countryRoster'
 import { useDefenseStore, canBuildDefense, militaryInUse } from '../../state/defenseStore'
 import { useTerritoryStore } from '../../state/territoryStore'
-import { useGameTimeStore } from '../../state/gameTimeStore'
 import { useArmyStore } from '../../state/armyStore'
 import { useShipStore } from '../../state/shipStore'
 import { useResourceStore } from '../../state/resourceStore'
@@ -31,7 +31,7 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const controllers = useTerritoryStore((s) => s.bodyController)
   const holders = useTerritoryStore((s) => s.nodeHolders)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  const simDays = useThrottledSimDays()
   const armies = useArmyStore((s) => s.armies)
   const ships = useShipStore((s) => s.ships)
   const amounts = useResourceStore((s) => (playerId ? s.byCountry[playerId]?.amounts : undefined))

@@ -1,3 +1,4 @@
+import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useEffect, useMemo, useState } from 'react'
 import { destinationLabel } from './shipPhysics'
 import { replanForWarpWhenReady } from './warpReplan'
@@ -32,7 +33,7 @@ import { engagementIntel, playerCommsDelayToShip, queueStance, shipsIntel, unkno
 import { useCombatStore, combatLocationKey, engagementIsContested } from '../state/combatStore'
 import { useFleetStore } from '../state/fleetStore'
 import { useViewStore } from '../state/viewStore'
-import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
+import { simDaysToSeconds } from '../state/gameTimeStore'
 import { DraggableWindow } from '../components/DraggableWindow'
 import { TransportCargo } from '../components/ArmyViews'
 
@@ -256,7 +257,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
   const addEngagement = useCombatStore((s) => s.addEngagement)
   const enterCombat = useViewStore((s) => s.enterCombat)
   const level = useViewStore((s) => s.level)
-  const simDays = useGameTimeStore((s) => s.simDays)
+  const simDays = useThrottledSimDays()
   // Which roster members are checked for a Split Off — see the Fleet row
   // below. Reset whenever the selection changes fleets, so a stale check
   // from one fleet's roster can't silently apply to a different one.

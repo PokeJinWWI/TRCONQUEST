@@ -515,6 +515,32 @@ function findUnit(unitId: string) {
   return null
 }
 
+// Chips of units sharing a node fan out on screen. Which node each unit is on
+// and its place among the units there is worked out ONCE per frame for all of
+// them: every marker used to re-scan every unit (a nearest-node search each),
+// which is quadratic in the number of units and made a big war unplayable.
+let fanFrame = -1
+let fanRanks = new Map<string, { rank: number; count: number }>()
+function fanOf(unitId: string, frame: number): { rank: number; count: number } {
+  if (frame !== fanFrame) {
+    fanFrame = frame
+    const byNode = new Map<number, string[]>()
+    for (const army of useArmyStore.getState().armies) {
+      if (army.location.kind !== 'body') continue
+      for (const u of army.units) {
+        if (!u.position) continue
+        const node = nearestNode(u.position, 'fine', u.nodeHint)
+        const list = byNode.get(node)
+        if (list) list.push(u.id)
+        else byNode.set(node, [u.id])
+      }
+    }
+    fanRanks = new Map()
+    for (const ids of byNode.values()) ids.forEach((id, rank) => fanRanks.set(id, { rank, count: ids.length }))
+  }
+  return fanRanks.get(unitId) ?? { rank: 0, count: 1 }
+}
+
 // Chips of units sharing a node fan out on screen, so a stack of units stays
 // clickable at any zoom.
 const FAN_PX = 13
@@ -534,7 +560,7 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
     if (isAdditiveClick(e)) useGroundViewStore.getState().toggleUnit(unitId)
     else useGroundViewStore.getState().selectUnit(unitId)
   }
-  useFrame(({ camera }) => {
+  useFrame(({ camera, clock }) => {
     const found = findUnit(unitId)
     const g = groupRef.current
     if (!found?.unit.position || !g) return
@@ -545,20 +571,9 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
     const facing = flat || p.x * camera.position.x + p.y * camera.position.y + p.z * camera.position.z > r * 0.2
     if (wrapRef.current) {
       wrapRef.current.style.display = facing ? '' : 'none'
-      // How many listed units share this unit's node, and its place among them.
-      const node = nearestNode(p, 'fine', found.unit.nodeHint)
-      let rank = 0
-      let count = 0
-      let k = 0
-      for (const army of useArmyStore.getState().armies) {
-        for (const u of army.units) {
-          if (!u.position || army.location.kind !== 'body') continue
-          if (nearestNode(u.position, 'fine', u.nodeHint) !== node) continue
-          if (u.id === unitId) rank = k
-          k++
-          count++
-        }
-      }
+      // How many listed units share this unit's node, and its place among them
+      // (worked out once per frame for every unit, not once per unit).
+      const { rank, count } = fanOf(unitId, clock.elapsedTime)
       const angle = count > 1 ? (rank / count) * Math.PI * 2 : 0
       const radiusPx = count > 1 ? FAN_PX * Math.min(2, 0.6 + count / 6) : 0
       wrapRef.current.style.transform = `translate(${Math.cos(angle) * radiusPx}px, ${Math.sin(angle) * radiusPx}px)`

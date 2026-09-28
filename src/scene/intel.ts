@@ -10,6 +10,7 @@
 // Pure functions plus one hook; every view that draws borders or opens a system
 // goes through these so the rule is the same everywhere. The sandbox has no
 // nations to hide, so nothing is gated there.
+import { useStarbaseActivityKey } from '../hooks/useStarbaseActivity'
 import { useCallback } from 'react'
 import { usePlayerStore } from '../state/playerStore'
 import { useStarbaseStore } from '../state/starbaseStore'
@@ -67,11 +68,13 @@ export function usePlayerIntel(): PlayerIntel {
   const knownIntel = useSurveyStore((s) => (playerId ? s.known[playerId] : undefined))
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const starbases = useStarbaseStore((s) => s.starbases)
-  const simDays = useGameTimeStore((s) => Math.floor(s.simDays))
+  // Re-derive only when a Starbase finishes, not every day (see useStarbaseActivityKey).
+  const activity = useStarbaseActivityKey()
   const gated = !!playerId && !sandbox
   const known = useCallback(
-    (starId: string) => !gated || systemKnownToPlayer(starId, playerId!, knownIntel, owners, starbases, simDays),
-    [gated, playerId, knownIntel, owners, starbases, simDays],
+    (starId: string) => !gated || systemKnownToPlayer(starId, playerId!, knownIntel, owners, starbases, useGameTimeStore.getState().simDays),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gated, playerId, knownIntel, owners, starbases, activity],
   )
   return { gated, known }
 }

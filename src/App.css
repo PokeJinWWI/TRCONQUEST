@@ -179,7 +179,14 @@
   padding-top: 0;
   padding-bottom: 0;
   gap: 12px;
-  justify-content: space-between;
+  /* Three columns with the action buttons in the middle one, so they sit at the
+     true centre of the screen whatever the widths of the left (comms + time
+     controls) and right (map modes + location) groups. Each side column is at
+     least as wide as its content, so at narrow widths they push the middle off
+     centre rather than overlapping it. */
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+  justify-content: normal;
   border-top: 1px solid rgba(111, 227, 255, 0.25);
 }
 
@@ -393,6 +400,7 @@
   flex: none;
   display: flex;
   gap: 10px;
+  justify-self: center;
 }
 
 .map-action-btn {
@@ -6190,6 +6198,7 @@ button.pl-tile.empty:hover {
 .hud-bottom-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 16px;
 }
 
