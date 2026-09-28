@@ -1,3 +1,4 @@
+import { deselectShipsOnEmptyClick } from './deselect'
 import { useMemo, useRef, useState } from 'react'
 import { KeyboardPan } from './KeyboardPan'
 import { Canvas } from '@react-three/fiber'
@@ -289,6 +290,7 @@ export function SolarSystemScene() {
   // on a marker; the marker's own onClick already handled them.
   const handleUnfocus = (event: MouseEvent) => {
     if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
+    deselectShipsOnEmptyClick(event)
     selectInView(null)
   }
 

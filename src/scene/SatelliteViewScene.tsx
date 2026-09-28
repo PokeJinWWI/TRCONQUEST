@@ -1,3 +1,4 @@
+import { deselectShipsOnEmptyClick } from './deselect'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { KeyboardPan } from './KeyboardPan'
 import { Canvas } from '@react-three/fiber'
@@ -255,6 +256,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   // a ship marker.
   const handleUnfocus = (event: MouseEvent) => {
     if (event.target instanceof Element && event.target.closest('.planet-marker, .focused-label, .ship-marker')) return
+    deselectShipsOnEmptyClick(event)
     selectInView(null)
   }
 

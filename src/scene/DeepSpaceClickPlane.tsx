@@ -1,4 +1,5 @@
 import type { ThreeEvent } from '@react-three/fiber'
+import { deselectShipsOnEmptyClick } from './deselect'
 
 interface DeepSpaceClickPlaneProps {
   onDeselect: () => void
@@ -26,6 +27,7 @@ export function DeepSpaceClickPlane({ onDeselect, onOrderTo, size = 100000 }: De
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.nativeEvent.target instanceof Element && e.nativeEvent.target.closest('.planet-marker, .ship-marker')) return
     onDeselect()
+    deselectShipsOnEmptyClick(e.nativeEvent)
   }
 
   const handleContextMenu = (e: ThreeEvent<MouseEvent>) => {

@@ -117,8 +117,8 @@ console.log('\n=== Ship commands: load, transfer, build ===')
   const held = (id: string) => useShipStore.getState().ships.find((s) => s.id === id)?.cargo ?? {}
   const stockOf = (id: 'alloys' | 'energy' | 'exoticMatter') => useResourceStore.getState().stateFor(NATION).amounts[id]
 
-  applyShipCommand('con', { kind: 'load', want: { alloys: 220, energy: 120, exoticMatter: 5 } }, 0)
-  check('load takes goods from the stockpile into the hold', held('con').alloys === 220 && stockOf('alloys') === 780 && held('con').exoticMatter === 5)
+  applyShipCommand('con', { kind: 'load', want: { alloys: 220 } }, 0)
+  check('load takes goods from the stockpile into the hold', held('con').alloys === 220 && stockOf('alloys') === 780 && Object.keys(held('con')).length === 1)
   applyShipCommand('con', { kind: 'load', want: { alloys: 9999 } }, 0)
   check('load stops at the hold capacity', (held('con').alloys ?? 0) + (held('con').energy ?? 0) + (held('con').exoticMatter ?? 0) === CONSTRUCTION_SHIP_CARGO)
   const before = stockOf('energy')
@@ -139,7 +139,7 @@ console.log('\n=== Ship commands: load, transfer, build ===')
   // Build from the hold.
   useTerritoryStore.getState().reset()
   useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'orbital-construction']) } } })
-  useShipStore.setState({ ships: [ship('b', 'construction-ship', { kind: 'star', starId: 'barnards-star', offset: [0, 0, 0] }, { alloys: 220, energy: 120, exoticMatter: 5 })] })
+  useShipStore.setState({ ships: [ship('b', 'construction-ship', { kind: 'star', starId: 'barnards-star', offset: [0, 0, 0] }, { alloys: 220 })] })
   applyShipCommand('b', { kind: 'build-starbase' }, 0)
   check('build refused while the system is not surveyed', useStarbaseStore.getState().starbases.length === 0)
   const sv = useSurveyStore.getState()
@@ -167,11 +167,11 @@ console.log('\n=== Commands take signal time out of contact ===')
 
 console.log('\n=== Refill at nearest station ===')
 {
-  check('a construction hold asks for exactly one Starbase kit', JSON.stringify(refillWant(undefined, CONSTRUCTION_SHIP_CARGO)) === JSON.stringify({ alloys: 220, energy: 120, exoticMatter: 5 }))
+  check('a construction hold asks for exactly one Starbase kit', JSON.stringify(refillWant(undefined, CONSTRUCTION_SHIP_CARGO)) === JSON.stringify({ alloys: 220 }))
   const big = refillWant(undefined, CARGO_SHIP_CARGO)
-  check('a cargo hold asks for as many kits as fit (4)', big.alloys === 880 && big.energy === 480 && big.exoticMatter === 20, JSON.stringify(big))
+  check('a cargo hold asks for as many kits as fit (6), and only alloys', big.alloys === 1320 && Object.keys(big).length === 1, JSON.stringify(big))
   check('what is already aboard is not asked for again', refillWant({ alloys: 100 }, CONSTRUCTION_SHIP_CARGO).alloys === 120)
-  check('a full hold asks for nothing', Object.keys(refillWant({ alloys: 220, energy: 120, exoticMatter: 5 }, CONSTRUCTION_SHIP_CARGO)).length === 0)
+  check('a full hold asks for nothing', Object.keys(refillWant({ alloys: 220 }, CONSTRUCTION_SHIP_CARGO)).length === 0)
 
   usePlayerStore.setState({ selectedCountryId: NATION, sandbox: false })
   useTerritoryStore.getState().reset()
@@ -189,7 +189,7 @@ console.log('\n=== Refill at nearest station ===')
   // At a station: loads at once. Elsewhere: flies there and loads on arrival.
   useShipStore.setState({ ships: [ship('haul', 'cargo-ship', orbit('Mars'))] })
   orderRefill('haul')
-  check('at one of its worlds, Refill loads straight away', (useShipStore.getState().ships[0].cargo?.alloys ?? 0) === 880)
+  check('at one of its worlds, Refill loads straight away', (useShipStore.getState().ships[0].cargo?.alloys ?? 0) === 1320)
   useShipStore.setState({ ships: [farOut] })
   orderRefill('haul')
   const sh = useShipStore.getState().ships[0]
@@ -199,7 +199,7 @@ console.log('\n=== Refill at nearest station ===')
   check('nothing is loaded before it arrives', (useShipStore.getState().ships[0].cargo?.alloys ?? 0) === 0)
   settleShips(arrives)
   const after = useShipStore.getState().ships[0]
-  check('on arrival it loads from the stockpile and the order clears', (after.cargo?.alloys ?? 0) === 880 && !after.arrivalCommand)
+  check('on arrival it loads from the stockpile and the order clears', (after.cargo?.alloys ?? 0) === 1320 && !after.arrivalCommand)
 }
 
 console.log(failures === 0 ? '\nAll cargo checks passed.' : `\n${failures} FAILED`)

@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import type { Group } from 'three'
 import { RELATION_COLORS } from '../data/shipData'
+import { ShipIcon, roleOfClass } from './ShipIcon'
 import { useRelationTo } from '../state/shipRelations'
 import { tacticBadge } from '../data/combatData'
 import { useShipStore } from '../state/shipStore'
@@ -98,7 +99,7 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
           }}
           onWheel={forwardWheelToCanvas}
         >
-          <span className="ship-marker-icon" style={{ borderBottomColor: color }} />
+          <ShipIcon role={roleOfClass(ship.classId)} color={color} />
           <span className="marker-label">{ship.name}</span>
           <span className="combat-marker-health">
             <span className="combat-marker-health-fill" style={{ width: `${healthPercent}%`, background: color }} />

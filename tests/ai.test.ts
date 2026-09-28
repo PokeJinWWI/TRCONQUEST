@@ -258,7 +258,7 @@ console.log('\n=== 4b. The Expander ===')
   check('it picks the surveyed, unclaimed star as its target', claim.memory?.expansionTarget === 'barnards-star')
   const conShip = useShipStore.getState().ships.find((s) => s.ownerId === MARS && s.classId === 'construction-ship')!
   check('the Construction Ship at the capital loads a Starbase kit', claim.intents.some((i) => i.kind === 'load-cargo' && i.shipId === conShip.id))
-  useShipStore.getState().setShipCargo(conShip.id, { alloys: 220, energy: 120, exoticMatter: 5 })
+  useShipStore.getState().setShipCargo(conShip.id, { alloys: 220 })
   const go = expander(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: 'barnards-star' })
   check('...once loaded it flies to the star', go.intents.some((i) => i.kind === 'move-ship' && i.shipId === conShip.id && i.systemId === 'barnards-star' && i.bodyName === null))
   useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === conShip.id ? { ...s, location: { kind: 'star' as const, starId: 'barnards-star', offset: [0, 0, 0] as [number, number, number] } } : s)) })
@@ -271,7 +271,7 @@ console.log('\n=== 4b. The Expander ===')
     const car = ships.find((s) => s.ownerId === MARS && s.classId === 'cargo-ship')!
     const at = (id: string, starId: string, cargo: Record<string, number> = {}) =>
       useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === id ? { ...s, cargo: cargo as never, location: { kind: 'star' as const, starId, offset: [0, 0, 0] as [number, number, number] } } : s)) })
-    const kit = { alloys: 220, energy: 120, exoticMatter: 5 }
+    const kit = { alloys: 220 }
     const run = () => expander(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: 'barnards-star' }).intents
     at(con.id, 'wolf-359') // away, empty
     useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === car.id ? { ...s, cargo: {} as never } : s)) })

@@ -1,3 +1,4 @@
+import { resolveFleetMerges } from '../scene/fleetMerge'
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore } from '../state/shipStore'
@@ -131,6 +132,9 @@ export function settleShips(simDays: number): void {
   // Fleets that have arrived (or are idle) and have a queued order move on
   // to the next one — see scene/orderQueue.ts.
   dispatchQueuedLegs(simDays)
+
+  // Fleets that have caught up with the lead they were told to merge into join it.
+  resolveFleetMerges()
 
 }
 

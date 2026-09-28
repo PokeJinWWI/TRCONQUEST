@@ -1,3 +1,4 @@
+import { deselectShipsOnEmptyClick } from './deselect'
 import { useEffect, useMemo, useRef } from 'react'
 import { KeyboardPan } from './KeyboardPan'
 import { isQueueModifierHeld } from './queueModifier'
@@ -181,7 +182,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
 
   return (
     <div className="solar-system-wrapper">
-      <Canvas camera={initialCamera}>
+      <Canvas camera={initialCamera} onPointerMissed={(event) => !(event.target instanceof Element && event.target.closest('.ship-marker')) && deselectShipsOnEmptyClick(event)}>
         <ambientLight intensity={0.6} />
         <Stars radius={300} depth={60} count={2000} factor={4} saturation={0} fade speed={0} />
 

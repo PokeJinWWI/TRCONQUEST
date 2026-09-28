@@ -6,6 +6,7 @@ import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
 import { useFleetStore } from '../state/fleetStore'
 import { RELATION_COLORS } from '../data/shipData'
+import { SHIP_ICON_SIZE, ShipIcon, roleOfClass } from './ShipIcon'
 import { useRelationTo } from '../state/shipRelations'
 import { playerShipRenderPosition } from './commsVisual'
 import { isAdditiveClick } from './selectionInput'
@@ -37,6 +38,8 @@ interface ShipMarkerProps {
    * the only cluster there. */
   stackIndex?: number
   stackCount?: number
+  /** Icon size in px — bigger in interstellar space (SHIP_ICON_SIZE). */
+  iconSize?: number
 }
 
 // One marker per fleet resting together — a triangle instead of the
@@ -48,7 +51,7 @@ interface ShipMarkerProps {
 // spot (see clusterRestingShipsByFleet). Noticing an order has finished and
 // settling a ship into its resting location — which is also where it might
 // join this fleet — is handled globally by useShipOrderSettler, not here.
-export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 1 }: ShipMarkerProps) {
+export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 1, iconSize = SHIP_ICON_SIZE.system }: ShipMarkerProps) {
   const groupRef = useRef<Group>(null)
   const [hovered, setHovered] = useState(false)
   const selectShip = useShipStore((s) => s.selectShip)
@@ -102,7 +105,7 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
           }}
           onWheel={forwardWheelToCanvas}
         >
-          <span className="ship-marker-icon" style={{ borderBottomColor: color }} />
+          <ShipIcon role={roleOfClass(lead.classId)} color={color} size={iconSize} />
           {multi && <span className="ship-marker-count">{ships.length}</span>}
           {!hideLabel && <span className="marker-label">{fleetName ?? lead.name}</span>}
         </div>

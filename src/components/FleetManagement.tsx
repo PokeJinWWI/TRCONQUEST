@@ -21,7 +21,8 @@ import { getShipStatusText } from '../scene/shipPhysics'
 import { queueStance, queueBombard } from '../scene/commsVisual'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS } from '../data/defenseData'
 import { isArmed } from '../scene/armyLogic'
-import { useCombatStore, combatLocationKey } from '../state/combatStore'
+import { fleetLocationKey } from '../scene/fleetRules'
+import { useCombatStore } from '../state/combatStore'
 import { useFleetStore, type Fleet } from '../state/fleetStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
@@ -30,6 +31,7 @@ import { POWER_TIER_BUDGET, POWER_TIER_LABELS, SLOT_SIZE_LABELS, modulesForSlot,
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerTech } from '../hooks/usePlayerTech'
 import { ShipyardPanel } from './ShipyardPanel'
+import { useFleetTabStore } from '../state/fleetTabStore'
 
 export type FleetTab = 'manager' | 'designer' | 'shipyard' | 'strategizer'
 
@@ -58,19 +60,6 @@ function damageTypesOf(profile: CombatProfile): DamageType[] {
 }
 
 // --- Fleet Manager --------------------------------------------------------
-
-// A fleet's single, unambiguous location — null when there isn't one (any
-// member mid-transit, or members somehow disagreeing on where "here" is),
-// which is exactly when it's NOT safe to merge. Mirrors the same
-// no-order + combatLocationKey co-location test ShipPanel's own single-pair
-// Merge Fleets button already uses (see its mergeableFleetId), generalized
-// to however many fleets are checked for a merge here at once.
-function fleetLocationKey(members: ShipInstance[]): string | null {
-  if (members.length === 0 || members.some((m) => m.order)) return null
-  const key = combatLocationKey(members[0].location)
-  if (key === null) return null
-  return members.every((m) => combatLocationKey(m.location) === key) ? key : null
-}
 
 // Every ship the player actually owns, with live condition and what it's
 // doing — grouped by fleet (see ShipInstance.fleetId) rather than one flat
@@ -756,7 +745,8 @@ function Strategizer() {
 // --- Root -----------------------------------------------------------------
 
 export function FleetManagement() {
-  const [tab, setTab] = useState<FleetTab>('manager')
+  const tab = useFleetTabStore((s) => s.tab)
+  const setTab = useFleetTabStore((s) => s.setTab)
 
   return (
     <div className="fleet-management">

@@ -1,3 +1,4 @@
+import { deselectShipsOnEmptyClick } from './deselect'
 import { usePlayerIntel } from './intel'
 import { BattleBadge } from '../components/BattleBadge'
 import { KeyboardPan } from './KeyboardPan'
@@ -158,6 +159,7 @@ export function GalacticViewScene() {
 
   const handleUnfocus = (event: MouseEvent) => {
     if (event.target instanceof Element && event.target.closest('.planet-marker')) return
+    deselectShipsOnEmptyClick(event)
     selectInView(null)
   }
 

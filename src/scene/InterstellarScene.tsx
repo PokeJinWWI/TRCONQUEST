@@ -1,3 +1,5 @@
+import { SHIP_ICON_SIZE, ShipIcon, roleOfClass } from './ShipIcon'
+import { deselectShipsOnEmptyClick } from './deselect'
 import { BattleBadge } from '../components/BattleBadge'
 import { KeyboardPan } from './KeyboardPan'
 import { useMemo, useRef, useState } from 'react'
@@ -171,10 +173,12 @@ function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelect
           {unidentifiedBase && <span className="unidentified-base" title="A Starbase: owner unknown until you explore this system" />}
           <BattleBadge scope={{ star: star.id }} />
           {fleetPresence.map(({ ship, relation }) => (
-            <span
+            <ShipIcon
               key={ship.id}
-              className="fleet-presence-icon"
-              style={{ borderBottomColor: RELATION_COLORS[relation] }}
+              inline
+              role={roleOfClass(ship.classId)}
+              color={RELATION_COLORS[relation]}
+              size={SHIP_ICON_SIZE.interstellar}
               onClick={(e) => {
                 // Otherwise this bubbles to the marker's own onClick above,
                 // selecting the star instead of (or as well as) the fleet.
@@ -440,6 +444,7 @@ export function InterstellarScene() {
   // actually landed on a marker so its own onClick isn't immediately undone.
   const handleUnfocus = (event: MouseEvent) => {
     if (event.target instanceof Element && event.target.closest('.planet-marker, .ship-marker')) return
+    deselectShipsOnEmptyClick(event)
     selectInView(null)
   }
 
@@ -484,7 +489,7 @@ export function InterstellarScene() {
         ))}
 
         {interstellarClusters.map((cluster) => (
-          <ShipMarker key={cluster.key} ships={cluster.ships} onOrderFollow={handleFollowShip} />
+          <ShipMarker key={cluster.key} ships={cluster.ships} onOrderFollow={handleFollowShip} iconSize={SHIP_ICON_SIZE.interstellar} />
         ))}
 
         {/* Committed orders for the player's own ships only — same

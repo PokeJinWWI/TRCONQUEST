@@ -7,6 +7,7 @@ import { useShipStore } from '../state/shipStore'
 import { isAdditiveClick } from './selectionInput'
 import { useFleetStore } from '../state/fleetStore'
 import { RELATION_COLORS } from '../data/shipData'
+import { ShipIcon, roleOfClass } from './ShipIcon'
 import { useRelationTo } from '../state/shipRelations'
 import { satelliteOrbitLocalPosition } from './shipPhysics'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -91,7 +92,7 @@ export function SatelliteShipMarker({
           }}
           onWheel={forwardWheelToCanvas}
         >
-          <span className="ship-marker-icon" style={{ borderBottomColor: color }} />
+          <ShipIcon role={roleOfClass(lead.classId)} color={color} />
           {multi && <span className="ship-marker-count">{ships.length}</span>}
           {stackCount > 1 && <span className="marker-label">{fleetName ?? lead.name}</span>}
         </div>

@@ -138,8 +138,8 @@ export const TURING_HYPERDRIVE_COOLDOWN_DAYS = 7
 // "reducible by future tech, not modeled yet" caveat as hyperdrive's.
 export const WARP_BASE_COOLDOWN_DAYS = 5
 
-// Hold sizes, in units of goods (picks, not balance). One Starbase costs 345
-// units (data/starbaseData.ts), so a Construction Ship's own hold covers one.
+// Hold sizes, in units of goods (picks, not balance). One Starbase costs 220
+// alloys (data/starbaseData.ts), so a Construction Ship's own hold covers one.
 export const CONSTRUCTION_SHIP_CARGO = 400
 export const CARGO_SHIP_CARGO = 1500
 

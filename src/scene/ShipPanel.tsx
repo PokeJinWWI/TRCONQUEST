@@ -3,7 +3,8 @@ import { destinationLabel } from './shipPhysics'
 import { replanForWarpWhenReady } from './warpReplan'
 import { ShipSurveySection } from './ShipSurveySection'
 import { ShipCargoSection } from './ShipCargoSection'
-import { anyCivilian } from './fleetRules'
+import { anyCivilian, mergeCheck } from './fleetRules'
+import { startFleetMerge } from './fleetMerge'
 import { viewShip } from './shipNav'
 import { useShipStore } from '../state/shipStore'
 import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
@@ -141,12 +142,34 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
     const ids = new Set(idsKey.split('|'))
     return ships.filter((s) => ids.has(s.id))
   }, [idsKey, ships])
+  // In selection order: the first fleet picked is the one "on top" — the lead a
+  // merge gathers the others onto.
   const byFleet = useMemo(() => {
+    const order = idsKey.split('|')
     const groups = new Map<string, typeof selected>()
-    for (const s of selected) groups.set(s.fleetId, [...(groups.get(s.fleetId) ?? []), s])
+    for (const s of [...selected].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))) groups.set(s.fleetId, [...(groups.get(s.fleetId) ?? []), s])
     return [...groups.entries()]
-  }, [selected])
+  }, [selected, idsKey])
   const mine = selected.filter((s) => isPlayerOwned(s))
+  const selectShips = useShipStore((s) => s.selectShips)
+  // Merging works on whole fleets (a marker or list row selects a fleet by its
+  // lead ship): every fleet with a selected ship heads for the fleet on top and
+  // joins it; the fleet on top carries on with whatever it is doing.
+  const selectedFleetIds = byFleet.map(([fleetId]) => fleetId)
+  const merge = mergeCheck(
+    selectedFleetIds.map((id) => ships.filter((s) => s.fleetId === id)),
+    (s) => isPlayerOwned(s),
+  )
+  const handleMerge = () => {
+    if (!merge.ok) return
+    const [lead, ...rest] = selectedFleetIds
+    startFleetMerge(lead, rest)
+  }
+  // Puts a fleet's ships first in the selection, making it the one on top.
+  const makeLead = (fleetId: string) => {
+    const first = ships.filter((s) => s.fleetId === fleetId && idsKey.split('|').includes(s.id)).map((s) => s.id)
+    selectShips([...first, ...idsKey.split('|').filter((id) => !first.includes(id))])
+  }
 
   return (
     <DraggableWindow title={`${selected.length} ships selected`} memoryKey="ships" onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
@@ -157,6 +180,12 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
           <div key={fleetId} className="army-group">
             <div className="army-group-label" style={{ color: RELATION_COLORS[relation] }}>
               {fleets.find((f) => f.id === fleetId)?.name ?? 'Fleet'} · {ownerDisplay(members[0].ownerId).name}
+              {byFleet.length > 1 && byFleet[0][0] === fleetId && <span className="fleet-lead-tag" title="A merge gathers the other fleets onto this one; it keeps doing what it is doing"> · on top</span>}
+              {byFleet.length > 1 && byFleet[0][0] !== fleetId && (
+                <button type="button" className="ship-panel-unfollow-btn" onClick={() => makeLead(fleetId)} title="Put this fleet on top: the others merge onto it">
+                  Make top
+                </button>
+              )}
             </div>
             <div className="inspect-row">
               <span className="inspect-label">Moves at</span>
@@ -184,6 +213,16 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
               </button>
             ))}
           </div>
+          {byFleet.length > 1 && (
+            <>
+              <div className="dip-actions">
+                <button type="button" className="detail-view-btn" disabled={!merge.ok} onClick={handleMerge} title={merge.ok ? 'The other fleets fly to the fleet on top and join it; it keeps doing what it is doing' : merge.reason}>
+                  Merge onto the top fleet
+                </button>
+              </div>
+              {!merge.ok && <div className="ship-panel-hint">{merge.reason}.</div>}
+            </>
+          )}
           <div className="ship-panel-hint">Right-click a destination to move every selected fleet, each at its slowest ship's pace.</div>
         </>
       )}

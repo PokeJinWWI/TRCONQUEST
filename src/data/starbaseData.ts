@@ -11,7 +11,7 @@
 // divides incoming damage, integrity is its hit points, destroyed at 0.
 import type { ResourceCost } from './shipyardData'
 
-export const STARBASE_COST: ResourceCost = { alloys: 220, energy: 120, exoticMatter: 5 }
+export const STARBASE_COST: ResourceCost = { alloys: 220 }
 export const STARBASE_BUILD_DAYS = 90
 export const STARBASE_INTEGRITY = 50
 export const STARBASE_ARMOR = 1.5

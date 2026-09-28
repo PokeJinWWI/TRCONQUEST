@@ -1,4 +1,5 @@
 import { BattleBadge } from '../components/BattleBadge'
+import { ShipyardBadge } from '../components/ShipyardBadge'
 import { useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
@@ -78,6 +79,7 @@ export function Planet({ data, selected, onSelect, onOrderTo, colorOverride, own
             <span className="marker-dot" style={{ borderColor: displayColor }} />
             <span className="marker-label">{data.name}</span>
             <BattleBadge scope={{ body: data.name }} />
+            <ShipyardBadge bodyName={data.name} />
           </div>
         </Html>
       </group>

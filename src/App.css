@@ -3067,17 +3067,48 @@
 }
 
 .ship-marker-icon {
+  --ship-size: 10px;
   position: absolute;
-  top: -4px;
-  left: -5px;
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 9px solid #9fe8ff;
-  filter: drop-shadow(0 0 4px rgba(159, 232, 255, 0.7));
+  top: calc(var(--ship-size) / -2 + 1px);
+  left: calc(var(--ship-size) / -2);
+  width: var(--ship-size);
+  height: var(--ship-size);
+  filter: drop-shadow(0 0 4px rgba(159, 232, 255, 0.55));
   transition: transform 0.15s;
 }
+
+/* A bit of invisible margin around the icon, so a ship is easy to click. */
+.ship-marker-icon::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.ship-marker-icon.inline {
+  position: relative;
+  top: auto;
+  left: auto;
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+  cursor: var(--cursor-pointer);
+}
+
+.ship-shape {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--ship-color, #9fe8ff);
+}
+
+/* One silhouette per role: the warship triangle, and a distinct shape for each
+   civilian job (see scene/ShipIcon.tsx). */
+.ship-role-warship .ship-shape { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.ship-role-transport .ship-shape { clip-path: polygon(50% 0, 100% 42%, 100% 100%, 0 100%, 0 42%); }
+.ship-role-civilian .ship-shape { clip-path: circle(46% at 50% 50%); }
+.ship-role-science .ship-shape { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.ship-role-construction .ship-shape { clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
+.ship-role-cargo .ship-shape { clip-path: polygon(0 22%, 100% 22%, 100% 78%, 0 78%); }
 
 .ship-marker.hovered .ship-marker-icon,
 .ship-marker.selected .ship-marker-icon {
@@ -3128,18 +3159,6 @@
    distinct relation color present (own/neutral/hostile), deliberately icon-only — but still
    clicking-to-select the fleet it represents, same as any other ship
    marker. */
-.fleet-presence-icon {
-  display: inline-block;
-  width: 0;
-  height: 0;
-  margin-left: 6px;
-  vertical-align: middle;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-bottom: 7px solid;
-  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
-  cursor: var(--cursor-pointer);
-}
 
 /* The prominent label for whichever body is currently focused/inspected in
    satellite view — anchored above the hologram instead of sitting on it. */
@@ -6222,4 +6241,102 @@ button.pl-tile.empty:hover {
   border: 1px solid rgba(111, 227, 255, 0.9);
   background: rgba(111, 227, 255, 0.08);
   box-shadow: 0 0 8px rgba(111, 227, 255, 0.35) inset;
+}
+
+/* Shipyard panel: slips, and the hull list grouped by kind. */
+.shipyard-slips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.shipyard-slip {
+  flex: 1 1 90px;
+  min-width: 90px;
+  padding: 6px 8px;
+  border: 1px dashed rgba(111, 227, 255, 0.3);
+  border-radius: 3px;
+  font-size: 11px;
+  text-align: center;
+  color: rgba(159, 232, 255, 0.5);
+}
+
+.shipyard-slip.busy {
+  border-style: solid;
+  border-color: rgba(111, 227, 255, 0.7);
+  background: rgba(111, 227, 255, 0.12);
+  color: #fff;
+}
+
+.shipyard-group + .shipyard-group {
+  margin-top: 10px;
+}
+
+.shipyard-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+  padding: 2px 0 4px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  cursor: var(--cursor-pointer);
+}
+
+.shipyard-group-count {
+  margin-left: auto;
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.shipyard-hull.unavailable {
+  opacity: 0.6;
+}
+
+.shipyard-filter {
+  margin-left: auto;
+  font-size: 10px;
+  color: #9fe8ff;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: var(--cursor-pointer);
+}
+
+/* The shipyard icon on a capital world's map marker. */
+.shipyard-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  vertical-align: middle;
+  color: var(--badge-color, #9fe8ff);
+  cursor: var(--cursor-default);
+}
+
+.shipyard-badge.own {
+  cursor: var(--cursor-pointer);
+}
+
+.shipyard-badge svg {
+  width: 15px;
+  height: 15px;
+  filter: drop-shadow(0 0 3px rgba(159, 232, 255, 0.5));
+}
+
+.shipyard-badge-count {
+  font-size: 9px;
+  line-height: 11px;
+  padding: 0 3px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: rgba(2, 6, 12, 0.85);
 }

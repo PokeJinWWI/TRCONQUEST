@@ -313,6 +313,11 @@ export interface ShipInstance {
   // itself since there's no fixed arrival time to compute up front — the
   // target can keep moving.
   followingShipId: string | null
+  // A merge in progress: this ship is following the lead of the fleet with this
+  // id (followingShipId) and joins it once both are resting in the same place
+  // (scene/fleetMerge.resolveFleetMerges). Cleared when it joins, or as soon as
+  // the follow is cancelled by a new order. Absent = not merging.
+  mergeIntoFleetId?: string | null
   // Goods carried in this hull's hold (see ShipClass.cargoCapacity and
   // scene/cargoLogic.ts). Optional: absent = empty, so no existing ShipInstance
   // literal needs updating.
@@ -443,6 +448,8 @@ interface ShipState {
   // scene's right-click-a-ship handler), so no keepFollowing-style guard is
   // needed here the way setShipOrder/setShipLocation have.
   setFollowing: (id: string, targetShipId: string | null) => void
+  // Marks (or clears, with null) ships as merging into a fleet — see ShipInstance.mergeIntoFleetId.
+  setMergeInto: (ids: string[], fleetId: string | null) => void
   // Bulk-applies one combat step's damage results, keyed by ship id, and
   // removes any ship whose core component hit zero. Combat resolves as a
   // pure function over every participant at once (see combatResolution.ts),
@@ -716,6 +723,11 @@ export const useShipStore = create<ShipState>((set) => ({
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, followingShipId: targetShipId } : ship)),
     })),
+  setMergeInto: (ids, fleetId) =>
+    set((s) => {
+      const set_ = new Set(ids)
+      return { ships: s.ships.map((ship) => (set_.has(ship.id) ? { ...ship, mergeIntoFleetId: fleetId } : ship)) }
+    }),
   applyCombatDamage: (next, destroyedIds) =>
     set((s) => {
       const destroyed = new Set(destroyedIds)
