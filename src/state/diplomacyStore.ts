@@ -5,9 +5,11 @@ import {
   OPINION_MAX,
   OPINION_MIN,
   OPINION_ON_WAR_DECLARED,
+  SKIRMISH_LAPSE_DAYS,
   TRUCE_DAYS,
   defaultRelation,
   pairKey,
+  type ConflictTier,
   type DiplomacyEvent,
   type DiplomacyEventKind,
   type Relation,
@@ -26,7 +28,7 @@ interface DiplomacyState {
   relations: Record<string, Relation>
   wars: War[]
   events: DiplomacyEvent[]
-  declareWar: (attackerId: string, defenderId: string, simDays: number) => DeclareWarResult
+  declareWar: (attackerId: string, defenderId: string, simDays: number, tier?: ConflictTier) => DeclareWarResult
   // Dev-tool only (DebugConsole scenarios): puts two nations at war even
   // inside a truce, so a scenario always gets its fight. A no-op if they're
   // already at war. Never call this from gameplay — declareWar's rules are
@@ -35,6 +37,13 @@ interface DiplomacyState {
   // Ends a war with no terms applied — territory handling for a real peace
   // lives in scene/peace.ts, which calls this last.
   endWar: (warId: string, simDays: number) => void
+  // Flips a war's tier. Only ever moves skirmish -> limited -> total; callers
+  // (scene/peace.ts) are responsible for checking whether escalation is
+  // justified (war score, valid war goal) before calling this.
+  setConflictTier: (warId: string, tier: ConflictTier) => void
+  touchEngagement: (warId: string, simDays: number) => void
+  // Ends any skirmish that's had no hostile engagement for SKIRMISH_LAPSE_DAYS.
+  lapseStaleSkirmishes: (simDays: number) => void
   adjustOpinion: (a: string, b: string, delta: number) => void
   // Adds to a war's attacker-POV battle balance and each side's exhaustion.
   recordWarLosses: (warId: string, attackerLossValue: number, defenderLossValue: number) => void
@@ -63,7 +72,7 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
   wars: [],
   events: [],
 
-  declareWar: (attackerId, defenderId, simDays) => {
+  declareWar: (attackerId, defenderId, simDays, tier = 'limited') => {
     if (attackerId === defenderId) return { ok: false, reason: 'A nation cannot declare war on itself.' }
     const state = get()
     const relation = relationIn(state.relations, attackerId, defenderId)
@@ -76,8 +85,10 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
       attackerId,
       defenderId,
       startedSimDays: simDays,
+      tier,
       battleBalance: 0,
       exhaustion: { [attackerId]: 0, [defenderId]: 0 },
+      lastEngagementSimDays: simDays,
     }
     const key = pairKey(attackerId, defenderId)
     const opinion = Math.max(OPINION_MIN, relation.opinion + OPINION_ON_WAR_DECLARED)
@@ -106,6 +117,24 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
         wars: s.wars.filter((w) => w.id !== warId),
         relations: { ...s.relations, [key]: { ...relation, status: 'peace', truceUntilSimDays: simDays + TRUCE_DAYS } },
       }
+    }),
+
+  setConflictTier: (warId, tier) => set((s) => ({ wars: s.wars.map((w) => (w.id === warId ? { ...w, tier } : w)) })),
+
+  touchEngagement: (warId, simDays) =>
+    set((s) => ({ wars: s.wars.map((w) => (w.id === warId ? { ...w, lastEngagementSimDays: simDays } : w)) })),
+
+  lapseStaleSkirmishes: (simDays) =>
+    set((s) => {
+      const stale = s.wars.filter((w) => w.tier === 'skirmish' && simDays - w.lastEngagementSimDays >= SKIRMISH_LAPSE_DAYS)
+      if (stale.length === 0) return s
+      const staleIds = new Set(stale.map((w) => w.id))
+      const relations = { ...s.relations }
+      for (const war of stale) {
+        const key = pairKey(war.attackerId, war.defenderId)
+        relations[key] = { ...relationIn(relations, war.attackerId, war.defenderId), status: 'peace', truceUntilSimDays: simDays }
+      }
+      return { wars: s.wars.filter((w) => !staleIds.has(w.id)), relations }
     }),
 
   adjustOpinion: (a, b, delta) =>

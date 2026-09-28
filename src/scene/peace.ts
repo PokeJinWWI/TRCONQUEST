@@ -8,15 +8,18 @@ import {
   BODY_VALUE_CAPITAL,
   BODY_VALUE_OUTPOST,
   BODY_VALUE_WORLD,
+  ESCALATION_MIN_SCORE,
   OPINION_ON_PEACE,
+  type ConflictTier,
   type PeaceTerms,
 } from '../data/diplomacyData'
 import { useDiplomacyStore, warBetweenIn, type DeclareWarResult } from '../state/diplomacyStore'
+import { isGuarantorOf, isNonAggression } from '../state/treatyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useArmyStore } from '../state/armyStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { controllerOf } from './territory'
-import { bodiesHeldFrom, evaluatePeace, type PeaceEvaluation } from './warScore'
+import { bodiesHeldFrom, evaluatePeace, scoreFor, type PeaceEvaluation } from './warScore'
 import { groundSurface, musterNode, placeUnits } from './groundLogic'
 
 function nameOf(countryId: string): string {
@@ -31,12 +34,13 @@ export function liveBodyValue(bodyName: string): number {
   return BODY_VALUE_OUTPOST
 }
 
-export function declareWarOn(attackerId: string, defenderId: string, simDays: number): DeclareWarResult {
-  const result = useDiplomacyStore.getState().declareWar(attackerId, defenderId, simDays)
+export function declareWarOn(attackerId: string, defenderId: string, simDays: number, tier: ConflictTier = 'limited'): DeclareWarResult {
+  if (isNonAggression(attackerId, defenderId)) return { ok: false, reason: 'A non-aggression pact is in effect' }
+  if (isGuarantorOf(attackerId, defenderId)) return { ok: false, reason: 'You guarantee their independence' }
+  const result = useDiplomacyStore.getState().declareWar(attackerId, defenderId, simDays, tier)
   if (result.ok) {
-    useDiplomacyStore
-      .getState()
-      .pushEvent('war-declared', [attackerId, defenderId], `${nameOf(attackerId)} declared war on ${nameOf(defenderId)}`, simDays)
+    const verb = tier === 'skirmish' ? 'started a skirmish with' : 'declared war on'
+    useDiplomacyStore.getState().pushEvent('war-declared', [attackerId, defenderId], `${nameOf(attackerId)} ${verb} ${nameOf(defenderId)}`, simDays)
   }
   return result
 }
@@ -96,7 +100,9 @@ export function makePeace(warId: string, terms: PeaceTerms, beneficiaryId: strin
   const text =
     terms.kind === 'white'
       ? `${nameOf(war.attackerId)} and ${nameOf(war.defenderId)} signed a white peace`
-      : `${nameOf(loserId)} made peace with ${nameOf(beneficiaryId)}, ceding ${terms.bodies.join(', ')}`
+      : terms.kind === 'cede'
+        ? `${nameOf(loserId)} made peace with ${nameOf(beneficiaryId)}, ceding ${terms.bodies.join(', ')}`
+        : `${nameOf(war.attackerId)} and ${nameOf(war.defenderId)} made peace`
   useDiplomacyStore.getState().pushEvent('peace-signed', [war.attackerId, war.defenderId], text, simDays)
 }
 
@@ -119,6 +125,33 @@ function sendStrandedArmiesHome(countryIds: string[]): void {
     return [{ ...a, location: { kind: 'body' as const, bodyName: capital }, units }]
   })
   if (changed) useArmyStore.getState().setArmies(next)
+}
+
+// Escalates a war one tier (skirmish -> limited -> total). `proposerId`'s war
+// score has to justify it: a skirmish always escalates freely (it's already
+// a live conflict, just widening its scope), but limited -> total needs the
+// proposer clearly winning, mirroring how a total war's stakes are higher.
+export function escalateConflict(warId: string, proposerId: string, simDays: number): { ok: boolean; reason: string } {
+  const diplomacy = useDiplomacyStore.getState()
+  const war = diplomacy.wars.find((w) => w.id === warId)
+  if (!war) return { ok: false, reason: 'No such war' }
+  if (war.tier === 'total') return { ok: false, reason: 'Already total war' }
+  if (war.tier === 'limited') {
+    const { bodyOwner, bodyController } = useTerritoryStore.getState()
+    const score = scoreFor(war, proposerId, bodyOwner, bodyController, liveBodyValue)
+    if (score < ESCALATION_MIN_SCORE) return { ok: false, reason: `Needs war score ${ESCALATION_MIN_SCORE} (have ${Math.floor(score)})` }
+  }
+  const nextTier: ConflictTier = war.tier === 'skirmish' ? 'limited' : 'total'
+  diplomacy.setConflictTier(warId, nextTier)
+  diplomacy.pushEvent('war-declared', [proposerId], `${nameOf(proposerId)} escalated the conflict to ${nextTier} war`, simDays)
+  return { ok: true, reason: 'Escalated' }
+}
+
+// Ends any skirmish that's had no hostile engagement for SKIRMISH_LAPSE_DAYS —
+// call this from wherever else the game already runs a periodic sweep (it's
+// cheap and idempotent, safe to call every tick).
+export function lapseStaleSkirmishes(simDays: number): void {
+  useDiplomacyStore.getState().lapseStaleSkirmishes(simDays)
 }
 
 // Charges a loss to every war between the loser's nation and any of

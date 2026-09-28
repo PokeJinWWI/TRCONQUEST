@@ -13,6 +13,7 @@ import { relationIn } from './diplomacyStore'
 import { COUNTRIES, getCountry } from '../data/countryData'
 import type { HoldingContext } from '../scene/holdings'
 import type { SpaceportSite } from '../scene/spaceportSites'
+import { treatyPortOperatorOf } from './treatyStore'
 
 const simple = () => economyModel() === 'abstract'
 
@@ -74,23 +75,34 @@ export function militarySlotsOf(bodyName: string): number {
 export function spaceportSitesOf(bodyName: string): SpaceportSite[] {
   const owner = useTerritoryStore.getState().bodyOwner[bodyName]
   const nation = owner ? getCountry(owner)?.name ?? owner : 'the state'
-  if (simple()) {
-    const w = useAbstractEconomyStore.getState().worlds[bodyName]
-    const n = w?.buildings.spaceport ?? 0
-    return Array.from({ length: n }, () => ({ operator: 'state', operatorName: `${nation} (state)` }))
+  const sites = (() => {
+    if (simple()) {
+      const w = useAbstractEconomyStore.getState().worlds[bodyName]
+      const n = w?.buildings.spaceport ?? 0
+      return Array.from({ length: n }, () => ({ operator: 'state', operatorName: `${nation} (state)` }))
+    }
+    const st = useEconomyStore.getState()
+    const w = worldByName(st.worlds, bodyName)
+    if (!w) return []
+    return w.buildings
+      .filter((b) => b.recipeId === 'spaceport')
+      .map((b) => {
+        if (b.owner.kind === 'corporation') {
+          const id = b.owner.corporationId
+          return { operator: id, operatorName: st.corporations.find((c) => c.id === id)?.name ?? id }
+        }
+        return { operator: 'state', operatorName: b.owner.kind === 'worker' ? 'its workers (co-op)' : `${nation} (state)` }
+      })
+  })()
+  // A treaty port cedes operating rights over the body's FIRST spaceport site
+  // (sites carry no id to target a particular one more precisely) to a
+  // foreign nation — a foothold with no territory changing hands.
+  const treatyOperatorId = treatyPortOperatorOf(bodyName)
+  if (treatyOperatorId && sites.length > 0) {
+    const name = getCountry(treatyOperatorId)?.name ?? treatyOperatorId
+    sites[0] = { operator: treatyOperatorId, operatorName: `${name} (treaty port)` }
   }
-  const st = useEconomyStore.getState()
-  const w = worldByName(st.worlds, bodyName)
-  if (!w) return []
-  return w.buildings
-    .filter((b) => b.recipeId === 'spaceport')
-    .map((b) => {
-      if (b.owner.kind === 'corporation') {
-        const id = b.owner.corporationId
-        return { operator: id, operatorName: st.corporations.find((c) => c.id === id)?.name ?? id }
-      }
-      return { operator: 'state', operatorName: b.owner.kind === 'worker' ? 'its workers (co-op)' : `${nation} (state)` }
-    })
+  return sites
 }
 
 // Tell both economies how many military slots each world's defenses take.

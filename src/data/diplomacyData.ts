@@ -18,13 +18,25 @@ export interface Relation {
   opinion: number
 }
 
-export type PeaceTerms = { kind: 'white' } | { kind: 'cede'; bodies: string[] }
+// A war's scope. 'skirmish' is a blockade / border clash / limited "police
+// action" short of a real war: no cession terms, capped exhaustion, and it
+// lapses on its own if nobody escalates it. 'limited' is today's war (cession
+// terms only). 'total' additionally allows subjugating or annexing the loser.
+export type ConflictTier = 'skirmish' | 'limited' | 'total'
+
+export type PeaceTerms =
+  | { kind: 'white' }
+  | { kind: 'cede'; bodies: string[] }
+  // 'total' tier only.
+  | { kind: 'vassalize'; subjectType: import('./subjectData').SubjectType }
+  | { kind: 'liberate-subject'; subjectId: string }
 
 export interface War {
   id: string
   attackerId: string
   defenderId: string
   startedSimDays: number
+  tier: ConflictTier
   // Running battle balance from the ATTACKER's point of view: value of
   // defender ships destroyed minus value of attacker ships destroyed. War
   // score adds occupied territory on top of this (see scene/warScore.ts).
@@ -32,9 +44,23 @@ export interface War {
   // Grows with time at war and with losses; high exhaustion makes a nation
   // accept a worse peace.
   exhaustion: Record<string, number>
+  // Last simDays either side had a hostile engagement — a skirmish with no
+  // engagement for SKIRMISH_LAPSE_DAYS lapses back to peace on its own.
+  lastEngagementSimDays: number
 }
 
-export type DiplomacyEventKind = 'war-declared' | 'peace-offered' | 'peace-signed' | 'peace-rejected' | 'body-occupied' | 'body-ceded' | 'installation-destroyed' | 'bombardment' | 'holding'
+export type DiplomacyEventKind =
+  | 'war-declared'
+  | 'peace-offered'
+  | 'peace-signed'
+  | 'peace-rejected'
+  | 'body-occupied'
+  | 'body-ceded'
+  | 'installation-destroyed'
+  | 'bombardment'
+  | 'holding'
+  | 'treaty-signed'
+  | 'treaty-broken'
 
 export interface DiplomacyEvent {
   id: string
@@ -102,3 +128,14 @@ export const WHITE_PEACE_EXHAUSTED_MAX_SCORE = 50
 // A loser cedes bodies when the winner's score covers what they're worth.
 // Exhaustion past this halves the score needed.
 export const CEDE_EXHAUSTION = 80
+
+// --- Conflict tiers ----------------------------------------------------------
+// A skirmish with no hostile engagement for this many sim-days lapses back to
+// peace on its own (mirrors terrain battles' own "no contact" end rule).
+export const SKIRMISH_LAPSE_DAYS = 90
+// Exhaustion accrues at this fraction of the normal rate while a war is only
+// a skirmish — a blockade shouldn't wear a nation down like a real war.
+export const SKIRMISH_EXHAUSTION_SCALE = 0.25
+// A limited war escalates to total once the attacker's war score (POV of
+// whichever side is proposing the escalation) passes this.
+export const ESCALATION_MIN_SCORE = 60

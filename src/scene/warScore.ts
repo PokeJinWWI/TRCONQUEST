@@ -106,6 +106,10 @@ export function evaluatePeace(
     return { accept: true, reason: 'White peace accepted' }
   }
 
+  // Vassalize/liberate-subject terms are only valid in a total war; that
+  // gating and their evaluation land in a later phase.
+  if (terms.kind !== 'cede') return { accept: false, reason: 'Not yet supported' }
+
   if (terms.bodies.length === 0) return { accept: false, reason: 'No bodies demanded' }
   const held = new Set(bodiesHeldFrom(receiverId, proposerId, owners, controllers))
   const notHeld = terms.bodies.filter((b) => !held.has(b))

@@ -11,7 +11,8 @@ import { useArmyStore } from '../src/state/armyStore'
 import { useEconomyStore, worldByName } from '../src/state/economyStore'
 import { seedBodyOwners, isOccupied } from '../src/scene/territory'
 import { battleScore, cessionCost, evaluatePeace, occupiedShare, scoreFor, warExhaustion, warScore } from '../src/scene/warScore'
-import { declareWarOn, liveBodyValue, makePeace, proposePeace, recordLoss } from '../src/scene/peace'
+import { declareWarOn, escalateConflict, liveBodyValue, makePeace, proposePeace, recordLoss } from '../src/scene/peace'
+import { SKIRMISH_LAPSE_DAYS } from '../src/data/diplomacyData'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -177,6 +178,41 @@ console.log('\n=== 7. A refused peace changes nothing ===')
   check('white peace hands Venus back', !isOccupied('Venus', t.bodyOwner, t.bodyController) && t.bodyOwner['Venus'] === VENUS)
   const army = useArmyStore.getState().armies.find((a) => a.id === home)
   check("...and Mars's army there goes home to Mars", army?.location.kind === 'body' && (army.location as { bodyName: string }).bodyName === 'Mars')
+}
+
+console.log('\n=== 8. Conflict tiers: skirmish, escalation, and lapsing ===')
+{
+  fresh()
+  declareWarOn(MARS, VENUS, 0)
+  check('a plain declaration defaults to limited war', war(MARS, VENUS).tier === 'limited')
+
+  fresh()
+  declareWarOn(MARS, VENUS, 0, 'skirmish')
+  check('a skirmish can be declared explicitly', war(MARS, VENUS).tier === 'skirmish')
+  check('a skirmish still counts as hostility', atWar(MARS, VENUS))
+
+  const noScore = escalateConflict(war(MARS, VENUS).id, MARS, 10)
+  check('a skirmish escalates to limited war freely, no score needed', noScore.ok && war(MARS, VENUS).tier === 'limited')
+
+  const tooWeak = escalateConflict(war(MARS, VENUS).id, MARS, 10)
+  check('escalating limited -> total needs a real war-score lead', !tooWeak.ok, tooWeak.reason)
+
+  useTerritoryStore.getState().occupyBody('Venus', MARS)
+  const toTotal = escalateConflict(war(MARS, VENUS).id, MARS, 10)
+  check('occupying the enemy capital is enough score to escalate to total war', toTotal.ok && war(MARS, VENUS).tier === 'total')
+  check("...and it can't escalate further", !escalateConflict(war(MARS, VENUS).id, MARS, 10).ok)
+
+  fresh()
+  declareWarOn(MARS, VENUS, 0, 'skirmish')
+  useDiplomacyStore.getState().lapseStaleSkirmishes(SKIRMISH_LAPSE_DAYS - 1)
+  check('a skirmish holds while there is still time on the clock', atWar(MARS, VENUS))
+  useDiplomacyStore.getState().lapseStaleSkirmishes(SKIRMISH_LAPSE_DAYS)
+  check('...and lapses back to peace once nobody has engaged for long enough', !atWar(MARS, VENUS) && useDiplomacyStore.getState().wars.length === 0)
+
+  fresh()
+  declareWarOn(MARS, VENUS, 0, 'limited')
+  useDiplomacyStore.getState().lapseStaleSkirmishes(SKIRMISH_LAPSE_DAYS * 10)
+  check('a limited (real) war never auto-lapses', atWar(MARS, VENUS))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

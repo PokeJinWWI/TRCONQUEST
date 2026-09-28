@@ -27,9 +27,9 @@ function nameOf(id: string): string {
 }
 
 function describeTerms(terms: PeaceTerms, fromId: string): string {
-  return terms.kind === 'white'
-    ? 'White peace: every occupied world returns to its owner.'
-    : `You cede ${terms.bodies.join(', ')} to ${nameOf(fromId)}.`
+  if (terms.kind === 'white') return 'White peace: every occupied world returns to its owner.'
+  if (terms.kind === 'cede') return `You cede ${terms.bodies.join(', ')} to ${nameOf(fromId)}.`
+  return `Terms with ${nameOf(fromId)}.`
 }
 
 // Whether the player may be offered peace in this war right now: not soon
