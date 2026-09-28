@@ -4,7 +4,7 @@
 
 import { glossaryLookup, normalizeTerm } from '../src/data/glossary'
 import { monthTicks, niceTicks } from '../src/components/TimeChart'
-import { resolveTooltip, type TipNode } from '../src/components/TooltipLayer'
+import { resolveTooltip, titledChain, type TipNode } from '../src/components/TooltipLayer'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -88,6 +88,17 @@ console.log('\n=== 4. One tooltip system: one box, never a native one beside it 
   check('glossary lookup stops at a control', resolveTooltip(btn) === null)
   check('nothing inside the tooltip box itself', resolveTooltip(node('DIV', { class: 'game-tooltip', title: 't' })) === null)
   check('plain text with no title or term gets nothing', resolveTooltip(node('SPAN', {}, 'Mars')) === null)
+
+  // The double-tooltip bug: a titled button inside a titled window. Lifting only
+  // the button's title left the window's for the browser to show a moment later.
+  const button = node('BUTTON', { title: 'Build for 12 days' }, 'Build')
+  const row = node('DIV', {}, '', [button])
+  const windowEl = node('DIV', { title: 'Shipyard window' }, '', [row])
+  node('DIV', { title: 'Whole page' }, '', [windowEl])
+  check('resolveTooltip shows only the nearest title', resolveTooltip(button)?.titleEl === button)
+  const chain = titledChain(button)
+  check('...but every titled element above the pointer has to be lifted', chain.length === 3 && chain[0] === button, `${chain.length} titled`)
+  check('an untitled tree has nothing to lift', titledChain(node('SPAN', {}, 'x')).length === 0)
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

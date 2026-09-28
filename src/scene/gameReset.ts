@@ -22,6 +22,8 @@ import { usePlayerStore } from '../state/playerStore'
 import { useResourceStore } from '../state/resourceStore'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { useShipStore } from '../state/shipStore'
+import { useSurveyStore } from '../state/surveyStore'
+import { useStarbaseStore } from '../state/starbaseStore'
 import { useShipyardStore } from '../state/shipyardStore'
 import { useTechStore } from '../state/techStore'
 import { useTerrainStore } from '../state/terrainStore'
@@ -48,6 +50,8 @@ const GAME_STORES: Resettable[] = [
   useWindowLayoutStore,
   usePlanetViewStore,
   useAiStore,
+  useSurveyStore,
+  useStarbaseStore,
   useArmyStore,
   useBattleStore,
   useCombatStore,

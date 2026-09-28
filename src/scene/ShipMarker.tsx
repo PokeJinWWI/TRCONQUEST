@@ -7,7 +7,7 @@ import { useShipStore } from '../state/shipStore'
 import { useFleetStore } from '../state/fleetStore'
 import { RELATION_COLORS } from '../data/shipData'
 import { useRelationTo } from '../state/shipRelations'
-import { playerVisualShipRenderPosition } from './commsVisual'
+import { playerShipRenderPosition } from './commsVisual'
 import { isAdditiveClick } from './selectionInput'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
@@ -73,12 +73,10 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
   // a bare point in space) always keeps its label regardless.
   const isOrbiting = !lead.order && lead.location.kind === 'orbiting'
   const hideLabel = isOrbiting && stackCount <= 1
-
   useFrame(() => {
     const simDays = useGameTimeStore.getState().simDays
-    // Comms-delay-aware — see commsVisual.ts. Collapses to the plain live
-    // position exactly as before whenever the player has instant contact.
-    const { position } = playerVisualShipRenderPosition(lead, simDays)
+    // Always the ship's real position (see commsVisual.playerShipRenderPosition).
+    const { position } = playerShipRenderPosition(lead, simDays)
     groupRef.current?.position.copy(position)
   })
 

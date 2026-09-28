@@ -30,7 +30,7 @@ import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { getPlanetPosition } from './orbitMath'
 import { shipSystemId, canFollow, bodyLivePosition, clusterRestingShipsByFleet, SYSTEM_SHIP_ORBIT_RADIUS } from './shipPhysics'
-import { orderSelectedFleets, playerVisualShipRenderPosition } from './commsVisual'
+import { orderSelectedFleets, playerShipRenderPosition } from './commsVisual'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore, type MoveDestination } from '../state/shipStore'
@@ -467,7 +467,7 @@ export function SolarSystemScene() {
             key={trackedShip.id}
             controlsRef={controlsRef}
             arriveDistance={SHIP_FOCUS_ARRIVE_DISTANCE}
-            getTargetPosition={() => playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
+            getTargetPosition={() => playerShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position}
             onArrive={() => setFlyingToShip(false)}
           />
         )}
@@ -484,7 +484,7 @@ export function SolarSystemScene() {
             controlsRef={controlsRef}
             getPosition={() => {
               if (lockOnEnabled) {
-                if (trackedShip) return playerVisualShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
+                if (trackedShip) return playerShipRenderPosition(trackedShip, useGameTimeStore.getState().simDays).position
                 if (selectedPlanetData) return getPlanetPosition(selectedPlanetData, simDaysToYears(useGameTimeStore.getState().simDays))
                 if (selectedStar) return new Vector3(...selectedStar.position)
               }

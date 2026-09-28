@@ -18,10 +18,10 @@ import { usePlayerStore } from '../state/playerStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { overallHealthFraction, shipCombatProfile, totalHitPoints } from '../scene/combatResolution'
 import { getShipStatusText } from '../scene/shipPhysics'
-import { queueStance, queueBombard, playerCommsDelayToShip, visualShipSnapshot } from '../scene/commsVisual'
+import { queueStance, queueBombard } from '../scene/commsVisual'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS } from '../data/defenseData'
 import { isArmed } from '../scene/armyLogic'
-import { useCombatStore, combatLocationKey, engagementIsContested } from '../state/combatStore'
+import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { useFleetStore, type Fleet } from '../state/fleetStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
@@ -178,17 +178,8 @@ function FleetManager() {
               members.map((ship) => {
                 const shipClass = resolveShipClass(ship.classId)
                 const profile = shipCombatProfile(ship)
-                // Comms-delay-aware — see commsVisual.ts and ShipPanel's own
-                // identical treatment for the full reasoning: a ship already
-                // being watched live in a contested fight is exempt, and only
-                // the informational readouts (health, status text) below get
-                // the stale lens, never anything a click actually acts on.
-                const engagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
-                const contested = !!engagement && engagementIsContested(engagement, (id) => allShips.some((s) => s.id === id))
-                const delay = contested ? 0 : playerCommsDelayToShip(ship, simDays)
-                const snap = delay > 0 ? visualShipSnapshot(ship, delay, simDays) : null
-                const displayShip = snap ? { ...ship, location: snap.location, order: snap.order } : ship
-                const displayCombat = snap ? snap.combat : ship.combat
+                const displayShip = ship
+                const displayCombat = ship.combat
                 const health = profile ? overallHealthFraction(displayCombat, profile) : 0
                 return (
                   <button

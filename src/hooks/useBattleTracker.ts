@@ -7,6 +7,8 @@ import { useDiplomacyStore } from '../state/diplomacyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { useShipStore } from '../state/shipStore'
 import { useTerrainStore } from '../state/terrainStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { engagementKnownToPlayer } from '../scene/commsVisual'
 import { engagedUnitIds } from '../scene/terrainWar'
 
 const keyOf = (battles: PlayerBattle[]) => battles.map((b) => `${b.key}@${b.starId ?? ''}`).join('|')
@@ -21,7 +23,9 @@ export function refreshBattles(): void {
   const engaged = engagedUnitIds(terrain)
   const armies = useArmyStore.getState().armies
   const next = [
-    ...playerSpaceBattles(useCombatStore.getState().engagements, useShipStore.getState().ships, playerId),
+    ...playerSpaceBattles(useCombatStore.getState().engagements, useShipStore.getState().ships, playerId, (e) =>
+      engagementKnownToPlayer(e, useShipStore.getState().ships, useGameTimeStore.getState().simDays),
+    ),
     ...playerTerrainBattles(terrain, playerId),
     ...playerGroundBattles(armies, playerId, engaged),
     ...playerContests(armies, playerId, undefined, engaged),
@@ -39,6 +43,10 @@ export function useBattleTracker() {
       useShipStore.subscribe(refreshBattles),
       usePlayerStore.subscribe(refreshBattles),
       useDiplomacyStore.subscribe(refreshBattles),
+      // News of a fight arrives with time, not with a store change.
+      useGameTimeStore.subscribe((state, prev) => {
+        if (Math.floor(state.simDays) !== Math.floor(prev.simDays)) refreshBattles()
+      }),
     ]
     return () => unsubs.forEach((u) => u())
   }, [])

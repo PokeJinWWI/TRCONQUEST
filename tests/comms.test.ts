@@ -15,7 +15,14 @@ import {
   visualShipRenderPosition,
   queueMoveOrder,
   applyMoveDestination,
+  playerShipRenderPosition,
+  engagementIntel,
+  shipsIntel,
+  unknownShipsMessage,
 } from '../src/scene/commsVisual'
+import { getShipRenderPosition } from '../src/scene/shipPhysics'
+import { playerSpaceBattles } from '../src/scene/battleList'
+import { useViewStore } from '../src/state/viewStore'
 import { STARS, starScenePosition } from '../src/data/starData'
 import { COUNTRIES } from '../src/data/countryData'
 import { SHIP_CLASSES } from '../src/data/shipData'
@@ -291,6 +298,57 @@ console.log('\n=== 9. shipCommsDelayDays: a ship mid-order uses its LIVE positio
   useTechStore.setState({ byCountry: {} })
   const playerDelay = playerCommsDelayToShip(ship, 10)
   check('playerCommsDelayToShip agrees with the lower-level function for the same mid-order ship', Math.abs(playerDelay - delayAtArrival) < 0.01)
+  usePlayerStore.setState({ selectedCountryId: null })
+}
+
+console.log('\n=== 10. Live view, and news of a fight arriving late ===')
+{
+  usePlayerStore.setState({ selectedCountryId: 'imperial-state-of-mars' })
+  useTechStore.setState({ byCountry: {} })
+  useGameTimeStore.setState({ simDays: 0, paused: false })
+  const far = makeShip('far', 'player', { location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] } })
+
+  const seen = playerShipRenderPosition(far, 500)
+  const real = getShipRenderPosition(far, 500)
+  check('a far ship is drawn where it REALLY is, whatever the comms lag', seen.position.distanceTo(real.position) < 1e-9)
+
+  // A fight at Alpha Centauri between the player's ship and an enemy that ARRIVED
+  // there at day 100 (its history shows it coming to rest).
+  const arrived = (id: string, owner: string, at: number) =>
+    makeShip(id, owner, {
+      location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] },
+      history: [
+        { simDays: at - 5, location: { kind: 'star', starId: 'sol', offset: [0, 0, 0] }, order: null, combat: far.combat },
+        { simDays: at, location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] }, order: null, combat: far.combat },
+      ],
+    })
+  const enemy = arrived('foe', 'orion-republic', 100)
+  const ships = [far, enemy]
+  const engagement = { id: 'e1', participants: [{ shipId: 'far' }, { shipId: 'foe' }] } as never
+  const delay = playerCommsDelayToShip(far, 100)
+  let intel = engagementIntel(engagement, ships, 100)
+  check('an enemy that has just arrived is not known yet: cannot enter', !intel.allKnown && intel.unknownCount === 1)
+  check('...and the player is not even aware of a fight yet', !intel.aware)
+  check('...the wait is the signal delay', Math.abs(intel.waitDays - delay) < 1e-6, `${intel.waitDays.toFixed(0)}d`)
+  check('...the message says how many and how long', /1 ship present isn't known to you yet/.test(unknownShipsMessage(intel)) && /days/.test(unknownShipsMessage(intel)))
+  check('...still unknown a day before its signal arrives', !engagementIntel(engagement, ships, 100 + delay - 1).allKnown)
+  check('...known, and enterable, once it does', engagementIntel(engagement, ships, 100 + delay).allKnown)
+  check('a ship with no arrival on record (scenario-spawned) is known at once', engagementIntel({ id: 'e2', participants: [{ shipId: 'far' }, { shipId: 'foe2' }] } as never, [far, makeShip('foe2', 'orion-republic', { location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] } })], 100).allKnown)
+  check('the player\'s own ships are always known', shipsIntel([far], 0).allKnown)
+  const two = [far, enemy, arrived('foe3', 'orion-republic', 400)]
+  intel = shipsIntel(two, 100 + delay)
+  check('with several strangers, ONE unknown blocks entering', !intel.allKnown && intel.unknownCount === 1 && intel.aware)
+  const list = (known: boolean) => playerSpaceBattles([{ ...(engagement as object), id: 'e1', locationKey: 'star:alpha-centauri', locationLabel: 'Alpha Centauri', startedSimDays: 100, density: 'standard', center: { x: 0, y: 0, z: 0 }, obstacles: [], participants: [{ shipId: 'far', side: 0, hostileSides: [1] }, { shipId: 'foe', side: 1, hostileSides: [0] }], nations: ['imperial-state-of-mars', 'orion-republic'] } as never], ships, 'imperial-state-of-mars', () => known)
+  check('an unheard-of fight is not in the battle list', list(false).length === 0)
+  check('...and a known one is', list(true).length === 1)
+
+  useViewStore.setState({ level: 'combat', combatEngagementId: 'e1' })
+  check('watching it in the arena counts as knowing everything in it (never thrown out of a view)', engagementIntel(engagement, ships, 100).allKnown)
+  useViewStore.setState({ level: 'system', combatEngagementId: null })
+
+  useTechStore.setState({ byCountry: { 'imperial-state-of-mars': { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set([HYPER_COMMS_TECH_ID]) } } })
+  check('with Hyper Comms the news is instant', engagementIntel(engagement, ships, 100).allKnown)
+  useTechStore.setState({ byCountry: {} })
   usePlayerStore.setState({ selectedCountryId: null })
 }
 

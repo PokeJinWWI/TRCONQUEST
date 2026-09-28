@@ -33,7 +33,7 @@ import {
   type ShipRenderInfo,
 } from './shipPhysics'
 import { planFleetMove } from './fleetMove'
-import { useCombatStore } from '../state/combatStore'
+import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { findEngagementFor } from './combatResolution'
 import { isPlayerOwned } from '../state/shipRelations'
 import { getShipRenderPosition } from './shipPhysics'
@@ -218,12 +218,87 @@ export function visualShipRenderPosition(ship: ShipInstance, delayDays: number, 
   return getShipRenderPosition({ ...ship, location: snap.location, order: snap.order }, asOf)
 }
 
-// The actual one-line swap every marker/camera-tracking call site uses in
-// place of a plain getShipRenderPosition(ship, simDays) — resolves the
-// player's own comms delay to `ship`'s current location and folds it in,
-// so a caller never has to plumb playerCommsDelayToShip itself.
-export function playerVisualShipRenderPosition(ship: ShipInstance, simDays: number): ShipRenderInfo {
-  return visualShipRenderPosition(ship, playerCommsDelayToShip(ship, simDays), simDays)
+// Where the player SEES a ship: its real position, right now, for every ship
+// and every comms tier. Signal time never staggers the view; it only delays what
+// the player can DO (orders, ship commands) and what they get to KNOW (reports,
+// news of ships and fights). (The delayed reconstruction, visualShipRenderPosition,
+// is no longer used for placing anything: it ran time backwards for a ship
+// faster than its own comms.)
+export function playerShipRenderPosition(ship: ShipInstance, simDays: number): ShipRenderInfo {
+  return getShipRenderPosition(ship, simDays)
+}
+
+// What the player knows of the ships in one place — who is there and whether
+// news of them has reached the capital. A ship of the player's own is always
+// known. Anyone else is known once the signal from the player's ships there
+// (or, with none there, from anywhere the ships are) has had time to arrive
+// since the ship came to rest at that place. A ship with no record of arriving
+// (spawned by a scenario, or resting here since the log began) is known at once.
+export interface ShipsIntel {
+  // Every ship present is known: the one condition for entering the combat view.
+  allKnown: boolean
+  // The player knows there is something to fight about: everything is known, or
+  // at least one ship that isn't theirs is. Drives the battle list and the clock.
+  aware: boolean
+  // Ships present that the player doesn't know yet, and how long (sim-days) until
+  // the last of that news arrives.
+  unknownCount: number
+  waitDays: number
+}
+
+// When `ship` last came to rest where it is now, from its own history log:
+// -Infinity if the log shows no arrival (so it has always been known).
+function restingSince(ship: ShipInstance): number {
+  const key = combatLocationKey(ship.location)
+  const history = ship.history ?? []
+  let i = history.length - 1
+  while (i >= 0 && combatLocationKey(history[i].location) === key) i--
+  return i === history.length - 1 || i < 0 ? -Infinity : history[i + 1].simDays
+}
+
+export function shipsIntel(present: ShipInstance[], simDays: number): ShipsIntel {
+  if (present.length === 0) return { allKnown: true, aware: true, unknownCount: 0, waitDays: 0 }
+  const mine = present.filter((s) => isPlayerOwned(s))
+  const informants = mine.length > 0 ? mine : present
+  const delay = Math.min(...informants.map((s) => playerCommsDelayToShip(s, simDays)))
+  let unknownCount = 0
+  let waitDays = 0
+  let foreignKnown = 0
+  for (const s of present) {
+    if (isPlayerOwned(s)) continue
+    const knownAt = restingSince(s) + delay
+    if (simDays >= knownAt) foreignKnown++
+    else {
+      unknownCount++
+      waitDays = Math.max(waitDays, knownAt - simDays)
+    }
+  }
+  const allKnown = unknownCount === 0
+  return { allKnown, aware: allKnown || foreignKnown > 0, unknownCount, waitDays }
+}
+
+// The same for an engagement's roster. Watching it in the arena already counts
+// as knowing everything in it (the arena is direct contact), so a fight never
+// throws the player out of a view they are in.
+export function engagementIntel(engagement: { id: string; participants: { shipId: string }[] }, ships: ShipInstance[], simDays: number): ShipsIntel {
+  const view = useViewStore.getState()
+  if (view.level === 'combat' && view.combatEngagementId === engagement.id) return { allKnown: true, aware: true, unknownCount: 0, waitDays: 0 }
+  const present = engagement.participants.map((p) => ships.find((s) => s.id === p.shipId)).filter((s): s is ShipInstance => !!s)
+  return shipsIntel(present, simDays)
+}
+
+// Whether the player has heard of a fight at all (see ShipsIntel.aware): it is
+// listed in the Outliner and the clock drops to tactical pace for it. Entering it
+// needs more — every ship known (ShipsIntel.allKnown).
+export function engagementKnownToPlayer(engagement: { id: string; participants: { shipId: string }[] }, ships: ShipInstance[], simDays: number): boolean {
+  return engagementIntel(engagement, ships, simDays).aware
+}
+
+// The message a disabled Enter Combat button gives.
+export function unknownShipsMessage(intel: ShipsIntel): string {
+  const n = intel.unknownCount
+  const wait = intel.waitDays >= 1 ? `${Math.ceil(intel.waitDays)} days` : `${Math.max(1, Math.ceil(intel.waitDays * 24))} hours`
+  return `${n} ship${n === 1 ? '' : 's'} present ${n === 1 ? "isn't" : "aren't"} known to you yet — intel arrives in about ${wait}`
 }
 
 // --- Command latency -----------------------------------------------------

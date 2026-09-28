@@ -19,7 +19,6 @@ import { DebtPanel } from './DebtPanel'
 import { ConstructionPanel } from './ConstructionPanel'
 import { TradePanel } from './TradePanel'
 import { StockpilePanel } from './StockpilePanel'
-import { MapModeSelector } from './MapModeSelector'
 import { SandboxPanel } from './SandboxPanel'
 import { usePlayerStore } from '../state/playerStore'
 import { useViewStore } from '../state/viewStore'
@@ -29,7 +28,6 @@ const SANDBOX_CATEGORY = 'Sandbox'
 const MILITARY_CATEGORY = 'Military'
 const NAVY_SUBCATEGORY = 'Navy'
 const ARMY_SUBCATEGORY = 'Army'
-const MAP_MODES_CATEGORY = 'Map Modes'
 const ECONOMY_CATEGORY = 'Economy'
 const TECHNOLOGY_CATEGORY = 'Technology'
 const GOVERNMENT_CATEGORY = 'Government'
@@ -62,7 +60,6 @@ const CATEGORIES: CategoryDef[] = [
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
   { name: CHARACTERS_CATEGORY, subcategories: ['Characters', 'Families'] },
-  { name: MAP_MODES_CATEGORY },
 ]
 
 // Simple mode replaces Complex mode's deep simulation: no goods
@@ -78,7 +75,6 @@ const ABSTRACT_CATEGORIES: CategoryDef[] = [
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
   { name: CHARACTERS_CATEGORY, subcategories: ['Characters', 'Families'] },
-  { name: MAP_MODES_CATEGORY },
 ]
 
 // The sandbox has no nation behind it, so no government, economy, markets or
@@ -86,7 +82,6 @@ const ABSTRACT_CATEGORIES: CategoryDef[] = [
 const SANDBOX_CATEGORIES: CategoryDef[] = [
   { name: SANDBOX_CATEGORY },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY] },
-  { name: MAP_MODES_CATEGORY },
 ]
 
 // Central Bank sub-tab label → the panel's internal section id.
@@ -100,10 +95,8 @@ const CB_SECTIONS: Record<string, CentralBankSection> = {
 // What actually renders inside a category/subcategory pairing. A few slots
 // have real content behind them — Fleet Management's existing UI (ship
 // roster, designer, stance strategizer) now lives under Military's Navy
-// sub-tab, since ships are this game's only naval asset; and Map Modes is a real, working selector (see
-// mapModeStore/mapModeColor.ts), not a placeholder — it's the same map
-// modes the bottom ActionBar's icons switch to as a side effect, just
-// picked directly and without resetting when the window closes. Everything
+// sub-tab, since ships are this game's only naval asset; Map Modes live in the bottom bar's right corner
+// (MapModesButton). Everything
 // else stays a reserved placeholder, same "don't invent content" spirit as
 // the Outliner's empty Starbases section — there's no
 // government/economy/society/characters simulation behind these yet.
@@ -111,7 +104,6 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   // Simple mode: the whole Economy category is one macro panel.
   if (abstractEconomy && category.name === ECONOMY_CATEGORY) return <AbstractEconomyPanel />
   if (category.name === SANDBOX_CATEGORY) return <SandboxPanel />
-  if (category.name === MAP_MODES_CATEGORY) return <MapModeSelector />
   // Complex mode: the whole economy on one scrollable page (the other tabs keep the detail).
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Overview') return <EconomyOverview />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />

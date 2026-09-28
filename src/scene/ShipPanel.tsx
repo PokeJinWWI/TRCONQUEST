@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { destinationLabel } from './shipPhysics'
+import { replanForWarpWhenReady } from './warpReplan'
+import { ShipSurveySection } from './ShipSurveySection'
+import { ShipCargoSection } from './ShipCargoSection'
+import { anyCivilian } from './fleetRules'
+import { viewShip } from './shipNav'
 import { useShipStore } from '../state/shipStore'
 import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
 import { ownerDisplay } from '../data/countryRoster'
@@ -22,7 +27,7 @@ import {
   coreHealthFraction,
 } from './shipPhysics'
 import { activeEnemyContacts, overallHealthFraction, createSoloEngagement, rangeFavor } from './combatResolution'
-import { playerCommsDelayToShip, queueStance, visualShipSnapshot } from './commsVisual'
+import { engagementIntel, playerCommsDelayToShip, queueStance, shipsIntel, unknownShipsMessage } from './commsVisual'
 import { useCombatStore, combatLocationKey, engagementIsContested } from '../state/combatStore'
 import { useFleetStore } from '../state/fleetStore'
 import { useViewStore } from '../state/viewStore'
@@ -236,14 +241,24 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
   // (see commsVisual.ts's queueMoveOrder/applyMoveDestination, which always
   // recomputes fresh at arrival time), so showing stale versions of THOSE
   // would mislead a player's own click rather than model anything real.
-  const engagementForDisplay = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
+  // A fight the player hasn't heard about yet (its news is still travelling —
+  // commsVisual.engagementKnownToPlayer) isn't shown, and can't be entered.
+  const rawEngagement = engagements.find((e) => e.participants.some((p) => p.shipId === ship.id))
+  // What the player knows of the ships here: the fight is entered only when
+  // every ship present is known (commsVisual.shipsIntel); until then the
+  // button says why instead of hiding or throwing them out.
+  const hereKey = combatLocationKey(ship.location)
+  const presentIntel = rawEngagement
+    ? engagementIntel(rawEngagement, ships, simDays)
+    : shipsIntel(hereKey ? ships.filter((s) => !s.order && combatLocationKey(s.location) === hereKey) : [ship], simDays)
+  const engagementForDisplay = rawEngagement && presentIntel.aware ? rawEngagement : undefined
   const contestedForDisplay =
     !!engagementForDisplay && engagementIsContested(engagementForDisplay, (id) => ships.some((s) => s.id === id))
   const displayDelayDays = contestedForDisplay ? 0 : playerCommsDelayToShip(ship, simDays)
-  const displaySnap = displayDelayDays > 0 ? visualShipSnapshot(ship, displayDelayDays, simDays) : null
-  const displayShip = displaySnap ? { ...ship, location: displaySnap.location, order: displaySnap.order } : ship
-  const displayCombat = displaySnap ? displaySnap.combat : ship.combat
-  const statusText = getShipStatusText(displayShip, simDays, ships)
+  // What the panel shows is live: signal delay never staggers the readouts, it
+  // only delays orders and reports (the Signal Delay row below says how long).
+  const displayCombat = ship.combat
+  const statusText = getShipStatusText(ship, simDays, ships)
   const owned = isPlayerOwned(ship)
   const hyperDrive = shipClass?.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
   const hasHyperdrive = !!hyperDrive
@@ -282,10 +297,16 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
   // rest (mid-order, there's no stable "here" to compare against) and uses
   // the same combatLocationKey test as every other co-location check in this
   // project (spawning, arrival auto-join, the arena's own contested check).
+  // Civilian hulls never join a fleet, so neither side of a merge may hold one.
   const mergeableFleetId =
-    !ship.order && locationKey !== null
+    !ship.order && locationKey !== null && !anyCivilian(fleetMates)
       ? ships.find(
-          (s) => s.fleetId !== ship.fleetId && s.ownerId === ship.ownerId && !s.order && combatLocationKey(s.location) === locationKey,
+          (s) =>
+            s.fleetId !== ship.fleetId &&
+            s.ownerId === ship.ownerId &&
+            !s.order &&
+            combatLocationKey(s.location) === locationKey &&
+            !anyCivilian(ships.filter((m) => m.fleetId === s.fleetId)),
         )?.fleetId
       : undefined
   const participant = engagement?.participants.find((p) => p.shipId === ship.id)
@@ -445,20 +466,35 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
             <input
               type="checkbox"
               checked={ship.warpEnabled}
-              onChange={(e) => setWarpEnabled(ship.id, e.target.checked)}
+              onChange={(e) => {
+                setWarpEnabled(ship.id, e.target.checked)
+                if (e.target.checked) replanForWarpWhenReady(ship.id)
+              }}
             />
             Use Warp Drive
           </label>
-          <label className="ship-panel-checkbox-row">
+          {/* Only meaningful while the warp drive is in use — planMove ignores
+              the flag otherwise — so it isn't offered (and shows unticked)
+              until "Use Warp Drive" is on. */}
+          <label
+            className="ship-panel-checkbox-row"
+            title={ship.warpEnabled ? 'Engage warp mid-flight as soon as the drive is ready, even on an order already underway' : 'Needs "Use Warp Drive" turned on'}
+          >
             <input
               type="checkbox"
-              checked={ship.warpWhenReady}
-              onChange={(e) => setWarpWhenReady(ship.id, e.target.checked)}
+              checked={ship.warpEnabled && ship.warpWhenReady}
+              disabled={!ship.warpEnabled}
+              onChange={(e) => {
+                setWarpWhenReady(ship.id, e.target.checked)
+                if (e.target.checked) replanForWarpWhenReady(ship.id)
+              }}
             />
             Warp When Ready
           </label>
         </>
       )}
+      {owned && <ShipSurveySection ship={ship} />}
+      {owned && <ShipCargoSection ship={ship} />}
       {ship.followingShipId && (
         <div className="inspect-row">
           <span className="inspect-label">Following</span>
@@ -521,23 +557,32 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           shown when there's no live Engagement already covering it (that
           case is the row below instead). */}
       {!engagement && !ship.order && level !== 'combat' && (
-        <div className="inspect-row">
-          <span className="inspect-label">{hostilePresent ? 'Combat' : 'Arena'}</span>
-          <span className="inspect-value">
-            <button
-              type="button"
-              className="ship-panel-unfollow-btn"
-              onClick={() => {
-                const solo = createSoloEngagement(ship, ships, simDays)
-                if (!solo) return
-                addEngagement(solo)
-                enterCombat(solo.id)
-              }}
-            >
-              {hostilePresent ? 'Enter Combat' : 'Enter Arena'}
-            </button>
-          </span>
-        </div>
+        <>
+          <div className="inspect-row">
+            <span className="inspect-label">{hostilePresent || rawEngagement ? 'Combat' : 'Arena'}</span>
+            <span className="inspect-value">
+              <button
+                type="button"
+                className="ship-panel-unfollow-btn"
+                disabled={!presentIntel.allKnown}
+                title={presentIntel.allKnown ? undefined : unknownShipsMessage(presentIntel)}
+                onClick={() => {
+                  if (rawEngagement) {
+                    enterCombat(rawEngagement.id)
+                    return
+                  }
+                  const solo = createSoloEngagement(ship, ships, simDays)
+                  if (!solo) return
+                  addEngagement(solo)
+                  enterCombat(solo.id)
+                }}
+              >
+                {hostilePresent || rawEngagement ? 'Enter Combat' : 'Enter Arena'}
+              </button>
+            </span>
+          </div>
+          {!presentIntel.allKnown && <div className="ship-panel-hint">{unknownShipsMessage(presentIntel)}</div>}
+        </>
       )}
       {engagement && (
         <>
@@ -552,12 +597,19 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
                   Hidden when already in the combat view, where it would be a
                   no-op. */}
               {level !== 'combat' && (
-                <button type="button" className="ship-panel-unfollow-btn" onClick={() => enterCombat(engagement.id)}>
+                <button
+                  type="button"
+                  className="ship-panel-unfollow-btn"
+                  disabled={!presentIntel.allKnown}
+                  title={presentIntel.allKnown ? undefined : unknownShipsMessage(presentIntel)}
+                  onClick={() => enterCombat(engagement.id)}
+                >
                   {engagementContested ? 'Enter Combat' : 'Enter Arena'}
                 </button>
               )}
             </span>
           </div>
+          {level !== 'combat' && !presentIntel.allKnown && <div className="ship-panel-hint">{unknownShipsMessage(presentIntel)}</div>}
           {/* Distinct from the row above on purpose — a ship can be "in
               combat" (present in this Engagement) without being "actively
               engaged" (in range and line of fire of anyone). This is the
@@ -610,11 +662,17 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           Then: {[...(ship.orderQueue ?? []).map((d) => destinationLabel(d)), ...(ship.pendingQueueAdds ?? []).map((a) => `${destinationLabel(a.destination)} (signal in transit)`)].join(' → ')}
         </div>
       )}
-      {onGoTo && (
-        <button type="button" className="detail-view-btn" onClick={onGoTo} disabled={goToPending}>
-          {goToPending ? 'Going to…' : 'Go To'}
-        </button>
-      )}
+      {/* In the current view the camera flies to it; if the ship is somewhere
+          else (another system, deep space) this takes you there. */}
+      <button
+        type="button"
+        className="detail-view-btn"
+        onClick={onGoTo ?? (() => viewShip(ship))}
+        disabled={!!onGoTo && goToPending}
+        title={onGoTo ? 'Fly the camera to this ship' : 'Open the map where this ship is'}
+      >
+        {onGoTo && goToPending ? 'Going to…' : 'Go To'}
+      </button>
       {owned && <TransportCargo ship={ship} />}
       {owned ? (
         ship.order && <div className="ship-panel-hint">Right-click a new destination to redirect.</div>

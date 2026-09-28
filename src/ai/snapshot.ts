@@ -7,6 +7,9 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { useDiplomacyStore } from '../state/diplomacyStore'
 import { useResourceStore } from '../state/resourceStore'
 import { useShipyardStore } from '../state/shipyardStore'
+import { useTechStore } from '../state/techStore'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { useSurveyStore } from '../state/surveyStore'
 import { useCombatStore } from '../state/combatStore'
 import { usePlayerStore } from '../state/playerStore'
 import { liveBodyValue } from '../scene/peace'
@@ -30,8 +33,13 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     nodeHolders: territory.nodeHolders,
     relations: diplomacy.relations,
     wars: diplomacy.wars,
+    starbases: useStarbaseStore.getState().starbases,
     resourcesOf: (id) => useResourceStore.getState().stateFor(id).amounts,
+    researchedOf: (id) => useTechStore.getState().stateFor(id).researched,
     buildQueueLengthOf: (id) => useShipyardStore.getState().ordersFor(id).length,
+    queuedClassesOf: (id) => useShipyardStore.getState().ordersFor(id).map((o) => o.classId),
+    discoveredOf: (id) => useSurveyStore.getState().discovered[id],
+    researchPointsOf: (id) => useTechStore.getState().stateFor(id).researchPoints,
     valueOf: liveBodyValue,
     orbitDenied: batteryDenial,
     hostileDefensesAt: hostileDefenseCount,

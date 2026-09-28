@@ -10,6 +10,8 @@ import { useShipyardStore } from '../state/shipyardStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { shipyardSlotsForWorld } from '../scene/shipyardLogic'
+import { useTechStore } from '../state/techStore'
+import { findTech } from '../data/techData'
 
 // The resources a hull can actually cost — the ones worth a row in the
 // stockpile readout (minerals only feed a future alloy chain).
@@ -45,6 +47,7 @@ export function ShipyardPanel() {
   const cancelBuild = useShipyardStore((s) => s.cancelBuild)
   const designs = useShipDesignStore((s) => s.designs)
   const simDays = useGameTimeStore((s) => s.simDays)
+  const researched = useTechStore((s) => s.stateFor(countryId).researched)
   const [message, setMessage] = useState<string | null>(null)
 
   const slots = shipyardSlotsForWorld(world)
@@ -114,6 +117,7 @@ export function ShipyardPanel() {
         const cost = shipBuildCost(shipClass)
         const affordable = COST_RESOURCE_IDS.every((id) => (cost[id] ?? 0) <= (amounts[id] ?? 0))
         const queueFull = orders.length >= MAX_QUEUED_BUILDS
+        const techMissing = shipClass.requiresTech && !researched.has(shipClass.requiresTech) ? (findTech(shipClass.requiresTech)?.name ?? shipClass.requiresTech) : null
         return (
           <div key={shipClass.id} className="fleet-row">
             <div className="fleet-row-head">
@@ -122,15 +126,17 @@ export function ShipyardPanel() {
               <button
                 type="button"
                 className="ship-panel-unfollow-btn"
-                disabled={!affordable || queueFull}
+                disabled={!affordable || queueFull || !!techMissing}
                 onClick={() => handleBuild(shipClass.id)}
-                title={queueFull ? 'The build queue is full' : affordable ? `Build for ${shipBuildDays(shipClass)} days` : 'Not enough resources'}
+                title={techMissing ? `Needs ${techMissing} researched` : queueFull ? 'The build queue is full' : affordable ? `Build for ${shipBuildDays(shipClass)} days` : 'Not enough resources'}
               >
                 Build
               </button>
             </div>
             <div className="fleet-row-status">
               {shipClass.ftlDrives.map(describeFtlDrive).join(', ')} · {shipBuildDays(shipClass)} days
+              {shipClass.cargoCapacity ? ` · Hold ${shipClass.cargoCapacity}` : ''}
+              {techMissing ? ` · Needs ${techMissing}` : ''}
             </div>
             <CostChips cost={cost} amounts={amounts} />
           </div>

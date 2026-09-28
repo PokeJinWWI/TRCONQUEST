@@ -19,6 +19,7 @@ import { shipCombatProfile, totalHitPoints } from '../scene/combatResolution'
 import { recordLoss } from '../scene/peace'
 import { utilityEffectiveness } from '../data/combatData'
 import { combatLocationLabel, engagementIsContested } from '../state/combatStore'
+import { engagementKnownToPlayer } from '../scene/commsVisual'
 
 // How far out into system space a disengaging ship is placed, in system
 // units. Small — this is a nudge clear of whatever it was orbiting so it
@@ -83,7 +84,6 @@ export function useCombatResolver() {
       // the proxy.
       const liveShipIds = new Set(ships.map((s) => s.id))
       const shipExists = (shipId: string) => liveShipIds.has(shipId)
-      const wasContested = combat.engagements.some((e) => engagementIsContested(e, shipExists))
 
       // Combat is unobservable at strategic pace (a real second is ~518,400
       // sim-seconds), so the clock follows whether any fight is live: pulled
@@ -99,6 +99,7 @@ export function useCombatResolver() {
       // case — left the player stranded in tactical time afterwards.
       const followCombatWithClock = (hasEngagements: boolean) => {
         fightPace.spaceLive = hasEngagements
+        if (!hasEngagements) fightPace.spaceAware = false
         if (!combat.autoTacticalOnEngage) return
         const time = useGameTimeStore.getState()
         // Down to tactical from strategic OR operational; back up only as far
@@ -121,8 +122,14 @@ export function useCombatResolver() {
         return
       }
 
-      const nowContested = synced.some((e) => engagementIsContested(e, shipExists))
-      if (!wasContested && nowContested) followCombatWithClock(true)
+      // The clock drops to tactical when the player LEARNS of a fight, not
+      // when it starts: news of a distant one takes the comms delay to arrive
+      // (commsVisual.engagementKnownToPlayer).
+      const aware = synced.some((e) => engagementIsContested(e, shipExists) && engagementKnownToPlayer(e, ships, simDays))
+      if (!fightPace.spaceAware && aware) {
+        fightPace.spaceAware = true
+        followCombatWithClock(true)
+      }
 
       // Snapshot, right now, which ships have a live enemy within range and
       // line of fire — the only situation an FTL escape's risk should be

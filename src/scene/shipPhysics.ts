@@ -469,7 +469,9 @@ export function getShipStatusText(ship: ShipInstance, simDays: number, ships?: S
     // a cooldown (see planMove) — even though both resolve to the same
     // reaction-drive-then-warp mechanics underneath.
     if (gravityWellClearSimDays !== undefined && simDays < gravityWellClearSimDays) {
-      return `${prefix}Leaving gravity well — reaction drive (warp in ${(gravityWellClearSimDays - simDays).toFixed(1)}d)`
+      return ship.warpEnabled
+        ? `${prefix}Leaving gravity well — reaction drive (warp in ${(gravityWellClearSimDays - simDays).toFixed(1)}d)`
+        : `${prefix}Leaving gravity well — reaction drive`
     }
     if (warpEngageSimDays !== undefined && simDays < warpEngageSimDays) {
       return `${prefix}En route to ${destLabel} — reaction drive (warp in ${(warpEngageSimDays - simDays).toFixed(1)}d)`
@@ -927,16 +929,6 @@ export function planMoveUnchecked(
     warpReadyOverride = warpReadySimDays
   }
 
-  // Warp is a player-toggleable convenience (see ShipInstance.warpEnabled) —
-  // a working drive doesn't mean the player wants *this* trip to use it.
-  if (!warpDrive || !ship.warpEnabled) {
-    return {
-      kind: 'order',
-      order: { ...baseOrder, arrivalSimDays: reactionOnlyArrivalSimDays, usedWarp: false },
-      warpReadyOverride,
-    }
-  }
-
   // A ship at rest in orbit (or beside a star) is inside that body's gravity
   // well — a warp drive can't fire from inside one, so it must first spend a
   // stretch on reaction drive alone clearing it, scaled by that specific
@@ -946,12 +938,33 @@ export function planMoveUnchecked(
   // If the destination is closer than escape alone would cover, the trip
   // just never gets that far — no gravity-well phase at all, plain reaction
   // drive the whole (short) way.
-  const gravityWell = ship.order ? null : gravityWellBody(ship.location)
+  //
+  // A ship mid-order that is *still* inside the well (its current order's
+  // gravityWellClearSimDays hasn't passed) is not out in open space yet, so
+  // that remaining stretch carries over into the new plan — this is what lets
+  // "Warp When Ready" be switched on mid-flight (see scene/warpReplan.ts)
+  // without skipping the well-clearing phase.
+  const gravityWell = warpDrive && !ship.order ? gravityWellBody(ship.location) : null
   const gravityWellEscapeDaysForBody = gravityWell ? gravityWellEscapeDays(gravityWell.massKg, gravityWell.radiusKm) : 0
-  const gravityWellClearSimDays =
-    gravityWell && simDays + gravityWellEscapeDaysForBody < reactionOnlyArrivalSimDays
-      ? simDays + gravityWellEscapeDaysForBody
+  const carriedWellClear =
+    warpDrive && ship.order?.gravityWellClearSimDays !== undefined && ship.order.gravityWellClearSimDays > simDays
+      ? ship.order.gravityWellClearSimDays
       : undefined
+  const wellClearCandidate = gravityWell ? simDays + gravityWellEscapeDaysForBody : carriedWellClear
+  const gravityWellClearSimDays =
+    wellClearCandidate !== undefined && wellClearCandidate < reactionOnlyArrivalSimDays ? wellClearCandidate : undefined
+
+  // Warp is a player-toggleable convenience (see ShipInstance.warpEnabled) —
+  // a working drive doesn't mean the player wants *this* trip to use it. The
+  // well-clearing time is still recorded on the order (it changes nothing
+  // here) so switching warp on mid-flight later still honours the escape.
+  if (!warpDrive || !ship.warpEnabled) {
+    return {
+      kind: 'order',
+      order: { ...baseOrder, arrivalSimDays: reactionOnlyArrivalSimDays, usedWarp: false, gravityWellClearSimDays },
+      warpReadyOverride,
+    }
+  }
 
   // Once clear of any gravity well, warp still can't fire until its own
   // cooldown clears. Unlike the gravity-well wait (always mandatory), a

@@ -72,10 +72,22 @@ export interface ShipClass {
   // UI can group hulls by role without inferring intent from stat lines.
   // 'transport' is the exception that IS mechanical: only a transport hull
   // carries armies (see armyCapacity and scene/armyLogic.ts).
-  role: 'civilian' | 'warship' | 'transport'
+  //
+  // 'science', 'construction' and 'cargo' are mechanical too: a science ship
+  // explores and surveys (scene/surveyLogic.ts), a construction ship builds
+  // Starbases out of the cargo it carries, and a cargo ship is the hauler
+  // (scene/cargoLogic.ts).
+  role: 'civilian' | 'warship' | 'transport' | 'science' | 'construction' | 'cargo'
   // How many armies this hull can carry. Absent/0 for everything but
   // transports.
   armyCapacity?: number
+  // Total units of strategic goods (alloys, energy, exotic matter…) the hold
+  // carries. Absent/0 = no hold. Loaded at an owned body, moved between ships
+  // in the same place, and (construction ships) spent on a Starbase.
+  cargoCapacity?: number
+  // A tech the owning nation must have researched before it can BUILD this
+  // hull at a shipyard (existing ships are unaffected).
+  requiresTech?: string
 }
 
 // Every ship is owned by a nation (ShipInstance.ownerId) — a class doesn't
@@ -125,6 +137,11 @@ export const TURING_HYPERDRIVE_COOLDOWN_DAYS = 7
 // Warp drive baseline cooldown (days) after completing a jump — same
 // "reducible by future tech, not modeled yet" caveat as hyperdrive's.
 export const WARP_BASE_COOLDOWN_DAYS = 5
+
+// Hold sizes, in units of goods (picks, not balance). One Starbase costs 345
+// units (data/starbaseData.ts), so a Construction Ship's own hold covers one.
+export const CONSTRUCTION_SHIP_CARGO = 400
+export const CARGO_SHIP_CARGO = 1500
 
 export const SHIP_CLASSES: ShipClass[] = [
   {
@@ -178,6 +195,39 @@ export const SHIP_CLASSES: ShipClass[] = [
     combat: TRANSPORT_COMBAT_PROFILE,
     role: 'transport',
     armyCapacity: 2,
+  },
+  {
+    // Explores unvisited systems and surveys their bodies one by one (see
+    // scene/surveyLogic.ts). Unarmed; available from the start.
+    id: 'science-ship',
+    name: 'Science Ship',
+    reactionDrive: true,
+    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    combat: CIVILIAN_COMBAT_PROFILE,
+    role: 'science',
+  },
+  {
+    // Builds Starbases at fully surveyed systems, paid out of what it carries
+    // (it is not consumed). Needs Orbital Construction to be built.
+    id: 'construction-ship',
+    name: 'Construction Ship',
+    reactionDrive: true,
+    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    combat: CIVILIAN_COMBAT_PROFILE,
+    role: 'construction',
+    cargoCapacity: CONSTRUCTION_SHIP_CARGO,
+    requiresTech: 'orbital-construction',
+  },
+  {
+    // The hauler: carries a large load of goods to wherever a construction
+    // ship is working.
+    id: 'cargo-ship',
+    name: 'Cargo Ship',
+    reactionDrive: true,
+    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    combat: CIVILIAN_COMBAT_PROFILE,
+    role: 'cargo',
+    cargoCapacity: CARGO_SHIP_CARGO,
   },
   // Warship hulls. Named after the conventional wet-navy ladder per the
   // design brief, and deliberately differentiated by *damage type matchup*
@@ -249,4 +299,7 @@ export const SHIP_ROLE_LABELS: Record<ShipClass['role'], string> = {
   civilian: 'Civilian',
   warship: 'Warship',
   transport: 'Transport',
+  science: 'Science',
+  construction: 'Construction',
+  cargo: 'Cargo',
 }

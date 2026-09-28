@@ -1,9 +1,10 @@
 // The strategic AI, Stellaris-style: instead of one monolithic brain, each
-// AI empire is run by five specialist agents that read a shared blackboard
+// AI empire is run by six specialist agents that read a shared blackboard
 // and post intents.
 //
 //   Diplomat    opinion of neighbours; seeking peace (diplomat.ts)
 //   Strategist  posture; declaring war (strategist.ts)
+//   Expander    research, survey and claiming systems with Starbases (expander.ts)
 //   Shipwright  ships, transports and armies to build (shipwright.ts)
 //   Admiral     where the navy goes: defend, attack, return home (admiral.ts)
 //   Marshal     loading transports and invading (marshal.ts)
@@ -18,6 +19,7 @@
 import { buildBlackboard, type AiSnapshot } from './blackboard'
 import { diplomat } from './diplomat'
 import { strategist } from './strategist'
+import { expander } from './expander'
 import { shipwright } from './shipwright'
 import { admiral } from './admiral'
 import { marshal } from './marshal'
@@ -39,6 +41,7 @@ export function planEmpire(countryId: string, snap: AiSnapshot, initialMemory: A
 
   absorb(diplomat(bb, snap, memory))
   absorb(strategist(bb, snap))
+  absorb(expander(bb, snap, memory))
   absorb(shipwright(bb, snap, memory))
   absorb(admiral(bb, snap, memory))
   absorb(marshal(bb, snap, memory))

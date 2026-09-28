@@ -169,6 +169,16 @@
 
 .hud-bottom {
   bottom: 0;
+  /* One height at every zoom level: the location label (system view and below)
+     used to make the bar taller than it is at interstellar/galactic level, which
+     left the centred buttons hanging over its top edge there. */
+  /* Above the side panels (z 12) so the Map Modes menu, which opens upward from
+     here, is not hidden behind the Outliner. */
+  z-index: 13;
+  height: 54px;
+  padding-top: 0;
+  padding-bottom: 0;
+  gap: 12px;
   justify-content: space-between;
   border-top: 1px solid rgba(111, 227, 255, 0.25);
 }
@@ -376,10 +386,11 @@
    the footer's true horizontal center regardless of how wide the left
    (fleet comms + time controls) and right (location label) groups are. */
 .map-action-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
+  /* An ordinary flex child of the footer, sitting in the room between the left
+     (comms + time controls) and right (map modes + location) groups. It used to be
+     pinned to the exact centre, which put it on top of the time controls whenever
+     the window was narrower than the three groups need. */
+  flex: none;
   display: flex;
   gap: 10px;
 }
@@ -3008,6 +3019,32 @@
   border-style: dashed;
 }
 
+.unidentified-base {
+  position: absolute;
+  top: -12px;
+  left: 6px;
+  width: 7px;
+  height: 7px;
+  background: #8a95a3;
+  border: 1px solid #c9d2dc;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.territory-label {
+  transform: translate(-50%, 22px);
+  white-space: nowrap;
+  padding: 1px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1px solid;
+  background: rgba(6, 12, 18, 0.55);
+  pointer-events: none;
+  opacity: 0.95;
+}
+
 .owner-ring.contested {
   border-width: 2px;
   border-style: solid;
@@ -3881,6 +3918,15 @@
   border-right: 4px solid transparent;
   border-bottom: 7px solid;
   border-radius: 0;
+}
+
+/* A Starbase reads as a small station, not a body — a diamond, distinct from
+   a ship's triangle and a world's circle. */
+.outliner-icon-starbase {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  transform: rotate(45deg);
 }
 
 .outliner-entry-name {
@@ -5314,33 +5360,33 @@ div.fleet-row .combat-density-row {
 
 .comms-signal-dot {
   display: block;
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: #ffd23f;
-  box-shadow: 0 0 8px #ffd23f;
+  box-shadow: 0 0 3px #ffd23f;
   animation: comms-signal-pulse 0.9s ease-in-out infinite;
 }
 
 .comms-signal.queue .comms-signal-dot {
   background: #ffb03b;
-  box-shadow: 0 0 8px #ffb03b;
+  box-shadow: 0 0 3px #ffb03b;
 }
 
 .comms-signal.stance .comms-signal-dot {
   background: #6fe3ff;
-  box-shadow: 0 0 8px #6fe3ff;
+  box-shadow: 0 0 3px #6fe3ff;
 }
 
 .comms-signal-time {
-  font-size: 9px;
+  font-size: 8px;
   color: #ffe9a8;
   text-shadow: 0 0 3px #000;
 }
 
 @keyframes comms-signal-pulse {
-  0%, 100% { transform: scale(0.8); opacity: 0.7; }
-  50% { transform: scale(1.3); opacity: 1; }
+  0%, 100% { transform: scale(0.85); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 1; }
 }
 
 /* The globe / flat map switch, top right of the planetary map: a live thumbnail
@@ -6000,4 +6046,139 @@ button.pl-tile.empty:hover {
   width: 6px;
   height: 6px;
   border-radius: 1px;
+}
+
+.ship-panel-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+/* Right-click menu (scene/StarContextMenu.tsx). */
+.context-menu {
+  position: fixed;
+  z-index: 9000;
+  min-width: 170px;
+  padding: 4px;
+  background: rgba(8, 16, 26, 0.97);
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+}
+
+.context-menu-title {
+  padding: 3px 8px 5px;
+  color: #6fe3ff;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.2);
+  margin-bottom: 3px;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  color: #dff4ff;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.16);
+}
+
+.context-menu-item:disabled {
+  color: #6b7a88;
+  cursor: default;
+}
+
+/* A battle in the Outliner whose ships aren't all known yet — shown, but not enterable. */
+.outliner-battle.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+/* Bottom-right group: Map Modes and the location label. */
+.hud-bottom-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.map-modes {
+  position: relative;
+}
+
+.map-modes-btn {
+  height: 26px;
+  padding: 0 12px;
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.4);
+  border-radius: 3px;
+  color: #9fe8ff;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.map-modes-btn:hover,
+.map-modes-btn.active {
+  background: rgba(111, 227, 255, 0.2);
+  color: #fff;
+}
+
+.map-modes-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: rgba(8, 16, 26, 0.97);
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  text-shadow: none;
+}
+
+.map-modes-title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6fe3ff;
+  padding-bottom: 4px;
+}
+
+.map-modes-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(111, 227, 255, 0.2);
+  color: #dff4ff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+
+/* Narrow windows: the fleet-comms placeholder (not functional yet) is the first
+   thing to give way, so the time controls, action buttons and map modes all fit. */
+@media (max-width: 1240px) {
+  .chat-placeholder {
+    display: none;
+  }
 }

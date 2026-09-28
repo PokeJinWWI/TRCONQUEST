@@ -7,6 +7,9 @@ import type { PeaceTerms } from '../data/diplomacyData'
 import { AI_PLAYER_OFFER_COOLDOWN_DAYS, AI_PLAYER_OFFER_MAX_COOLDOWN_DAYS, AI_PLAYER_OFFER_MIN_GAP_DAYS } from '../data/aiData'
 import { useDiplomacyStore } from '../state/diplomacyStore'
 import { useShipyardStore } from '../state/shipyardStore'
+import { useTechStore } from '../state/techStore'
+import { applyShipCommand } from '../scene/shipCommands'
+import type { MoveDestination } from '../state/shipStore'
 import { useArmyStore } from '../state/armyStore'
 import { useShipStore } from '../state/shipStore'
 import { useConfirmStore } from '../state/confirmStore'
@@ -95,6 +98,35 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
       case 'build-ship':
         useShipyardStore.getState().queueBuild(countryId, intent.classId, simDays)
         break
+      case 'build-starbase': {
+        // The ship builds where it rests, paid from its hold.
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) applyShipCommand(ship.id, { kind: 'build-starbase' }, simDays)
+        break
+      }
+      case 'research-tech':
+        useTechStore.getState().researchNode(countryId, intent.techId)
+        break
+      case 'explore-system': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) applyShipCommand(ship.id, { kind: 'explore' }, simDays)
+        break
+      }
+      case 'survey-system': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) applyShipCommand(ship.id, { kind: 'survey' }, simDays)
+        break
+      }
+      case 'load-cargo': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) applyShipCommand(ship.id, { kind: 'load', want: intent.want }, simDays)
+        break
+      }
+      case 'transfer-cargo': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.fromShipId)
+        if (ship?.ownerId === countryId) applyShipCommand(ship.id, { kind: 'transfer', toShipId: intent.toShipId, want: intent.want }, simDays)
+        break
+      }
       case 'recruit-army':
         useArmyStore.getState().recruitArmy(countryId, intent.bodyName, 'assault', simDays)
         break
@@ -105,7 +137,7 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
         // The whole fleet goes, together; once per fleet per pass.
         if (movedFleets.has(ship.fleetId)) break
         movedFleets.add(ship.fleetId)
-        const destination = { kind: 'body' as const, systemId: intent.systemId, bodyName: intent.bodyName }
+        const destination: MoveDestination = intent.bodyName ? { kind: 'body', systemId: intent.systemId, bodyName: intent.bodyName } : { kind: 'star', starId: intent.systemId }
         applyFleetMove(fleetMembersOf(ship, ships), destination, simDays, planMoveUnchecked)
         break
       }

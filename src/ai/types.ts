@@ -2,6 +2,7 @@ import type { BombardStance } from '../data/defenseData'
 // Shared shapes for the strategic AI (see coordinator.ts for how the pieces
 // fit together).
 import type { PeaceTerms } from '../data/diplomacyData'
+import type { ResourceId } from '../data/resourceData'
 
 // What an agent wants done. Agents never touch stores: they return intents,
 // and the executor (executor.ts) carries them out through the same store
@@ -11,8 +12,17 @@ export type Intent =
   | { kind: 'propose-peace'; warId: string; terms: PeaceTerms }
   | { kind: 'adjust-opinion'; otherId: string; delta: number }
   | { kind: 'build-ship'; classId: string }
+  // A Construction Ship builds a Starbase at the star it rests at, paid from
+  // its hold; `starId` is only what the planner meant (for traces).
+  | { kind: 'build-starbase'; shipId: string; starId: string }
+  | { kind: 'research-tech'; techId: string }
+  | { kind: 'explore-system'; shipId: string }
+  | { kind: 'survey-system'; shipId: string }
+  | { kind: 'load-cargo'; shipId: string; want: Partial<Record<ResourceId, number>> }
+  | { kind: 'transfer-cargo'; fromShipId: string; toShipId: string; want: Partial<Record<ResourceId, number>> }
   | { kind: 'recruit-army'; bodyName: string }
-  | { kind: 'move-ship'; shipId: string; systemId: string; bodyName: string }
+  // `bodyName: null` means the system's star itself (systemId is the star id).
+  | { kind: 'move-ship'; shipId: string; systemId: string; bodyName: string | null }
   | { kind: 'embark'; shipId: string; armyIds: string[] }
   | { kind: 'land'; shipId: string; dropNode?: number }
   | { kind: 'set-bombard'; shipId: string; stance: BombardStance }
@@ -31,6 +41,8 @@ export interface AiMemory {
   targetBody: string | null
   // warId → last simDays this empire offered peace in it (rate-limits offers).
   lastPeaceOfferSimDays: Record<string, number>
+  // The star the Expander is currently working to claim with a Starbase.
+  expansionTarget?: string | null
 }
 
 export const INITIAL_AI_MEMORY: AiMemory = { posture: 'peace', targetBody: null, lastPeaceOfferSimDays: {} }

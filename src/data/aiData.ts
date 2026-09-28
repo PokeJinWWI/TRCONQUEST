@@ -6,9 +6,9 @@
 export const AI_PLAN_INTERVAL_DAYS = 5
 
 // --- Diplomat ---------------------------------------------------------------
-// Opinion change per planning pass toward a nation sharing a system with you
-// (competition for the same space), and recovery toward 0 for everyone else.
-export const AI_NEIGHBOUR_FRICTION = -0.5
+// Opinion recovery per planning pass, toward 0, for a nation with a real
+// grievance still on the books (e.g. a past war) — capped so it never
+// overshoots past neutral in one pass.
 export const AI_OPINION_RECOVERY = 0.25
 // Minimum sim-days between peace offers in one war.
 export const AI_PEACE_OFFER_COOLDOWN_DAYS = 60
@@ -66,3 +66,18 @@ export const AI_DEFEND_POWER_RATIO = 0.8
 // (Lanchester: total attack × total defense) is at least this multiple of the
 // defenders' — whose defense counts their key-node fortification and cities.
 export const AI_INVASION_POWER_RATIO = 0.9
+
+// --- Expander ---------------------------------------------------------------
+// Ships an empire keeps for exploring, surveying and claiming systems: one
+// science ship always, and (once Orbital Construction is researched) a
+// construction ship and a cargo ship to resupply it.
+export const AI_SCIENCE_SHIPS = 1
+export const AI_CONSTRUCTION_SHIPS = 1
+export const AI_CARGO_SHIPS = 1
+// Most Starbases an empire builds by itself (no attempt yet at judging how
+// many is enough).
+export const AI_MAX_STARBASES = 3
+// What it researches, in order, on the way to being able to build a Starbase.
+// Research income only exists in Simple economy mode (nothing feeds it in
+// Complex), so in Complex an AI stays where it is.
+export const AI_RESEARCH_PATH = ['classical-mechanics', 'orbital-mechanics', 'orbital-construction'] as const

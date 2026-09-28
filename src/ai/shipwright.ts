@@ -21,7 +21,7 @@ import type { AgentOutput, AiMemory, Intent } from './types'
 
 const TRANSPORT_CLASS_ID = 'troop-transport'
 
-function affordable(classId: string, amounts: Record<ResourceId, number>): boolean {
+export function affordable(classId: string, amounts: Record<ResourceId, number>): boolean {
   const shipClass = resolveShipClass(classId)
   return !!shipClass && missingResources(shipBuildCost(shipClass), amounts).length === 0
 }

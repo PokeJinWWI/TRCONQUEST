@@ -77,6 +77,15 @@ export const PHYSICS_TECHS: TechNode[] = [
     cost: 130,
     prerequisites: [['orbital-mechanics']],
   },
+  {
+    id: 'orbital-construction',
+    name: 'Orbital Construction',
+    category: 'physics',
+    description:
+      'Building and holding station at real orbital scale, unmanned and unattended — the basis for a Starbase: a permanent claim on a system that needs no world to stand on.',
+    cost: 150,
+    prerequisites: [['orbital-mechanics']],
+  },
 
   // --- Thermodynamics ------------------------------------------------------
   {

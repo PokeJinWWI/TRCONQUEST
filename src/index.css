@@ -25,4 +25,15 @@ body,
 body {
   font: 16px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
+  /* A game, not a document: dragging over the UI never highlights text. Only
+     things you actually type into are selectable. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
 }

@@ -15,6 +15,7 @@ import { EscapeMenu } from './components/EscapeMenu'
 import { useKeyboardControls } from './hooks/useKeyboardControls'
 import { DiplomacyToast } from './components/DiplomacyPanel'
 import { TimeControls } from './components/TimeControls'
+import { MapModesButton } from './components/MapModesButton'
 import { useGameClock } from './hooks/useGameClock'
 import { useHudBarLayout } from './hooks/useHudBarLayout'
 import { useShipOrderSettler } from './hooks/useShipOrderSettler'
@@ -23,6 +24,8 @@ import { useShipDriftIntegrator } from './hooks/useShipDriftIntegrator'
 import { useCombatResolver } from './hooks/useCombatResolver'
 import { useGroundCombatResolver } from './hooks/useGroundCombatResolver'
 import { useDefenseResolver } from './hooks/useDefenseResolver'
+import { useStarbaseResolver } from './hooks/useStarbaseResolver'
+import { useSurveyResolver } from './hooks/useSurveyResolver'
 import { useBombardmentResolver } from './hooks/useBombardmentResolver'
 import { useHoldingsResolver } from './hooks/useHoldingsResolver'
 import { useCommsResolver } from './hooks/useCommsResolver'
@@ -90,6 +93,9 @@ function App() {
   useGroundCombatResolver()
   // Planetary defenses: batteries fire on hostile warships in orbit.
   useDefenseResolver()
+  // Starbases: hostile warships in a Starbase's system grind it down.
+  useStarbaseResolver()
+  useSurveyResolver()
   // Orbital bombardment of enemy worlds.
   useBombardmentResolver()
   // Foreign buildings: embassies and branch offices.
@@ -153,7 +159,10 @@ function App() {
           <TimeControls />
         </div>
         <ActionBar />
-        <LocationLabel />
+        <div className="hud-bottom-right">
+          <MapModesButton />
+          <LocationLabel />
+        </div>
       </footer>
       <ConfirmDialog />
       <EscapeMenu />

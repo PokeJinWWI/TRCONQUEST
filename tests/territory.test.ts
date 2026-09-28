@@ -47,6 +47,13 @@ console.log('\n=== 2. System claims: "every claimed body", not "every body" ==='
     return c.kind === 'owned' && c.countryId === LALANDE
   })())
   check("Barnard's Star, with no claimed bodies, is unclaimed", systemClaim('barnards-star', owners).kind === 'unclaimed')
+
+  const withStarbase = systemClaim('barnards-star', owners, [MARS])
+  check('...but a lone Starbase there claims it', withStarbase.kind === 'owned' && withStarbase.countryId === MARS)
+  const dueling = systemClaim('barnards-star', owners, [MARS, VENUS])
+  check('two nations with Starbases in the same empty system contest it', dueling.kind === 'contested' && dueling.countryIds.includes(MARS) && dueling.countryIds.includes(VENUS))
+  const besideAWorld = systemClaim('alpha-centauri', owners, [MARS])
+  check("a Starbase alongside another nation's owned world contests it too", besideAWorld.kind === 'contested' && besideAWorld.countryIds.includes(MARS) && besideAWorld.countryIds.includes(ORION))
 }
 
 console.log('\n=== 3. Occupation is control, not ownership ===')

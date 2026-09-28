@@ -45,6 +45,18 @@ export interface TooltipSource {
 }
 
 const CONTROLS = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'])
+
+// Every element from `start` up the tree that carries a native `title`. The
+// browser shows the NEAREST one after a second or so, and as soon as that one
+// is taken away it falls back to the next titled ancestor's — so ALL of them
+// have to be lifted while hovered, not just the one we display (a button in a
+// titled window used to get our tooltip and then, a few seconds later, the
+// window's plain browser one).
+export function titledChain(start: TipNode | null): TipNode[] {
+  const out: TipNode[] = []
+  for (let el = start; el; el = el.parentElement) if (el.getAttribute('title')) out.push(el)
+  return out
+}
 const titleOf = (el: TipNode) => el.getAttribute('title') || el.getAttribute('data-tip') || el.getAttribute('data-tooltip') || null
 
 // What explains the element under the cursor: the NEAREST titled element up the
@@ -86,7 +98,9 @@ export function TooltipLayer() {
 
   useEffect(() => {
     let anchor: Element | null = null
-    let stashed: Element | null = null // the element whose title we took over
+    let stashed: Element | null = null // the element whose title we show
+    let lifted: Element[] = [] // every element whose native title we took over
+    let hovered: Element | null = null // what the pointer is over
     let timer: ReturnType<typeof setTimeout> | null = null
     let mouse = { x: 0, y: 0 }
 
@@ -98,12 +112,21 @@ export function TooltipLayer() {
         el.removeAttribute('data-tip')
       }
     }
+    const lift = (el: Element) => {
+      const own = el.getAttribute('title')
+      if (!own) return
+      el.setAttribute('data-tip', own)
+      el.removeAttribute('title')
+      if (!lifted.includes(el)) lifted.push(el)
+    }
     const hide = () => {
       if (timer) clearTimeout(timer)
       timer = null
-      restoreTitle(stashed)
+      for (const el of lifted) restoreTitle(el)
+      lifted = []
       stashed = null
       anchor = null
+      hovered = null
       setTip(null)
     }
 
@@ -116,19 +139,17 @@ export function TooltipLayer() {
       if (src.anchor === anchor && src.titleEl === stashed) return
       hide()
       anchor = src.anchor as Element
-      // Keep the browser's own tooltip from appearing beside ours.
-      const titled = src.titleEl as Element | null
-      const own = titled?.getAttribute('title')
-      if (titled && own) {
-        titled.setAttribute('data-tip', own)
-        titled.removeAttribute('title')
-        stashed = titled
-      }
+      hovered = e.target as Element
+      // Keep the browser's own tooltip from appearing beside ours: lift the
+      // title off every titled element above the pointer, not just the one shown.
+      for (let el: Element | null = hovered; el; el = el.parentElement) lift(el)
+      stashed = src.titleEl as Element | null
       const text = src.title
       const entry = src.entry
       timer = setTimeout(() => {
         timer = null
-        setTip({ title: text, entry, x: mouse.x, y: mouse.y })
+        // The live text: a re-render may have changed the title since hovering began.
+        setTip({ title: stashed?.getAttribute('data-tip') ?? text, entry, x: mouse.x, y: mouse.y })
       }, SHOW_DELAY_MS)
     }
     const onMove = (e: PointerEvent) => {
@@ -141,6 +162,23 @@ export function TooltipLayer() {
       hide()
     }
 
+    // React re-renders can put a `title` back (or change it) while the pointer
+    // is still over the element — lift it again at once so the native tooltip
+    // never gets its second, and keep our own text current.
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        const el = m.target as Element
+        if (!hovered || !el.contains(hovered) || !el.getAttribute('title')) continue
+        const wasShown = el === stashed
+        lift(el)
+        if (wasShown) {
+          const text = el.getAttribute('data-tip')
+          setTip((t) => (t ? { ...t, title: text } : t))
+        }
+      }
+    })
+    observer.observe(document.body, { attributes: true, attributeFilter: ['title'], subtree: true })
+
     document.addEventListener('pointerover', onOver, true)
     document.addEventListener('pointermove', onMove, true)
     document.addEventListener('pointerout', onOut, true)
@@ -150,6 +188,7 @@ export function TooltipLayer() {
     window.addEventListener('blur', hide)
     return () => {
       hide()
+      observer.disconnect()
       document.removeEventListener('pointerover', onOver, true)
       document.removeEventListener('pointermove', onMove, true)
       document.removeEventListener('pointerout', onOut, true)

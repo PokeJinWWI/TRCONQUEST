@@ -5,7 +5,6 @@ import { Vector3, type InterleavedBufferAttribute, type PerspectiveCamera } from
 import type { Line2 } from 'three-stdlib'
 import type { ShipInstance } from '../state/shipStore'
 import { getShipRenderPosition } from './shipPhysics'
-import { playerCommsDelayToShip, visualShipSnapshot } from './commsVisual'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { LINE_THICKNESS_PX, useSettingsStore } from '../state/settingsStore'
 import { arrowWings, pixelsToWorldSize } from './routeArrow'
@@ -61,16 +60,15 @@ export function NavigationLine({ ship, color, arrowLength }: NavigationLineProps
     // that's the one case this doesn't fully cover (see this session's plan
     // for why membership/mounting stays on live truth).
     const simDays = useGameTimeStore.getState().simDays
-    const delay = playerCommsDelayToShip(ship, simDays)
-    const snap = delay > 0 ? visualShipSnapshot(ship, delay, simDays) : { location: ship.location, order: ship.order, combat: ship.combat }
-    if (!snap.order) {
+    const order = ship.order
+    if (!order) {
       line.visible = false
       return
     }
     line.visible = true
 
-    const { position: start } = getShipRenderPosition({ ...ship, location: snap.location, order: snap.order }, simDays - delay)
-    const end = new Vector3(...snap.order.endPosition)
+    const { position: start } = getShipRenderPosition(ship, simDays)
+    const end = new Vector3(...order.endPosition)
 
     const attribute = line.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute
     const buffer = attribute.data

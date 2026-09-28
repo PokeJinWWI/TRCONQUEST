@@ -4,7 +4,7 @@ import { Line } from '@react-three/drei'
 import { Vector3, type InterleavedBufferAttribute, type PerspectiveCamera } from 'three'
 import type { Line2 } from 'three-stdlib'
 import type { ShipInstance, MoveDestination } from '../state/shipStore'
-import { playerVisualShipRenderPosition } from './commsVisual'
+import { playerShipRenderPosition } from './commsVisual'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { LINE_THICKNESS_PX, useSettingsStore } from '../state/settingsStore'
 import { arrowWings, pixelsToWorldSize } from './routeArrow'
@@ -76,7 +76,7 @@ export function PendingOrderLine({ ship, color, arrowLength, dashSize, gapSize, 
     // should still match wherever the ship's own marker is currently drawn
     // (which IS delay-lensed), or the dashed line would visibly detach from
     // the marker it's supposed to originate at.
-    const start = playerVisualShipRenderPosition(ship, simDays).position
+    const start = playerShipRenderPosition(ship, simDays).position
 
     const attribute = line.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute
     const buffer = attribute.data
