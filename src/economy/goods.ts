@@ -80,6 +80,7 @@ export type GoodId =
   // Furniture — a household durable (lumber/hardwood/glass → furniture). A
   // premium substitute for plain consumer goods in the pop household need.
   | 'furniture'
+  | 'textiles'
   | 'luxuryGoods'
   // A "culture" consumer good — produced by an Art Studio, bought like any
   // other luxury.
@@ -143,6 +144,7 @@ export const GOOD_IDS: GoodId[] = [
   'groceries',
   'consumerGoods',
   'furniture',
+  'textiles',
   'luxuryGoods',
   'art',
   'healthcare',
@@ -207,6 +209,7 @@ export const GOODS: Record<GoodId, GoodDef> = {
   groceries: { id: 'groceries', label: 'Groceries', category: 'consumer', basePrice: 4 },
   consumerGoods: { id: 'consumerGoods', label: 'Consumer Goods', category: 'consumer', basePrice: 6 },
   furniture: { id: 'furniture', label: 'Furniture', category: 'consumer', basePrice: 14 },
+  textiles: { id: 'textiles', label: 'Textiles', category: 'consumer', basePrice: 5 },
   luxuryGoods: { id: 'luxuryGoods', label: 'Luxury Goods', category: 'consumer', basePrice: 26 },
   art: { id: 'art', label: 'Art', category: 'consumer', basePrice: 22 },
   healthcare: { id: 'healthcare', label: 'Healthcare', category: 'service', basePrice: 12 },

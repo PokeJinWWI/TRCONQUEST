@@ -39,7 +39,17 @@ function seedOf(s: string): number {
 
 // Nodes for `count` spaceports in all (the terrain's own first, if it has one).
 // Returns the ADDITIONAL nodes, each marked regular or outlier.
+const cache = new Map<string, { node: number; outlier: boolean }[]>()
 export function extraSpaceportNodes(surface: BodySurface, count: number): { node: number; outlier: boolean }[] {
+  const key = `${surface.bodyName}|${surface.tier}|${count}|${surface.keySlots.map((k) => k.node).join(',')}`
+  const hit = cache.get(key)
+  if (hit) return hit
+  const out = placeSites(surface, count)
+  cache.set(key, out)
+  return out
+}
+
+function placeSites(surface: BodySurface, count: number): { node: number; outlier: boolean }[] {
   const main = surface.keySlots.some((k) => k.kind === 'spaceport') ? 1 : 0
   const need = count - main
   if (need <= 0 || surface.keySlots.length === 0) return []

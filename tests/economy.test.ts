@@ -248,10 +248,14 @@ console.log('\n=== 12. Ownership routes profit to state / corporation / workers 
 
 console.log('\n=== 13. Owner autonomy: private owners pick their own method ===')
 {
-  // Under a market economy, a corporation- or worker-owned mine self-optimizes.
+  // Under a market economy, a corporation- or worker-owned mine self-optimizes
+  // — when its ore sells out (owners never retool to make more of a good in
+  // glut), so Mars is given the mills to use it.
   let countries = seedCountries()
   let worlds = seedWorlds().map((w) =>
-    w.id === 'Mars' ? { ...w, buildings: w.buildings.map((b) => (b.recipeId === 'ironMine' ? { ...b, methodId: 'manual', methodLocked: false } : b)) } : w,
+    w.id === 'Mars'
+      ? { ...w, buildings: w.buildings.map((b) => (b.recipeId === 'ironMine' ? { ...b, methodId: 'manual', methodLocked: false } : b.recipeId === 'steelMill' ? { ...b, level: b.level * 3 } : b)) }
+      : w,
   )
   let corporations = seedCorporations()
   let switched = false
@@ -773,8 +777,11 @@ console.log('\n=== 26. Corporation AI: reinvest winners, pull out of chronic los
     check('a chronic loss-maker (streak ≥ 12) is divested one level', loser?.level === 2 && buildingsOf(after.worlds, 'redmines') === before, `level 3 -> ${loser?.level}`)
     check('divesting returns salvage cash to the company', after.corp.cash > poor.cash, `cash ${poor.cash} -> ${after.corp.cash.toFixed(0)}`)
     const lastLevel = worlds.map((w) => ({ ...w, buildings: w.buildings.map((b) => (b.id === 'loser' ? { ...b, level: 1 } : b)) }))
+    // At its last level it isn't closed but mothballed further (it reopens when
+    // its good turns scarce; closing a world's last mine broke every chain after it).
     const closed = runCycle(poor, lastLevel)
-    check('...and closed at its last level', !closed.worlds.some((w) => w.buildings.some((b) => b.id === 'loser')) && buildingsOf(closed.worlds, 'redmines') < before, `buildings ${before} -> ${buildingsOf(closed.worlds, 'redmines')}`)
+    const kept = closed.worlds.flatMap((w) => w.buildings).find((b) => b.id === 'loser')
+    check('...and mothballed, not closed, at its last level', !!kept && (kept.idle ?? 0) > 0 && buildingsOf(closed.worlds, 'redmines') === before, `idle ${kept?.idle ?? 'closed'}`)
   }
 
   // A brief, recent loss (short streak) is NOT enough to trigger a pull-out —
@@ -1693,11 +1700,12 @@ console.log('\n=== 44. Emergent/latent demand: adoption gates non-essential good
     check('a supplied emergent good gains adoption over time', a1 > a0, `${(a0 * 100).toFixed(0)}% → ${(a1 * 100).toFixed(0)}%`)
   }
   {
-    // Decay: strip electronics production from Mars → its adoption falls.
+    // Decay: strip electronics production from Mars's nation, with everyone at
+    // war so none is imported → its adoption falls.
     let cs = seedCountries(), corps = seedCorporations(), bs = seedBanks()
-    let ws = seedWorlds().map((w) => (w.id === 'Mars' ? { ...w, buildings: w.buildings.filter((b) => b.recipeId !== 'electronicsFactory') } : w))
+    let ws = seedWorlds().map((w) => (w.ownerId === 'imperial-state-of-mars' ? { ...w, buildings: w.buildings.filter((b) => b.recipeId !== 'electronicsFactory') } : w))
     const e0 = ws.find((w) => w.id === 'Mars')!.adoption!.electronics ?? 0
-    for (let i = 0; i < 20; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: ['imperial-state-of-mars'] }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
+    for (let i = 0; i < 20; i++) { const r = tickEconomy(cs, ws, corps, { tick: i + 1, enableAI: true, humanCountryIds: ['imperial-state-of-mars'], atWar: () => true }, bs); cs = r.countries; ws = r.worlds; corps = r.corporations; bs = r.banks }
     const e1 = ws.find((w) => w.id === 'Mars')!.adoption!.electronics ?? 0
     check('an emergent good whose supply is cut loses adoption (demand fades)', e1 < e0 - 0.1, `${(e0 * 100).toFixed(0)}% → ${(e1 * 100).toFixed(0)}%`)
     check('adoption stays within [0,1]', EMERGENT_GOODS.every((g) => { const a = ws.find((w) => w.id === 'Mars')!.adoption![g] ?? 0; return a >= 0 && a <= 1 }))

@@ -10,8 +10,9 @@ import { abstractReport, districtSlots, freeSlots } from '../economy-abstract/ab
 import { stockOf } from './abstractEconomyStore'
 import { districtUsage, estimateWorldGdp, TICKS_PER_YEAR } from '../economy/economyTick'
 import { relationIn } from './diplomacyStore'
-import { COUNTRIES } from '../data/countryData'
+import { COUNTRIES, getCountry } from '../data/countryData'
 import type { HoldingContext } from '../scene/holdings'
+import type { SpaceportSite } from '../scene/spaceportSites'
 
 const simple = () => economyModel() === 'abstract'
 
@@ -64,6 +65,32 @@ export function militarySlotsOf(bodyName: string): number {
   }
   const w = worldByName(useEconomyStore.getState().worlds, bodyName)
   return w ? w.districtCapacity.military ?? 0 : 0
+}
+
+// A world's spaceports, as its economy runs them (scene/spaceportSites.ts puts
+// each on the ground map as a key node): Complex — one per spaceport building,
+// run by the state or a company; Simple — one per level of its spaceport
+// building. None without an economy world here.
+export function spaceportSitesOf(bodyName: string): SpaceportSite[] {
+  const owner = useTerritoryStore.getState().bodyOwner[bodyName]
+  const nation = owner ? getCountry(owner)?.name ?? owner : 'the state'
+  if (simple()) {
+    const w = useAbstractEconomyStore.getState().worlds[bodyName]
+    const n = w?.buildings.spaceport ?? 0
+    return Array.from({ length: n }, () => ({ operator: 'state', operatorName: `${nation} (state)` }))
+  }
+  const st = useEconomyStore.getState()
+  const w = worldByName(st.worlds, bodyName)
+  if (!w) return []
+  return w.buildings
+    .filter((b) => b.recipeId === 'spaceport')
+    .map((b) => {
+      if (b.owner.kind === 'corporation') {
+        const id = b.owner.corporationId
+        return { operator: id, operatorName: st.corporations.find((c) => c.id === id)?.name ?? id }
+      }
+      return { operator: 'state', operatorName: b.owner.kind === 'worker' ? 'its workers (co-op)' : `${nation} (state)` }
+    })
 }
 
 // Tell both economies how many military slots each world's defenses take.

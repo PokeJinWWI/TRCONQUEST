@@ -26,6 +26,7 @@ import {
   SIMPLE_WORLD_SEEDS,
   type SimpleBuildingId,
   type SimpleGood,
+  takesSlot,
 } from '../data/simplisticEconomyData'
 import { STARTING_STOCKPILE } from '../data/shipyardData'
 import type { TechCategory } from '../data/techData'
@@ -256,13 +257,14 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
       }
       // …then trade between nations (economy-abstract/tradeMatching.ts): the
       // standing orders fill from real partners at peace, matched each month
-      // on what every nation holds and can pay now.
+      // on what every nation holds and can pay now, through its spaceports.
       const filled = matchTrade(
         ids.map((id) => {
+          const tradeCapacity = abstractReport(byCountry[id], worldsOf(id, worlds, owners, controllers), stocks[id]).tradeCapacity
           const r = reports[id]
           const monthlyUse = r ? Object.fromEntries(SIMPLE_GOODS.map((g) => [g, r.used[g] + r.consumed[g]])) : {}
           const monthlyNet = r ? Object.fromEntries(SIMPLE_GOODS.map((g) => [g, r.produced[g] - r.used[g] - r.consumed[g]])) : {}
-          return { id, orders: byCountry[id].trade, stock: stocks[id], monthlyUse, monthlyNet, cash: byCountry[id].treasury, unitCost: (g: SimpleGood) => importUnitCost(byCountry[id], g) }
+          return { id, orders: byCountry[id].trade, stock: stocks[id], monthlyUse, monthlyNet, cash: byCountry[id].treasury, unitCost: (g: SimpleGood) => importUnitCost(byCountry[id], g), tradeCapacity }
         }),
         atWar,
       )
@@ -342,7 +344,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     if (controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `${bodyName} is occupied.` }
     if (!SIMPLE_BUILDING_DEFS[building]) return { ok: false, reason: 'Unknown building.' }
     const d = DISTRICT_OF_BUILDING[building]
-    if (freeSlots(w, c.queue, d) <= 0) return { ok: false, reason: `No free slot in ${bodyName}'s ${SIMPLE_DISTRICT_DEFS[d].name} — develop the district first.` }
+    if (takesSlot(building) && freeSlots(w, c.queue, d) <= 0) return { ok: false, reason: `No free slot in ${bodyName}'s ${SIMPLE_DISTRICT_DEFS[d].name} — develop the district first.` }
     set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, building, progress: 0 }], nextOrderId: cur.nextOrderId + 1 })))
     return { ok: true }
   },

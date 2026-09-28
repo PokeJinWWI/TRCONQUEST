@@ -5,11 +5,12 @@ import { ownerDisplay } from '../../data/countryRoster'
 import { canBuildDefense, useDefenseStore } from '../../state/defenseStore'
 import { useTerritoryStore } from '../../state/territoryStore'
 import { useGameTimeStore } from '../../state/gameTimeStore'
-import { groundSurface, holderOf } from '../../scene/groundLogic'
+import { holderOf } from '../../scene/groundLogic'
 import { isActive, isMilitaryInstallation, withInstallationKeys } from '../../scene/defenseLogic'
 import { keyNameOf } from '../../scene/keyNames'
 import { KEY_BUILDING_ICON, keyBuildingsOf, type KeyBuilding } from '../../scene/keyBuildings'
 import { PlanetIcon } from './PlanetIcons'
+import { useGroundKeySurface } from '../../hooks/useGroundKeySurface'
 
 // The planet screen's key sites (both economy modes): the Civic group — the
 // buildings that ARE the world's key nodes (scene/keyBuildings.ts) — and the
@@ -23,10 +24,9 @@ export function useKeyBuildings(bodyName: string): KeyBuilding[] {
   const holders = useTerritoryStore((s) => s.nodeHolders)
   const installations = useDefenseStore((s) => s.installations)
   const day = useGameTimeStore((s) => Math.floor(s.simDays))
-  return useMemo(() => {
-    const surface = groundSurface(bodyName, owners)
-    return surface ? keyBuildingsOf(surface, installations, day, owners, holders) : []
-  }, [bodyName, owners, holders, installations, day])
+  // Terrain + the economy's spaceports; keyBuildingsOf adds the installations.
+  const surface = useGroundKeySurface(bodyName, false)
+  return useMemo(() => (surface ? keyBuildingsOf(surface, installations, day, owners, holders) : []), [surface, owners, holders, installations, day])
 }
 
 function tooltip(k: KeyBuilding): string {
@@ -75,7 +75,7 @@ export function MilitaryTiles({ bodyName, playerId, canBuild, slots, grouped }: 
   const [message, setMessage] = useState<string | null>(null)
   const here = installations.filter((i) => i.bodyName === bodyName && isMilitaryInstallation(i))
   const free = Math.max(0, slots - here.length)
-  const surface = useMemo(() => groundSurface(bodyName, owners), [bodyName, owners])
+  const surface = useGroundKeySurface(bodyName, false)
   const named = surface ? withInstallationKeys(surface, installations, Infinity) : null
   const doBuild = (kind: DefenseKind) => {
     if (!playerId) return

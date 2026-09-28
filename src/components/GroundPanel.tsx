@@ -141,10 +141,10 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                 type="button"
                 className="ground-key-row"
                 onClick={() => useGroundViewStore.getState().focusNode(k.node)}
-                title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
+                title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''}${k.operator ? `\nRun by ${k.operator}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
               >
-                <span className="ground-key-row-name">{kn.name ?? KEY_KIND_LABEL[k.kind]}{kn.native ? <span className="abs-dim"> {kn.native}</span> : null}</span>
-                <span className="abs-dim">{kn.name ? KEY_KIND_LABEL[k.kind] : ''}{region ? `${kn.name ? ' · ' : ''}${region}` : ''}</span>
+                <span className="ground-key-row-name">{kn.name ?? kn.label}{kn.native ? <span className="abs-dim"> {kn.native}</span> : null}</span>
+                <span className="abs-dim">{[kn.name ? KEY_KIND_LABEL[k.kind] : '', region ?? '', k.operator ? `run by ${k.operator}` : ''].filter(Boolean).join(' · ')}</span>
                 <span className="ground-key-row-holder" style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined }}>{k.holder ? ownerDisplay(k.holder).name : 'nobody'}</span>
               </button>
             )

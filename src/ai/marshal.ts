@@ -68,7 +68,7 @@ export function armiesNeededToTake(countryId: string, bodyName: string, snap: Ai
 // Where to put an invasion down: as close as the rules allow to the enemy's
 // weakest-held key node.
 export function chooseDropNode(countryId: string, bodyName: string, cargo: Army[], snap: AiSnapshot, atWar: (a: string, b: string) => boolean): number | null {
-  const surface = groundSurface(bodyName, snap.owners)
+  const surface = snap.surfaceOf?.(bodyName) ?? groundSurface(bodyName, snap.owners)
   if (!surface) return null
   const types = cargo.flatMap((a) => a.units.map((u) => u.type))
   return defaultDropNode(surface, types, countryId, snap.armies, snap.owners, snap.nodeHolders, atWar, snap.shieldedFor?.(countryId, bodyName))

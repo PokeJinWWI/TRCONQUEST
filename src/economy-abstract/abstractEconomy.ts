@@ -55,6 +55,7 @@ import {
   AMENITIES_PER_POP,
   CITY_AMENITIES_PER_POP,
   AMENITIES_MIN_POP,
+  takesSlot,
 } from '../data/simplisticEconomyData'
 import type { TechCategory } from '../data/techData'
 import { DEVASTATION_OUTPUT_LOSS } from '../data/defenseData'
@@ -284,7 +285,7 @@ export function worldLevels(w: WorldState): number {
 // Buildings in a district (across its building families).
 export function buildingsInDistrict(w: WorldState, d: SimpleDistrictId): number {
   let n = d === 'urban' ? w.foreignSlots ?? 0 : d === 'military' ? w.militarySlots ?? 0 : 0
-  for (const b of SIMPLE_DISTRICT_DEFS[d].buildings) n += w.buildings[b] ?? 0
+  for (const b of SIMPLE_DISTRICT_DEFS[d].buildings) if (takesSlot(b)) n += w.buildings[b] ?? 0
   return n
 }
 // District levels built — or, for a world that predates districts, just enough
@@ -310,7 +311,7 @@ export function districtSlots(w: WorldState, d: SimpleDistrictId): number {
 }
 // Free slots in the district a building belongs to, counting queued buildings.
 export function freeSlots(w: WorldState, queue: ConstructionOrder[], d: SimpleDistrictId): number {
-  const queued = queue.filter((o) => o.bodyName === w.bodyName && o.building && DISTRICT_OF_BUILDING[o.building] === d).length
+  const queued = queue.filter((o) => o.bodyName === w.bodyName && o.building && takesSlot(o.building) && DISTRICT_OF_BUILDING[o.building] === d).length
   return districtSlots(w, d) - buildingsInDistrict(w, d) - queued
 }
 // Free land for more district levels, counting queued districts.
@@ -424,6 +425,7 @@ export interface AbstractReport {
   importCost: number
   exportRevenue: number
   tradeBalance: number // exports − imports, per month
+  tradeCapacity: number // TSC of goods (at GOOD_VALUE) its spaceports can trade a month, bought and sold together
   // National accounts (annual)
   realGdp: number
   gdp: number // nominal
@@ -535,6 +537,10 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   }
   const runs = Object.fromEntries(SIMPLE_BUILDINGS.map((b) => [b, runOf(b)])) as Record<SimpleBuildingId, number>
   for (const b of SIMPLE_BUILDINGS) for (const [g, n] of Object.entries(SIMPLE_BUILDING_DEFS[b].upkeep) as [SimpleGood, number][]) used[g] += active[b] * n * runs[b]
+  // Trade capacity: what the spaceports can move this month (staffed levels,
+  // slowed when short of rockets or spaceships).
+  let tradeCapacity = 0
+  for (const b of SIMPLE_BUILDINGS) tradeCapacity += active[b] * runs[b] * (SIMPLE_BUILDING_DEFS[b].tradeCapacity ?? 0)
   // The worst-supplied input, over the goods buildings need (a diagnostic).
   const inputSatisfaction = Math.min(1, ...SIMPLE_GOODS.filter((g) => need[g] > 0).map((g) => goodSat[g]))
 
@@ -731,6 +737,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     importCost,
     exportRevenue,
     tradeBalance: exportRevenue - importCost,
+    tradeCapacity,
     realGdp,
     gdp,
     revenue,
@@ -813,7 +820,7 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
     if (done && o.district && districtLevelsTotal(w) < landOf(w)) {
       w.districts = { ...districtsOf(w), [o.district]: districtsOf(w)[o.district] + 1 }
       completed.push(next)
-    } else if (done && o.building && buildingsInDistrict(w, DISTRICT_OF_BUILDING[o.building]) < districtSlots(w, DISTRICT_OF_BUILDING[o.building])) {
+    } else if (done && o.building && (!takesSlot(o.building) || buildingsInDistrict(w, DISTRICT_OF_BUILDING[o.building]) < districtSlots(w, DISTRICT_OF_BUILDING[o.building]))) {
       w.buildings[o.building] = (w.buildings[o.building] ?? 0) + 1
       completed.push(next)
     } else queue.push(next)

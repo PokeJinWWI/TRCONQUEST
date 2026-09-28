@@ -17,8 +17,9 @@
 // (separation of concerns), coordinated by `runCountryAI` below — the single
 // entry point tickEconomy calls for each non-player country.
 
-import type { Country, CountryFiscal, World, Corporation, ConstructionOrder } from './economyTypes'
-import { goodIsScarce, inputsAvailable, recipeGood } from './scarcity'
+import type { Country, CountryFiscal, World, WorldReport, Corporation, ConstructionOrder } from './economyTypes'
+import { goodIsGlutted, goodIsScarce, inputsAvailable, recipeGood } from './scarcity'
+import { downsized, mayDownsize } from './downsizing'
 import { RECIPES, districtOfRecipe, constructionWork, type DistrictType } from './recipes'
 import { districtOrder, freeLandOfWorld } from './districts'
 import { economicSystemDef } from './laws'
@@ -31,6 +32,7 @@ import { economicSystemDef } from './laws'
 const FISCAL_REVIEW_PERIOD = 12 // yearly: tax/welfare
 const DEBT_REVIEW_PERIOD = 12 // yearly: bond issue/redeem housekeeping
 const BUILD_REVIEW_PERIOD = 6 // twice-yearly: one construction decision
+const DOWNSIZE_STREAK = 12 // months at a loss before the state cuts a building back
 
 // Fiscal dead-bands, as a fraction of the nation's own revenue, so the same
 // rule works for a small nation and a large one.
@@ -52,6 +54,7 @@ const MAX_DEBT_TO_GDP = 1.8 // stop borrowing past here (let the deficit bite)
 // Construction manager thresholds.
 const BUILD_TREASURY_BUFFER = 30000 // keep this much on hand before building
 const BUREAUCRACY_STRAIN = 0.85 // consumed/capacity above this = build admin
+const BUREAUCRACY_RESERVE_MONTHS = 12 // build admin before the reserve runs out
 // Below this nation-wide satisfaction of a core needs tier, the state steps in
 // and builds the essential that serves it — even a laissez-faire one.
 const ESSENTIAL_NEEDS_THRESHOLD = 0.8
@@ -140,6 +143,7 @@ const GROWTH_BUILDINGS: { recipeId: string }[] = [
   { recipeId: 'foodProcessor' },
   { recipeId: 'clinic' },
   { recipeId: 'consumerGoodsFactory' },
+  { recipeId: 'textileMill' },
   { recipeId: 'steelMill' },
   { recipeId: 'solarPlant' },
 ]
@@ -153,7 +157,7 @@ function districtRoom(world: World, recipeId: string): boolean {
 // --- Governance manager: one government (state-funded) construction decision.
 //     Priority 1 is keeping the bureaucracy solvent; priority 2 is growing the
 //     economy where the state plausibly builds. ---
-function governanceManager(country: Country, report: CountryFiscal, worlds: World[], tick: number): World[] {
+function governanceManager(country: Country, report: CountryFiscal, worlds: World[], tick: number, worldReports?: Record<string, WorldReport>): World[] {
   const owned = worlds.filter((w) => w.ownerId === country.id)
   if (owned.length === 0) return worlds
   // Necessities (bureaucracy, feeding/caring for people) get built even when the
@@ -186,7 +190,11 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
   // Priority 1: bureaucracy under strain → build administrative capacity. That
   // means either running the reserve DRY (consuming more than we produce, with
   // nothing stored), or riding near the storage ceiling.
-  const runningDry = report.bureaucracy <= 0 && report.bureaucracyConsumed > report.bureaucracyProduced
+  // Running dry: using more than it makes with under a year's reserve left —
+  // not waiting for zero, when every state building's output drops at once
+  // (Orion's power plants fell to 60% and its industry with them).
+  const deficit = report.bureaucracyConsumed - report.bureaucracyProduced
+  const runningDry = deficit > 0 && report.bureaucracy < BUREAUCRACY_RESERVE_MONTHS * deficit
   const nearCeiling = report.bureaucracyCapacity > 0 && report.bureaucracyConsumed >= BUREAUCRACY_STRAIN * report.bureaucracyCapacity
   const strained = runningDry || nearCeiling
   if (strained && !alreadyQueuing('ministry') && !alreadyQueuing('governmentOffice')) {
@@ -197,7 +205,7 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
   // Scarce, and a plant for it could run (its inputs are made in the nation).
   const scarce = (recipeId: string) => {
     const good = recipeGood(recipeId)
-    return !!good && goodIsScarce(good, owned) && inputsAvailable(recipeId, owned)
+    return !!good && goodIsScarce(good, owned, worldReports) && inputsAvailable(recipeId, owned)
   }
 
   // Priority 2: BASIC PROVISION — regardless of economic system, a state keeps
@@ -230,6 +238,15 @@ function governanceManager(country: Country, report: CountryFiscal, worlds: Worl
         if (placed) return placed
       }
     }
+  }
+
+  // Priority 2b: UTILITIES — power is a public job whatever the economic
+  // system: when electricity is scarce in the nation the state builds a plant
+  // (companies don't found essentials, and a laissez-faire state otherwise left
+  // Orion's industry to run out of power as it grew).
+  if (scarce('solarPlant') && !alreadyQueuing('solarPlant')) {
+    const placed = placeOn('solarPlant')
+    if (placed) return placed
   }
 
   // Priority 3: growth — a command/interventionist state builds a needed plant
@@ -287,6 +304,7 @@ export function runCountryAI(
   worlds: World[],
   _corporations: Corporation[],
   tick: number,
+  worldReports?: Record<string, WorldReport>,
 ): { country: Country; worlds: World[] } {
   let next = country
   if (tick % FISCAL_REVIEW_PERIOD === phase(country.id, FISCAL_REVIEW_PERIOD)) next = fiscalManager(next, report)
@@ -294,6 +312,25 @@ export function runCountryAI(
   // urgent — do it whenever the treasury is meaningfully underwater.
   if (tick % DEBT_REVIEW_PERIOD === phase(country.id, DEBT_REVIEW_PERIOD) || report.treasury < -OVERDRAFT_FUND_BUFFER) next = debtManager(next, report)
   let nextWorlds = worlds
-  if (tick % BUILD_REVIEW_PERIOD === phase(country.id, BUILD_REVIEW_PERIOD)) nextWorlds = governanceManager(next, report, worlds, tick)
+  if (tick % BUILD_REVIEW_PERIOD === phase(country.id, BUILD_REVIEW_PERIOD)) nextWorlds = downsizeManager(next, governanceManager(next, report, worlds, tick, worldReports), worldReports)
   return { country: next, worlds: nextWorlds }
+}
+
+// --- Downsizing: the state cuts back its worst chronic loss-maker whose good
+//     is in a real glut (economy/downsizing.ts: a level, or more mothballed at
+//     the last — never closed), at most one a review. ---
+function downsizeManager(country: Country, worlds: World[], worldReports?: Record<string, WorldReport>): World[] {
+  const owned = worlds.filter((w) => w.ownerId === country.id)
+  let worst: { worldId: string; buildingId: string; loss: number } | null = null
+  for (const w of owned) {
+    for (const b of w.buildings) {
+      if (b.owner.kind !== 'state' || !mayDownsize(b) || (b.unprofitableStreak ?? 0) < DOWNSIZE_STREAK) continue
+      // Only in a real glut: a month or more of its good lying unsold.
+      const good = recipeGood(b.recipeId)
+      if (!good || goodIsScarce(good, owned, worldReports) || !goodIsGlutted(good, owned)) continue
+      if (!worst || b.lastProfit < worst.loss) worst = { worldId: w.id, buildingId: b.id, loss: b.lastProfit }
+    }
+  }
+  if (!worst) return worlds
+  return worlds.map((w) => (w.id === worst!.worldId ? { ...w, buildings: w.buildings.map((b) => (b.id === worst!.buildingId ? downsized(b) : b)) } : w))
 }

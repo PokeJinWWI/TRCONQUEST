@@ -37,6 +37,7 @@ import { updateExchangeRates, convertBetween } from './fx'
 import { tickMonetary } from './monetaryPolicy'
 import { runForeignInvestmentAI } from './foreignInvestmentAI'
 import { TRANSPORT_LOSS, sellFromWorld, tradeBetweenNations } from './internationalTrade'
+import { goodIsScarce } from './scarcity'
 
 const PRICE_ADJUST = 0.07
 export const WAGE_FLOOR = 5
@@ -73,6 +74,11 @@ const JOB_LADDER: PopClass[] = ['political', 'professional', 'technical', 'labor
 // is quicker (losing workforce or market bites sooner).
 const THROUGHPUT_RAMP_UP = 0.05
 const THROUGHPUT_RAMP_DOWN = 0.15
+// How fast mothballed capacity (Building.idle) reopens while its good is scarce.
+const REOPEN_PER_MONTH = 0.2
+// Equipment used as a recipe input (see the production step).
+const CAPITAL_INPUTS = new Set<GoodId>(['tools', 'machinery', 'heavyMachinery', 'precisionMachinery', 'electricalMachinery'])
+const CAPITAL_INPUT_FLOOR = 0.6
 export const NEW_BUILDING_THROUGHPUT = 0.1
 
 // Workers per job slot. Recipe job counts are written at a "hands on the floor"
@@ -245,6 +251,7 @@ const CPI_WEIGHTS: Partial<Record<GoodId, number>> = {
   meat: 0.3,
   fish: 0.2,
   consumerGoods: 0.5,
+  textiles: 0.2,
   electricity: 0.3,
   healthcare: 0.2,
   retail: 0.15,
@@ -542,7 +549,8 @@ function tickWorld(
   }
   // Jobs posted this month: each building hires for the run it plans (its last
   // run plus the ramp), not its full size — an idle factory isn't hiring.
-  const runPlan = (b: Building) => Math.min(1, b.throughput + THROUGHPUT_RAMP_UP)
+  // Mothballed capacity doesn't run (Building.idle).
+  const runPlan = (b: Building) => Math.min(1 - (b.idle ?? 0), b.throughput + THROUGHPUT_RAMP_UP)
   const jobDemand = zeroClasses()
   for (const b of world.buildings) for (const cls of POP_CLASSES) jobDemand[cls] += jobSlots(b, cls) * runPlan(b)
 
@@ -885,7 +893,12 @@ function tickWorld(
       const want = input.amount * b.level * plan
       const got = want * inputFulfill[input.good]
       inputCost += got * prices[input.good]
-      inputScale = Math.min(inputScale, want > 0 ? got / want : 1)
+      const share = want > 0 ? got / want : 1
+      // Tools and machinery are equipment: short of them a plant runs slower
+      // (down to CAPITAL_INPUT_FLOOR), it doesn't stop — as with capital upkeep.
+      // Strictly required, steel ↔ tools ↔ machinery could all hit zero at
+      // once and never restart.
+      inputScale = Math.min(inputScale, CAPITAL_INPUTS.has(input.good) ? CAPITAL_INPUT_FLOOR + (1 - CAPITAL_INPUT_FLOOR) * share : share)
     }
     // Capital upkeep is bought like an input but never stops production.
     for (const u of CAPITAL_UPKEEP) inputCost += u.amount * b.level * plan * inputFulfill[u.good] * prices[u.good]
@@ -939,7 +952,13 @@ function tickWorld(
     else if (b.owner.kind === 'worker') workerDividendPool += netProfit
 
     const unprofitableStreak = netProfit < 0 ? (b.unprofitableStreak ?? 0) + 1 : 0
-    return { ...b, inventory: inv, throughput, lastProfit: netProfit, unprofitableStreak, employed, jobsPosted }
+    // Mothballed capacity reopens, a little each month, while its good is
+    // scarce here and its inputs are all to be had — never closed again this
+    // way (that throttling spiralled); reopening into a shortage of its own
+    // inputs only spread it (Orion ran out of power).
+    const good = method.outputs[0]?.good
+    const idle = b.idle && good && inputScale >= 0.95 && goodIsScarce(good, [world]) ? Math.max(0, b.idle - REOPEN_PER_MONTH) : b.idle
+    return { ...b, inventory: inv, throughput, lastProfit: netProfit, unprofitableStreak, employed, jobsPosted, ...(idle !== b.idle ? { idle: idle || undefined } : {}) }
   })
 
   // Next tick's wages: the labour share of the value added actually earned,
@@ -1538,7 +1557,7 @@ export function tickEconomy(
       if (humans && humans.includes(country.id)) return country
       const report = reports.countries[country.id]
       if (!report) return country
-      const decided = runCountryAI(country, report, aiWorlds, aiCorporations, tick)
+      const decided = runCountryAI(country, report, aiWorlds, aiCorporations, tick, reports.worlds)
       aiWorlds = decided.worlds
       return decided.country
     })
@@ -1548,7 +1567,7 @@ export function tickEconomy(
     const poolOf = new Map(aiCountries.map((c) => [c.id, c.investmentPool]))
     const openHosts = new Set(aiCountries.filter((c) => c.foreignInvestmentPolicy !== 'closed').map((c) => c.id))
     aiCorporations = aiCorporations.map((corp) => {
-      const decided = runCorporationAI(corp, aiWorlds, tick, poolOf.get(corp.countryId) ?? 0, openHosts)
+      const decided = runCorporationAI(corp, aiWorlds, tick, poolOf.get(corp.countryId) ?? 0, openHosts, reports.worlds)
       aiWorlds = decided.worlds
       return decided.corp
     })

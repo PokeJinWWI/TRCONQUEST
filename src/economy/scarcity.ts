@@ -9,11 +9,19 @@
 
 import { GOODS, type GoodId } from './goods'
 import { getMethod, RECIPES } from './recipes'
-import type { World } from './economyTypes'
+import type { World, WorldReport } from './economyTypes'
 
 const UNSOLD_MONTHS = 0.5
+const SHORT_SHARE = 0.95 // buyers got less than this of what they wanted
 
-export function goodIsScarce(good: GoodId, worlds: World[]): boolean {
+export function goodIsScarce(good: GoodId, worlds: World[], reports?: Record<string, WorldReport>): boolean {
+  // Buyers going short this month is scarcity whatever the price says (price
+  // moves a few percent a month; power can't be stored, so an electricity
+  // shortage showed nowhere else while its price caught up).
+  if (reports && worlds.some((w) => {
+    const r = reports[w.id]?.goods[good]
+    return !!r && r.demand > 0 && r.transacted < SHORT_SHARE * r.demand
+  })) return true
   if (!worlds.some((w) => (w.market.prices[good] ?? 0) >= GOODS[good].basePrice)) return false
   let unsold = 0
   let monthly = 0
@@ -26,6 +34,21 @@ export function goodIsScarce(good: GoodId, worlds: World[]): boolean {
     }
   }
   return unsold <= UNSOLD_MONTHS * monthly
+}
+
+// A real glut: its producers here hold a month or more of their output unsold.
+export function goodIsGlutted(good: GoodId, worlds: World[]): boolean {
+  let unsold = 0
+  let monthly = 0
+  for (const w of worlds) {
+    for (const b of w.buildings) {
+      const out = getMethod(b.recipeId, b.methodId)?.outputs.find((o) => o.good === good)
+      if (!out) continue
+      unsold += b.inventory[good] ?? 0
+      monthly += out.amount * b.level * b.throughput
+    }
+  }
+  return monthly > 0 && unsold >= monthly
 }
 
 // Whether every input a recipe's (first) method needs is made on one of these

@@ -10,7 +10,7 @@ import { useShipyardStore } from '../state/shipyardStore'
 import { useCombatStore } from '../state/combatStore'
 import { usePlayerStore } from '../state/playerStore'
 import { liveBodyValue } from '../scene/peace'
-import { batteryDenial, hostileDefenseCount, shieldedFor } from '../state/defenseStore'
+import { batteryDenial, groundKeySurface, hostileDefenseCount, shieldedFor } from '../state/defenseStore'
 import type { AiSnapshot } from './blackboard'
 
 export function captureSnapshot(simDays: number): AiSnapshot {
@@ -36,5 +36,6 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     orbitDenied: batteryDenial,
     hostileDefensesAt: hostileDefenseCount,
     shieldedFor,
+    surfaceOf: (bodyName) => groundKeySurface(bodyName, territory.bodyOwner),
   }
 }

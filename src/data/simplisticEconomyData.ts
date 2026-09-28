@@ -9,8 +9,8 @@
 
 import type { ResourceId } from './resourceData'
 
-export type SimpleGood = Extract<ResourceId, 'food' | 'minerals' | 'energy' | 'alloys' | 'electronics' | 'consumerGoods' | 'exoticMatter' | 'hyperium'>
-export const SIMPLE_GOODS: SimpleGood[] = ['food', 'minerals', 'energy', 'alloys', 'electronics', 'consumerGoods', 'exoticMatter', 'hyperium']
+export type SimpleGood = Extract<ResourceId, 'food' | 'minerals' | 'energy' | 'alloys' | 'electronics' | 'consumerGoods' | 'spaceships' | 'rockets' | 'exoticMatter' | 'hyperium'>
+export const SIMPLE_GOODS: SimpleGood[] = ['food', 'minerals', 'energy', 'alloys', 'electronics', 'consumerGoods', 'spaceships', 'rockets', 'exoticMatter', 'hyperium']
 
 export const SIMPLE_GOOD_NAMES: Record<SimpleGood, string> = {
   food: 'Food',
@@ -19,6 +19,8 @@ export const SIMPLE_GOOD_NAMES: Record<SimpleGood, string> = {
   alloys: 'Alloys',
   electronics: 'Electronics',
   consumerGoods: 'Consumer Goods',
+  spaceships: 'Spaceships',
+  rockets: 'Rockets',
   exoticMatter: 'Exotic Matter',
   hyperium: 'Hyperium',
 }
@@ -33,6 +35,8 @@ export const GOOD_VALUE: Record<SimpleGood, number> = {
   alloys: 1.6,
   electronics: 5,
   consumerGoods: 3.8,
+  spaceships: 12,
+  rockets: 4,
   exoticMatter: 8,
   hyperium: 25,
 }
@@ -54,6 +58,8 @@ export type SimpleBuildingId =
   | 'consumerFactory'
   | 'electronicsPlant'
   | 'exoticRefinery'
+  | 'spaceyard'
+  | 'rocketWorks'
   | 'physicsLab'
   | 'societyLab'
   | 'engineeringLab'
@@ -66,10 +72,13 @@ export type SimpleBuildingId =
   | 'clinic'
   | 'entertainmentCenter'
   | 'commercialZone'
+  | 'spaceport'
 
 // What a building makes: goods, construction points, research in a tree,
 // amenities (planet services people need) or services GDP ($B a month).
 export type SimpleProduct = SimpleGood | 'construction' | 'physics' | 'society' | 'engineering' | 'amenities' | 'services'
+
+export const TRADE_PER_SPACEPORT = 60 // TSC of trade per spaceport level per month
 
 export interface SimpleBuildingDef {
   name: string
@@ -84,6 +93,13 @@ export interface SimpleBuildingDef {
   pu?: number
   // Extra annual population growth per level per billion people (clinics).
   popGrowth?: number
+  // Trade between nations one level can move, in TSC of goods (at GOOD_VALUE)
+  // per month, bought and sold together — spaceports only. A nation's trade is
+  // capped by its spaceports (economy-abstract/tradeMatching.ts).
+  tradeCapacity?: number
+  // Takes no district slot: a key site of its own on the ground map (the
+  // spaceport), listed with the district but not counted against its slots.
+  noSlot?: boolean
 }
 
 export const SIMPLE_BUILDING_DEFS: Record<SimpleBuildingId, SimpleBuildingDef> = {
@@ -116,6 +132,18 @@ export const SIMPLE_BUILDING_DEFS: Record<SimpleBuildingId, SimpleBuildingDef> =
     description: 'Refines exotic matter (warp fuel) and a trickle of hyperium (hyperdrive fuel). Energy hungry.',
     district: 'industrial', jobs: 20, stratum: 'specialists', cost: 1200,
     outputs: { exoticMatter: 3, hyperium: 0.5 }, upkeep: { energy: 10 },
+  },
+  spaceyard: {
+    name: 'Spaceyard',
+    description: 'Builds civilian spaceships — the freighters and liners that spaceports work to carry trade between worlds and nations.',
+    district: 'industrial', jobs: 10, stratum: 'specialists', cost: 800,
+    outputs: { spaceships: 1.2 }, upkeep: { alloys: 6, electronics: 1 },
+  },
+  rocketWorks: {
+    name: 'Rocket Works',
+    description: 'Builds the launch rockets that lift cargo from spaceports to orbit.',
+    district: 'industrial', jobs: 10, stratum: 'workers', cost: 600,
+    outputs: { rockets: 4 }, upkeep: { alloys: 5, energy: 8 },
   },
   physicsLab: {
     name: 'Physics Lab',
@@ -171,8 +199,14 @@ export const SIMPLE_BUILDING_DEFS: Record<SimpleBuildingId, SimpleBuildingDef> =
     name: 'Commercial Zone', description: 'Shops, offices and markets: some amenities and a stream of taxable services output.',
     district: 'urban', jobs: 20, stratum: 'workers', cost: 400, outputs: { amenities: 5, services: 15 }, upkeep: {},
   },
+  spaceport: {
+    name: 'Spaceport',
+    description: 'Landing fields and orbital lift: the gate for trade with other nations. Each level adds trade capacity and is a key node on the ground map (it takes no district slot); it burns rockets and wears out spaceships.',
+    district: 'urban', jobs: 5, stratum: 'workers', cost: 600, outputs: { amenities: 3, services: 6 }, upkeep: { rockets: 1, spaceships: 0.2 }, tradeCapacity: TRADE_PER_SPACEPORT, noSlot: true,
+  },
 }
 export const SIMPLE_BUILDINGS = Object.keys(SIMPLE_BUILDING_DEFS) as SimpleBuildingId[]
+export const takesSlot = (b: SimpleBuildingId) => !SIMPLE_BUILDING_DEFS[b].noSlot
 
 // Amenities (Stellaris's planet services): every million people use a little;
 // cities provide a base share, urban buildings the rest. See abstractEconomy.
@@ -240,15 +274,15 @@ export interface SimpleWorldSeed {
 // The inhabited worlds; every other body a nation owns starts as an outpost.
 export const SIMPLE_WORLD_SEEDS: Record<string, SimpleWorldSeed> = {
   // Imperial State of Mars
-  Mars: { population: 3000, buildings: { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 5, electronicsPlant: 2, exoticRefinery: 2, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1 } },
-  Luna: { population: 600, buildings: { civilianFactory: 2, consumerFactory: 1, farm: 1, mine: 3, powerPlant: 2, commercialZone: 1 } },
+  Mars: { population: 3000, buildings: { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 5, electronicsPlant: 2, exoticRefinery: 2, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1, spaceport: 6 } },
+  Luna: { population: 600, buildings: { civilianFactory: 1, consumerFactory: 1, farm: 1, mine: 3, powerPlant: 2, commercialZone: 1, spaceport: 1, spaceyard: 1, rocketWorks: 2 } }, // Luna's low gravity makes it Mars's space industry
   // Republic of Venus
-  Venus: { population: 3000, buildings: { civilianFactory: 8, alloyFoundry: 2, consumerFactory: 5, electronicsPlant: 2, exoticRefinery: 2, farm: 7, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1 } },
+  Venus: { population: 3000, buildings: { civilianFactory: 7, alloyFoundry: 2, consumerFactory: 5, electronicsPlant: 2, exoticRefinery: 2, farm: 7, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1, spaceport: 6, spaceyard: 1, rocketWorks: 2 } },
   // Orion Republic
-  Arcadia: { population: 1200, buildings: { civilianFactory: 3, alloyFoundry: 1, consumerFactory: 2, electronicsPlant: 1, exoticRefinery: 1, farm: 3, mine: 2, powerPlant: 2, physicsLab: 1, engineeringLab: 1, clinic: 1 } },
-  'Proxima b': { population: 450, buildings: { civilianFactory: 1, consumerFactory: 1, farm: 2, mine: 1, powerPlant: 1 } },
+  Arcadia: { population: 1200, buildings: { civilianFactory: 2, alloyFoundry: 1, consumerFactory: 2, electronicsPlant: 1, exoticRefinery: 1, farm: 3, mine: 2, powerPlant: 2, physicsLab: 1, engineeringLab: 1, clinic: 1, spaceport: 2, spaceyard: 1, rocketWorks: 1 } },
+  'Proxima b': { population: 450, buildings: { civilianFactory: 1, consumerFactory: 1, farm: 2, mine: 1, powerPlant: 1, spaceport: 1 } },
   // Kingdom of Lalande
-  'Lalande 21185 d': { population: 2000, buildings: { civilianFactory: 4, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, exoticRefinery: 1, farm: 6, mine: 5, powerPlant: 4, physicsLab: 1, entertainmentCenter: 1 } },
+  'Lalande 21185 d': { population: 2000, buildings: { civilianFactory: 3, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, exoticRefinery: 1, farm: 6, mine: 5, powerPlant: 4, physicsLab: 1, entertainmentCenter: 1, spaceport: 4, spaceyard: 1, rocketWorks: 1 } },
 }
 
 export const OUTPOST_SEED: SimpleWorldSeed = { population: 48, buildings: { mine: 1 } }
@@ -259,6 +293,8 @@ export const SIMPLE_STARTING_STOCK: Partial<Record<SimpleGood, number>> = {
   food: 200,
   consumerGoods: 150,
   electronics: 60,
+  rockets: 30,
+  spaceships: 6,
 }
 
 // --- Currencies ----------------------------------------------------------------

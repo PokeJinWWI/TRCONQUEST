@@ -59,8 +59,9 @@ function GroupTile({ group, selected, onClick }: { group: Building[]; selected: 
   const r = RECIPES[group[0].recipeId]
   const levels = group.reduce((n, b) => n + b.level, 0)
   const run = group.reduce((n, b) => n + Math.max(0, Math.min(1, b.throughput)) * b.level, 0) / Math.max(1, levels)
+  const idle = group.reduce((n, b) => n + (b.idle ?? 0) * b.level, 0) / Math.max(1, levels)
   return (
-    <button type="button" className={`pl-tile${run < 0.6 ? ' understaffed' : ''}${selected ? ' selected' : ''}`} title={`${r?.label ?? group[0].recipeId} — ${group.length} building${group.length === 1 ? '' : 's'}, ${levels} levels in all\nRunning at ${pct(run)} on average\nClick for details`} onClick={onClick}>
+    <button type="button" className={`pl-tile${run < 0.6 ? ' understaffed' : ''}${selected ? ' selected' : ''}`} title={`${r?.label ?? group[0].recipeId} — ${group.length} building${group.length === 1 ? '' : 's'}, ${levels} levels in all\nRunning at ${pct(run)} on average${idle > 0 ? `\n${pct(idle)} of capacity mothballed` : ''}\nClick for details`} onClick={onClick}>
       <PlanetIcon id={buildingGroup(group[0].recipeId)} size={22} />
       <span className="pl-tile-name">{r?.label ?? group[0].recipeId}</span>
       <span className="pl-tile-level">×{group.length}{levels !== group.length ? ` · Lv ${levels}` : ''}</span>
@@ -76,7 +77,7 @@ function BuildingTile({ b, corpName, selected, onClick }: { b: Building; corpNam
     <button
       type="button"
       className={`pl-tile owner-${b.owner.kind}${run < 0.6 ? ' understaffed' : ''}${selected ? ' selected' : ''}`}
-      title={`${r?.label ?? b.recipeId} — level ${b.level}\nOwner: ${ownerLabel(b.owner, corpName)}\nRunning at ${pct(run)} · last profit ${formatMoney(b.lastProfit)}\nClick for details`}
+      title={`${r?.label ?? b.recipeId} — level ${b.level}\nOwner: ${ownerLabel(b.owner, corpName)}\nRunning at ${pct(run)} · last profit ${formatMoney(b.lastProfit)}${b.idle ? `\n${pct(b.idle)} mothballed` : ''}\nClick for details`}
       onClick={onClick}
     >
       <PlanetIcon id={buildingGroup(b.recipeId)} size={22} />

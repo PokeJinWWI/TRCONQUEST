@@ -137,6 +137,10 @@ export interface Building {
   // (design doc Section 3, "throughput"). Freshly built or newly expanded
   // buildings start low and climb.
   throughput: number
+  // Share of its capacity mothballed (0–1): it runs, and posts jobs, only for
+  // the rest. Seeded where a nation needs less than one level of it; reopened
+  // a little each month its good is scarce (economyTick). Absent = 0.
+  idle?: number
   lastProfit: number
   // Consecutive ticks this building has run at a loss (reset to 0 on any
   // profitable tick). A corporation owner divests a building that stays

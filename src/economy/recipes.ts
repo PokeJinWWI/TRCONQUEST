@@ -78,6 +78,7 @@ export const LOGISTICS_OUTPUT: Record<string, number> = {
   roadNetwork: 300,
   railway: 1200,
   spaceport: 2000,
+  seaport: 1500,
 }
 
 // Construction points a Construction Sector adds to its WORLD's build capacity
@@ -212,6 +213,7 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   foodProcessor: 'consumerGoods',
   consumerGoodsFactory: 'consumerGoods',
   furnitureFactory: 'consumerGoods',
+  textileMill: 'consumerGoods',
   luxuryFactory: 'consumerGoods',
   meatPacking: 'consumerGoods',
   // Vehicles & craft
@@ -226,6 +228,7 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   roadNetwork: 'infrastructure',
   railway: 'infrastructure',
   spaceport: 'infrastructure',
+  seaport: 'infrastructure',
   // Public services
   clinic: 'services',
   school: 'services',
@@ -951,6 +954,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Petrochemistry',
         description: 'Cracks oil into industrial chemicals in machinery-driven plant.',
         inputs: [
+          { good: 'sulfur', amount: 60 },
           { good: 'oil', amount: 300 },
           { good: 'machinery', amount: 40 },
           { good: 'electricity', amount: 220 },
@@ -973,6 +977,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Nitrate Synthesis',
         description: 'Combines phosphate and chemicals into fertilizer for farms.',
         inputs: [
+          { good: 'sulfur', amount: 40 },
           { good: 'phosphate', amount: 300 },
           { good: 'chemicals', amount: 150 },
           { good: 'machinery', amount: 30 },
@@ -996,6 +1001,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Ordnance Synthesis',
         description: 'Turns chemicals into industrial and military explosives.',
         inputs: [
+          { good: 'sulfur', amount: 80 },
           { good: 'chemicals', amount: 250 },
           { good: 'electricity', amount: 200 },
         ],
@@ -1268,6 +1274,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Fine Manufacture',
         description: 'Electronics and consumer goods into luxuries for the wealthy.',
         inputs: [
+          { good: 'textiles', amount: 60 },
           { good: 'electronics', amount: 200 },
           { good: 'consumerGoods', amount: 200 },
           { good: 'electricalMachinery', amount: 40 },
@@ -1293,6 +1300,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Joinery',
         description: 'Lumber and hardwood worked into household furniture.',
         inputs: [
+          { good: 'textiles', amount: 40 },
           { good: 'lumber', amount: 220 },
           { good: 'hardwood', amount: 120 },
           { good: 'electricity', amount: 150 },
@@ -1308,6 +1316,7 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Finished Goods Line',
         description: 'Adds glass and consumer fittings for finer furniture, on heavier tooling.',
         inputs: [
+          { good: 'textiles', amount: 40 },
           { good: 'lumber', amount: 200 },
           { good: 'hardwood', amount: 110 },
           { good: 'glass', amount: 60 },
@@ -1340,6 +1349,29 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'labor', count: 150 },
           { class: 'technical', count: 40 },
+        ],
+      },
+    ],
+  },
+  textileMill: {
+    id: 'textileMill',
+    label: 'Textile Mill',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Spinning & Dyeing',
+        description: 'Wool and synthetic fibre spun, woven and dyed into cloth and clothing.',
+        inputs: [
+          { good: 'livestock', amount: 60 },
+          { good: 'chemicals', amount: 80 },
+          { good: 'dyes', amount: 60 },
+          { good: 'electricity', amount: 120 },
+        ],
+        outputs: [{ good: 'textiles', amount: 1400 }],
+        jobs: [
+          { class: 'labor', count: 180 },
+          { class: 'technical', count: 60 },
         ],
       },
     ],
@@ -1673,6 +1705,8 @@ export const RECIPES: Record<string, Recipe> = {
         label: 'Orbital Freight Hub',
         description: 'Aircraft and orbital lift connect the world off-planet — the greatest market access and freight capacity.',
         inputs: [
+          { good: 'rockets', amount: 6 },
+          { good: 'spaceships', amount: 1 },
           { good: 'aircraft', amount: 20 },
           { good: 'fuel', amount: 200 },
           { good: 'electricity', amount: 200 },
@@ -1688,6 +1722,28 @@ export const RECIPES: Record<string, Recipe> = {
   },
 
   // ---------------- Services ----------------
+  seaport: {
+    id: 'seaport',
+    label: 'Seaport',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Harbour & Shipping',
+        description: 'Docks and ocean-going ships carry freight along a world’s coasts and across its seas — strong infrastructure and freight capacity, on a world with sea.',
+        inputs: [
+          { good: 'oceanGoingShips', amount: 8 },
+          { good: 'fuel', amount: 120 },
+          { good: 'electricity', amount: 100 },
+        ],
+        outputs: [{ good: 'infrastructure', amount: 800 }],
+        jobs: [
+          { class: 'labor', count: 200 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+    ],
+  },
   clinic: {
     id: 'clinic',
     label: 'Clinic',
