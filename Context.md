@@ -864,3 +864,47 @@ Plan: `/Users/hopak/.claude/plans/tingly-coalescing-pnueli.md` (all sections don
 - **Simple:** resources `spaceships`/`rockets` (resourceData + icons), buildings `spaceyard`, `rocketWorks`, `spaceport` (urban, `noSlot`, jobs 5, rockets 1 + spaceships 0.2 upkeep, `TRADE_PER_SPACEPORT` 60 TSC). Seeds: 2 per billion people; Mars's space industry sits on Luna (Mars's land is 15 and was otherwise full). `matchTrade` capped by `tradeCapacity` (buyer and seller); AI builds spaceports when its standing orders outgrow capacity and rocket works/spaceyards on an upkeep gap. Trade tab shows "Spaceports used / capacity TSC". Glossary entries added.
 - **Findings:** Simple AI nations trade little (~30 TSC/mo of orders vs 175–419 capacity), so the cap binds mainly for the player. Complex month-4 Mars market still shows big surpluses in dyes, sulfur, ocean-going ships, glass (1748 vs 10) and concrete — the dead-end goods now have buyers but aren't balanced to them. Invasion times with more key nodes were deliberately NOT tuned (user: tech will change them); ai/ground tests pass as is.
 - Tests: `tests/spaceports.test.ts` (new, both modes); updated simpleBuildings (20 buildings). Full sweep clean.
+
+# Project Context — Combat/Navy track handoff #2 (survey/construction/cargo, knowledge-based comms, HUD pass)
+
+(Updated by /newchat, 2026-09-27. `Context.md` == `CONTEXT.md` on this case-insensitive FS — edit only this last section, never overwrite the file. Standing rules and architecture live in `CLAUDE.md`, which already documents everything below.)
+
+## Objective
+Web grand-strategy game (Vite + React + TS + r3f + zustand). User owns combat/tech/ships; a collaborator (mr1noobfatfish) owns economy/politics. This session grew Starbases into a Stellaris-style expansion loop and moved comms to a "live view, delayed knowledge" model, plus many UX fixes.
+
+## Current State
+- Last full sweep I ran (`tsc -b`, all 46+ `tests/*.test.ts`, `npm run build`) was green BEFORE the merge below. The user then merged `origin/main` (collaborator's spaceports / mothballing work) via GitHub Desktop and resolved/committed it; git status is now clean and up to date with origin. **I resolved the CLAUDE.md and Context.md conflicts (collaborator's economy bullet + my tooltip bullet; Context sections concatenated) but did NOT run the sweep on the merged tree** — my sweep call was interrupted. Run it first.
+- Built and live-verified this session (details in CLAUDE.md): Science/Construction/Cargo ships; per-body survey; explore/survey as independent orders; explored-only star info and borders (`known` vs `discovered` survey layers); Starbases built from a Construction Ship's hold; AI `Expander` agent; shader-bubble borders + nation labels; right-click star menu (Explore/Move to/Survey/Build) with `arrivalCommand`; Refill at nearest station; live view for all ships (no predicted marker, no delayed snapshot); Enter Combat only when every ship present is known (`shipsIntel`), button disabled with reason; fleets are player-formed and civilians can't join; selecting a ship never changes the view; Map Modes moved to the bottom-right with a "Border & nation names" toggle and border hover tooltip; bottom bar fixed 54px, no overlap; text selection off; Simple economy mode is the menu default; double-tooltip fix (lift every titled ancestor); Warp When Ready re-plans in-flight orders and needs Use Warp Drive.
+- Unused leftovers: `visualShipSnapshot` / `visualShipRenderPosition` in `scene/commsVisual.ts` (only tests call them) — offered for deletion, user hasn't answered.
+
+## Decisions
+- Signal time delays orders, ship commands (explore/survey/load/transfer/build), discovery reports and news of ships/fights; it never delays what panels/markers/route lines show.
+- AI nations expand for real (research → science ship → survey → haul → Starbase) using the same commands, no comms delay, reading `discovered` truth. Research income exists only in Simple mode, so in Complex an AI explores/surveys but never builds.
+- Construction Ship is not consumed; explore needs a Science Ship specifically.
+- Starbases: territory claim only, destroyed by combat only.
+
+## Constraints
+- Never commit unless asked. Full sweep after any change (`tsc -b`, every test via `npx tsx`, `npm run build`); a helper script is at `/private/tmp/claude-501/-Users-pikaj-Documents-Terra-Relicta-TRCONQUEST/b48e001a-06d4-4d8b-9f58-0e61cf07e7b1/scratchpad/sweep.sh` (may be gone in a new session — recreate).
+- Don't read Context.md whole; macOS `sed -i ''`, no `timeout`; python heredocs for multi-line edits.
+- Browser verification: HMR after editing often reloads to the nation picker (redo setup: Simple mode default, click Mars at ~(180,320) in the 800x600 frame); dynamic `import()` of stores gives a different instance than the app; screenshots lag; drive the real UI or dispatch DOM events.
+- Never call a hook after an early return (tests scan for it).
+
+## Important Details
+- Plan file for this feature set: `/Users/pikaj/.claude/plans/snuggly-singing-elephant.md`.
+- Debug Console (backtick) spawns any ship class (incl. the new ones) and loads scenarios (Mars/Earth bodies only); Free/Grant Research cheats exist, no resource cheat.
+- Reports at light-speed comms are long (Alpha Centauri ≈ 4.4 years each way); Warp Comms still isn't auto-granted.
+
+## Open Questions
+- Delete the now-unused `visualShipSnapshot`/`visualShipRenderPosition` and their tests?
+- User reported "loading a scenario instantly kicks me out of combat"; I could not reproduce (only happens if the scenario is at a different body than the open arena). Ask for the exact steps if it recurs.
+- Not live-verified (test-covered only): full survey→Starbase build through the UI, the Refill button, nested-ship camera pan, the Build menu item states, mid-flight Warp When Ready.
+- Carried over: gravity-well escape time at stars (~46-55 d), Warp Comms auto-unlock, terrain visuals / line of sight.
+
+## Next Steps
+1. Run the full sweep on the merged tree; fix anything the merge broke.
+2. Ask the user for the next request (likely playtesting the expansion loop, more UI polish, or the open balance questions).
+
+## User Preferences
+- Short mid-task corrections are authoritative; wants plain-language UI text.
+- Ask (AskUserQuestion) before big commitments, plan mode for big features; no invented mechanics; honest reporting incl. "not verified".
+- Wants live browser verification for anything UI-observable, tests for each mechanic; wants AI nations to obey the same rules as the player.

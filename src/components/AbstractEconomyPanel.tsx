@@ -247,7 +247,7 @@ function MacroTab({ countryId, s, r }: TabProps) {
           <button type="button" className="laws-enact-btn" onClick={() => payDebt(countryId, s.reserves + s.treasury * 0.25)}>Pay Debt</button>
         </span>
       </div>
-      <label className="econ-control-row" style={{ cursor: 'pointer' }} title="Emergency wartime revenue (+25%) at a standing stability cost.">
+      <label className="econ-control-row" style={{ cursor: 'var(--cursor-pointer)' }} title="Emergency wartime revenue (+25%) at a standing stability cost.">
         <span className="inspect-label">War taxes {s.warTaxes ? '(active)' : ''}</span>
         <input type="checkbox" checked={s.warTaxes} onChange={(e) => setWarTaxes(countryId, e.target.checked)} />
       </label>

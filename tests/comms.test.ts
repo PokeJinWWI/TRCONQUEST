@@ -14,6 +14,9 @@ import {
   visualShipSnapshot,
   visualShipRenderPosition,
   queueMoveOrder,
+  queueFleetMoveOrder,
+  ownerCommsDelayToShip,
+  plannerFor,
   applyMoveDestination,
   playerShipRenderPosition,
   engagementIntel,
@@ -349,6 +352,41 @@ console.log('\n=== 10. Live view, and news of a fight arriving late ===')
   useTechStore.setState({ byCountry: { 'imperial-state-of-mars': { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set([HYPER_COMMS_TECH_ID]) } } })
   check('with Hyper Comms the news is instant', engagementIntel(engagement, ships, 100).allKnown)
   useTechStore.setState({ byCountry: {} })
+  usePlayerStore.setState({ selectedCountryId: null })
+}
+
+
+console.log('\n=== AI empires obey the same signal delay ===')
+{
+  // Orion's capital is at Alpha Centauri; a ship of theirs resting at Sol is ~4.4 ly from it.
+  const orion = 'orion-republic'
+  const mars = PLAYER_NATION
+  usePlayerStore.setState({ selectedCountryId: mars })
+  useGameTimeStore.setState({ simDays: 50 })
+  const farAi = makeShip('ai-far', orion, { location: { kind: 'star', starId: 'sol', offset: [0, 0, 0] } })
+  const homeAi = makeShip('ai-home', orion, { location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] } })
+  useShipStore.setState({ ships: [farAi, homeAi] })
+
+  useTechStore.setState({ byCountry: {} })
+  const light = ownerCommsDelayToShip(farAi, 50)
+  check('an AI ship far from its capital has a real delay at light speed', light > 365, `${light.toFixed(0)}d`)
+  check('...measured from ITS capital, not the player\'s (a ship at home has none to speak of)', ownerCommsDelayToShip(homeAi, 50) < 1)
+  check('the player\'s own ship gets the same answer as before', Math.abs(ownerCommsDelayToShip(makeShip('mine', 'player'), 50) - playerCommsDelayToShip(makeShip('mine', 'player'), 50)) < 1e-9)
+  check('the AI\'s move planner is the unchecked one, the player\'s the gated one', plannerFor(farAi) !== plannerFor(makeShip('mine', 'player')))
+
+  queueFleetMoveOrder([farAi], { kind: 'star', starId: 'barnards-star' })
+  const sent = useShipStore.getState().ships.find((s) => s.id === 'ai-far')!
+  check('an AI order to it is queued as a signal, not applied at once', !!sent.pendingMoveOrder && !sent.order)
+  check('...arriving after the delay', !!sent.pendingMoveOrder && Math.abs(sent.pendingMoveOrder.arrivesSimDays - (50 + light)) < 1e-6)
+
+  useTechStore.setState({ byCountry: { [orion]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set([WARP_COMMS_TECH_ID]) } } })
+  const warp = ownerCommsDelayToShip(farAi, 50)
+  check('with Warp Comms the AI\'s delay drops to days', warp < 10 && warp > 0, `${warp.toFixed(1)}d`)
+  useTechStore.setState({ byCountry: { [orion]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set([HYPER_COMMS_TECH_ID]) } } })
+  check('with Hyper Comms the AI\'s orders are instant', commsInstantContact(ownerCommsDelayToShip(farAi, 50)))
+  check('a nation with no capital (a rogue faction) has no delay to wait on', ownerCommsDelayToShip(makeShip('rogue', 'pirates', { location: { kind: 'star', starId: 'sol', offset: [0, 0, 0] } }), 50) === 0)
+  useTechStore.setState({ byCountry: {} })
+  useShipStore.setState({ ships: [] })
   usePlayerStore.setState({ selectedCountryId: null })
 }
 

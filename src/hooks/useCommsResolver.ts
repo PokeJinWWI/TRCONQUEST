@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
-import { applyFleetMove } from '../scene/commsVisual'
+import { applyFleetMove, plannerFor } from '../scene/commsVisual'
 import { resolveQueueAdds } from '../scene/orderQueue'
 import { resolvePendingCommands } from '../scene/shipCommands'
 
@@ -17,39 +17,40 @@ import { resolvePendingCommands } from '../scene/shipCommands'
 // pendingHyperdriveJump's firing condition, so the comms deadline is just
 // one more clause on that existing check rather than a second place racing
 // to fire the same field.
+// One pass at `simDays`, exported so a headless run (tests) can drive it without React.
+export function resolveCommsSignals(simDays: number): void {
+  const { ships, setPendingMoveOrder, setStance } = useShipStore.getState()
+
+  // Due move orders fire per fleet, so a fleet that got its order
+  // together (queueFleetMoveOrder) still moves together.
+  const dueByFleet = new Map<string, ShipInstance[]>()
+  for (const ship of ships) {
+    if (ship.pendingMoveOrder && simDays >= ship.pendingMoveOrder.arrivesSimDays) {
+      const key = `${ship.fleetId}|${JSON.stringify(ship.pendingMoveOrder.destination)}`
+      dueByFleet.set(key, [...(dueByFleet.get(key) ?? []), ship])
+    }
+  }
+  for (const group of dueByFleet.values()) {
+    const destination = group[0].pendingMoveOrder!.destination
+    for (const ship of group) setPendingMoveOrder(ship.id, null)
+    applyFleetMove(group, destination, simDays, plannerFor(group[0]))
+  }
+
+  for (const ship of ships) {
+    if (ship.pendingBombard && simDays >= ship.pendingBombard.arrivesSimDays) useShipStore.getState().setBombardStance(ship.id, ship.pendingBombard.stance)
+    if (ship.pendingStance && simDays >= ship.pendingStance.arrivesSimDays) {
+      setStance(ship.id, ship.pendingStance.stance)
+    }
+  }
+
+  // Shift-orders whose signal has arrived join their ship's queue.
+  resolveQueueAdds(simDays)
+  resolvePendingCommands(simDays)
+}
+
 export function useCommsResolver() {
   useEffect(() => {
-    const resolve = (simDays: number) => {
-      const { ships, setPendingMoveOrder, setStance } = useShipStore.getState()
-
-      // Due move orders fire per fleet, so a fleet that got its order
-      // together (queueFleetMoveOrder) still moves together.
-      const dueByFleet = new Map<string, ShipInstance[]>()
-      for (const ship of ships) {
-        if (ship.pendingMoveOrder && simDays >= ship.pendingMoveOrder.arrivesSimDays) {
-          const key = `${ship.fleetId}|${JSON.stringify(ship.pendingMoveOrder.destination)}`
-          dueByFleet.set(key, [...(dueByFleet.get(key) ?? []), ship])
-        }
-      }
-      for (const group of dueByFleet.values()) {
-        const destination = group[0].pendingMoveOrder!.destination
-        for (const ship of group) setPendingMoveOrder(ship.id, null)
-        applyFleetMove(group, destination, simDays)
-      }
-
-      for (const ship of ships) {
-        if (ship.pendingBombard && simDays >= ship.pendingBombard.arrivesSimDays) useShipStore.getState().setBombardStance(ship.id, ship.pendingBombard.stance)
-        if (ship.pendingStance && simDays >= ship.pendingStance.arrivesSimDays) {
-          setStance(ship.id, ship.pendingStance.stance)
-        }
-      }
-
-      // Shift-orders whose signal has arrived join their ship's queue.
-      resolveQueueAdds(simDays)
-      resolvePendingCommands(simDays)
-    }
-
-    resolve(useGameTimeStore.getState().simDays)
-    return useGameTimeStore.subscribe((state) => resolve(state.simDays))
+    resolveCommsSignals(useGameTimeStore.getState().simDays)
+    return useGameTimeStore.subscribe((state) => resolveCommsSignals(state.simDays))
   }, [])
 }

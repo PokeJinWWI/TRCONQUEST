@@ -87,6 +87,8 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
       <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
         <div
           className={`ship-marker combat-ship-marker${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
+          // Shift+drag box selection picks the player's own markers by this (components/BoxSelectLayer).
+          data-select-ship={relation === 'own' && ship ? ship.id : undefined}
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
           onClick={(e) => (isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(ship.id) : selectShip(ship.id))}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { isCivilianClass } from '../scene/fleetRules'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
@@ -44,7 +45,12 @@ interface OutlinerEntry {
   starId?: string
   /** A dim second label (a colony's system, when the list spans several). */
   detail?: string
+  /** Fleet entries only — a civilian hull (science, construction, cargo…),
+   * listed under the Fleets section's Civilian tab. */
+  civilian?: boolean
 }
+
+type FleetTab = 'military' | 'civilian'
 
 const FILTERS: { kind: FilterKind; label: string }[] = [
   { kind: 'neighborhood', label: 'Neighborhoods' },
@@ -120,7 +126,9 @@ function useFleetEntries(): OutlinerEntry[] {
     return Array.from(byFleet.entries()).map(([fleetId, members]) => {
       const fleet = fleets.find((f) => f.id === fleetId)
       const name = members.length > 1 ? `${fleet?.name ?? 'Fleet'} (${members.length})` : members[0].name
-      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id }
+      // Civilians never share a fleet with warships (fleetRules), so the lead
+      // ship says which tab the whole row belongs on.
+      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id, civilian: isCivilianClass(members[0].classId) }
     })
   }, [ships, fleets, playerCountryId])
 }
@@ -326,6 +334,9 @@ function OutlinerSection({
   selectedKey,
   selectedKeys,
   onEntryClick,
+  tabs,
+  activeTab,
+  onTab,
 }: {
   title: string
   entries: OutlinerEntry[]
@@ -339,6 +350,11 @@ function OutlinerSection({
   /** Omitted for sections with nothing real to select yet (Colonies,
    * Starbases) — entries stay inert rather than clickable-but-no-op. */
   onEntryClick?: (entry: OutlinerEntry, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void
+  // Sub-tabs under the title (Fleets: Military / Civilian). `entries` is
+  // already the active tab's list.
+  tabs?: { id: string; label: string; count: number }[]
+  activeTab?: string
+  onTab?: (id: string) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -353,6 +369,23 @@ function OutlinerSection({
         <span className={`outliner-section-caret${collapsed ? ' collapsed' : ''}`}>▾</span>
         {title}
       </button>
+      {!collapsed && tabs && (
+        <div className="outliner-subtabs" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={t.id === activeTab}
+              className={`outliner-subtab${t.id === activeTab ? ' active' : ''}`}
+              onClick={() => onTab?.(t.id)}
+            >
+              {t.label}
+              {t.count > 0 ? ` (${t.count})` : ''}
+            </button>
+          ))}
+        </div>
+      )}
       {!collapsed &&
         (entries.length === 0 ? (
           <div className="outliner-empty">{emptyText}</div>
@@ -381,6 +414,7 @@ function OutlinerSection({
 // see scene/starbaseLogic.ts for what one is).
 export function Outliner() {
   const [collapsed, setCollapsed] = useState(false)
+  const [fleetTab, setFleetTab] = useState<FleetTab>('military')
   const [search, setSearch] = useState('')
   const [visibleKinds, setVisibleKinds] = useState<Set<FilterKind>>(
     () => new Set(FILTERS.map((f) => f.kind)),
@@ -475,6 +509,8 @@ export function Outliner() {
     () => fleetEntries.filter((entry) => query === '' || entry.name.toLowerCase().includes(query)),
     [fleetEntries, query],
   )
+  const militaryFleets = filteredFleets.filter((e) => !e.civilian)
+  const civilianShips = filteredFleets.filter((e) => e.civilian)
 
   return (
     <div className={`outliner${collapsed ? ' collapsed' : ''}`}>
@@ -530,8 +566,14 @@ export function Outliner() {
         />
         <OutlinerSection
           title="Fleets"
-          entries={filteredFleets}
-          emptyText="No fleets deployed"
+          entries={fleetTab === 'military' ? militaryFleets : civilianShips}
+          emptyText={fleetTab === 'military' ? 'No fleets deployed' : 'No civilian ships'}
+          tabs={[
+            { id: 'military', label: 'Military', count: militaryFleets.length },
+            { id: 'civilian', label: 'Civilian', count: civilianShips.length },
+          ]}
+          activeTab={fleetTab}
+          onTab={(id) => setFleetTab(id as FleetTab)}
           selectedKey={selectedFleetId}
           selectedKeys={selectedFleetIds}
           onEntryClick={handleFleetClick}

@@ -2,8 +2,9 @@
 // building. `queueShipCommand` is what the player's UI calls: with instant
 // comms contact the command applies at once, otherwise it travels as a signal
 // and useCommsResolver applies it when it arrives. `applyShipCommand` is the
-// one place a command takes effect, shared with the strategic AI (which has no
-// comms delay and calls it directly).
+// one place a command takes effect, when it reaches the ship. The strategic AI
+// sends its commands the same way (queueShipCommand): a nation's orders wait on
+// its own comms tier, whoever gives them.
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipCommand } from '../state/shipStore'
 import { useSurveyStore } from '../state/surveyStore'
@@ -14,7 +15,7 @@ import { useStarbaseStore } from '../state/starbaseStore'
 import { useTechStore } from '../state/techStore'
 import { getCountry } from '../data/countryData'
 import { commsTierFor } from '../data/commsData'
-import { commsInstantContact, orderSelectedFleets, playerCommsDelayToShip, shipCommsDelayDays } from './commsVisual'
+import { commsInstantContact, orderSelectedFleets, ownerCommsDelayToShip, shipCommsDelayDays } from './commsVisual'
 import { isPlayerOwned } from '../state/shipRelations'
 import { cargoPlus, cargoSpace, clampToSpace, loadingBody, transferCheck, cargoMinus } from './cargoLogic'
 import { spendCost } from './shipyardLogic'
@@ -49,6 +50,8 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
       if (resolveShipClass(ship.classId)?.role !== 'science') return
       const star = restingStarId(ship)
       if (!star) return
+      // Already at it (a repeat order that crossed the first in transit).
+      if (ship.surveyJob?.starId === star) return
       useShipStore.getState().setSurveyJob(shipId, { starId: star, startedSimDays: simDays, done: 0 })
       return
     }
@@ -89,7 +92,7 @@ export function queueShipCommand(shipId: string, command: ShipCommand): void {
   const ship = store.ships.find((s) => s.id === shipId)
   if (!ship) return
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ship, simDays)
+  const delay = ownerCommsDelayToShip(ship, simDays)
   if (commsInstantContact(delay)) {
     applyShipCommand(shipId, command, simDays)
     return

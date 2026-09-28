@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 32 32">
+  <!-- Reticle with a red slash: this can't be done right now. Hotspot is the centre (11,11 at 22px). -->
+  <g fill="none" stroke="#020a12" stroke-width="4.2" stroke-linecap="round">
+    <circle cx="16" cy="16" r="9"/>
+    <path d="M9.6 22.4 L22.4 9.6"/>
+  </g>
+  <g fill="none" stroke="#ff5a5a" stroke-width="1.9" stroke-linecap="round">
+    <circle cx="16" cy="16" r="9"/>
+    <path d="M9.6 22.4 L22.4 9.6"/>
+  </g>
+</svg>

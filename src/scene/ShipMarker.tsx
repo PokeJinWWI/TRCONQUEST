@@ -54,7 +54,8 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
   const selectShip = useShipStore((s) => s.selectShip)
   const fleets = useFleetStore((s) => s.fleets)
   const lead = ships[0]
-  const color = RELATION_COLORS[useRelationTo(lead.ownerId)]
+  const relation = useRelationTo(lead.ownerId)
+  const color = RELATION_COLORS[relation]
   // Selected if ANY member is in the selection, not just the lead — the
   // player can inspect a specific hull within a fleet (see ShipPanel's
   // roster), or have several fleets selected at once, without losing the
@@ -85,6 +86,8 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
       <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
         <div
           className={`ship-marker${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
+          // Shift+drag box selection picks the player's own markers by this (components/BoxSelectLayer).
+          data-select-ship={relation === 'own' ? lead.id : undefined}
           style={
             stackIndex > 0
               ? { transform: `translate(${BASE_OFFSET_PX.x}px, ${BASE_OFFSET_PX.y - stackIndex * STACK_STEP_PX}px)` }

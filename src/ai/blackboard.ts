@@ -123,8 +123,15 @@ function isArmedShip(ship: ShipInstance): boolean {
   return (resolveShipClass(ship.classId)?.combat.weapons.length ?? 0) > 0
 }
 
+// An order or command the empire has already sent that hasn't reached the ship
+// yet (FTL comms delay): the ship isn't free to be tasked again, or the resend
+// would restart the signal's clock and it would never arrive.
+export function hasOrderInFlight(ship: ShipInstance): boolean {
+  return !!ship.pendingMoveOrder || (ship.pendingCommands?.length ?? 0) > 0 || (ship.pendingQueueAdds?.length ?? 0) > 0
+}
+
 export function isIdle(ship: ShipInstance, snap: AiSnapshot): boolean {
-  return !ship.order && !ship.pendingHyperdriveJump && !snap.engagedShipIds.has(ship.id) && ship.location.kind === 'orbiting'
+  return !ship.order && !ship.pendingHyperdriveJump && !hasOrderInFlight(ship) && !snap.engagedShipIds.has(ship.id) && ship.location.kind === 'orbiting'
 }
 
 export function buildBlackboard(countryId: string, snap: AiSnapshot): Blackboard {

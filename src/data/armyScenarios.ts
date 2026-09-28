@@ -20,10 +20,13 @@
 //            the reserve, out of range, never fights), but ONE order wins:
 //            bring the reserve up to the front line before the enemy arrives.
 //   hard   — leaving it alone loses, and so does that one order. Winning takes
-//            a plan: fall back onto the reserve, link up, then counter-attack
-//            together (advance on the enemy, halting to fire whenever one is
-//            in range). It is a real win — the tests run that plan — but it
-//            takes real play, unit by unit.
+//            a plan: pull the front army back while the reserve marches
+//            forward to meet it, link up, then counter-attack together
+//            (advance on the enemy, halting to fire whenever one is in range).
+//            It is a real win — the tests run that plan — but it takes real
+//            play, unit by unit, and it must start at once: once the enemy is
+//            on the front army in a terrain battle it cannot break away (the
+//            battle's patch is 7 cells across, and its edge is a wall).
 //
 // Every battle is on Earth: continental ground with plains, forest, desert,
 // tundra and mountains, and nobody's territory in either a normal game or the
@@ -116,10 +119,10 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     id: 'army-hard-fall-back-to-the-woods',
     name: 'Fall Back to the Woods',
     difficulty: 'hard',
-    battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 6, near: [19, -4] },
+    battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 7, near: [19, -4] },
     description:
-      'An assault army on the forest line in the Congo basin, its twin nine cells back in the woods, against two assault armies. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is falling back onto the reserve, linking up, and counter-attacking together.',
-    player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 9, rearTerrain: 'forest' }],
+      'An assault army on the forest line in the Congo basin, its twin eight cells back in the woods, against two assault armies. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is acting at once: pull the front army back while the reserve comes forward to meet it, link up, and counter-attack together. Wait until the enemy is on top of the front army and it cannot get away.',
+    player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 8, rearTerrain: 'forest' }],
     enemy: [{ kind: 'assault' }, { kind: 'assault' }],
   },
   {

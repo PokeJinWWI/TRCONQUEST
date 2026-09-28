@@ -38,7 +38,9 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     researchedOf: (id) => useTechStore.getState().stateFor(id).researched,
     buildQueueLengthOf: (id) => useShipyardStore.getState().ordersFor(id).length,
     queuedClassesOf: (id) => useShipyardStore.getState().ordersFor(id).map((o) => o.classId),
-    discoveredOf: (id) => useSurveyStore.getState().discovered[id],
+    // What has reached the empire's capital, not what its ships have found:
+    // it acts on reports, which take signal time (a nation's `known` layer).
+    discoveredOf: (id) => useSurveyStore.getState().known[id],
     researchPointsOf: (id) => useTechStore.getState().stateFor(id).researchPoints,
     valueOf: liveBodyValue,
     orbitDenied: batteryDenial,

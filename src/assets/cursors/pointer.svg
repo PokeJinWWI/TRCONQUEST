@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 32 32">
+  <!-- Command-deck pointer: a slim angular arrowhead, cyan on a dark keyline. Hotspot is the tip (2,2 at 22px). -->
+  <path d="M3 3 L3 24 L9 18.6 L13.6 28.5 L17.4 26.8 L12.9 17 L21 17 Z" fill="#6fe3ff" stroke="#020a12" stroke-width="2" stroke-linejoin="round" paint-order="stroke"/>
+  <path d="M3 3 L21 17 L12.9 17 L9 18.6 Z" fill="#c9f6ff" opacity="0.55"/>
+  <path d="M3 3 L3 24 L9 18.6 L13.6 28.5 L17.4 26.8 L12.9 17 L21 17 Z" fill="none" stroke="#6fe3ff" stroke-width="0.6" stroke-linejoin="round"/>
+</svg>

@@ -29,6 +29,7 @@ import {
   KM_PER_SYSTEM_UNIT,
   LY_IN_KM,
   planMove,
+  planMoveUnchecked,
   type MoveResult,
   type ShipRenderInfo,
 } from './shipPhysics'
@@ -171,6 +172,27 @@ export function playerCommsDelayToShip(ship: ShipInstance, simDays: number): num
   const researched = useTechStore.getState().stateFor(countryId).researched
   const tier = commsTierFor(researched)
   return shipCommsDelayDays(ship, country.capitalStarId, country.capitalBodyName, simDays, tier)
+}
+
+// Signal time for an ORDER to reach a ship: from the capital of whoever owns
+// it, at that nation's own comms tech. The player's orders and the strategic
+// AI's go through the same rule — a nation without Hyper Comms waits on light
+// (or warp) speed to command a distant fleet, AI or not. A player ship in the
+// arena the player is watching is in direct contact (0). A nation with no
+// capital (a sandbox faction, the rogue powers) has no signal to wait on.
+export function ownerCommsDelayToShip(ship: ShipInstance, simDays: number): number {
+  if (isPlayerOwned(ship)) return playerCommsDelayToShip(ship, simDays)
+  const country = getCountry(ship.ownerId)
+  if (!country) return 0
+  const tier = commsTierFor(useTechStore.getState().stateFor(ship.ownerId).researched)
+  return shipCommsDelayDays(ship, country.capitalStarId, country.capitalBodyName, simDays, tier)
+}
+
+// The move planner for a ship's own orders: the player-gated one for the
+// player's ships, the unchecked one for every other nation's (the strategic AI
+// only ever commands its own).
+export function plannerFor(ship: ShipInstance): typeof planMove {
+  return isPlayerOwned(ship) ? planMove : planMoveUnchecked
 }
 
 // delayDays <= 0 (only really possible at the 'hyper' tier, or a location
@@ -405,9 +427,9 @@ export function orderSelectedFleets(destination: MoveDestination, queue: boolean
 export function queueFleetMoveOrder(ships: ShipInstance[], destination: MoveDestination): void {
   if (ships.length === 0) return
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ships[0], simDays)
+  const delay = ownerCommsDelayToShip(ships[0], simDays)
   if (commsInstantContact(delay)) {
-    applyFleetMove(ships, destination, simDays)
+    applyFleetMove(ships, destination, simDays, plannerFor(ships[0]))
     return
   }
   for (const ship of ships) useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays })
@@ -429,7 +451,7 @@ export function queueFleetMoveAppend(ships: ShipInstance[], destination: MoveDes
   if (ships.length === 0) return
   const store = useShipStore.getState()
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ships[0], simDays)
+  const delay = ownerCommsDelayToShip(ships[0], simDays)
   for (const ship of ships) {
     if (commsInstantContact(delay)) store.setOrderQueue(ship.id, [...(ship.orderQueue ?? []), destination])
     else store.setPendingQueueAdds(ship.id, [...(ship.pendingQueueAdds ?? []), { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays }])
@@ -438,9 +460,9 @@ export function queueFleetMoveAppend(ships: ShipInstance[], destination: MoveDes
 
 export function queueMoveOrder(ship: ShipInstance, destination: MoveDestination): void {
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ship, simDays)
+  const delay = ownerCommsDelayToShip(ship, simDays)
   if (commsInstantContact(delay)) {
-    applyMoveDestination(ship, destination, simDays)
+    applyMoveDestination(ship, destination, simDays, plannerFor(ship))
     return
   }
   useShipStore.getState().setPendingMoveOrder(ship.id, { destination, arrivesSimDays: simDays + delay, sentSimDays: simDays })
@@ -449,7 +471,7 @@ export function queueMoveOrder(ship: ShipInstance, destination: MoveDestination)
 // A bombardment stance change, comms-delayed the same way (scene/bombardment.ts).
 export function queueBombard(ship: ShipInstance, stance: BombardStance): void {
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ship, simDays)
+  const delay = ownerCommsDelayToShip(ship, simDays)
   if (commsInstantContact(delay)) {
     useShipStore.getState().setBombardStance(ship.id, stance)
     return
@@ -461,7 +483,7 @@ export function queueBombard(ship: ShipInstance, stance: BombardStance): void {
 // directly rather than needing planMove-style re-resolution at arrival.
 export function queueStance(ship: ShipInstance, stance: ShipInstance['stance']): void {
   const simDays = useGameTimeStore.getState().simDays
-  const delay = playerCommsDelayToShip(ship, simDays)
+  const delay = ownerCommsDelayToShip(ship, simDays)
   if (commsInstantContact(delay)) {
     useShipStore.getState().setStance(ship.id, stance)
     return

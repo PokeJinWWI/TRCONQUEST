@@ -32,7 +32,7 @@ import { starbaseOwnersOf } from '../scene/starbaseLogic'
 import { isExplored, isFullySurveyed, restingStarId, unsurveyedBodies } from '../scene/surveyLogic'
 import { systemClaim } from '../scene/territory'
 import type { ResourceCost } from '../data/shipyardData'
-import type { AiSnapshot, Blackboard } from './blackboard'
+import { hasOrderInFlight, type AiSnapshot, type Blackboard } from './blackboard'
 import { affordable } from './shipwright'
 import type { AgentOutput, AiMemory, Intent } from './types'
 
@@ -40,7 +40,7 @@ const roleOf = (s: { classId: string }) => resolveShipClass(s.classId)?.role
 
 // Free to be tasked: not under way, not waiting on an order, not in a fight.
 function resting(s: ShipInstance, snap: AiSnapshot): boolean {
-  return !s.order && !s.pendingHyperdriveJump && !s.pendingMoveOrder && !snap.engagedShipIds.has(s.id)
+  return !s.order && !s.pendingHyperdriveJump && !hasOrderInFlight(s) && !snap.engagedShipIds.has(s.id)
 }
 
 function distanceLy(a: StarData, b: StarData): number {

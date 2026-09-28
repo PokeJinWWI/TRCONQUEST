@@ -31,6 +31,7 @@ import { shipwright } from '../src/ai/shipwright'
 import { expander } from '../src/ai/expander'
 import { useSurveyStore } from '../src/state/surveyStore'
 import { resolveSurvey } from '../src/hooks/useSurveyResolver'
+import { resolveCommsSignals } from '../src/hooks/useCommsResolver'
 import { systemBodies } from '../src/scene/territory'
 import { admiral } from '../src/ai/admiral'
 import { marshal, wouldTakeBody } from '../src/ai/marshal'
@@ -218,9 +219,11 @@ console.log('\n=== 4b. The Expander ===')
   check('with no science ship it queues one', plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'science-ship'))
   check('...but not a Construction Ship before Orbital Construction', !plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'construction-ship'))
   check('with no research points it researches nothing', !has(plan(MARS).intents, 'research-tech'))
-  setTech(MARS, [], 40)
-  check('with the points it researches the first step on the road', plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'classical-mechanics'))
-  setTech(MARS, ['classical-mechanics'], 40)
+  setTech(MARS, [], 90)
+  check('with the points it researches Warp Comms first (its orders and reports cross the same signal delay the player\'s do)', plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'warp-comms'))
+  setTech(MARS, ['warp-comms'], 40)
+  check('...then the first step on the road to Orbital Construction', plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'classical-mechanics'))
+  setTech(MARS, ['warp-comms', 'classical-mechanics'], 40)
   check('...and will not skip ahead to a step it cannot afford', !plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'orbital-construction'))
 
   spawnExtra(MARS, 'science-ship', 1)
@@ -423,6 +426,7 @@ console.log('\n=== 7. Headless campaign: AI empires on their own ===')
   for (let day = 1; day <= (Number(process.env.AI_STOP) || 1100); day++) {
     if (day % 30 === 0) for (const c of COUNTRIES) applyStrategicIncome(c.id, 1)
     runStrategicAI(day)
+    resolveCommsSignals(day)
     resolveShipyards(day)
     marsArmiesOnVenus = Math.max(marsArmiesOnVenus, useArmyStore.getState().armies.filter((a) => a.ownerId === MARS && a.location.kind === 'body' && a.location.bodyName === 'Venus').length)
     for (const s of useShipStore.getState().ships) {
@@ -498,6 +502,7 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
         if (grantResearch) for (const id of aiIds) useTechStore.getState().grantResearch(id, 'physics', 25)
       }
       runStrategicAI(day)
+      resolveCommsSignals(day)
       resolveShipyards(day)
       settle(day)
       resolveSurvey(day)
@@ -509,7 +514,8 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
     }
     const sv = useSurveyStore.getState().discovered
     for (const id of aiIds) surveyedBodies += sv[id]?.surveyed.size ?? 0
-    return { firstStarbaseDay, surveyedBodies, starbases: useStarbaseStore.getState().starbases }
+    const commandsInFlight = useShipStore.getState().ships.reduce((n, sh) => n + (sh.pendingCommands?.length ?? 0), 0)
+    return { firstStarbaseDay, surveyedBodies, starbases: useStarbaseStore.getState().starbases, commandsInFlight }
   }
 
   const simple = runExpansion('simple', true, 3000)
@@ -519,9 +525,13 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
   check('...never more than the cap per empire', ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic'].every((id) => simple.starbases.filter((b) => b.ownerId === id).length <= AI_MAX_STARBASES))
   check('...each in a system nobody else owned', simple.starbases.every((b) => !systemBodies(b.starId).some((body) => useTerritoryStore.getState().bodyOwner[body])))
 
+  // No research income, so no Warp Comms either: every order to a ship in
+  // another system crosses light-years at light speed, like the player's.
   const complex = runExpansion('complex', false, 1200)
   check('with no research income (Complex mode) nothing is built and nothing breaks', complex.starbases.length === 0)
-  check('...but its science ships still explore and survey', complex.surveyedBodies > 0, `${complex.surveyedBodies} bodies`)
+  check('...its science ships fly out, but their orders crawl at light speed (commands still in flight)', complex.commandsInFlight > 0, `${complex.commandsInFlight} in flight, ${complex.surveyedBodies} bodies surveyed`)
+  const complexLong = runExpansion('complex-long', false, 3600)
+  check('...and given years, they arrive and its science ships explore and survey', complexLong.surveyedBodies > 0, `${complexLong.surveyedBodies} bodies`)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

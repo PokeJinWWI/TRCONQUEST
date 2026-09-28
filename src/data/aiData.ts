@@ -78,6 +78,10 @@ export const AI_CARGO_SHIPS = 1
 // many is enough).
 export const AI_MAX_STARBASES = 3
 // What it researches, in order, on the way to being able to build a Starbase.
+// Warp Comms comes first: its orders and reports cross the same signal delay
+// the player's do (a light-year is a year at light speed), so without it an
+// empire can't usefully command a ship beyond its own system. (Warp Theory is
+// a starting tech; it's listed because Warp Comms needs it.)
 // Research income only exists in Simple economy mode (nothing feeds it in
-// Complex), so in Complex an AI stays where it is.
-export const AI_RESEARCH_PATH = ['classical-mechanics', 'orbital-mechanics', 'orbital-construction'] as const
+// Complex), so in Complex an AI stays where it is — and at light-speed comms.
+export const AI_RESEARCH_PATH = ['warp-theory', 'warp-comms', 'classical-mechanics', 'orbital-mechanics', 'orbital-construction'] as const
