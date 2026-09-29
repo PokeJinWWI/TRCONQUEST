@@ -189,6 +189,15 @@ console.log('\n=== 3. The Diplomat ===')
   check('fresh, with Mars still in reach, Venus presses on rather than settle for Phobos', !has(pressing.intents, 'propose-peace'))
   const tired = diplomat(buildBlackboard(VENUS, captureSnapshot(400)), captureSnapshot(400), INITIAL_AI_MEMORY)
   check('...but a year in, it takes what it holds', tired.intents.some((i) => i.kind === 'propose-peace' && i.terms.kind === 'cede' && i.terms.bodies.includes('Phobos')))
+
+  // Won the battles, but Venus's only world is its capital and none of it is held.
+  freshWorld()
+  declareWarOn(MARS, VENUS, 0)
+  useDiplomacyStore.setState((s) => ({ wars: s.wars.map((w) => ({ ...w, battleBalance: 3440 })) }))
+  const early = diplomat(buildBlackboard(MARS, captureSnapshot(10)), captureSnapshot(10), INITIAL_AI_MEMORY)
+  check('winning battles early with Venus still in reach, Mars presses on', !has(early.intents, 'propose-peace'))
+  const later = diplomat(buildBlackboard(MARS, captureSnapshot(400)), captureSnapshot(400), INITIAL_AI_MEMORY)
+  check('...a year in, with no world it can claim, it demands reparations', later.intents.some((i) => i.kind === 'propose-peace' && i.terms.kind === 'reparations' && i.terms.share > 0))
 }
 
 console.log('\n=== 4. The Shipwright ===')
@@ -315,8 +324,12 @@ console.log('\n=== 5. The Admiral ===')
   check('an attack on its own world comes first: it defends Luna', has(defend.intents, 'move-ship') && defend.intents.filter((i) => i.kind === 'move-ship').every((i) => i.kind === 'move-ship' && i.bodyName === 'Luna'))
 
   freshWorld()
+  const settled = admiral(buildBlackboard(MARS, captureSnapshot(1)), captureSnapshot(1), INITIAL_AI_MEMORY)
+  check('at peace, a starting navy (already one fleet) stays put and has nothing to gather', !has(settled.intents, 'move-ship') && !has(settled.intents, 'merge-fleets'))
+  const straggler = useShipStore.getState().ships.find((s) => s.ownerId === MARS && s.classId === 'corvette')!
+  useShipStore.getState().splitFleet([straggler.id])
   const home = admiral(buildBlackboard(MARS, captureSnapshot(1)), captureSnapshot(1), INITIAL_AI_MEMORY)
-  check('at peace, a navy already home stays put (it only gathers itself into one fleet)', !has(home.intents, 'move-ship') && has(home.intents, 'merge-fleets'))
+  check('with a warship split off at home, it stays put and gathers itself into one fleet', !has(home.intents, 'move-ship') && has(home.intents, 'merge-fleets'))
 }
 
 console.log('\n=== 6. The Marshal ===')
@@ -525,13 +538,11 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
   check('...never more than the cap per empire', ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic'].every((id) => simple.starbases.filter((b) => b.ownerId === id).length <= AI_MAX_STARBASES))
   check('...each in a system nobody else owned', simple.starbases.every((b) => !systemBodies(b.starId).some((body) => useTerritoryStore.getState().bodyOwner[body])))
 
-  // No research income, so no Warp Comms either: every order to a ship in
-  // another system crosses light-years at light speed, like the player's.
+  // No research income, but every nation starts with Warp Comms, so orders to
+  // ships in other systems arrive in days, not years.
   const complex = runExpansion('complex', false, 1200)
   check('with no research income (Complex mode) nothing is built and nothing breaks', complex.starbases.length === 0)
-  check('...its science ships fly out, but their orders crawl at light speed (commands still in flight)', complex.commandsInFlight > 0, `${complex.commandsInFlight} in flight, ${complex.surveyedBodies} bodies surveyed`)
-  const complexLong = runExpansion('complex-long', false, 3600)
-  check('...and given years, they arrive and its science ships explore and survey', complexLong.surveyedBodies > 0, `${complexLong.surveyedBodies} bodies`)
+  check('...yet its science ships explore and survey within a few years (orders cross at warp-comms speed)', complex.surveyedBodies > 0, `${complex.surveyedBodies} bodies surveyed`)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

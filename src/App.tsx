@@ -31,6 +31,7 @@ import { useHoldingsResolver } from './hooks/useHoldingsResolver'
 import { useCommsResolver } from './hooks/useCommsResolver'
 import { useBattleTracker } from './hooks/useBattleTracker'
 import { useShipyardResolver } from './hooks/useShipyardResolver'
+import { useColonyResolver } from './hooks/useColonyResolver'
 import { useStrategicResources } from './hooks/useStrategicResources'
 import { useGameSetup } from './hooks/useGameSetup'
 import { useStrategicAI } from './hooks/useStrategicAI'
@@ -111,6 +112,7 @@ function App() {
   // The capital's shipyard, and the placeholder resource supply it builds from
   // — see data/shipyardData.ts.
   useShipyardResolver()
+  useColonyResolver()
   useStrategicResources()
   // Every nation's starting navy and armies, once a nation is picked.
   useGameSetup()

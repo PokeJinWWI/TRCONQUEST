@@ -4,6 +4,7 @@ import { usePlayerStore } from '../state/playerStore'
 import { COUNTRIES } from '../data/countryData'
 import { SIM_DAYS_PER_INCOME_TICK } from '../data/shipyardData'
 import { applyStrategicIncome, seedSimplisticStock, seedStrategicResources } from '../scene/shipyardLogic'
+import { applyInfluenceIncome, seedInfluence } from '../scene/colonies'
 
 // Feeds EVERY nation's strategic stockpile (alloys, exotic matter,
 // hyperium…) with the PLACEHOLDER supply in data/shipyardData.ts: a starting
@@ -18,6 +19,8 @@ export function useStrategicResources() {
         seedStrategicResources(country.id)
         // Simple mode's civilian goods (food, consumer goods, electronics).
         if (usePlayerStore.getState().economyModel === 'abstract') seedSimplisticStock(country.id)
+        // Influence, in both modes (after the seeds above zero every "/mo").
+        seedInfluence(country.id)
       }
     }
     const started = () => {
@@ -41,6 +44,7 @@ export function useStrategicResources() {
       const ticks = Math.floor(elapsed / SIM_DAYS_PER_INCOME_TICK)
       lastTickSimDays += ticks * SIM_DAYS_PER_INCOME_TICK
       if (!started()) return
+      for (const country of COUNTRIES) applyInfluenceIncome(country.id, ticks)
       // In Simple mode the resources come from that economy's buildings
       // (see useEconomyTick), not this flat placeholder.
       if (usePlayerStore.getState().economyModel === 'abstract') return

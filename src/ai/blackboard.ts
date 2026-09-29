@@ -16,6 +16,7 @@ import type { NodeHolderMap } from '../scene/groundLogic'
 import type { Starbase } from '../scene/starbaseLogic'
 import type { NationIntel } from '../scene/surveyLogic'
 import type { TechCategory } from '../data/techData'
+import type { Colony } from '../state/colonyStore'
 
 export interface CountryInfo {
   id: string
@@ -41,6 +42,10 @@ export interface AiSnapshot {
   relations: Record<string, Relation>
   wars: War[]
   starbases: Starbase[]
+  // Colonies (scene/colonies.ts) and whether this game has them (Simple mode).
+  // Optional: absent = none.
+  colonies?: Record<string, Colony>
+  simpleEconomy?: boolean
   resourcesOf: (countryId: string) => Record<ResourceId, number>
   researchedOf: (countryId: string) => Set<string>
   buildQueueLengthOf: (countryId: string) => number
@@ -189,7 +194,8 @@ export function buildBlackboard(countryId: string, snap: AiSnapshot): Blackboard
     wars,
     myWarships,
     myTransports,
-    idleWarships: myWarships.filter((s) => isIdle(s, snap)),
+    // A ship on patrol duty holds a colony's orbit: not the navy's to send.
+    idleWarships: myWarships.filter((s) => isIdle(s, snap) && !s.patrol),
     idleTransports: myTransports.filter((s) => isIdle(s, snap)),
     power: powerOf(countryId),
     powerOf,

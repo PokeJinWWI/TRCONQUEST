@@ -479,6 +479,17 @@ export function queueBombard(ship: ShipInstance, stance: BombardStance): void {
   useShipStore.getState().setPendingBombard(ship.id, { stance, arrivesSimDays: simDays + delay, sentSimDays: simDays })
 }
 
+// Patrol duty on or off, the same signal-delayed way.
+export function queuePatrol(ship: ShipInstance, on: boolean): void {
+  const simDays = useGameTimeStore.getState().simDays
+  const delay = ownerCommsDelayToShip(ship, simDays)
+  if (commsInstantContact(delay)) {
+    useShipStore.getState().setPatrol(ship.id, on)
+    return
+  }
+  useShipStore.getState().setPendingPatrol(ship.id, { on, arrivesSimDays: simDays + delay, sentSimDays: simDays })
+}
+
 // Same idea for a stance change — trivial enough to just carry the value
 // directly rather than needing planMove-style re-resolution at arrival.
 export function queueStance(ship: ShipInstance, stance: ShipInstance['stance']): void {

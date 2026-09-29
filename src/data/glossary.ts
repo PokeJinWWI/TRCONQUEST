@@ -37,6 +37,13 @@ const ENTRIES: { terms: string[]; term: string; text: string }[] = [
   { terms: ['civil'], term: 'Civil spending', text: 'Running the state: administration, police, courts, infrastructure upkeep.' },
   { terms: ['military'], term: 'Military', text: 'The armed forces. In the budget: what it costs to maintain them. In production: the share of industry making war material (alloys).' },
   { terms: ['debt servicing', 'debt service'], term: 'Debt servicing', text: 'Interest paid on the national debt each year — money that buys nothing.' },
+  // --- Colonies ------------------------------------------------------------------
+  { terms: ['influence'], term: 'Influence', text: 'Political reach, spent to found colonies. Every nation earns a little each month (+2), up to 1,000. Bigger and more distant worlds cost more. It cannot be traded or taken in a peace.' },
+  { terms: ['colony', 'colonies'], term: 'Colony', text: 'A world your nation has settled. A Colony Ship founds one on a surveyed, unowned world, using its settlers and some Influence; it starts as a micro-colony.' },
+  { terms: ['micro-colony', 'micro colony'], term: 'Micro-colony', text: 'A new colony: little land to build on and no armies of its own. It becomes a planetary colony after 90 days with a patrol ship holding its orbit, no hostile warship there and no enemy on the ground.' },
+  { terms: ['planetary colony'], term: 'Planetary colony', text: 'A full colony: all its land, and it can raise armies. Every world a nation starts with is one.' },
+  { terms: ['patrol duty', 'patrol'], term: 'Patrol duty', text: "An armed ship on patrol duty holds the orbit of the colony it circles (a moon's orbit is its planet's). That is what turns a micro-colony into a planetary colony." },
+  { terms: ['settlers'], term: 'Settlers', text: "People a Colony Ship carries to a new world. They are taken out of the capital's population when the ship is built." },
   // --- Debt & credit ---------------------------------------------------------------
   { terms: ['national debt', 'debt'], term: 'National debt', text: "Everything the state owes from past borrowing. It costs interest every year; too much of it hurts the credit rating." },
   { terms: ['debt / gdp', 'debt/gdp', 'debt-to-gdp', 'debt to gdp'], term: 'Debt-to-GDP', text: "National debt as a share of one year's GDP — the usual yardstick for how heavy a debt is. Under ~60% is comfortable; well over 100% is dangerous." },

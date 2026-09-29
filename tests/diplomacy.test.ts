@@ -10,7 +10,9 @@ import { useTerritoryStore } from '../src/state/territoryStore'
 import { useArmyStore } from '../src/state/armyStore'
 import { useEconomyStore, worldByName } from '../src/state/economyStore'
 import { seedBodyOwners, isOccupied } from '../src/scene/territory'
-import { battleScore, cessionCost, evaluatePeace, occupiedShare, scoreFor, warExhaustion, warScore } from '../src/scene/warScore'
+import { affordableReparations, battleScore, cessionCost, evaluatePeace, occupiedShare, scoreFor, warExhaustion, warScore } from '../src/scene/warScore'
+import { useResourceStore } from '../src/state/resourceStore'
+import { REPARATIONS_MAX_SHARE } from '../src/data/diplomacyData'
 import { declareWarOn, escalateConflict, liveBodyValue, makePeace, proposePeace, recordLoss } from '../src/scene/peace'
 import { SKIRMISH_LAPSE_DAYS } from '../src/data/diplomacyData'
 
@@ -213,6 +215,37 @@ console.log('\n=== 8. Conflict tiers: skirmish, escalation, and lapsing ===')
   declareWarOn(MARS, VENUS, 0, 'limited')
   useDiplomacyStore.getState().lapseStaleSkirmishes(SKIRMISH_LAPSE_DAYS * 10)
   check('a limited (real) war never auto-lapses', atWar(MARS, VENUS))
+}
+
+console.log('\n=== 9. Reparations: what a win buys when there is no world to take ===')
+{
+  fresh()
+  declareWarOn(MARS, VENUS, 0, 'limited')
+  // Mars won the battles (a starting navy's worth) but holds no whole world.
+  useDiplomacyStore.setState((s) => ({ wars: s.wars.map((w) => ({ ...w, battleBalance: 3440 })) }))
+  const w = war(MARS, VENUS)
+  const owners = useTerritoryStore.getState().bodyOwner
+  const score = scoreFor(w, MARS, owners, {}, liveBodyValue)
+  const share = affordableReparations(w, MARS, owners, {}, liveBodyValue, 10)
+  check('the winner can afford one percent of their stockpile per point of war score', share === Math.floor(score) / 100, `score ${score.toFixed(1)} -> ${share}`)
+  check('the loser can afford none', affordableReparations(w, VENUS, owners, {}, liveBodyValue, 10) === 0)
+  check('Venus accepts what the score buys', evaluatePeace(w, MARS, { kind: 'reparations', share }, owners, {}, liveBodyValue, 10).accept)
+  const greedy = evaluatePeace(w, MARS, { kind: 'reparations', share: share + 0.1 }, owners, {}, liveBodyValue, 10)
+  check('...and refuses more, saying what it would take', !greedy.accept && /Needs war score/.test(greedy.reason), greedy.reason)
+  check('never more than the cap, whatever the score', !evaluatePeace({ ...w, battleBalance: 1e9 }, MARS, { kind: 'reparations', share: REPARATIONS_MAX_SHARE + 0.01 }, owners, { Venus: MARS }, liveBodyValue, 10).accept)
+  check('an exhausted loser pays twice as much per point', affordableReparations({ ...w, exhaustion: { [VENUS]: 1e9 } }, MARS, owners, {}, liveBodyValue, 10) === Math.min(REPARATIONS_MAX_SHARE, (2 * Math.floor(score)) / 100))
+
+  const res = useResourceStore.getState()
+  res.setAmount(VENUS, 'alloys', 1000)
+  res.setAmount(VENUS, 'energy', 500)
+  res.setAmount(MARS, 'alloys', 0)
+  const marsEnergy = res.stateFor(MARS).amounts.energy
+  const verdict = proposePeace(w.id, MARS, { kind: 'reparations', share }, 10)
+  const after = useResourceStore.getState()
+  check('signing it ends the war', verdict.accept && !atWar(MARS, VENUS))
+  check('...Venus hands over that share of every good', after.stateFor(VENUS).amounts.alloys === 1000 - Math.floor(1000 * share) && after.stateFor(VENUS).amounts.energy === 500 - Math.floor(500 * share))
+  check('...and Mars gets it', after.stateFor(MARS).amounts.alloys === Math.floor(1000 * share) && after.stateFor(MARS).amounts.energy === marsEnergy + Math.floor(500 * share))
+  check('...which the log records', useDiplomacyStore.getState().events.some((e) => e.kind === 'peace-signed' && /reparations/.test(e.text)))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

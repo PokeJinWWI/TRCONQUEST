@@ -11,6 +11,7 @@ import {
   BATTLE_SCORE_MAX,
   BATTLE_SCORE_SCALE_HP,
   CEDE_EXHAUSTION,
+  REPARATIONS_MAX_SHARE,
   EXHAUSTION_LOSS_HP_PER_POINT,
   EXHAUSTION_PER_YEAR,
   WHITE_PEACE_EXHAUSTED_MAX_SCORE,
@@ -78,6 +79,20 @@ export function cessionCost(bodies: string[], loserId: string, owners: OwnerMap,
   return (100 * bodies.reduce((s, b) => s + valueOf(b), 0)) / total
 }
 
+// What demanding `share` of the loser's stockpile costs in war score.
+export function reparationsCost(share: number): number {
+  return 100 * share
+}
+
+// The largest share of its stockpile `receiverId` would pay `proposerId` now
+// (0 if their score buys nothing), whole percents, capped.
+export function affordableReparations(war: War, proposerId: string, owners: OwnerMap, controllers: OwnerMap, valueOf: BodyValueFn, simDays: number): number {
+  const receiverId = proposerId === war.attackerId ? war.defenderId : war.attackerId
+  const score = scoreFor(war, proposerId, owners, controllers, valueOf)
+  const perPoint = warExhaustion(war, receiverId, simDays) >= CEDE_EXHAUSTION ? 2 : 1
+  return Math.min(REPARATIONS_MAX_SHARE, Math.floor(Math.max(0, score) * perPoint) / 100)
+}
+
 export interface PeaceEvaluation {
   accept: boolean
   reason: string
@@ -104,6 +119,14 @@ export function evaluatePeace(
     const cap = receiverExhaustion >= WHITE_PEACE_EXHAUSTION ? WHITE_PEACE_EXHAUSTED_MAX_SCORE : WHITE_PEACE_MAX_SCORE
     if (receiverScore > cap) return { accept: false, reason: `They are winning (war score ${Math.round(receiverScore)})` }
     return { accept: true, reason: 'White peace accepted' }
+  }
+
+  if (terms.kind === 'reparations') {
+    if (!(terms.share > 0) || terms.share > REPARATIONS_MAX_SHARE) return { accept: false, reason: `Reparations must be up to ${Math.round(REPARATIONS_MAX_SHARE * 100)}% of their stockpile` }
+    const cost = reparationsCost(terms.share)
+    const needed = receiverExhaustion >= CEDE_EXHAUSTION ? cost / 2 : cost
+    if (-receiverScore < needed) return { accept: false, reason: `Needs war score ${Math.ceil(needed)} (have ${Math.floor(-receiverScore)})` }
+    return { accept: true, reason: 'Reparations accepted' }
   }
 
   // Vassalize/liberate-subject terms are only valid in a total war; that

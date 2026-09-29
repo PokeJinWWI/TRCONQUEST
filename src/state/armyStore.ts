@@ -26,6 +26,8 @@ import { atWar } from './diplomacyStore'
 import { isPlayerOwned } from './shipRelations'
 import { useTerrainStore } from './terrainStore'
 import { engagedUnitIds } from '../scene/terrainWar'
+import { useColonyStore } from './colonyStore'
+import { isAbstractEconomy } from './playerStore'
 
 // Units fighting on a terrain map take their orders there, not on the planetary
 // map (scene/terrainWar.ts).
@@ -90,7 +92,11 @@ export function canRecruitAt(countryId: string, bodyName: string): ArmyActionRes
   if (bodyOwner[bodyName] !== countryId) return { ok: false, reason: 'Not your world' }
   if (controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: 'World is occupied' }
   const isCapital = COUNTRIES.some((c) => c.id === countryId && c.capitalBodyName === bodyName)
-  if (!isCapital && !worldByName(useEconomyStore.getState().worlds, bodyName)) return { ok: false, reason: 'Needs an inhabited world' }
+  const colony = useColonyStore.getState().colonies[bodyName]
+  if (colony?.stage === 'micro') return { ok: false, reason: "A micro-colony can't raise armies until it becomes a planetary colony" }
+  // In Simple mode every planetary colony is a settled world.
+  const settled = isCapital || !!worldByName(useEconomyStore.getState().worlds, bodyName) || (isAbstractEconomy() && colony?.stage === 'planetary')
+  if (!settled) return { ok: false, reason: 'Needs an inhabited world' }
   if (!hasOrbitalSuperiority(countryId, bodyName, useShipStore.getState().ships, atWar)) {
     return { ok: false, reason: 'Blockaded by enemy warships' }
   }

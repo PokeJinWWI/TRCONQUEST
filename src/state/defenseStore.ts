@@ -5,6 +5,8 @@ import { groundSurface } from '../scene/groundLogic'
 import { holderOfInstallation, hostileBatteries, placeInstallation, shieldBlocksLanding, withInstallationKeys, type Installation } from '../scene/defenseLogic'
 import { militarySlotsOf, spaceportSitesOf, syncMilitarySlots } from './nationEconomy'
 import { withSpaceportKeys } from '../scene/spaceportSites'
+import { withOutpostKey } from '../scene/colonyLogic'
+import { useColonyStore } from './colonyStore'
 import type { BodySurface } from '../scene/planetTerrain'
 import { atWar } from './diplomacyStore'
 import { useGameTimeStore } from './gameTimeStore'
@@ -74,10 +76,12 @@ export function groundKeySurface(bodyName: string, owners = useTerritoryStore.ge
   const installations = useDefenseStore.getState().installations
   return installations.length > 0 ? withInstallationKeys(withPorts, installations, useGameTimeStore.getState().simDays) : withPorts
 }
-// The terrain's key nodes plus the economy's spaceports (no installations yet).
+// The terrain's key nodes plus the colony's planetary outpost and the
+// economy's spaceports (no installations yet).
 export function groundPortSurface(bodyName: string, owners = useTerritoryStore.getState().bodyOwner): BodySurface | null {
-  const surface = groundSurface(bodyName, owners)
-  if (!surface) return null
+  const terrain = groundSurface(bodyName, owners)
+  if (!terrain) return null
+  const surface = withOutpostKey(terrain, useColonyStore.getState().colonies[bodyName]?.outpostNode)
   const sites = spaceportSitesOf(bodyName)
   return sites.length > 0 ? withSpaceportKeys(surface, sites) : surface
 }

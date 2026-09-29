@@ -17,6 +17,8 @@ import { useDiplomacyStore, warBetweenIn, type DeclareWarResult } from '../state
 import { isGuarantorOf, isNonAggression } from '../state/treatyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useArmyStore } from '../state/armyStore'
+import { useResourceStore } from '../state/resourceStore'
+import type { ResourceId } from '../data/resourceData'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { controllerOf } from './territory'
 import { bodiesHeldFrom, evaluatePeace, scoreFor, type PeaceEvaluation } from './warScore'
@@ -81,6 +83,8 @@ export function makePeace(warId: string, terms: PeaceTerms, beneficiaryId: strin
   }
 
   // Occupations between these two that weren't settled by cession end.
+  if (terms.kind === 'reparations') payReparations(loserId, beneficiaryId, terms.share)
+
   {
     const { bodyOwner, bodyController } = useTerritoryStore.getState()
     for (const body of [
@@ -102,13 +106,29 @@ export function makePeace(warId: string, terms: PeaceTerms, beneficiaryId: strin
       ? `${nameOf(war.attackerId)} and ${nameOf(war.defenderId)} signed a white peace`
       : terms.kind === 'cede'
         ? `${nameOf(loserId)} made peace with ${nameOf(beneficiaryId)}, ceding ${terms.bodies.join(', ')}`
-        : `${nameOf(war.attackerId)} and ${nameOf(war.defenderId)} made peace`
+        : terms.kind === 'reparations'
+          ? `${nameOf(loserId)} made peace with ${nameOf(beneficiaryId)}, paying ${Math.round(terms.share * 100)}% of its stockpile in reparations`
+          : `${nameOf(war.attackerId)} and ${nameOf(war.defenderId)} made peace`
   useDiplomacyStore.getState().pushEvent('peace-signed', [war.attackerId, war.defenderId], text, simDays)
 }
 
 // Armies of these nations standing on a body their nation no longer controls
 // return to their capital's muster point (or disband if the capital itself
 // isn't theirs).
+// Hands `share` of every good in the loser's stockpile to the winner.
+export function payReparations(loserId: string, winnerId: string, share: number): void {
+  const resources = useResourceStore.getState()
+  const amounts = resources.stateFor(loserId).amounts
+  for (const id of Object.keys(amounts) as ResourceId[]) {
+    // Influence is political reach, not goods: it can't be handed over.
+    if (id === 'influence') continue
+    const paid = Math.floor(Math.max(0, amounts[id]) * share)
+    if (paid <= 0) continue
+    resources.addAmount(loserId, id, -paid)
+    resources.addAmount(winnerId, id, paid)
+  }
+}
+
 function sendStrandedArmiesHome(countryIds: string[]): void {
   const { bodyOwner, bodyController } = useTerritoryStore.getState()
   const involved = new Set(countryIds)

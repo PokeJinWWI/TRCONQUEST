@@ -27,6 +27,8 @@ export type ConflictTier = 'skirmish' | 'limited' | 'total'
 export type PeaceTerms =
   | { kind: 'white' }
   | { kind: 'cede'; bodies: string[] }
+  // The loser hands over this share (0..1] of its stockpile (resourceStore).
+  | { kind: 'reparations'; share: number }
   // 'total' tier only.
   | { kind: 'vassalize'; subjectType: import('./subjectData').SubjectType }
   | { kind: 'liberate-subject'; subjectId: string }
@@ -61,6 +63,8 @@ export type DiplomacyEventKind =
   | 'holding'
   | 'treaty-signed'
   | 'treaty-broken'
+  | 'colony-founded'
+  | 'colony-promoted'
 
 export interface DiplomacyEvent {
   id: string
@@ -128,6 +132,9 @@ export const WHITE_PEACE_EXHAUSTED_MAX_SCORE = 50
 // A loser cedes bodies when the winner's score covers what they're worth.
 // Exhaustion past this halves the score needed.
 export const CEDE_EXHAUSTION = 80
+// Reparations: a share of the loser's stockpile, one war score per percent
+// (halved past CEDE_EXHAUSTION, like a cession), never more than this share.
+export const REPARATIONS_MAX_SHARE = 0.5
 
 // --- Conflict tiers ----------------------------------------------------------
 // A skirmish with no hostile engagement for this many sim-days lapses back to

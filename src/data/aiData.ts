@@ -31,6 +31,9 @@ export const AI_STALEMATE_SCORE = 10
 // as enemy-held ground remains in its theatre.
 export const AI_PRESS_ON_EXHAUSTION = 30
 export const AI_PRESS_ON_DAYS = 180
+// Winning by at least this with no whole world it can claim, once it stops
+// pressing on it settles for reparations (a share of the loser's stockpile).
+export const AI_REPARATIONS_MIN_SCORE = 10
 
 // --- Strategist -------------------------------------------------------------
 // No AI war declarations before this sim-day (the clock starts at day 0).
@@ -74,14 +77,15 @@ export const AI_INVASION_POWER_RATIO = 0.9
 export const AI_SCIENCE_SHIPS = 1
 export const AI_CONSTRUCTION_SHIPS = 1
 export const AI_CARGO_SHIPS = 1
+// Colony Ships it keeps at once (Simple mode, when it can afford a colony).
+export const AI_COLONY_SHIPS = 1
 // Most Starbases an empire builds by itself (no attempt yet at judging how
 // many is enough).
 export const AI_MAX_STARBASES = 3
 // What it researches, in order, on the way to being able to build a Starbase.
-// Warp Comms comes first: its orders and reports cross the same signal delay
-// the player's do (a light-year is a year at light speed), so without it an
-// empire can't usefully command a ship beyond its own system. (Warp Theory is
-// a starting tech; it's listed because Warp Comms needs it.)
+// Warp Theory and Warp Comms are starting techs (techStore.DEFAULT_RESEARCHED);
+// they stay listed first so an empire somehow without them fetches them before
+// anything else (orders beyond its own system are useless at light speed).
 // Research income only exists in Simple economy mode (nothing feeds it in
-// Complex), so in Complex an AI stays where it is — and at light-speed comms.
+// Complex), so in Complex an AI stays where it is.
 export const AI_RESEARCH_PATH = ['warp-theory', 'warp-comms', 'classical-mechanics', 'orbital-mechanics', 'orbital-construction'] as const

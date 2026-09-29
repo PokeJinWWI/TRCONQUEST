@@ -20,6 +20,7 @@ import { isPlayerOwned } from '../state/shipRelations'
 import { cargoPlus, cargoSpace, clampToSpace, loadingBody, transferCheck, cargoMinus } from './cargoLogic'
 import { spendCost } from './shipyardLogic'
 import { isExplored, restingStarId } from './surveyLogic'
+import { foundColony } from './colonies'
 
 // Signal time for a discovery to reach its nation's capital from where the ship
 // is now — the FTL comms delay (0 with Hyper Comms, and for a nation with no
@@ -84,6 +85,9 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
       useStarbaseStore.getState().build(ship.ownerId, star, simDays, shipId)
       return
     }
+    case 'colonize':
+      foundColony(shipId, command.bodyName, simDays)
+      return
   }
 }
 
@@ -115,9 +119,10 @@ export function resolvePendingCommands(simDays: number): void {
 
 // The role a command belongs to, and so which of the player's selected ships a
 // star's right-click menu hands it to.
-export function commandRole(command: ShipCommand): 'science' | 'construction' | null {
+export function commandRole(command: ShipCommand): 'science' | 'construction' | 'colony' | null {
   if (command.kind === 'explore' || command.kind === 'survey') return 'science'
   if (command.kind === 'build-starbase') return 'construction'
+  if (command.kind === 'colonize') return 'colony'
   return null
 }
 

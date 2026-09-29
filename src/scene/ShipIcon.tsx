@@ -17,6 +17,7 @@ export const SHIP_ROLE_SHAPES: Record<ShipRole, string> = {
   science: 'Diamond: science ship',
   construction: 'Hexagon: construction ship',
   cargo: 'Bar: cargo ship',
+  colony: 'House: colony ship',
 }
 
 export function roleOfClass(classId: string): ShipRole {

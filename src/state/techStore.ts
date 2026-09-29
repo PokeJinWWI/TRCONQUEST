@@ -10,9 +10,11 @@ export interface TechState {
 // researched — NOT an empty set. Both are genuinely gated now (see
 // shipPhysics.ts's planMove), but every ship class in the game already has a
 // warp or hyperdrive unconditionally, so a brand-new country has to start
-// exactly as capable as one is today. Everything else starts unresearched;
-// there is no other retroactive seeding anywhere else in the tree.
-const DEFAULT_RESEARCHED = ['warp-theory', 'hyperspace-theory']
+// exactly as capable as one is today. Warp Comms too: at light speed the
+// first scout's report from the nearest star took six years to come home,
+// which left exploring dead for the whole early game. Everything else starts
+// unresearched; there is no other retroactive seeding anywhere else in the tree.
+const DEFAULT_RESEARCHED = ['warp-theory', 'hyperspace-theory', 'warp-comms']
 
 function freshTechState(): TechState {
   return {

@@ -908,3 +908,116 @@ Web grand-strategy game (Vite + React + TS + r3f + zustand). User owns combat/te
 - Short mid-task corrections are authoritative; wants plain-language UI text.
 - Ask (AskUserQuestion) before big commitments, plan mode for big features; no invented mechanics; honest reporting incl. "not verified".
 - Wants live browser verification for anything UI-observable, tests for each mechanic; wants AI nations to obey the same rules as the player.
+
+# Project Context — UX/perf polish + colonies design handoff #3
+
+(Updated by /newchat, 2026-09-28. `Context.md` == `CONTEXT.md` on this case-insensitive FS — edit only this last section, never overwrite the file. Standing rules and architecture live in `CLAUDE.md`, which already documents everything below in full detail — this section is the narrative/status layer on top.)
+
+## Objective
+Same project as handoff #2 (Web grand-strategy game, Vite+React+TS+r3f+zustand). This session: verified the merge from #2 was clean, then did a long run of small-to-medium UX/UI requests and two real performance fixes, plus a design-only deliverable (no code) for the co-op partner's (mr1noobfatfish) colonies/ownership feature request.
+
+## Current State
+- **Sweep on the merged tree (from handoff #2): came back clean immediately** — `tsc -b`, all tests, `npm run build` all green. The merge broke nothing.
+- **Git: the user has been committing this session's work themselves** (outside my instruction — I never ran `git commit`; standing rule "never commit unless asked" was respected on my end). Recent commits on `main`: `94e99c8` "more optimizatino+ ANOTHER selection fix", `a322dc1` "quick selection fix", `a51af43` "lag fix", on top of `1575bb9` (merge) and the pre-session `fab500c`. `git status` is clean as of now. `src/main.tsx` has no leftover store-probe code.
+- **Built and verified this session** (all documented in CLAUDE.md, which is authoritative — this is a summary):
+  - Sci-fi custom cursors (deck pointer / targeting reticle / blocked), sized down after user feedback (32px→22px→final ~10/22px hotspots).
+  - `tests/armyScenarios.test.ts` now runs the REAL war (`stepGroundWar` + `stepTerrainWar` chained, as `resolveGroundWar` does) instead of just the coarse step; this exposed that the hard-tier "fall back and link up" plan needed a "meet the reserve halfway, start on day 0" rework (a terrain battle's 7-cell patch has a wall edge, so a cornered army can't retreat) — done, all tiers pass.
+  - Outliner Fleets: Military/Civilian sub-tabs.
+  - Shift+drag box select on every map (own ships/units only, any distance, capture-phase).
+  - **AI now obeys FTL comms delay like the player** (`ownerCommsDelayToShip`, `plannerFor`, AI researches Warp Comms first, `hasOrderInFlight` gate, reads `known` not `discovered` for its own timing) — this was a real gap the user flagged, not previously true despite CLAUDE.md's comms section implying uniformity.
+  - Starbase cost changed to alloys-only (was alloys+energy+exoticMatter) per explicit user instruction.
+  - Fleet merging rewritten Stellaris-style: select multiple fleets, the one first-selected is "on top" and keeps its order, the others get a follow directive + `mergeIntoFleetId` and join when they catch up (`scene/fleetMerge.ts`, resolved every `settleShips` pass).
+  - Ship map icons are now role-shaped (warship triangle / transport arrowhead / civilian circle / science diamond / construction hexagon / cargo bar), not all triangles; sized per view (`SHIP_ICON_SIZE`), shrunk once after "far too big" feedback.
+  - Shipyard panel redesigned (slips shown as boxes, waiting list, stockpile, hulls grouped by role with an affordability filter) + a shipyard drydock icon badge on each nation's capital-world marker (own = clickable, opens the panel; others show in relation colour).
+  - Bottom HUD bar: fixed off-centre action-button bug by switching to a real 3-column CSS grid (was flex `justify-content: space-between`, which let the middle group drift when the side groups were uneven width).
+  - **Performance investigation** (user reported "extremely laggy"): the game LOGIC was never the problem (benchmarked headlessly — per-frame resolvers <0.2ms, one economy month ~19ms). Found and fixed two real React/r3f causes: (1) `InterstellarScene`/`GalacticViewScene` were subscribed directly to `simDays`, re-rendering every marker 60x/sec — replaced with `useStarbaseActivityKey` (changes only when a Starbase finishes) plus a few panels switched to a new `useThrottledSimDays` (≤4 renders/sec) for their own countdown displays; (2) `GroundViewScene`'s unit markers each did an O(n) rescan of every unit per frame (O(n²) total) to compute stacking — replaced with one shared O(n) pass per frame (`fanOf`). Added a "Performance rules" section to CLAUDE.md so these two patterns (subscribing to the clock, per-marker O(n) work) don't recur.
+  - **Deselection bugs**, found via direct user complaints, fixed in sequence: (1) right-click on empty space was deselecting (r3f reports a right-click as a "pointer miss" too) — now every empty-space handler returns early on `contextmenu`; (2) **the galaxy view lost a lot of fps** — its 321 neighbourhood markers were each a separate `Html`-overlay DOM element repositioned every camera frame; rewrote as `scene/GalaxyMarkers.tsx`, one GPU point cloud (dots + claim rings + hover/selection highlight, ring texture on `<points>`) with picking by screen distance (`scene/galaxyPick.ts`), and only the hovered/selected/battling ones still get a real DOM label; (3) **dragging the camera was deselecting on release** — added `scene/dragGuard.ts` (`wasDrag`, >4px since pointer-down) and wired it into every empty-space click handler and `DeepSpaceClickPlane` (which also now checks r3f's own `e.delta` and left-button-only). Verified live in the browser for the galaxy view specifically (click selects, drag doesn't deselect, still click does); the same drag-guard logic is applied uniformly to every other map view (system/interstellar/satellite/moon/ground/terrain) but NOT individually re-verified live on all of them.
+  - **Colonies/ownership design doc** (`docs/colonies-design.md`) written for the co-op partner's four asks (partial planet ownership, hycean-world land, water-world colonies, colony/city founding mechanics) — DESIGN ONLY, no code. Decisions folded in from the partner's answers (relayed by the user): economy split = Option B (one `World` per body+owner, linked by local trade), undersea habitats vulnerable only after a tech, settlers come from a nation's pops in every mode, hycean life-support is a very-late-game tech gated behind a not-yet-created hycean species, Proxima c reads as a gas giant to non-hycean species and an ocean world to hycean ones, hycean worlds have zero land, non-hycean ocean worlds get floating/seabed settlements behind tech. Five sub-questions remain open in the doc's own "Still open" section (penetrating-weapons tech line, settler pop cost, aerostat belt extent on hycean worlds, the hycean species stats themselves, region-cession terms in peace deals).
+
+## Decisions
+- (Carried from #2, still true) Signal time delays orders/commands/reports/news, never the live view.
+- **New this session:** the AI's orders are ALSO signal-delayed by its own comms tech — this had been a documented-but-unbuilt gap; it's now actually implemented.
+- Starbases cost alloys only (user's explicit call, overriding the earlier alloys+energy+exoticMatter).
+- Fleet merging is Stellaris-style (fly-to-and-join), not the old same-place-only merge.
+- Deselection: ONLY a still, plain, single left-click on empty space deselects. Shift/Ctrl/Cmd-click, any right-click, and the release at the end of a drag all leave the selection alone.
+- Colonies: partial ownership by REGION (landmass+city footprint, no drawn borders), economy Option B (per-owner Worlds), per earlier AskUserQuestion + partner's follow-up answers — see the design doc for the full decision list.
+
+## Constraints
+- Never commit unless asked (still holding on my end; the user has been committing their own work directly this session).
+- Full sweep after any change: `npx tsc -b`, every `tests/*.test.ts` via `npx tsx`, `npm run build`.
+- **New standing rule this session:** never subscribe a scene/big component to `simDays` directly; never do per-marker O(n) work in a `useFrame`; past a a few dozen markers, use one point-cloud draw + distance-based picking instead of one DOM element per marker (all now written up in CLAUDE.md's new "Performance rules" section).
+- The browser pane throttles `requestAnimationFrame` to ~1fps once a WebGL canvas is mounted — it CANNOT be used to measure real frame rate. Performance work this session was verified by (a) headless benchmarks of the pure sim/resolvers in Node, (b) reasoning about DOM element counts and subscription patterns, (c) live browser checks of correctness (does the marker still render, does click still select) rather than speed.
+- macOS `sed -i ''`, no `timeout`; python heredocs for multi-line edits; store-probe pattern in `main.tsx` must always be reverted (confirmed clean now).
+
+## Important Details
+- New files this session: `src/scene/deselect.ts`, `src/scene/dragGuard.ts`, `src/scene/fleetMerge.ts`, `src/scene/fleetRules.ts` additions, `src/scene/ShipIcon.tsx`, `src/scene/GalaxyMarkers.tsx`, `src/scene/galaxyPick.ts`, `src/scene/boxSelect.ts`, `src/components/BoxSelectLayer.tsx`, `src/components/ShipyardBadge.tsx`, `src/state/fleetTabStore.ts`, `src/hooks/useStarbaseActivity.ts`, `src/hooks/useThrottledSimDays.ts`, `docs/colonies-design.md`, plus matching test files (`tests/fleetMerge.test.ts`, `tests/shipIcons.test.ts`, `tests/galaxyPick.test.ts`, `tests/cursors.test.ts`, `tests/boxSelect.test.ts`).
+- `src/data/starbaseData.ts` `STARBASE_COST` changed; `CONSTRUCTION_SHIP_CARGO`/`CARGO_SHIP_CARGO` hold-fit comments/tests updated to match (a Cargo Ship now fits 6 kits, was 4).
+- `src/data/aiData.ts` `AI_RESEARCH_PATH` now starts with `warp-theory`/`warp-comms` before the Orbital Construction road.
+- CLAUDE.md was updated after nearly every change this session and is the authoritative detail reference — read it fully before continuing, don't rely solely on this summary.
+
+## Open Questions
+- **User asked "why can't I build ships during war" then added "specifically during war"** — I hypothesized this is the TAC time-pace slowdown (a space fight drops the clock to 1 real sec = 1 game sec, so a 13-day build takes 13 real days) but this was NEVER CONFIRMED by the user and NOT investigated further (the conversation moved on to lag/deselect fixes instead). **This is the most likely next thing to pick up** — needs either the user confirming that hypothesis, or a fresh investigation (check whether `resolveShipyards` is even being called while in TAC/combat views, whether the capital's shipyard is blockaded by an enemy fleet in orbit, etc. — I did NOT check the blockade angle at all).
+- Colonies design doc's 5 "Still open" sub-questions (see the doc itself).
+- Whether the drag-guard/right-click deselect fix behaves correctly on every map view was only spot-checked (galaxy view + one system-view click/right-click pair), not exhaustively re-verified on satellite/moon/ground/terrain/combat-arena views.
+- Whether the two performance fixes (simDays subscription removal, galaxy point-cloud) actually resolved the user's felt lag has NOT been confirmed by the user — only verified structurally/by correctness, since the browser pane can't measure fps. **Ask the user directly whether it feels better now.**
+
+## Next Steps
+1. Resolve the "can't build ships during war" report — confirm or refute the TAC-pace hypothesis, check for a blockade rule, or ask the user for exact repro steps.
+2. Ask the user whether the perf fixes actually helped in real play.
+3. Get the user/partner's sign-off on `docs/colonies-design.md` (or answers to its open sub-questions) before starting any colonies code — nothing has been implemented yet, doc only.
+4. Otherwise, wait for next request; this was a long "polish pass" session with no single big feature in flight.
+
+# Project Context — early-game loop + colonies v1 handoff #4
+
+(Updated by /newchat, 2026-09-28. `Context.md` == `CONTEXT.md` on this case-insensitive FS — append only, never overwrite. `CLAUDE.md` is the authoritative architecture/rules reference and was updated for everything below; `docs/colonies-design.md` holds the full colony rules + v2 plan.)
+
+## Objective
+Make the EARLY GAME a working gameplay loop in **Simple ("abstract") economy mode**: economy → research → build → explore/survey → expand (colonies) → war → invade → peace. User direction: **mechanics, not balance**; **ignore onboarding/tutorial and Complex mode** for now.
+
+## Current State
+- All work below is built, tested and live-verified in the browser; full sweep clean (tsc, all 58 `tests/*.test.ts`, `npm run build`). **Nothing committed** (user commits themselves). `src/main.tsx` is clean (store-probe reverted).
+- Playtest (Mars, Simple mode) confirmed working: economy tick, research points + TechPanel spend, Shipyard build → hull in orbit, star right-click Explore/Survey, declare war dialog, fleet merge, space battle, Defense-tab bombardment → Invade button, landing, white peace.
+- **Fixed this session:**
+  1. **Clock stuck in Tactical after any won space battle** (the real "can't build ships during war" cause): victor-only engagement stays open by design, but return-to-STRAT only fired when `engagements.length === 0`. Now follows `engagementIsContested` (same test as the drop to TAC). Combat resolver extracted as exported `resolveSpaceCombat(simDays)` in `hooks/useCombatResolver.ts`; regression test in `tests/pacing.test.ts` §6.
+  2. **Every nation starts with Warp Comms** (`techStore.DEFAULT_RESEARCHED`): at light speed the first scout's report from Barnard's Star took 6 years. Applies to BOTH modes.
+  3. **Starting warships spawn as one "1st Fleet"** (troop transport separate) in `scene/gameSetup.ts` — separate fleets arrived piecemeal (warp frigates ahead of reaction-drive cruisers). New `tests/gameSetup.test.ts`.
+  4. **Reparations peace term** `{kind:'reparations', share}`: share of loser's `resourceStore` stockpile, 1 war score per %, halved past `CEDE_EXHAUSTION`, capped `REPARATIONS_MAX_SHARE` 0.5; `warScore.affordableReparations`; "Demand reparations" button on the war card; AI Diplomat demands it (not pressing, score ≥ `AI_REPARATIONS_MIN_SCORE` 10). Tests in `diplomacy.test.ts` §9, `ai.test.ts`.
+  5. **Colonies v1** (Simple mode only) — see Decisions/Important Details.
+- Corrected a false claim from earlier this session: nations do NOT start with zero ships — `setUpNewGame()` seeds every nation's navy, garrisons, assault armies, fortress + battery on day 0.
+
+## Decisions
+- User's colony spec: colony ships found colonies; several colonies may share a planet, a planet wholly claimed by one nation = one colony; every colony (starting ones too) has a planetary outpost; founding costs Influence (cap 1,000, +2/mo, **cost varies**); new colony = **micro-colony**, becomes **planetary** once orbit uncontested (designated **patrol ships** orbit **90 days**) and colony uncontested; micro and planetary share the economy, micro just has smaller limits.
+- **Phased:** v1 = one nation per planet (colony claims the whole body). v2 = shared planets via regions (doc §2c/2d).
+- Micro-colony: land capped at 3, can't recruit. Planetary: full land (`landForBody`), can recruit.
+- My calls (flagged to user, not yet confirmed): **a moon's orbit is its planet's** (`territory.orbitBodyOf`) because ships can't orbit a moon (`bodyLivePosition` has no moons — a ship "orbiting Titan" draws at the Sun); in Simple mode every planetary colony counts as settled for `canRecruitAt` (so Phobos/Deimos can now recruit); tuning picks: cost = 20 + 10×size + 5×ly (small moon ~50, Titan 70, Earth 100), 100 starting Influence, 20M settlers, patrol 90 days.
+- Earlier decisions still hold (AI obeys comms delay; Starbases alloys-only; Stellaris-style merging; only a still plain left-click deselects).
+
+## Constraints
+- Never commit unless asked. Full sweep after any change: `npx tsc -b`, every `tests/*.test.ts` via `npx tsx`, `npm run build`.
+- Simple changes must not touch Complex economy (`src/economy/*`). Colonies are gated to Simple mode (colonize check + Colony Ship hidden/refused in Complex).
+- Performance rules in CLAUDE.md (no scene `simDays` subscriptions; linear `useFrame`; point clouds for many markers).
+- Browser pane can't measure fps; store-probe in `main.tsx` must be reverted. Dynamic `import()` of some stores in the browser (defenseStore, diplomacyStore, shipyardStore) yields a SEPARATE instance — expose stores via the main.tsx probe instead.
+- macOS `sed -i ''`, no `timeout`; python heredocs for multi-line edits.
+
+## Important Details
+- Colony files: `data/colonyData.ts` (tuning), `scene/colonyLogic.ts` (pure: `colonyInfluenceCost`, `placeOutpostNode`, `withOutpostKey`, `orbitSecure`, `stepColonies`), `scene/colonies.ts` (store I/O: `seedInfluence`, `applyInfluenceIncome`, `seedColonies`, `canColonize`, `foundColony`, `embarkSettlers`, `orderSelectedToColonize`), `state/colonyStore.ts` (owner = `bodyOwner`, never stored), `hooks/useColonyResolver.ts` (`resolveColonies`, mounted in App.tsx), `scene/BodyOrderMenu.tsx` (right-click Colonize menu in system + satellite views; moon menu "Hold station by X / Colonize X"), `scene/ShipColonySection.tsx` (Colony section + `ShipPatrolToggle`), InspectPanel `ColonyRow`, Outliner "micro-colony" tag, glossary entries, `tests/colonies.test.ts` (incl. headless AI campaign).
+- Influence = `resourceStore` resource `influence`, not in `SIMPLE_GOODS`, excluded from `payReparations`, seeded after the other seeds (which zero `/mo`), income applied in `useStrategicResources` before its Simple early-return; in HUD (`HUD_RESOURCE_IDS`).
+- New ship role `'colony'` (`colony-ship`, `settlerCapacity`), house icon clip-path; `ShipCommand` `{kind:'colonize', bodyName}`; `ShipInstance.patrol/pendingPatrol/settlers`; `queuePatrol` (signal-delayed); `territoryStore.claimBody`; `abstractEconomyStore.addColonyWorld/adjustPopulation/setLand`; outpost key node added in `defenseStore.groundPortSurface`.
+- AI: snapshot has `colonies`/`simpleEconomy`; blackboard `idleWarships` excludes patrol ships; Expander `pickColonyTarget`, builds Colony Ship (`AI_COLONY_SHIPS` 1), intents `colonize-body` and `set-patrol` (patrols only with ≥2 idle warships, released once planetary).
+- Known gaps: Orbital Construction (Starbases) needs 260 physics (~4 yrs at start rate) and Starbases give only borders; war score counts only WHOLE occupied bodies (+ battle score capped 30); an enemy shipyard spawning into a blockaded orbit re-triggers TAC each time; moons can't be invaded (same no-moon-orbit gap).
+
+## Open Questions
+- User sign-off on my flagged calls: moon orbit = planet orbit; Phobos/Deimos recruiting in Simple mode; Warp Comms also given in Complex mode; colony tuning numbers.
+- Colonies v2 (shared planets/regions) — scope and timing; the doc's 5 older "Still open" items.
+- Whether perf fixes from handoff #3 helped real play (still unconfirmed).
+- Drag-guard deselect only spot-checked on galaxy/system views.
+
+## Next Steps
+1. Confirm the flagged calls with the user.
+2. Continue the early-game loop playtest (e.g. a full war with the new reparations as the player; AI peace offers to the player; recruiting/transports at a new colony).
+3. Decide next loop gap: making moons real destinations (fixes moon invasion too), Starbase payoff/timing, or colonies v2.
+
+## User Preferences
+- Mechanics over balance; working loop first. Short mid-task corrections are authoritative; plain-language UI text.
+- Ask (AskUserQuestion) before big commitments; plan mode for big features; no invented mechanics; honest reporting incl. "not verified".
+- Live browser verification for UI changes; a test per mechanic; AI must obey the same rules as the player.

@@ -36,6 +36,7 @@ import { useViewStore } from '../state/viewStore'
 import { simDaysToSeconds } from '../state/gameTimeStore'
 import { DraggableWindow } from '../components/DraggableWindow'
 import { TransportCargo } from '../components/ArmyViews'
+import { ShipColonySection, ShipPatrolToggle } from './ShipColonySection'
 
 function formatCooldown(label: string, remainingDays: number): string {
   return remainingDays > 0 ? `${label} ${remainingDays.toFixed(1)}d` : `${label} Ready`
@@ -533,7 +534,9 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           </label>
         </>
       )}
+      {owned && <ShipPatrolToggle ship={ship} />}
       {owned && <ShipSurveySection ship={ship} />}
+      {owned && <ShipColonySection ship={ship} />}
       {owned && <ShipCargoSection ship={ship} />}
       {ship.followingShipId && (
         <div className="inspect-row">

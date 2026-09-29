@@ -15,6 +15,7 @@ import { usePlayerStore } from '../state/playerStore'
 import { liveBodyValue } from '../scene/peace'
 import { batteryDenial, groundKeySurface, hostileDefenseCount, shieldedFor } from '../state/defenseStore'
 import type { AiSnapshot } from './blackboard'
+import { useColonyStore } from '../state/colonyStore'
 
 export function captureSnapshot(simDays: number): AiSnapshot {
   const territory = useTerritoryStore.getState()
@@ -34,6 +35,8 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     relations: diplomacy.relations,
     wars: diplomacy.wars,
     starbases: useStarbaseStore.getState().starbases,
+    colonies: useColonyStore.getState().colonies,
+    simpleEconomy: usePlayerStore.getState().economyModel === 'abstract',
     resourcesOf: (id) => useResourceStore.getState().stateFor(id).amounts,
     researchedOf: (id) => useTechStore.getState().stateFor(id).researched,
     buildQueueLengthOf: (id) => useShipyardStore.getState().ordersFor(id).length,

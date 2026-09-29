@@ -6,7 +6,7 @@ import { combatLocationKey } from '../state/combatStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import type { ShipInstance } from '../state/shipStore'
 
-const CIVILIAN_ROLES = new Set(['civilian', 'science', 'construction', 'cargo'])
+const CIVILIAN_ROLES = new Set(['civilian', 'science', 'construction', 'cargo', 'colony'])
 
 export function isCivilianClass(classId: string): boolean {
   const role = resolveShipClass(classId)?.role

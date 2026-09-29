@@ -16,6 +16,12 @@ if (typeof window !== 'undefined') {
 }
 
 // Whether this click ended a drag rather than being a still click.
+// Where the last press (any button, so a right-click too) went down — for a
+// menu opened from a callback that gets no mouse event.
+export function lastPointerDown(): { x: number; y: number } | null {
+  return down
+}
+
 export function wasDrag(event: { clientX?: number; clientY?: number }, from: { x: number; y: number } | null = down): boolean {
   if (!from || event.clientX === undefined || event.clientY === undefined) return false
   return Math.hypot(event.clientX - from.x, event.clientY - from.y) > DRAG_TOLERANCE_PX

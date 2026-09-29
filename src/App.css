@@ -3117,6 +3117,7 @@
 .ship-role-science .ship-shape { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
 .ship-role-construction .ship-shape { clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
 .ship-role-cargo .ship-shape { clip-path: polygon(0 22%, 100% 22%, 100% 78%, 0 78%); }
+.ship-role-colony .ship-shape { clip-path: polygon(50% 0, 100% 40%, 85% 40%, 85% 100%, 15% 100%, 15% 40%, 0 40%); }
 
 .ship-marker.hovered .ship-marker-icon,
 .ship-marker.selected .ship-marker-icon {

@@ -35,6 +35,10 @@ import { usePlayerStore } from '../src/state/playerStore'
 import { useTechStore } from '../src/state/techStore'
 
 let failures = 0
+// Nations start with Warp Comms; these checks are about the light-speed tier.
+function lightSpeedOnly(countryId: string) {
+  useTechStore.setState({ byCountry: { [countryId]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory']) } } })
+}
 function check(label: string, cond: boolean, detail = '') {
   if (cond) console.log(`  PASS  ${label}${detail ? ` — ${detail}` : ''}`)
   else {
@@ -177,7 +181,7 @@ console.log('\n=== 7. queueMoveOrder / applyMoveDestination: comms-gated command
 {
   usePlayerStore.setState({ selectedCountryId: 'imperial-state-of-mars' })
   useGameTimeStore.setState({ simDays: 0, paused: false })
-  useTechStore.setState({ byCountry: {} }) // nothing researched -> light speed tier
+  lightSpeedOnly('imperial-state-of-mars')
 
   // A ship out at Alpha Centauri, light-years from the Mars capital — a
   // move order issued to it should NOT apply immediately.
@@ -298,7 +302,7 @@ console.log('\n=== 9. shipCommsDelayDays: a ship mid-order uses its LIVE positio
 
   // Same shape via the full player-facing wrapper, tech/country set up.
   usePlayerStore.setState({ selectedCountryId: 'imperial-state-of-mars' })
-  useTechStore.setState({ byCountry: {} })
+  lightSpeedOnly('imperial-state-of-mars')
   const playerDelay = playerCommsDelayToShip(ship, 10)
   check('playerCommsDelayToShip agrees with the lower-level function for the same mid-order ship', Math.abs(playerDelay - delayAtArrival) < 0.01)
   usePlayerStore.setState({ selectedCountryId: null })
@@ -367,7 +371,7 @@ console.log('\n=== AI empires obey the same signal delay ===')
   const homeAi = makeShip('ai-home', orion, { location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] } })
   useShipStore.setState({ ships: [farAi, homeAi] })
 
-  useTechStore.setState({ byCountry: {} })
+  lightSpeedOnly(orion)
   const light = ownerCommsDelayToShip(farAi, 50)
   check('an AI ship far from its capital has a real delay at light speed', light > 365, `${light.toFixed(0)}d`)
   check('...measured from ITS capital, not the player\'s (a ship at home has none to speak of)', ownerCommsDelayToShip(homeAi, 50) < 1)

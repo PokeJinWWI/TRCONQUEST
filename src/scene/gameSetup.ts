@@ -13,6 +13,8 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { bodiesOwnedBy } from './territory'
 import { spawnOwnedShip } from './shipyardLogic'
+import { resolveShipClass } from '../state/shipClassResolver'
+import { seedColonies } from './colonies'
 import { groundSurface, musterNode } from './groundLogic'
 import { placeInstallation } from './defenseLogic'
 import { resyncMilitarySlots, useDefenseStore } from '../state/defenseStore'
@@ -24,10 +26,30 @@ export function setUpNewGame(): void {
   const { ships } = useShipStore.getState()
   for (const country of COUNTRIES) {
     if (ships.some((s) => s.ownerId === country.id)) continue
-    for (const classId of STARTING_NAVY) spawnOwnedShip(classId, country.id, country.capitalStarId, country.capitalBodyName)
+    const warshipIds: string[] = []
+    for (const classId of STARTING_NAVY) {
+      const id = spawnOwnedShip(classId, country.id, country.capitalStarId, country.capitalBodyName)
+      if (id && resolveShipClass(classId)?.role === 'warship') warshipIds.push(id)
+    }
+    mergeIntoOneFleet(warshipIds)
   }
   seedStartingArmies()
   seedStartingDefenses()
+  seedColonies(useGameTimeStore.getState().simDays)
+}
+
+// The starting warships sail as one fleet: as separate fleets, "attack
+// together" sent the warp-driven frigates ahead of the reaction-drive
+// cruisers, to arrive alone and die.
+function mergeIntoOneFleet(shipIds: string[]): void {
+  const store = useShipStore.getState()
+  const fleetOf = (id: string) => useShipStore.getState().ships.find((s) => s.id === id)?.fleetId
+  const lead = shipIds.length > 0 ? fleetOf(shipIds[0]) : undefined
+  if (!lead) return
+  for (const id of shipIds.slice(1)) {
+    const from = fleetOf(id)
+    if (from && from !== lead) store.mergeFleets(lead, from)
+  }
 }
 
 // Every capital starts fortified: a Fortress and a Defense Battery, ready now

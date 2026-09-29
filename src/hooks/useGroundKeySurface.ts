@@ -4,6 +4,7 @@ import { groundPortSurface, useDefenseStore } from '../state/defenseStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useEconomyStore } from '../state/economyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { useColonyStore } from '../state/colonyStore'
 import { isActive, withInstallationKeys } from '../scene/defenseLogic'
 import type { BodySurface } from '../scene/planetTerrain'
 
@@ -17,6 +18,7 @@ export function useGroundKeySurface(bodyName: string, withInstallations = true):
   const complexWorlds = useEconomyStore((s) => s.worlds)
   const simpleWorld = useAbstractEconomyStore((s) => s.worlds[bodyName])
   const installations = useDefenseStore((s) => s.installations)
+  const outpostNode = useColonyStore((s) => s.colonies[bodyName]?.outpostNode)
   const activeKey = useGameTimeStore((t) =>
     installations
       .filter((i) => i.bodyName === bodyName && isActive(i, t.simDays))
@@ -27,5 +29,5 @@ export function useGroundKeySurface(bodyName: string, withInstallations = true):
     const surface = groundPortSurface(bodyName, owners)
     if (!surface || !withInstallations || installations.length === 0) return surface
     return withInstallationKeys(surface, installations, useGameTimeStore.getState().simDays)
-  }, [bodyName, owners, complexWorlds, simpleWorld, installations, activeKey, withInstallations])
+  }, [bodyName, owners, complexWorlds, simpleWorld, installations, activeKey, withInstallations, outpostNode])
 }

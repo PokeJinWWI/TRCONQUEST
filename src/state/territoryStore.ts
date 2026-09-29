@@ -32,6 +32,9 @@ interface TerritoryState {
   // A peace treaty's cession: the body — and, if it's an inhabited world, its
   // whole economy — now belongs to `countryId`, and any occupation ends.
   cedeBody: (bodyName: string, countryId: string) => void
+  // An unowned body becomes `countryId`'s (a colony is founded there). No-op
+  // on a body someone already owns: that changes hands only by treaty.
+  claimBody: (bodyName: string, countryId: string) => void
   reset: () => void
 }
 
@@ -88,6 +91,9 @@ export const useTerritoryStore = create<TerritoryState>((set) => ({
       delete nodeHolders[bodyName]
       return { bodyController: controllers, nodeHolders }
     }),
+
+  claimBody: (bodyName, countryId) =>
+    set((s) => (s.bodyOwner[bodyName] ? s : { bodyOwner: { ...s.bodyOwner, [bodyName]: countryId } })),
 
   cedeBody: (bodyName, countryId) => {
     set((s) => {

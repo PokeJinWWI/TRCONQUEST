@@ -17,6 +17,9 @@ import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { OwnerNote, SimpleDistrictsTab, SimplePopulationTab, SimpleWorldSummary } from './planet/SimplePlanetTabs'
 import { ComplexDistrictsTab, ComplexWorldSummary } from './planet/ComplexPlanetTabs'
 import { DefenseTab } from './planet/DefenseTab'
+import { useColonyStore } from '../state/colonyStore'
+import { COLONY_PATROL_DAYS } from '../data/colonyData'
+import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 
 export interface InspectPanelAction {
   label: string
@@ -60,6 +63,29 @@ const TAB_TIPS: Record<InspectTab, string> = {
   politics: 'This world’s politics (Complex mode)',
 }
 
+// A colony's stage in plain words; a micro-colony shows its patrol progress.
+function ColonyRow({ bodyName }: { bodyName: string }) {
+  const colony = useColonyStore((s) => s.colonies[bodyName])
+  const simDays = useThrottledSimDays()
+  if (!colony) return null
+  const patrolled = colony.orbitSecureSinceSimDays === null ? 0 : Math.min(COLONY_PATROL_DAYS, Math.floor(simDays - colony.orbitSecureSinceSimDays))
+  return (
+    <div className="inspect-row">
+      <span className="inspect-label">Colony</span>
+      <span
+        className="inspect-value"
+        title={
+          colony.stage === 'micro'
+            ? `Becomes a planetary colony after ${COLONY_PATROL_DAYS} days with a patrol ship holding its orbit, no hostile warship there and no enemy on the ground. Until then it has little land and cannot raise armies.`
+            : 'A full colony: all its land, and it can raise armies.'
+        }
+      >
+        {colony.stage === 'micro' ? `Micro-colony (patrol ${patrolled} / ${COLONY_PATROL_DAYS} days)` : 'Planetary colony'}
+      </span>
+    </div>
+  )
+}
+
 function OverviewRows({ body, action }: { body: InspectableBody; action?: InspectPanelAction }) {
   const size = estimateSize(body.radiusKm)
   const habitability = body.kind !== 'star' ? estimateHabitability(body.name, body.orbitAU) : null
@@ -86,6 +112,7 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
           </span>
         </div>
       )}
+      {owner && <ColonyRow bodyName={body.name} />}
       {occupier && (
         <div className="inspect-row">
           <span className="inspect-label">Controller</span>

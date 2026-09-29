@@ -21,6 +21,7 @@ import { useResourceStore } from '../state/resourceStore'
 import { useShipStore, pristineCombatState } from '../state/shipStore'
 import type { ShipBuildOrder } from '../state/shipyardStore'
 import { DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from './shipPhysics'
+import { embarkSettlers } from './colonies'
 
 const RESOURCE_NAMES = Object.fromEntries(RESOURCE_TYPES.map((r) => [r.id, r.name])) as Record<ResourceId, string>
 
@@ -139,7 +140,9 @@ export function spawnOwnedShip(classId: string, ownerId: string, systemId: strin
 // Puts a finished hull into orbit around its nation's capital, owned by that
 // nation.
 export function spawnBuiltShip(order: ShipBuildOrder, country: Pick<Country, 'id' | 'capitalStarId' | 'capitalBodyName'>): string | null {
-  return spawnOwnedShip(order.classId, country.id, country.capitalStarId, country.capitalBodyName)
+  const id = spawnOwnedShip(order.classId, country.id, country.capitalStarId, country.capitalBodyName)
+  if (id) embarkSettlers(id, country.id)
+  return id
 }
 
 // --- Placeholder resource supply -------------------------------------------

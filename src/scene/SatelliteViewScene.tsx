@@ -29,6 +29,7 @@ import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { InspectPanel } from '../components/InspectPanel'
 import { PlanetArmyMarkers, PlanetGroundHud } from './PlanetArmyMarkers'
+import { colonizeMenuItem, useBodyOrderMenu } from './BodyOrderMenu'
 
 interface SatelliteViewSceneProps {
   bodyName: string
@@ -77,6 +78,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   )
   const PLANETS = useMemo(() => getPlanetsForStar(selectedStarId), [selectedStarId])
   const controlsRef = useRef<OrbitControlsImpl>(null)
+  const bodyMenu = useBodyOrderMenu()
   const [flyingToMoon, setFlyingToMoon] = useState<MoonData | null>(null)
   // Set once CameraFocusRig arrives at a moon — swaps this scene over to
   // MoonDetailScene until the player zooms back out.
@@ -224,7 +226,10 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
+    const move = () => orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
+    const colonize = colonizeMenuItem(selectedStarId, bodyName)
+    if (colonize) bodyMenu.open(bodyName, [{ label: `Move to ${bodyName}`, onClick: move }, colonize])
+    else move()
   }
 
   // Right-clicking a moon orders the currently-selected ship into orbit
@@ -239,7 +244,11 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) })
+    const move = () => orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) })
+    // A moon's orbit is its planet's, so a Colony Ship settles it from here.
+    const colonize = colonizeMenuItem(selectedStarId, moon.name)
+    if (colonize) bodyMenu.open(moon.name, [{ label: `Hold station by ${moon.name}`, onClick: move }, colonize])
+    else move()
   }
 
   // Right-clicking another ship while one is selected orders the selected
@@ -436,6 +445,8 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
           />
           <KeyboardPan controlsRef={controlsRef} mode="orbit" />
         </Canvas>
+
+        {bodyMenu.element}
 
         {!isStar && <PlanetGroundHud bodyName={primaryBody.name} />}
 

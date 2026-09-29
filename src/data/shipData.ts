@@ -8,6 +8,7 @@ import {
   TRANSPORT_COMBAT_PROFILE,
   type CombatProfile,
 } from './combatData'
+import { COLONY_SHIP_SETTLERS } from './colonyData'
 
 // Every ship has sublight reaction thrusters regardless of what FTL drive(s)
 // it also carries — warp/hyperdrives don't handle real-space maneuvering at
@@ -77,7 +78,8 @@ export interface ShipClass {
   // explores and surveys (scene/surveyLogic.ts), a construction ship builds
   // Starbases out of the cargo it carries, and a cargo ship is the hauler
   // (scene/cargoLogic.ts).
-  role: 'civilian' | 'warship' | 'transport' | 'science' | 'construction' | 'cargo'
+  // 'colony' carries settlers and founds a colony (scene/colonies.ts).
+  role: 'civilian' | 'warship' | 'transport' | 'science' | 'construction' | 'cargo' | 'colony'
   // How many armies this hull can carry. Absent/0 for everything but
   // transports.
   armyCapacity?: number
@@ -88,6 +90,8 @@ export interface ShipClass {
   // A tech the owning nation must have researched before it can BUILD this
   // hull at a shipyard (existing ships are unaffected).
   requiresTech?: string
+  // Settlers (millions) it takes from its capital when built (colony ships).
+  settlerCapacity?: number
 }
 
 // Every ship is owned by a nation (ShipInstance.ownerId) — a class doesn't
@@ -229,6 +233,17 @@ export const SHIP_CLASSES: ShipClass[] = [
     role: 'cargo',
     cargoCapacity: CARGO_SHIP_CARGO,
   },
+  {
+    // Carries settlers from the capital to found a colony on an unowned,
+    // surveyed world (scene/colonies.ts); used up in the founding.
+    id: 'colony-ship',
+    name: 'Colony Ship',
+    reactionDrive: true,
+    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    combat: CIVILIAN_COMBAT_PROFILE,
+    role: 'colony',
+    settlerCapacity: COLONY_SHIP_SETTLERS,
+  },
   // Warship hulls. Named after the conventional wet-navy ladder per the
   // design brief, and deliberately differentiated by *damage type matchup*
   // rather than by raw stat inflation — a Frigate's missiles ignore a
@@ -302,4 +317,5 @@ export const SHIP_ROLE_LABELS: Record<ShipClass['role'], string> = {
   science: 'Science',
   construction: 'Construction',
   cargo: 'Cargo',
+  colony: 'Colony',
 }

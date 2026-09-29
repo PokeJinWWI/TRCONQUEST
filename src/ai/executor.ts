@@ -17,10 +17,11 @@ import { useArmyStore } from '../state/armyStore'
 import { useShipStore } from '../state/shipStore'
 import { useConfirmStore } from '../state/confirmStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { fleetMembersOf, queueBombard, queueFleetMoveOrder } from '../scene/commsVisual'
+import { fleetMembersOf, queueBombard, queueFleetMoveOrder, queuePatrol } from '../scene/commsVisual'
 import { declareWarOn, makePeace, proposePeace } from '../scene/peace'
 import { useAiStore } from './aiStore'
 import type { Intent } from './types'
+import { orbitBodyOf } from '../scene/territory'
 
 function nameOf(id: string): string {
   return ownerDisplay(id).name
@@ -29,6 +30,7 @@ function nameOf(id: string): string {
 function describeTerms(terms: PeaceTerms, fromId: string): string {
   if (terms.kind === 'white') return 'White peace: every occupied world returns to its owner.'
   if (terms.kind === 'cede') return `You cede ${terms.bodies.join(', ')} to ${nameOf(fromId)}.`
+  if (terms.kind === 'reparations') return `You pay ${nameOf(fromId)} ${Math.round(terms.share * 100)}% of your stockpile in reparations.`
   return `Terms with ${nameOf(fromId)}.`
 }
 
@@ -167,6 +169,27 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
       case 'set-bombard': {
         const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
         if (ship?.ownerId === countryId) queueBombard(ship, intent.stance)
+        break
+      }
+      case 'set-patrol': {
+        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId === countryId) queuePatrol(ship, intent.on)
+        break
+      }
+      case 'colonize-body': {
+        // Founds it where it orbits, else flies there and founds it on arrival
+        // (the same arrival command the player's Colonize order sets).
+        const ships = useShipStore.getState().ships
+        const ship = ships.find((s) => s.id === intent.shipId)
+        if (ship?.ownerId !== countryId) break
+        const orbit = orbitBodyOf(intent.bodyName)
+        const command = { kind: 'colonize' as const, bodyName: intent.bodyName }
+        if (ship.location.kind === 'orbiting' && ship.location.bodyName === orbit) {
+          queueShipCommand(ship.id, command)
+          break
+        }
+        useShipStore.getState().setArrivalCommand(ship.id, { starId: intent.systemId, bodyName: orbit, command })
+        queueFleetMoveOrder(fleetMembersOf(ship, ships), { kind: 'body', systemId: intent.systemId, bodyName: orbit })
         break
       }
     }

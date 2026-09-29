@@ -26,6 +26,7 @@ import { useBattleStore } from '../state/battleStore'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { engagementIntel, unknownShipsMessage } from '../scene/commsVisual'
+import { useColonyStore } from '../state/colonyStore'
 
 type EntryKind = 'neighborhood' | 'star' | 'planet' | 'moon' | 'ship' | 'treaty' | 'starbase'
 // The filter offers a "black holes" toggle even though nothing in the game
@@ -144,8 +145,16 @@ function useFleetEntries(): OutlinerEntry[] {
 function useColonyEntries(): OutlinerEntry[] {
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
   const bodyOwner = useTerritoryStore((s) => s.bodyOwner)
+  // Joined into a string so the list re-derives only when a stage changes.
+  const microKey = useColonyStore((s) =>
+    Object.values(s.colonies)
+      .filter((c) => c.stage === 'micro')
+      .map((c) => c.bodyName)
+      .join('|'),
+  )
   return useMemo(() => {
     if (!selectedCountryId) return []
+    const micro = new Set(microKey.split('|'))
     const owned = [...bodyIndex().values()].filter((b) => bodyOwner[b.name] === selectedCountryId)
     const spansSystems = new Set(owned.map((b) => b.starId)).size > 1
     return owned.map((b) => {
@@ -153,10 +162,11 @@ function useColonyEntries(): OutlinerEntry[] {
         b.kind === 'moon'
           ? getMoonsForPlanet(b.parentPlanet ?? '').moons.find((m) => m.name === b.name)?.color
           : getPlanetsForStar(b.starId).find((p) => p.name === b.name)?.color
-      const detail = spansSystems ? STARS.find((st) => st.id === b.starId)?.name : undefined
+      const system = spansSystems ? STARS.find((st) => st.id === b.starId)?.name : undefined
+      const detail = [micro.has(b.name) ? 'micro-colony' : undefined, system].filter(Boolean).join(' · ') || undefined
       return { key: b.name, name: b.name, color: color ?? '#ffffff', kind: b.kind, parentPlanet: b.parentPlanet, starId: b.starId, detail }
     })
-  }, [selectedCountryId, bodyOwner])
+  }, [selectedCountryId, bodyOwner, microKey])
 }
 
 // Every article of every treaty (embassy, non-aggression pact, trade

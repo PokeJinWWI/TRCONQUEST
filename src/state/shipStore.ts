@@ -68,6 +68,9 @@ export type ShipCommand =
   // A Construction Ship builds a Starbase at the star it rests at, paid from
   // its hold.
   | { kind: 'build-starbase' }
+  // A Colony Ship founds a colony on `bodyName`: the body it orbits, or a moon
+  // of it (scene/colonies.ts).
+  | { kind: 'colonize'; bodyName: string }
 
 export interface PendingShipCommand {
   command: ShipCommand
@@ -289,6 +292,13 @@ export interface ShipInstance {
   // absent = off.
   bombardStance?: BombardStance
   pendingBombard?: { stance: BombardStance; arrivesSimDays: number; sentSimDays?: number } | null
+  // Patrol duty (armed ships): orbiting a colony, it holds the orbit toward
+  // making a micro-colony a planetary colony (scene/colonyLogic.ts). Absent =
+  // off; changed through comms delay like the bombard stance.
+  patrol?: boolean
+  pendingPatrol?: { on: boolean; arrivesSimDays: number; sentSimDays?: number } | null
+  // Settlers (millions) a Colony Ship carries. Absent = none.
+  settlers?: number
   // A short trailing log of this ship's own order/location/combat state,
   // appended once each time any of those actually changes (see
   // setShipOrder/setShipLocation/applyCombatDamage below) — never read by
@@ -437,6 +447,9 @@ interface ShipState {
   setPendingMoveOrder: (id: string, pending: { destination: MoveDestination; arrivesSimDays: number; sentSimDays?: number } | null) => void
   setBombardStance: (id: string, stance: BombardStance) => void
   setPendingBombard: (id: string, pending: ShipInstance['pendingBombard']) => void
+  setPatrol: (id: string, on: boolean) => void
+  setPendingPatrol: (id: string, pending: ShipInstance['pendingPatrol']) => void
+  setSettlers: (id: string, settlers: number) => void
   setPendingStance: (id: string, pending: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null) => void
   // See ShipInstance.orderQueue / pendingQueueAdds.
   setOrderQueue: (id: string, queue: MoveDestination[]) => void
@@ -699,6 +712,9 @@ export const useShipStore = create<ShipState>((set) => ({
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingMoveOrder: pending } : ship)),
     })),
+  setPatrol: (id, on) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, patrol: on, pendingPatrol: null } : ship)) })),
+  setPendingPatrol: (id, pending) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingPatrol: pending } : ship)) })),
+  setSettlers: (id, settlers) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, settlers } : ship)) })),
   setBombardStance: (id, stance) =>
     set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, bombardStance: stance, pendingBombard: null } : ship)) })),
   setPendingBombard: (id, pending) =>

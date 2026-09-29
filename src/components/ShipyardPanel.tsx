@@ -13,6 +13,7 @@ import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { shipyardSlotsForWorld } from '../scene/shipyardLogic'
 import { useTechStore } from '../state/techStore'
 import { findTech } from '../data/techData'
+import { isAbstractEconomy } from '../state/playerStore'
 
 // The resources a hull can actually cost — the ones worth a row in the
 // stockpile readout (minerals only feed a future alloy chain).
@@ -48,7 +49,7 @@ function CostChips({ cost, amounts }: { cost: ResourceCost; amounts: Record<Reso
 const GROUPS: { id: string; label: string; hint: string; roles: ShipClass['role'][] }[] = [
   { id: 'warship', label: 'Warships', hint: 'Combat ships', roles: ['warship'] },
   { id: 'transport', label: 'Troop transports', hint: 'Carry armies between worlds', roles: ['transport'] },
-  { id: 'support', label: 'Science & support', hint: 'Science, construction, cargo and other civilian ships', roles: ['science', 'construction', 'cargo', 'civilian'] },
+  { id: 'support', label: 'Science & support', hint: 'Science, colony, construction, cargo and other civilian ships', roles: ['science', 'colony', 'construction', 'cargo', 'civilian'] },
 ]
 const DESIGNS_GROUP = { id: 'designs', label: 'Your designs', hint: 'Hulls you made in the Ship Designer' }
 
@@ -82,7 +83,8 @@ export function ShipyardPanel() {
 
   const sections = useMemo(() => {
     const all = [
-      ...GROUPS.map((g) => ({ ...g, classes: SHIP_CLASSES.filter((c) => g.roles.includes(c.role)) })),
+      // Colonies exist in Simple mode only (scene/colonies.ts).
+      ...GROUPS.map((g) => ({ ...g, classes: SHIP_CLASSES.filter((c) => g.roles.includes(c.role) && (c.role !== 'colony' || isAbstractEconomy())) })),
       { ...DESIGNS_GROUP, roles: [] as ShipClass['role'][], classes: designClasses },
     ]
     return all.filter((g) => g.classes.length > 0)

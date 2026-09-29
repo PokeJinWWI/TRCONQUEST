@@ -6,13 +6,14 @@ import {
   AI_PEACE_OFFER_COOLDOWN_DAYS,
   AI_PRESS_ON_DAYS,
   AI_PRESS_ON_EXHAUSTION,
+  AI_REPARATIONS_MIN_SCORE,
   AI_STALEMATE_DAYS,
   AI_STALEMATE_SCORE,
   AI_WHITE_PEACE_WHEN_EXHAUSTION,
   AI_WHITE_PEACE_WHEN_SCORE_BELOW,
 } from '../data/aiData'
 import type { PeaceTerms } from '../data/diplomacyData'
-import { bodiesHeldFrom, evaluatePeace, scoreFor, warExhaustion } from '../scene/warScore'
+import { affordableReparations, bodiesHeldFrom, evaluatePeace, scoreFor, warExhaustion } from '../scene/warScore'
 import { bodyStarId, controllerOf } from '../scene/territory'
 import type { AiSnapshot, Blackboard } from './blackboard'
 import type { AgentOutput, AiMemory, Intent } from './types'
@@ -75,8 +76,15 @@ function chooseTerms(bb: Blackboard, enemy: string, war: AiSnapshot['wars'][numb
       const terms: PeaceTerms = { kind: 'cede', bodies: held.slice(0, n) }
       if (evaluatePeace(war, me, terms, snap.owners, snap.controllers, snap.valueOf, snap.simDays).accept) return terms
     }
-    // Holding ground it can't yet claim: fall through — it keeps fighting for
-    // more score unless it's losing or worn out anyway.
+    // Holding ground it can't yet claim: fall through to reparations, or to
+    // fighting on for more score.
+  }
+
+  // Winning with no whole world to take (a neighbour's only world is usually
+  // its capital): it takes what its score buys of the loser's stockpile.
+  if (!pressing && score >= AI_REPARATIONS_MIN_SCORE) {
+    const terms: PeaceTerms = { kind: 'reparations', share: affordableReparations(war, me, snap.owners, snap.controllers, snap.valueOf, snap.simDays) }
+    if (terms.share > 0 && wouldAccept(terms)) return terms
   }
 
   const stalemate = snap.simDays - war.startedSimDays >= AI_STALEMATE_DAYS && Math.abs(score) < AI_STALEMATE_SCORE

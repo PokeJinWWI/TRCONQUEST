@@ -19,7 +19,7 @@ import { canOfferSubjection, grantIndependence, releaseAsSubject } from '../scen
 import { cancelTreaty, proposeTreaty } from '../scene/treaties'
 import { bodiesOwnedBy } from '../scene/territory'
 import { spaceportSitesOf } from '../state/nationEconomy'
-import { bodiesHeldFrom, cessionCost, scoreFor, warExhaustion } from '../scene/warScore'
+import { affordableReparations, bodiesHeldFrom, cessionCost, scoreFor, warExhaustion } from '../scene/warScore'
 
 // Diplomacy: a directory of every nation (Relations) that drills into a full
 // per-nation profile — Paradox-style, everything about (and doable to) that
@@ -556,6 +556,7 @@ function WarCard({ war, viewerId }: { war: War; viewerId: string }) {
   const iHold = bodiesHeldFrom(them, me, owners, controllers)
   const theyHold = bodiesHeldFrom(me, them, owners, controllers)
   const demandCost = cessionCost(iHold, them, owners, liveBodyValue)
+  const reparations = affordableReparations(war, me, owners, controllers, liveBodyValue, day)
 
   const offer = (terms: PeaceTerms) => {
     const verdict = proposePeace(war.id, me, terms, useGameTimeStore.getState().simDays)
@@ -608,6 +609,16 @@ function WarCard({ war, viewerId }: { war: War; viewerId: string }) {
               onClick={() => offer({ kind: 'cede', bodies: iHold })}
             >
               Demand {iHold.join(', ')} ({Math.ceil(demandCost)})
+            </button>
+          )}
+          {reparations > 0 && (
+            <button
+              type="button"
+              className="detail-view-btn"
+              title="They hand you this share of every good in their stockpile. Each percent costs a point of war score (half a point if they are exhausted)."
+              onClick={() => offer({ kind: 'reparations', share: reparations })}
+            >
+              Demand reparations ({Math.round(reparations * 100)}% of their stockpile)
             </button>
           )}
         </div>

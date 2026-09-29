@@ -1,6 +1,24 @@
 # Colonies, cities and shared worlds — design proposal
 
-**Status:** design agreed on the points below; nothing implemented. Requested by the co-op partner (economy/politics track); written by the combat/navy track.
+**Status:** version 1 is implemented (Simple mode only, see "Version 1" below). The rest of this doc is still the plan. Requested by the co-op partner (economy/politics track); written by the combat/navy track.
+
+### The project owner's colony rules (2026-09-28)
+- Colonies are founded by **colony ships**, one colony at a time on a planet. Several colonies may share a planet; a planet wholly claimed by one nation counts as one colony.
+- **Every colony, the starting ones included, has a planetary outpost.**
+- Founding costs **Influence**: a national stockpile capped at 1,000, +2 a month by default; the cost varies.
+- A new colony is a **micro-colony**. It becomes a **planetary colony** once its orbit is uncontested (for now: warships designated **patrol ships** orbit it for a period, 90 days) and the colony itself is uncontested.
+- Micro and planetary colonies have the same economy; a micro-colony just has smaller limits.
+
+### Version 1 (built)
+One nation per planet: a colony claims the whole planet; shared planets (regions, §2c/2d) are version 2.
+- `data/colonyData.ts` (tuning), `scene/colonyLogic.ts` (pure: cost, outpost placement, patrol clock, promotion), `scene/colonies.ts` (founding, seeding, settlers, Influence), `state/colonyStore.ts` (one row per colonized body; owner = `bodyOwner`), `hooks/useColonyResolver.ts`.
+- **Influence** is a `resourceStore` resource outside `SIMPLE_GOODS`: never traded, never paid in reparations. Start 100, +2/mo, cap 1,000.
+- **Cost** = 20 + 10 × planet size (districts) + 5 × light-years from the capital (small moons ~50, Titan 70, Earth 100).
+- **Colony Ship** (civilian, no tech): takes 20 million settlers from the capital when built. `colonize` command needs Simple mode, the world surveyed, unowned, with land, no hostile warship in orbit, settlers aboard and the Influence. It founds a micro-colony: the owner, a Simple-economy world (the settlers, land capped at 3), the outpost key node and a garrison; the ship is used up.
+- **A moon's orbit is its planet's**: ships can't orbit a moon on their own yet (`bodyLivePosition` knows stars and planets only), so a Colony Ship over Saturn settles Titan and patrol ships over Saturn hold its moons' orbits (`territory.orbitBodyOf`).
+- **Patrol duty** (armed ships, signal-delayed like the bombard stance): 90 days of the owner's patrol ship in orbit with no hostile warship, then promotion if nobody else holds ground there and no enemy army stands on it. A hostile warship resets the clock.
+- **Micro-colony limits:** land capped, can't recruit. Planetary: full land, can recruit (in Simple mode every planetary colony counts as a settled world, the seeded outposts too).
+- **AI** (Simple mode): the Expander colonizes the cheapest surveyed unowned world it can afford, and puts one spare warship on patrol at each micro-colony (released once it's planetary).
 
 ### Decisions (answered by the co-op partner and the project owner)
 - **Partial ownership is by region** (landmass + city footprint), not by percentage; region granularity follows this doc's proposal (no drawn borders).

@@ -45,6 +45,13 @@ export function bodyIndex(): Map<string, BodyInfo> {
   return index
 }
 
+// The orbit a ship holds to be "at" a body: the body's own, or for a moon its
+// planet's (ships can't orbit a moon on their own yet).
+export function orbitBodyOf(bodyName: string): string {
+  const info = bodyIndex().get(bodyName)
+  return info?.kind === 'moon' && info.parentPlanet ? info.parentPlanet : bodyName
+}
+
 export function bodyStarId(bodyName: string): string | undefined {
   return bodyIndex().get(bodyName)?.starId
 }

@@ -8,7 +8,11 @@ import { AI_PLAYER_OFFER_COOLDOWN_DAYS, AI_PLAYER_OFFER_MAX_COOLDOWN_DAYS, AI_PL
 import { PIRATES_ID, SANDBOX_PLAYER_ID } from '../src/data/countryRoster'
 import { executeIntents, mayOfferPeaceToPlayer } from '../src/ai/executor'
 import { useAiStore } from '../src/ai/aiStore'
-import { fightPace, paceAfterSpaceFight } from '../src/hooks/fightPace'
+import { fightPace, paceAfterSpaceFight, resetFightPace } from '../src/hooks/fightPace'
+import { resolveSpaceCombat } from '../src/hooks/useCombatResolver'
+import { spawnOwnedShip } from '../src/scene/shipyardLogic'
+import { useShipStore } from '../src/state/shipStore'
+import { setUpTestNations, TEST_ENEMY, TEST_PLAYER } from './testNations'
 import { followGroundFightWithClock, GROUND_FIGHT_COOLDOWN_DAYS } from '../src/hooks/useGroundCombatResolver'
 import type { Army } from '../src/scene/armyLogic'
 import { playerFightLive } from '../src/scene/armyLogic'
@@ -222,6 +226,38 @@ console.log('\n=== 5. End to end: an AI offer pauses, and declines make it rarer
   useConfirmStore.getState().resolve(false)
   check('a second decline is counted', useAiStore.getState().playerOffers[warId]?.declines === 2)
   useAiStore.getState().reset()
+  useDiplomacyStore.getState().reset()
+}
+
+console.log('\n=== 6. A won space fight hands the clock back, though the victor stays ===')
+{
+  setUpTestNations()
+  resetFightPace()
+  useShipStore.setState({ ships: [] })
+  useCombatStore.setState({ engagements: [], autoTacticalOnEngage: true })
+  for (let i = 0; i < 3; i++) spawnOwnedShip('cruiser', TEST_PLAYER, 'sol', 'Luna')
+  spawnOwnedShip('corvette', TEST_ENEMY, 'sol', 'Luna')
+  time.setState({ simDays: 100, paused: false, speedIndex: 0, mode: 'normal' })
+
+  let simDays = 100
+  resolveSpaceCombat(simDays)
+  check('a fight the player is in pulls the clock down to tactical', time.getState().mode === 'tactical')
+  const enemyAlive = () => useShipStore.getState().ships.some((s) => s.ownerId === TEST_ENEMY)
+  for (let i = 0; i < 3000 && enemyAlive(); i++) {
+    simDays += 4 / 86_400
+    time.setState({ simDays })
+    resolveSpaceCombat(simDays)
+  }
+  check('the player wins the fight', !enemyAlive())
+  resolveSpaceCombat(simDays + 1 / 86_400)
+  check('...the victor-only engagement is still open (the arena does not kick the player out)', useCombatStore.getState().engagements.length === 1)
+  check('...and yet the clock is back on strategic', time.getState().mode === 'normal')
+  time.setState({ mode: 'tactical' })
+  resolveSpaceCombat(simDays + 2 / 86_400)
+  check('tactical picked by hand over an empty arena is left alone', time.getState().mode === 'tactical')
+  useShipStore.setState({ ships: [] })
+  useCombatStore.setState({ engagements: [] })
+  time.setState({ mode: 'normal' })
   useDiplomacyStore.getState().reset()
 }
 

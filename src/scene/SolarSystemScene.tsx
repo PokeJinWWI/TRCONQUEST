@@ -42,6 +42,7 @@ import { ownerDisplay } from '../data/countryRoster'
 import { useTerritoryStore } from '../state/territoryStore'
 import { usePlayerStore } from '../state/playerStore'
 import { InspectPanel } from '../components/InspectPanel'
+import { colonizeMenuItem, useBodyOrderMenu } from './BodyOrderMenu'
 
 const MAX_DISTANCE = 32000
 const EXIT_DISTANCE = 26000
@@ -125,6 +126,7 @@ function getBodyPosition(name: string, stars: SystemStarRender[], planets: Plane
 
 export function SolarSystemScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
+  const bodyMenu = useBodyOrderMenu()
   const enterSatellite = useViewStore((s) => s.enterSatellite)
   const exitSystemToInterstellar = useViewStore((s) => s.exitSystemToInterstellar)
   const selectedName = useViewStore((s) => s.inViewSelection)
@@ -311,7 +313,11 @@ export function SolarSystemScene() {
     if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
+    const move = () => orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
+    // With a Colony Ship selected, a menu: move there, or found a colony.
+    const colonize = colonizeMenuItem(selectedStarId, bodyName)
+    if (colonize) bodyMenu.open(bodyName, [{ label: `Move to ${bodyName}`, onClick: move }, colonize])
+    else move()
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
@@ -543,6 +549,8 @@ export function SolarSystemScene() {
         />
         <KeyboardPan controlsRef={controlsRef} />
       </Canvas>
+
+      {bodyMenu.element}
 
       {selectedShipId ? (
         <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />

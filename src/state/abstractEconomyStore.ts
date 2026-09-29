@@ -204,6 +204,12 @@ interface AbstractEconomyStore {
   // population killed by full bombardment (share per body).
   setDevastation: (byBody: Record<string, number>) => void
   killPopulation: (shareByBody: Record<string, number>) => void
+  // Colonies (scene/colonies.ts): a newly founded world with its settlers and
+  // a land limit; people leaving on (or arriving by) a Colony Ship; a colony's
+  // land limit changing with its stage.
+  addColonyWorld: (bodyName: string, population: number, land: number) => void
+  adjustPopulation: (bodyName: string, delta: number) => void
+  setLand: (bodyName: string, land: number) => void
   // Foreign buildings (scene/holdings.ts): urban slots taken, per body, and
   // money in/out of a nation's treasury.
   setForeignSlots: (byBody: Record<string, number>) => void
@@ -406,6 +412,18 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
         if (w && share > 0) worlds[body] = { ...w, population: w.population * (1 - share) }
       }
       return { worlds }
+    }),
+  addColonyWorld: (bodyName, population, land) =>
+    set((s) => (s.worlds[bodyName] ? s : { worlds: { ...s.worlds, [bodyName]: { bodyName, population, buildings: {}, districts: {}, land } } })),
+  adjustPopulation: (bodyName, delta) =>
+    set((s) => {
+      const w = s.worlds[bodyName]
+      return w ? { worlds: { ...s.worlds, [bodyName]: { ...w, population: Math.max(0, w.population + delta) } } } : s
+    }),
+  setLand: (bodyName, land) =>
+    set((s) => {
+      const w = s.worlds[bodyName]
+      return w ? { worlds: { ...s.worlds, [bodyName]: { ...w, land } } } : s
     }),
   cancelOrder: (countryId, orderId) => set((s) => patch(s, countryId, (c) => ({ ...c, queue: c.queue.filter((o) => o.id !== orderId) }))),
   demolish: (countryId, bodyName, building) => {

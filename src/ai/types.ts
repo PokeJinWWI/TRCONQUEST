@@ -26,6 +26,10 @@ export type Intent =
   | { kind: 'embark'; shipId: string; armyIds: string[] }
   | { kind: 'land'; shipId: string; dropNode?: number }
   | { kind: 'set-bombard'; shipId: string; stance: BombardStance }
+  // A Colony Ship founds a colony on `bodyName` (flying there first if it must).
+  | { kind: 'colonize-body'; shipId: string; systemId: string; bodyName: string }
+  // Patrol duty on or off (a warship holding a micro-colony's orbit).
+  | { kind: 'set-patrol'; shipId: string; on: boolean }
   // Fleet organisation: fleets travel as one (scene/fleetMove.ts), so the
   // AI keeps its transports in their own fleet and gathers its warships.
   | { kind: 'split-fleet'; shipIds: string[] }
