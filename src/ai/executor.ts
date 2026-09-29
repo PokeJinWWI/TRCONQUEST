@@ -21,7 +21,6 @@ import { fleetMembersOf, queueBombard, queueFleetMoveOrder, queuePatrol } from '
 import { declareWarOn, makePeace, proposePeace } from '../scene/peace'
 import { useAiStore } from './aiStore'
 import type { Intent } from './types'
-import { orbitBodyOf } from '../scene/territory'
 
 function nameOf(id: string): string {
   return ownerDisplay(id).name
@@ -111,11 +110,6 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
       case 'research-tech':
         useTechStore.getState().researchNode(countryId, intent.techId)
         break
-      case 'explore-system': {
-        const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
-        if (ship?.ownerId === countryId) queueShipCommand(ship.id, { kind: 'explore' })
-        break
-      }
       case 'survey-system': {
         const ship = useShipStore.getState().ships.find((s) => s.id === intent.shipId)
         if (ship?.ownerId === countryId) queueShipCommand(ship.id, { kind: 'survey' })
@@ -182,14 +176,13 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
         const ships = useShipStore.getState().ships
         const ship = ships.find((s) => s.id === intent.shipId)
         if (ship?.ownerId !== countryId) break
-        const orbit = orbitBodyOf(intent.bodyName)
         const command = { kind: 'colonize' as const, bodyName: intent.bodyName }
-        if (ship.location.kind === 'orbiting' && ship.location.bodyName === orbit) {
+        if (ship.location.kind === 'orbiting' && ship.location.bodyName === intent.bodyName) {
           queueShipCommand(ship.id, command)
           break
         }
-        useShipStore.getState().setArrivalCommand(ship.id, { starId: intent.systemId, bodyName: orbit, command })
-        queueFleetMoveOrder(fleetMembersOf(ship, ships), { kind: 'body', systemId: intent.systemId, bodyName: orbit })
+        useShipStore.getState().setArrivalCommand(ship.id, { starId: intent.systemId, bodyName: intent.bodyName, command })
+        queueFleetMoveOrder(fleetMembersOf(ship, ships), { kind: 'body', systemId: intent.systemId, bodyName: intent.bodyName })
         break
       }
     }

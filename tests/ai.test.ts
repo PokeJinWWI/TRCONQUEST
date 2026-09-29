@@ -213,7 +213,7 @@ console.log('\n=== 4. The Shipwright ===')
   check('with an empty stockpile it builds nothing', broke.intents.length === 0)
 
   freshWorld()
-  useTechStore.setState({ byCountry: { [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory', 'orbital-construction']) } } })
+  useTechStore.setState({ byCountry: { [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', 'orbital-construction']) } } })
   check('the Shipwright no longer plans Starbases (the Expander does)', !has(shipwright(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), INITIAL_AI_MEMORY).intents, 'build-starbase'))
 }
 
@@ -221,7 +221,7 @@ console.log('\n=== 4b. The Expander ===')
 {
   const plan = (id: string, memory = INITIAL_AI_MEMORY) => expander(buildBlackboard(id, captureSnapshot(0)), captureSnapshot(0), memory)
   const setTech = (id: string, extra: string[], points = 0) =>
-    useTechStore.setState({ byCountry: { [id]: { researchPoints: { physics: points, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory', ...extra]) } } })
+    useTechStore.setState({ byCountry: { [id]: { researchPoints: { physics: points, society: 0, engineering: points }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', ...extra]) } } })
 
   freshWorld()
   setTech(MARS, [])
@@ -240,13 +240,12 @@ console.log('\n=== 4b. The Expander ===')
   const sci = plan(MARS).intents.find((i) => i.kind === 'move-ship')
   check('the science ship heads for the nearest star it has not surveyed (Alpha Centauri)', sci?.kind === 'move-ship' && sci.systemId === 'alpha-centauri' && sci.bodyName === null, JSON.stringify(sci))
 
-  // At an unexplored star it orders both, independently: explore, then survey.
+  // At an unexplored star it just surveys: being there explores it.
   {
     const sciShip = useShipStore.getState().ships.find((s) => s.ownerId === MARS && s.classId === 'science-ship')!
     useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === sciShip.id ? { ...s, location: { kind: 'star' as const, starId: 'alpha-centauri', offset: [0, 0, 0] as [number, number, number] } } : s)) })
     const there = plan(MARS).intents
-    check('at an unexplored star it orders an explore', there.some((i) => i.kind === 'explore-system' && i.shipId === sciShip.id))
-    check('...and a survey, without waiting for the exploring', there.some((i) => i.kind === 'survey-system' && i.shipId === sciShip.id))
+    check('at an unexplored star it orders a survey, without waiting for the exploring', there.some((i) => i.kind === 'survey-system' && i.shipId === sciShip.id))
     useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === sciShip.id ? { ...s, location: { kind: 'orbiting' as const, systemId: 'sol', bodyName: 'Mars', periodDays: 1, phaseDeg: 0, inclinationDeg: 0 } } : s)) })
   }
 
@@ -512,7 +511,10 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
       if (day % 30 === 0) {
         for (const c of COUNTRIES) applyStrategicIncome(c.id, 1)
         // Simple mode's labs feed every nation's tech trees; Complex mode has none.
-        if (grantResearch) for (const id of aiIds) useTechStore.getState().grantResearch(id, 'physics', 25)
+        if (grantResearch) for (const id of aiIds) {
+          useTechStore.getState().grantResearch(id, 'physics', 25)
+          useTechStore.getState().grantResearch(id, 'engineering', 25)
+        }
       }
       runStrategicAI(day)
       resolveCommsSignals(day)

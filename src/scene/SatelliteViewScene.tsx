@@ -22,14 +22,17 @@ import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
 import { OrbitRing } from './OrbitRing'
 import { getSystemStars } from '../data/starData'
-import { satelliteOrbitLocalPosition, canFollow, oppositeMoonSyncOrbit, clusterRestingShipsByFleet } from './shipPhysics'
+import { satelliteShipLocalPosition, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
 import { orderSelectedFleets } from './commsVisual'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { InspectPanel } from '../components/InspectPanel'
 import { PlanetArmyMarkers, PlanetGroundHud } from './PlanetArmyMarkers'
-import { colonizeMenuItem, useBodyOrderMenu } from './BodyOrderMenu'
+import { bodyMenuItems, useBodyOrderMenu } from './BodyOrderMenu'
+import { hasOwnShipSelected, openInViewFull } from './panelOpen'
+import { isNewTabModifierHeld } from './queueModifier'
+import { useWorkspaceStore } from '../state/workspaceStore'
 
 interface SatelliteViewSceneProps {
   bodyName: string
@@ -93,22 +96,21 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const setFollowing = useShipStore((s) => s.setFollowing)
-  // Ships resting in orbit around this exact body — the "correct
-  // corresponding view" a move order here should actually be visible in, not
-  // just an abstract system-AU point only system view could ever render. A
-  // ship still mid-order (even one destined here) isn't resting yet, so it
-  // doesn't show until it actually arrives.
-  const orbitingShips = useMemo(
-    () =>
-      ships.filter(
-        (ship) =>
-          !ship.order &&
-          ship.location.kind === 'orbiting' &&
-          ship.location.systemId === selectedStarId &&
-          ship.location.bodyName === bodyName,
-      ),
-    [ships, bodyName, selectedStarId],
-  )
+  // Ships resting in orbit around this exact body or one of its moons — the
+  // "correct corresponding view" a move order here should actually be
+  // visible in, not just an abstract system-AU point only system view could
+  // ever render. A ship still mid-order (even one destined here) isn't
+  // resting yet, so it doesn't show until it actually arrives.
+  const orbitingShips = useMemo(() => {
+    const here = new Set([bodyName, ...getMoonsForPlanet(bodyName).moons.map((m) => m.name)])
+    return ships.filter(
+      (ship) =>
+        !ship.order &&
+        ship.location.kind === 'orbiting' &&
+        ship.location.systemId === selectedStarId &&
+        here.has(ship.location.bodyName),
+    )
+  }, [ships, bodyName, selectedStarId])
   // Only track a selected ship for the camera lock while it's actually
   // rendered here (an orbitingShips member) — same "focusing logic like a
   // moon/the primary body" idea as the other scenes.
@@ -130,8 +132,15 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   // identical system-view version, which needs the extra per-body grouping
   // this view doesn't).
   const clusterStackInfo = useMemo(() => {
+    // Stacked per orbited body (the primary or one of its moons).
+    const byBody = new Map<string, string[]>()
+    for (const cluster of orbitingClusters) {
+      const lead = cluster.ships[0].location
+      const body = lead.kind === 'orbiting' ? lead.bodyName : ''
+      byBody.set(body, [...(byBody.get(body) ?? []), cluster.key])
+    }
     const info = new Map<string, { index: number; count: number }>()
-    orbitingClusters.forEach((cluster, index) => info.set(cluster.key, { index, count: orbitingClusters.length }))
+    for (const keys of byBody.values()) keys.forEach((key, index) => info.set(key, { index, count: keys.length }))
     return info
   }, [orbitingClusters])
   // One ring per distinct inclination present (almost always just one, 0° —
@@ -140,9 +149,9 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   // circle).
   const shipOrbitInclinations = useMemo(() => {
     const set = new Set<number>()
-    for (const ship of orbitingShips) if (ship.location.kind === 'orbiting') set.add(ship.location.inclinationDeg)
+    for (const ship of orbitingShips) if (ship.location.kind === 'orbiting' && ship.location.bodyName === bodyName) set.add(ship.location.inclinationDeg)
     return Array.from(set)
-  }, [orbitingShips])
+  }, [orbitingShips, bodyName])
 
   // If the Outliner (or anything else driving inViewSelection) points
   // somewhere other than the moon currently focused — e.g. the player is
@@ -208,10 +217,12 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   }, [selectedMoon, inViewSelection, primaryBody, orbitAU])
 
   const handleSelectMoon = (moon: MoonData) => {
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: moon.name, selectedShipId: null })
     selectShip(null)
     selectInView(moon.name)
   }
   const handleSelectPrimary = () => {
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: primaryBody.name, selectedShipId: null })
     selectShip(null)
     selectInView(primaryBody.name)
   }
@@ -223,31 +234,27 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   // moons (isStar's the star case; moons have no onOrderTo handler on their
   // own marker) since a moon isn't a valid move-order target yet.
   const handleOrderToPrimary = () => {
-    if (!selectedShipId) return
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: bodyName, selectedShipId: null })
+    if (!hasOwnShipSelected()) return openInViewFull(bodyName)
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
     const move = () => orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
-    const colonize = colonizeMenuItem(selectedStarId, bodyName)
-    if (colonize) bodyMenu.open(bodyName, [{ label: `Move to ${bodyName}`, onClick: move }, colonize])
+    const extra = bodyMenuItems(selectedStarId, bodyName)
+    if (extra.length > 0) bodyMenu.open(bodyName, [{ label: `Move to ${bodyName}`, onClick: move }, ...extra])
     else move()
   }
 
   // Right-clicking a moon orders the currently-selected ship into orbit
-  // around *this scene's own primary body* — not the moon itself, a moon
-  // still isn't a valid destination on its own — but synced to match that
-  // moon's exact period/phase/inclination, offset 180° (see
-  // shipPhysics.oppositeMoonSyncOrbit). Matching period is what makes
-  // "opposite" hold forever rather than just at the moment of arrival: a
-  // ship on its own default (much faster, unrelated) orbit would drift in
-  // and out of alignment with the moon continuously.
+  // around that moon — a place of its own (its own orbital superiority,
+  // blockade, invasion and colony patrol), drawn circling the moon here.
   const handleOrderToMoonOrbit = (moon: MoonData) => {
-    if (!selectedShipId) return
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: moon.name, selectedShipId: null })
+    if (!hasOwnShipSelected()) return openInViewFull(moon.name)
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    const move = () => orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName, syncOrbit: oppositeMoonSyncOrbit(moon) })
-    // A moon's orbit is its planet's, so a Colony Ship settles it from here.
-    const colonize = colonizeMenuItem(selectedStarId, moon.name)
-    if (colonize) bodyMenu.open(moon.name, [{ label: `Hold station by ${moon.name}`, onClick: move }, colonize])
+    const move = () => orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName: moon.name })
+    const extra = bodyMenuItems(selectedStarId, moon.name)
+    if (extra.length > 0) bodyMenu.open(moon.name, [{ label: `Move to ${moon.name}`, onClick: move }, ...extra])
     else move()
   }
 
@@ -344,9 +351,10 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
               key={cluster.key}
               ships={cluster.ships}
               primaryVisualRadius={primaryVisualRadius}
+              moons={moonInfo.moons}
               onOrderFollow={handleFollowShip}
               stackIndex={clusterStackInfo.get(cluster.key)?.index ?? index}
-              stackCount={orbitingClusters.length}
+              stackCount={clusterStackInfo.get(cluster.key)?.count ?? orbitingClusters.length}
             />
           ))}
 
@@ -372,9 +380,10 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
               arriveDistance={SHIP_FOCUS_ARRIVE_DISTANCE}
               getTargetPosition={() =>
                 new Vector3(
-                  ...satelliteOrbitLocalPosition(
+                  ...satelliteShipLocalPosition(
                     trackedShipLocation,
                     primaryVisualRadius,
+                    moonInfo.moons,
                     useGameTimeStore.getState().simDays,
                   ),
                 )
@@ -397,7 +406,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
                 if (lockOnEnabled) {
                   if (trackedShipLocation)
                     return new Vector3(
-                      ...satelliteOrbitLocalPosition(trackedShipLocation, primaryVisualRadius, useGameTimeStore.getState().simDays),
+                      ...satelliteShipLocalPosition(trackedShipLocation, primaryVisualRadius, moonInfo.moons, useGameTimeStore.getState().simDays),
                     )
                   if (selectedMoon) return getMoonPosition(selectedMoon, simDaysToYears(useGameTimeStore.getState().simDays))
                 }

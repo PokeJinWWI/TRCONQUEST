@@ -16,7 +16,6 @@ export type Intent =
   // its hold; `starId` is only what the planner meant (for traces).
   | { kind: 'build-starbase'; shipId: string; starId: string }
   | { kind: 'research-tech'; techId: string }
-  | { kind: 'explore-system'; shipId: string }
   | { kind: 'survey-system'; shipId: string }
   | { kind: 'load-cargo'; shipId: string; want: Partial<Record<ResourceId, number>> }
   | { kind: 'transfer-cargo'; fromShipId: string; toShipId: string; want: Partial<Record<ResourceId, number>> }

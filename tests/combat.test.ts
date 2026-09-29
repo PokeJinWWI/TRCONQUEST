@@ -2476,7 +2476,7 @@ console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, but the default
   useTechStore.setState((s) => {
     const current = s.stateFor(countryId)
     const stripped = new Set(current.researched)
-    stripped.delete('warp-theory')
+    stripped.delete('warp-drives')
     return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: stripped } } }
   })
   const withoutWarp = planMove(corvette, farStar, simDays)
@@ -2492,7 +2492,7 @@ console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, but the default
   // check.
   useTechStore.setState((s) => {
     const current = s.stateFor(countryId)
-    return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: new Set(current.researched).add('warp-theory') } } }
+    return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: new Set(current.researched).add('warp-drives') } } }
   })
   const destroyer = makeShip('destroyer', 'p2', countryId, 'Mars')
   const starDest = { kind: 'star' as const, starId: 'sol' }

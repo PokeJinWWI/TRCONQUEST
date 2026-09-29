@@ -5,6 +5,13 @@
 // focused), because the scenes' right-click callbacks are handed a target, not
 // the mouse event.
 let held = false
+// Ctrl/Cmd, the "open in a new tab" modifier, tracked the same way for the
+// scenes' select callbacks (they get a name, not the click).
+let newTabHeld = false
+
+export function isNewTabModifierHeld(): boolean {
+  return newTabHeld
+}
 
 export function isQueueModifierHeld(): boolean {
   return held
@@ -18,12 +25,15 @@ export function setQueueModifierHeld(value: boolean): void {
 export function installQueueModifier(): () => void {
   const key = (e: KeyboardEvent) => {
     if (e.key === 'Shift') held = e.type === 'keydown'
+    if (e.key === 'Control' || e.key === 'Meta') newTabHeld = e.type === 'keydown'
   }
   const pointer = (e: MouseEvent | PointerEvent) => {
     held = e.shiftKey
+    newTabHeld = e.ctrlKey || e.metaKey
   }
   const clear = () => {
     held = false
+    newTabHeld = false
   }
   window.addEventListener('keydown', key, true)
   window.addEventListener('keyup', key, true)

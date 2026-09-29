@@ -1,9 +1,11 @@
 import { create } from 'zustand'
-import { canResearch, findTech, type TechCategory } from '../data/techData'
+import { canResearch, findTech, queuePlan, queuedResearchNow, type TechCategory } from '../data/techData'
 
 export interface TechState {
   researchPoints: Record<TechCategory, number>
   researched: Set<string>
+  // Research queued for later (techData.queuePlan / queuedResearchNow).
+  queue?: string[]
 }
 
 // A fresh country starts with Warp Theory and Hyperspace Theory already
@@ -14,7 +16,7 @@ export interface TechState {
 // first scout's report from the nearest star took six years to come home,
 // which left exploring dead for the whole early game. Everything else starts
 // unresearched; there is no other retroactive seeding anywhere else in the tree.
-const DEFAULT_RESEARCHED = ['warp-theory', 'hyperspace-theory', 'warp-comms']
+const DEFAULT_RESEARCHED = ['warp-theory', 'warp-drives', 'hyperspace-theory', 'warp-comms']
 
 function freshTechState(): TechState {
   return {
@@ -55,6 +57,12 @@ interface TechStore {
   // actually light up instead of just silently succeeding once clicked).
   freeResearchMode: boolean
   setFreeResearchMode: (on: boolean) => void
+  // Queue a tech (and whatever it still needs) for later; researched as soon
+  // as it can be (processQueue, run when research points come in).
+  queueTech: (countryId: string, nodeId: string) => void
+  unqueueTech: (countryId: string, nodeId: string) => void
+  // Researches every queued tech that can be now, in queue order.
+  processQueue: (countryId: string) => void
 }
 
 export const useTechStore = create<TechStore>((set, get) => ({
@@ -86,11 +94,43 @@ export const useTechStore = create<TechStore>((set, get) => ({
       byCountry: {
         ...state.byCountry,
         [countryId]: {
+          ...current,
           researchPoints: { ...current.researchPoints, [node.category]: current.researchPoints[node.category] - cost },
           researched: new Set(current.researched).add(nodeId),
         },
       },
     }))
     return true
+  },
+
+  queueTech: (countryId, nodeId) => {
+    const current = get().byCountry[countryId] ?? freshTechState()
+    const queue = current.queue ?? []
+    const add = queuePlan(nodeId, current.researched, queue)
+    if (add.length === 0) return
+    set((state) => ({ byCountry: { ...state.byCountry, [countryId]: { ...current, queue: [...queue, ...add] } } }))
+    get().processQueue(countryId)
+  },
+
+  unqueueTech: (countryId, nodeId) => {
+    const current = get().byCountry[countryId]
+    if (!current?.queue) return
+    // Anything queued only because it needed this goes too.
+    const drop = new Set([nodeId])
+    for (const id of current.queue) {
+      const node = findTech(id)
+      if (node && node.prerequisites.length > 0 && node.prerequisites.every((set) => set.some((p) => drop.has(p)))) drop.add(id)
+    }
+    set((state) => ({ byCountry: { ...state.byCountry, [countryId]: { ...current, queue: current.queue!.filter((id) => !drop.has(id)) } } }))
+  },
+
+  processQueue: (countryId) => {
+    const current = get().byCountry[countryId]
+    if (!current?.queue || current.queue.length === 0) return
+    const now = queuedResearchNow(current.queue, current.researched, current.researchPoints, get().freeResearchMode)
+    for (const id of now) get().researchNode(countryId, id)
+    const after = get().byCountry[countryId]!
+    const queue = (after.queue ?? []).filter((id) => !after.researched.has(id))
+    if (queue.length !== (after.queue ?? []).length) set((state) => ({ byCountry: { ...state.byCountry, [countryId]: { ...after, queue } } }))
   },
 }))

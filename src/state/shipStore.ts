@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ResourceId } from '../data/resourceData'
 import type { SurveyJob } from '../scene/surveyLogic'
+import type { Automation } from '../scene/automation'
 import type { ResourceCost } from '../data/shipyardData'
 import type { BombardStance } from '../data/defenseData'
 import { CHAFF_CHARGES, type CombatProfile, type CombatStance, type ComponentKind, type FleetStrategy } from '../data/combatData'
@@ -24,7 +25,7 @@ import { useGameTimeStore } from './gameTimeStore'
 // `inclinationDeg` defaults to 0 for a normal arrival (a flat orbit, same as
 // before this field existed) — nonzero only when a ship has entered a
 // synced orbit matching a real moon's tilt (see MoveDestination's 'body'
-// `syncOrbit`, and shipPhysics.oppositeMoonSyncOrbit), so its path actually
+// `syncOrbit`), so its path actually
 // stays coplanar with that moon's, not just angularly opposite it.
 export type ShipLocation =
   | { kind: 'orbiting'; systemId: string; bodyName: string; periodDays: number; phaseDeg: number; inclinationDeg: number }
@@ -40,8 +41,7 @@ export type MoveDestination =
       kind: 'body'
       systemId: string
       bodyName: string
-      // Present only for "enter a preexisting orbit" (see
-      // shipPhysics.oppositeMoonSyncOrbit) — overrides the default
+      // Present only for "enter a preexisting orbit" — overrides the default
       // fresh-arrival period/phase/inclination with an exact match to
       // another orbiting object's motion (offset however the caller likes;
       // the opposite-a-moon case bakes in a 180° phase offset itself).
@@ -57,10 +57,10 @@ export type MoveDestination =
 // at once or, out of comms contact, when its signal arrives (see
 // ShipInstance.pendingCommands).
 export type ShipCommand =
-  // Reveal the star this ship rests at (its owner, bodies, borders).
-  | { kind: 'explore' }
-  // Survey every body at the star this ship rests at. Needs no exploring first.
-  | { kind: 'survey' }
+  // A science ship surveys every unsurveyed body of `starId` (default: the
+  // system it is in), or only `bodyName`, flying to each in turn. Exploring
+  // needs no order: any ship entering a system explores it.
+  | { kind: 'survey'; starId?: string; bodyName?: string }
   // Take goods from the nation's stockpile aboard (at an owned world).
   | { kind: 'load'; want: ResourceCost }
   // Hand goods to another of the nation's ships in the same place.
@@ -68,8 +68,8 @@ export type ShipCommand =
   // A Construction Ship builds a Starbase at the star it rests at, paid from
   // its hold.
   | { kind: 'build-starbase' }
-  // A Colony Ship founds a colony on `bodyName`: the body it orbits, or a moon
-  // of it (scene/colonies.ts).
+  // A Colony Ship founds a colony on `bodyName`, the body it orbits
+  // (scene/colonies.ts).
   | { kind: 'colonize'; bodyName: string }
 
 export interface PendingShipCommand {
@@ -226,7 +226,7 @@ export interface ShipInstance {
   // warp mid-flight once able, rather than riding reaction drive for the
   // whole trip (see shipPhysics.planMove). Never gates the *mandatory*
   // gravity-well-clearing phase — that always auto-engages once clear,
-  // provided warp is otherwise ready. Default false — an opt-in.
+  // provided warp is otherwise ready. On by default for new ships.
   warpWhenReady: boolean
   // Whether this hull spends its own chaff charges automatically when
   // actually under threat (see combatResolution's AI countermeasures step,
@@ -299,6 +299,13 @@ export interface ShipInstance {
   pendingPatrol?: { on: boolean; arrivesSimDays: number; sentSimDays?: number } | null
   // Settlers (millions) a Colony Ship carries. Absent = none.
   settlers?: number
+  // A Colony Ship at work founding a colony on `bodyName` (the body it
+  // orbits) since `sinceSimDays`; the colony exists after COLONY_FOUNDING_DAYS
+  // (scene/colonies.resolveFoundings). Cleared by any manual order.
+  founding?: { bodyName: string; sinceSimDays: number } | null
+  // Stellaris-style automation (scene/automation.ts): the ship finds its own
+  // work. Absent = off; any manual order turns it off.
+  automation?: Automation | null
   // A short trailing log of this ship's own order/location/combat state,
   // appended once each time any of those actually changes (see
   // setShipOrder/setShipLocation/applyCombatDamage below) — never read by
@@ -332,9 +339,9 @@ export interface ShipInstance {
   // scene/cargoLogic.ts). Optional: absent = empty, so no existing ShipInstance
   // literal needs updating.
   cargo?: Partial<Record<ResourceId, number>>
-  // A science ship's standing survey job (scene/surveyLogic.ts): while set and
-  // the ship stays at that star, it works through the system's bodies. Cleared
-  // when the ship leaves or the system is fully surveyed.
+  // A science ship's standing survey job (scene/surveyLogic.ts): while set it
+  // flies to each listed body and surveys it (hooks/useSurveyResolver).
+  // Cleared when every body is done, or by any manual order to the ship.
   surveyJob?: SurveyJob | null
   // "Go there and do this": set by a star's right-click menu (explore, survey,
   // build a Starbase). Fires once when the ship arrives at that star
@@ -450,6 +457,8 @@ interface ShipState {
   setPatrol: (id: string, on: boolean) => void
   setPendingPatrol: (id: string, pending: ShipInstance['pendingPatrol']) => void
   setSettlers: (id: string, settlers: number) => void
+  setFounding: (id: string, founding: ShipInstance['founding']) => void
+  setAutomation: (id: string, automation: Automation | null) => void
   setPendingStance: (id: string, pending: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null) => void
   // See ShipInstance.orderQueue / pendingQueueAdds.
   setOrderQueue: (id: string, queue: MoveDestination[]) => void
@@ -619,6 +628,11 @@ export const useShipStore = create<ShipState>((set) => ({
                   orderQueue: keepFollowing ? ship.orderQueue : [],
                   warpReadySimDays: warpReadySimDays ?? ship.warpReadySimDays,
                   followingShipId: keepFollowing ? ship.followingShipId : null,
+                  // A manual order ends a survey job; the job's own flights
+                  // (keepFollowing) leave it be.
+                  surveyJob: keepFollowing ? ship.surveyJob : null,
+                  founding: keepFollowing ? ship.founding : null,
+                  automation: keepFollowing ? ship.automation : null,
                 },
                 simDays,
               )
@@ -695,6 +709,9 @@ export const useShipStore = create<ShipState>((set) => ({
                 // whatever comms-delayed command might still be queued.
                 pendingMoveOrder: null,
                 followingShipId: keepFollowing ? sh.followingShipId : null,
+                surveyJob: keepFollowing ? sh.surveyJob : null,
+                founding: keepFollowing ? sh.founding : null,
+                automation: keepFollowing ? sh.automation : null,
               },
               simDays,
             )
@@ -715,6 +732,8 @@ export const useShipStore = create<ShipState>((set) => ({
   setPatrol: (id, on) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, patrol: on, pendingPatrol: null } : ship)) })),
   setPendingPatrol: (id, pending) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingPatrol: pending } : ship)) })),
   setSettlers: (id, settlers) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, settlers } : ship)) })),
+  setFounding: (id, founding) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, founding } : ship)) })),
+  setAutomation: (id, automation) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automation } : ship)) })),
   setBombardStance: (id, stance) =>
     set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, bombardStance: stance, pendingBombard: null } : ship)) })),
   setPendingBombard: (id, pending) =>

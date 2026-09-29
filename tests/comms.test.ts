@@ -37,7 +37,7 @@ import { useTechStore } from '../src/state/techStore'
 let failures = 0
 // Nations start with Warp Comms; these checks are about the light-speed tier.
 function lightSpeedOnly(countryId: string) {
-  useTechStore.setState({ byCountry: { [countryId]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory']) } } })
+  useTechStore.setState({ byCountry: { [countryId]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory']) } } })
 }
 function check(label: string, cond: boolean, detail = '') {
   if (cond) console.log(`  PASS  ${label}${detail ? ` — ${detail}` : ''}`)

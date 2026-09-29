@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { COUNTRIES, getCountry } from '../data/countryData'
 import { STRATEGIC_AI_COUNTRY_IDS, ownerDisplay } from '../data/countryRoster'
-import { TRUCE_DAYS, type PeaceTerms, type War } from '../data/diplomacyData'
+import { TRUCE_DAYS, type DiplomacyEvent, type PeaceTerms, type War } from '../data/diplomacyData'
+import { TOAST_MS, goToEvent, tickToasts, type Toast } from '../scene/eventNavigation'
 import { bindsForeignPolicy, paysTribute, SUBJECT_OFFER_MIN_POWER_RATIO, type SubjectType } from '../data/subjectData'
 import { useDiplomacyStore, relationIn, warBetweenIn } from '../state/diplomacyStore'
 import { usePlayerStore } from '../state/playerStore'
@@ -903,23 +904,22 @@ export function DiplomacyPanel({ subcategory }: { subcategory: string | null }) 
   return <RelationsTab />
 }
 
-// New diplomacy events pop up briefly at the top of the screen, whichever
-// view is open — war declarations, occupations, peace.
-const TOAST_MS = 7000
+// New diplomacy events pop up at the top of the screen, whichever view is open
+// — war declarations, occupations, peace, colonies. Each stays TOAST_MS of
+// real time, counted only while the game runs (scene/eventNavigation).
+// Left-click goes to where it happened (or its Diplomacy tab); right-click
+// dismisses it.
 const MAX_TOASTS = 3
+const TOAST_TICK_MS = 200
+
+type ToastItem = Toast & { event: DiplomacyEvent; color: string }
 
 export function DiplomacyToast() {
   const events = useDiplomacyStore((s) => s.events)
   // The last event already on record when this mounted; anything after it is
   // new. '' when there were none, so the very first event still shows.
   const seen = useRef<string>(useDiplomacyStore.getState().events.at(-1)?.id ?? '')
-  const timers = useRef(new Set<ReturnType<typeof setTimeout>>())
-  const [toasts, setToasts] = useState<{ id: string; text: string; color: string }[]>([])
-
-  useEffect(() => {
-    const pending = timers.current
-    return () => pending.forEach(clearTimeout)
-  }, [])
+  const [toasts, setToasts] = useState<ToastItem[]>([])
 
   useEffect(() => {
     const last = events[events.length - 1]
@@ -928,23 +928,37 @@ export function DiplomacyToast() {
     const fresh = events.slice(idx + 1)
     seen.current = last.id
     if (fresh.length === 0) return
-    setToasts((t) => [...t, ...fresh.map((e) => ({ id: e.id, text: e.text, color: colorOf(e.countryIds[0] ?? '') }))].slice(-MAX_TOASTS))
-    // Each batch expires on its own clock — a later event mustn't cancel an
-    // earlier one's timeout.
-    const ids = new Set(fresh.map((e) => e.id))
-    const timer = setTimeout(() => {
-      timers.current.delete(timer)
-      setToasts((t) => t.filter((x) => !ids.has(x.id)))
-    }, TOAST_MS)
-    timers.current.add(timer)
+    setToasts((t) => [...t, ...fresh.map((e) => ({ id: e.id, remainingMs: TOAST_MS, event: e, color: colorOf(e.countryIds[0] ?? '') }))].slice(-MAX_TOASTS))
   }, [events])
 
+  // A real-time clock (setInterval, not the game's), standing still while paused.
+  const any = toasts.length > 0
+  useEffect(() => {
+    if (!any) return
+    const timer = setInterval(() => setToasts((t) => tickToasts(t, TOAST_TICK_MS, useGameTimeStore.getState().paused)), TOAST_TICK_MS)
+    return () => clearInterval(timer)
+  }, [any])
+
+  const dismiss = (id: string) => setToasts((t) => t.filter((x) => x.id !== id))
   if (toasts.length === 0) return null
   return (
     <div className="dip-toasts">
       {toasts.map((t) => (
-        <div key={t.id} className="dip-toast" style={{ borderLeftColor: t.color }}>
-          {t.text}
+        <div
+          key={t.id}
+          className="dip-toast"
+          style={{ borderLeftColor: t.color }}
+          title="Click to go there · right-click to dismiss"
+          onClick={() => {
+            goToEvent(t.event)
+            dismiss(t.id)
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            dismiss(t.id)
+          }}
+        >
+          {t.event.text}
         </div>
       ))}
     </div>

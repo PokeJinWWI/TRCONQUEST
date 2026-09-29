@@ -36,14 +36,15 @@ export interface TechNode {
   locked?: boolean
 }
 
-// --- Physics -----------------------------------------------------------
+// --- The tree ------------------------------------------------------------
 //
 // Eight open root branches plus one locked one, per the user's own design
-// brief. Real-world physics fields, not invented ones — the user gave
-// explicit creative discretion here, so branch/node choices below are this
-// session's judgment call within that brief, not something they dictated
-// node-by-node.
-export const PHYSICS_TECHS: TechNode[] = [
+// brief. Real-world fields, not invented ones. Each node's `category` is the
+// research pool it's paid from: theory is Physics, turning it into hardware is
+// Engineering, life sciences are Society — so one branch crosses trees (Warp
+// Theory → Warp Drives, Orbital Mechanics → Orbital Construction). The
+// per-tree lists below are filters of this one list.
+const BRANCH_TECHS: TechNode[] = [
   // --- Classical Mechanics ------------------------------------------------
   // The one branch with a confirmed, wired mechanical effect this pass: see
   // combatArena.ts's orbitalHoldVelocity and combatResolution.ts's
@@ -71,7 +72,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'free-flight-maneuvering',
     name: 'Free-Flight Maneuvering',
-    category: 'physics',
+    category: 'engineering',
     description:
       "Continuous stationkeeping thrust, precisely countering a body's gravity well. A ship can hold any position it chooses instead of settling into a natural orbit — at the real cost, in reaction mass and power, of fighting gravity every second it does.",
     cost: 130,
@@ -80,10 +81,12 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'orbital-construction',
     name: 'Orbital Construction',
-    category: 'physics',
+    category: 'engineering',
     description:
       'Building and holding station at real orbital scale, unmanned and unattended — the basis for a Starbase: a permanent claim on a system that needs no world to stand on.',
-    cost: 150,
+    cost: 60,
+    // Starbases are what a colony needs in its system
+    // (scene/colonies.canColonize), so it stays cheap.
     prerequisites: [['orbital-mechanics']],
   },
 
@@ -99,7 +102,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'waste-heat-management',
     name: 'Waste Heat Management',
-    category: 'physics',
+    category: 'engineering',
     description:
       "Efficient heat dissipation and recapture. Exotic matter's output is effectively infinite, but only as much of it as doesn't leak away as waste heat is actually usable.",
     cost: 80,
@@ -108,7 +111,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'thermal-cloaking',
     name: 'Thermal Cloaking',
-    category: 'physics',
+    category: 'engineering',
     description: "Actively suppressing and redirecting a hull's own heat signature.",
     cost: 160,
     prerequisites: [['waste-heat-management']],
@@ -116,7 +119,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'exotic-matter-containment',
     name: 'Exotic Matter Containment',
-    category: 'physics',
+    category: 'engineering',
     description: 'Controlled, gradual extraction from an exotic matter deposit, rather than an uncontrolled release.',
     cost: 200,
     prerequisites: [['waste-heat-management']],
@@ -137,7 +140,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'directed-energy-weapons',
     name: 'Directed Energy Weapons',
-    category: 'physics',
+    category: 'engineering',
     description: 'Coherent, focused beams of energy — the physics behind every laser and beam weapon in service.',
     cost: 90,
     prerequisites: [['electromagnetism']],
@@ -145,7 +148,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'shielding',
     name: 'Shielding',
-    category: 'physics',
+    category: 'engineering',
     description: 'Deflector fields — a standing electromagnetic barrier that absorbs incoming energy before it reaches the hull.',
     cost: 90,
     prerequisites: [['electromagnetism']],
@@ -153,7 +156,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'point-defense-systems',
     name: 'Point Defense Systems',
-    category: 'physics',
+    category: 'engineering',
     description: 'Fast-tracking, short-range interception fire, purpose-built to shoot down incoming missiles and torpedoes.',
     cost: 90,
     prerequisites: [['electromagnetism']],
@@ -161,7 +164,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'sensors-and-jammers',
     name: 'Sensors & Jammers',
-    category: 'physics',
+    category: 'engineering',
     description: 'Long-range electromagnetic detection, and the countermeasures built to blind it.',
     cost: 130,
     prerequisites: [['electromagnetism']],
@@ -169,7 +172,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'mirror-coating',
     name: 'Mirror Coating',
-    category: 'physics',
+    category: 'engineering',
     description:
       "A reflective hull finish that scatters a portion of incoming laser fire — a direct, narrow counter to Directed Energy Weapons, and useful cover against passive optical detection besides.",
     cost: 170,
@@ -178,7 +181,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'dyson-swarm-engineering',
     name: 'Dyson Swarm Engineering',
-    category: 'physics',
+    category: 'engineering',
     description: 'Orbital collector arrays at a stellar scale — the electromagnetic and structural engineering behind a Dyson swarm.',
     cost: 320,
     prerequisites: [['directed-energy-weapons', 'shielding']],
@@ -193,7 +196,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'biology',
     name: 'Biology',
-    category: 'physics',
+    category: 'society',
     description: 'The study of living systems — anatomy, genetics, and the chemistry that drives them.',
     cost: 50,
     prerequisites: [],
@@ -201,7 +204,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'genetic-engineering',
     name: 'Genetic Engineering',
-    category: 'physics',
+    category: 'society',
     description: 'Directly editing genetic code — hardier colonists and crops engineered for conditions Earth life never evolved for.',
     cost: 90,
     prerequisites: [['biology']],
@@ -209,7 +212,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'xenobiology',
     name: 'Xenobiology',
-    category: 'physics',
+    category: 'society',
     description: "The biology of non-terrestrial life — how organisms that evolved elsewhere differ from Earth's own, and what that means for habitability and first contact.",
     cost: 90,
     prerequisites: [['biology']],
@@ -232,6 +235,16 @@ export const PHYSICS_TECHS: TechNode[] = [
     cost: 110,
     prerequisites: [['relativity']],
   },
+  // The engineering that turns Warp Theory into a drive a hull can carry:
+  // what actually lets a ship's warp drive fire (shipPhysics.planMove).
+  {
+    id: 'warp-drives',
+    name: 'Warp Drives',
+    category: 'engineering',
+    description: 'Building the theory into hardware: field generators and exotic-matter handling small and robust enough to fit a ship.',
+    cost: 90,
+    prerequisites: [['warp-theory']],
+  },
   // Signal relays riding the same exotic-matter warp field a warp drive
   // does — see commsData.ts's WARP_COMMS_SPEED_C for the actual speed this
   // buys (a balance pick, not derived). The first of two comms tiers gating
@@ -241,7 +254,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'warp-comms',
     name: 'Warp Comms',
-    category: 'physics',
+    category: 'engineering',
     description: 'FTL signal relays, riding the same exotic-matter warp field a warp drive does — order and report transit times measured in days rather than years.',
     cost: 90,
     prerequisites: [['warp-theory']],
@@ -258,7 +271,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'quantum-computing',
     name: 'Quantum Computing',
-    category: 'physics',
+    category: 'engineering',
     description: 'Computation exploiting superposition and entanglement — a real leap in processing efficiency.',
     cost: 90,
     prerequisites: [['quantum-mechanics']],
@@ -266,7 +279,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'quantum-communications',
     name: 'Quantum Communications',
-    category: 'physics',
+    category: 'engineering',
     description: 'Entanglement-based signaling — communication with none of the usual electromagnetic-spectrum limitations.',
     cost: 90,
     prerequisites: [['quantum-mechanics']],
@@ -284,7 +297,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'nuclear-energetics',
     name: 'Nuclear Energetics',
-    category: 'physics',
+    category: 'engineering',
     description: 'Energy release from nuclear reactions — a real efficiency gain over chemical or purely electromagnetic power.',
     cost: 90,
     prerequisites: [['atomic-physics']],
@@ -292,7 +305,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'radioisotope-power',
     name: 'Radioisotope Power Systems',
-    category: 'physics',
+    category: 'engineering',
     description: 'Steady, low-maintenance power from radioactive decay — ideal for anything that has to run unattended for a long time.',
     cost: 90,
     prerequisites: [['atomic-physics']],
@@ -336,7 +349,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'hyperium-synthesis',
     name: 'Hyperium Synthesis',
-    category: 'physics',
+    category: 'engineering',
     description: 'Manufacturing hyperium directly from exotic matter, rather than relying on rare natural deposits.',
     cost: 300,
     prerequisites: [['hyperspace-theory', 'exotic-matter-theory']],
@@ -350,7 +363,7 @@ export const PHYSICS_TECHS: TechNode[] = [
   {
     id: 'hyper-comms',
     name: 'Hyper Comms',
-    category: 'physics',
+    category: 'engineering',
     description: 'Entangled hyperspace relays — a message departs and arrives in the same instant, anywhere. The end of the light-speed leash on command.',
     cost: 260,
     prerequisites: [['hyperspace-theory', 'quantum-communications']],
@@ -370,21 +383,15 @@ export const PHYSICS_TECHS: TechNode[] = [
   },
 ]
 
-// Structurally real — every helper below works on these exactly like
-// PHYSICS_TECHS — just content-empty. Society is the collaborator's
-// economy/politics track.
-
-export const SOCIETY_TECHS: TechNode[] = []
-
-// --- Engineering ---------------------------------------------------------
+// --- Power Systems (Engineering) -------------------------------------------
 //
-// Engineering's first real content: a small, linear Power Systems chain
+// A small, linear Power Systems chain
 // gating the ship builder's Power Distribution tiers (see shipModules.ts's
 // own "Power Distribution" section and POWER_TIER_TECH_ID) — every ship
 // defaults to Tier 1 for free, so the chain starts at Tier 2. A flat
 // prerequisite line (each tier needs the one before) rather than branching,
 // since there's no meaningful choice here, just an investment ladder.
-export const ENGINEERING_TECHS: TechNode[] = [
+const POWER_TECHS: TechNode[] = [
   {
     id: 'power-distribution-2',
     name: 'Power Distribution II',
@@ -411,6 +418,12 @@ export const ENGINEERING_TECHS: TechNode[] = [
   },
 ]
 
+// Every tech, all three trees together (the "All" tree view).
+export const ALL_TECHS: TechNode[] = [...BRANCH_TECHS, ...POWER_TECHS]
+export const PHYSICS_TECHS: TechNode[] = ALL_TECHS.filter((n) => n.category === 'physics')
+export const SOCIETY_TECHS: TechNode[] = ALL_TECHS.filter((n) => n.category === 'society')
+export const ENGINEERING_TECHS: TechNode[] = ALL_TECHS.filter((n) => n.category === 'engineering')
+
 export const TECHS_BY_CATEGORY: Record<TechCategory, TechNode[]> = {
   physics: PHYSICS_TECHS,
   society: SOCIETY_TECHS,
@@ -418,7 +431,22 @@ export const TECHS_BY_CATEGORY: Record<TechCategory, TechNode[]> = {
 }
 
 export function findTech(id: string): TechNode | undefined {
-  return PHYSICS_TECHS.find((n) => n.id === id) ?? SOCIETY_TECHS.find((n) => n.id === id) ?? ENGINEERING_TECHS.find((n) => n.id === id)
+  return ALL_TECHS.find((n) => n.id === id)
+}
+
+// A tree's own roots: nodes none of whose prerequisites are in `techs` (a
+// global root, or the first node of a tree that builds on another tree).
+export function localRoots(techs: TechNode[]): TechNode[] {
+  const ids = new Set(techs.map((n) => n.id))
+  return techs.filter((n) => n.prerequisites.every((set) => set.every((id) => !ids.has(id))))
+}
+
+// Prerequisites of `node` that live outside `techs` (in another tree).
+export function externalPrerequisites(node: TechNode, techs: TechNode[]): TechNode[] {
+  const ids = new Set(techs.map((n) => n.id))
+  const out = new Map<string, TechNode>()
+  for (const set of node.prerequisites) for (const id of set) if (!ids.has(id)) { const t = findTech(id); if (t) out.set(id, t) }
+  return [...out.values()]
 }
 
 // True if ANY prerequisite set is fully satisfied (or there are none at all
@@ -428,14 +456,14 @@ export function prerequisitesMet(node: TechNode, researchedIds: ReadonlySet<stri
   return node.prerequisites.some((set) => set.every((id) => researchedIds.has(id)))
 }
 
-// How much of the (non-Anomalous) Physics tree has to be researched before
+// How many (non-Anomalous) techs, any tree, have to be researched before
 // Anomalous Phenomena is even attemptable — a simple aggregate threshold
 // rather than an ordinary prerequisite, since the node itself isn't being
 // expanded yet and there's nothing to be a "child" of.
 export const ANOMALOUS_UNLOCK_THRESHOLD = 15
 
 export function anomalousUnlocked(researchedIds: ReadonlySet<string>): boolean {
-  const count = PHYSICS_TECHS.filter((n) => !n.locked && researchedIds.has(n.id)).length
+  const count = ALL_TECHS.filter((n) => !n.locked && researchedIds.has(n.id)).length
   return count >= ANOMALOUS_UNLOCK_THRESHOLD
 }
 
@@ -447,11 +475,16 @@ export function anomalousUnlocked(researchedIds: ReadonlySet<string>): boolean {
 // here; the UI is what decides a grandchild renders as a locked preview
 // rather than full detail, since that's a presentation concern, not a
 // visibility one).
+// Links cross trees, so the rule runs on every tech and the result is cut
+// down to `techs` (the tree being shown).
 export function visibleNodeIds(techs: TechNode[], researchedIds: ReadonlySet<string>): Set<string> {
+  const all = new Map(ALL_TECHS.map((n) => [n.id, n]))
+  for (const n of techs) all.set(n.id, n)
+  const graph = [...all.values()]
   const visible = new Set<string>()
-  const childrenOf = (parentId: string) => techs.filter((n) => n.prerequisites.some((set) => set.includes(parentId)))
+  const childrenOf = (parentId: string) => graph.filter((n) => n.prerequisites.some((set) => set.includes(parentId)))
 
-  for (const node of techs) {
+  for (const node of graph) {
     if (node.prerequisites.length === 0) visible.add(node.id)
   }
   for (const id of researchedIds) {
@@ -461,7 +494,8 @@ export function visibleNodeIds(techs: TechNode[], researchedIds: ReadonlySet<str
       for (const grandchild of childrenOf(child.id)) visible.add(grandchild.id)
     }
   }
-  return visible
+  const shown = new Set(techs.map((n) => n.id))
+  return new Set([...visible].filter((id) => shown.has(id)))
 }
 
 // `freeCost` is the dev console's "zero all tech costs" toggle (see
@@ -474,4 +508,57 @@ export function canResearch(node: TechNode, researchedIds: ReadonlySet<string>, 
   if (node.locked && !anomalousUnlocked(researchedIds)) return false
   if (!prerequisitesMet(node, researchedIds)) return false
   return freeCost || availablePoints >= node.cost
+}
+
+// --- Research queue --------------------------------------------------------
+//
+// A nation can queue research for later (techStore.queueTech): queued techs
+// are researched in order as soon as their prerequisites are met and their
+// own tree has the points. Queueing a tech whose prerequisites aren't met or
+// queued yet queues those first (the first alternative of an OR).
+
+// The ids to append to `queue` so `id` can be researched: its missing
+// prerequisites first (depth first), then itself. Empty if it is already
+// researched or queued.
+export function queuePlan(id: string, researched: ReadonlySet<string>, queue: readonly string[]): string[] {
+  const out: string[] = []
+  const have = (t: string) => researched.has(t) || queue.includes(t) || out.includes(t)
+  const visit = (t: string, depth: number) => {
+    if (have(t) || depth > 50) return
+    const node = findTech(t)
+    if (!node) return
+    if (!prerequisitesMet(node, new Set([...researched, ...queue, ...out]))) {
+      // Take the alternative that needs the fewest new techs.
+      const sets = node.prerequisites.map((set) => set.filter((p) => !have(p)))
+      const pick = sets.reduce((a, b) => (b.length < a.length ? b : a), sets[0] ?? [])
+      for (const p of pick) visit(p, depth + 1)
+    }
+    if (!have(t)) out.push(t)
+  }
+  visit(id, 0)
+  return out
+}
+
+// Which queued techs get researched now, in order, given the points in each
+// tree (spent as it goes). Within one tree the queue order holds: once a tree's
+// next tech can't be afforded, nothing later in that tree jumps ahead of it.
+export function queuedResearchNow(queue: readonly string[], researched: ReadonlySet<string>, points: Record<TechCategory, number>, freeCost = false): string[] {
+  const have = new Set(researched)
+  const left = { ...points }
+  const blocked = new Set<TechCategory>()
+  const done: string[] = []
+  for (const id of queue) {
+    const node = findTech(id)
+    if (!node || have.has(id)) continue
+    if (blocked.has(node.category)) continue
+    if (!prerequisitesMet(node, have) || (node.locked && !anomalousUnlocked(have))) continue
+    if (!freeCost && left[node.category] < node.cost) {
+      blocked.add(node.category)
+      continue
+    }
+    if (!freeCost) left[node.category] -= node.cost
+    have.add(id)
+    done.push(id)
+  }
+  return done
 }

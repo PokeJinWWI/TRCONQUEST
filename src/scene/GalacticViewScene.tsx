@@ -161,7 +161,7 @@ export function GalacticViewScene() {
             controlsRef={controlsRef}
             arriveDistance={FOCUS_ARRIVE_DISTANCE}
             getTargetPosition={() => new Vector3(...neighborhoodScenePosition(focused))}
-            onArrive={() => enterInterstellar(focused.id)}
+            onArrive={() => enterInterstellar(focused.id, true)}
           />
         )}
 

@@ -12,8 +12,9 @@ import {
 import { resolveShipClass } from '../state/shipClassResolver'
 import { ACTIVE_ENGAGEMENT_RISK_BONUS, WARP_BASE_ESCAPE_LOSS_CHANCE, coreDamageRiskBonus } from '../data/combatData'
 import { PLANETS, PLANETS_BY_STAR, getPlanetsForStar, UNITS_PER_AU, AU_IN_KM, type PlanetData } from './planetData'
-import { getPlanetPosition, getOrbitPosition, angleForYear, MOON_TIME_DILATION } from './orbitMath'
+import { getPlanetPosition, getOrbitPosition, angleForYear, getMoonPosition } from './orbitMath'
 import type { MoonData } from './moonData'
+import { bodyIndex } from './territory'
 import { STARS, UNITS_PER_LY, starScenePosition, getSystemStars, findSystemStar, type StarComponent } from '../data/starData'
 import { DAYS_PER_YEAR, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
@@ -162,9 +163,18 @@ export function bodyLivePosition(bodyName: string, simDays: number): Vector3 {
   // at [0,0]), so this correctly handles a ship resting at any star.
   const star = findSystemStar(bodyName)
   if (star) return systemStarOffset(star)
-  const planet = findPlanetByName(bodyName)
+  // A moon sits on its planet at system scale (Luna is 0.0026 AU out, far
+  // below a pixel), so a ship orbiting it travels to, and is drawn at, the
+  // planet's live position; the satellite view draws it circling the moon.
+  const planet = findPlanetByName(moonParent(bodyName) ?? bodyName)
   if (!planet) return new Vector3(0, 0, 0)
   return getPlanetPosition(planet, simDays / DAYS_PER_YEAR)
+}
+
+// The planet a moon orbits, or undefined for anything that isn't a moon.
+export function moonParent(bodyName: string): string | undefined {
+  const info = bodyIndex().get(bodyName)
+  return info?.kind === 'moon' ? info.parentPlanet : undefined
 }
 
 function starPosition(starId: string): Vector3 {
@@ -258,7 +268,7 @@ function restingOffset(shipId: string): [number, number, number] {
 // orbitMath.ts); 20 sits right at that pace rather than the ~5x-faster
 // default this constant used to be. A flat circular orbit by default (no
 // inclination) — nonzero inclination only happens via a synced orbit (see
-// oppositeMoonSyncOrbit below), not a fresh arrival.
+// MoveDestination's 'body'.syncOrbit), not a fresh arrival.
 export const DEFAULT_SHIP_ORBIT_PERIOD_DAYS = 20
 // How far out a resting ship's marker orbits its body, in *system view's*
 // own scale — real planet radii are near sub-pixel at true AU scale (Earth's
@@ -311,7 +321,9 @@ function gravityWellBody(location: ShipLocation): { massKg: number; radiusKm: nu
   if (location.kind === 'orbiting') {
     const star = findSystemStar(location.bodyName)
     if (star) return { massKg: star.massKg, radiusKm: star.radiusKm }
-    const planet = findPlanetByName(location.bodyName)
+    // A moon's orbit is still inside its planet's well (and most moons
+    // carry no mass data).
+    const planet = findPlanetByName(moonParent(location.bodyName) ?? location.bodyName)
     return planet ? { massKg: planet.massKg, radiusKm: planet.radiusKm } : null
   }
   if (location.kind === 'star') {
@@ -342,6 +354,25 @@ export function satelliteOrbitLocalPosition(
   simDays: number,
 ): [number, number, number] {
   const v = shipOrbitOffset(primaryVisualRadius + 1.2, location.periodDays, location.phaseDeg, location.inclinationDeg, simDays)
+  return [v.x, v.y, v.z]
+}
+
+// How far out a ship circles a moon in the satellite view, past the moon's
+// own drawn radius.
+const SATELLITE_MOON_ORBIT_MARGIN = 0.35
+
+// Where a ship resting in orbit draws in a satellite view of `moons`' planet:
+// circling the moon it orbits, or else the primary itself.
+export function satelliteShipLocalPosition(
+  location: { bodyName: string; periodDays: number; phaseDeg: number; inclinationDeg: number },
+  primaryVisualRadius: number,
+  moons: MoonData[],
+  simDays: number,
+): [number, number, number] {
+  const moon = moons.find((m) => m.name === location.bodyName)
+  if (!moon) return satelliteOrbitLocalPosition(location, primaryVisualRadius, simDays)
+  const v = getMoonPosition(moon, simDays / DAYS_PER_YEAR)
+  v.add(shipOrbitOffset(moon.visualRadius + SATELLITE_MOON_ORBIT_MARGIN, location.periodDays, location.phaseDeg, location.inclinationDeg, simDays))
   return [v.x, v.y, v.z]
 }
 
@@ -519,7 +550,7 @@ export function getShipStatusText(ship: ShipInstance, simDays: number, ships?: S
 // starting orbital phase seeded from the ship's own id so multiple arrivals
 // at the same body don't all line up identically (see hashAngleRad). `sync`
 // overrides that default fresh-arrival motion entirely — see
-// MoveDestination's 'body'.syncOrbit / oppositeMoonSyncOrbit.
+// MoveDestination's 'body'.syncOrbit.
 function orbitingLocation(
   systemId: string,
   bodyName: string,
@@ -533,27 +564,6 @@ function orbitingLocation(
     periodDays: sync?.periodDays ?? DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
     phaseDeg: sync?.phaseDeg ?? (hashAngleRad(shipId) * 180) / Math.PI,
     inclinationDeg: sync?.inclinationDeg ?? 0,
-  }
-}
-
-// The synced period/phase/inclination for entering orbit on the exact
-// opposite side of a moon's parent body from that moon — matching its
-// period (so the two stay antipodal forever, not just at the moment the
-// order was given) and its inclination (so they stay coplanar, not just
-// angularly opposite while drifting apart in 3D over one tilted orbit vs.
-// the other's flat one). `periodDays` reuses the moon's real period scaled
-// by the same MOON_TIME_DILATION its own on-screen motion already uses
-// (orbitMath.ts) — matching the moon's *apparent* rate, not its real one —
-// negated for a retrograde moon (e.g. Triton): `angleForYear` computes angle
-// as `phase + (t/period)*2π`, so flipping period's sign flips the sign of
-// angle's rate of change over time exactly the way getMoonPosition's own
-// `simYears * direction` trick does, with no other code needing to know
-// about direction at all.
-export function oppositeMoonSyncOrbit(moon: MoonData): { periodDays: number; phaseDeg: number; inclinationDeg: number } {
-  return {
-    periodDays: moon.periodDays * MOON_TIME_DILATION * (moon.retrograde ? -1 : 1),
-    phaseDeg: (moon.phaseDeg + 180) % 360,
-    inclinationDeg: moon.inclinationDeg,
   }
 }
 
@@ -809,7 +819,7 @@ export function wouldHyperjump(ship: ShipInstance, destination: MoveDestination)
   const shipClass = resolveShipClass(ship.classId)
   if (!shipClass) return false
   const researched = useTechStore.getState().stateFor(ship.ownerId).researched
-  const warp = researched.has('warp-theory') && shipClass.ftlDrives.some((d) => d.kind === 'warp')
+  const warp = researched.has('warp-drives') && shipClass.ftlDrives.some((d) => d.kind === 'warp')
   const hyper = researched.has('hyperspace-theory') && shipClass.ftlDrives.some((d) => d.kind === 'hyperdrive')
   return hyper && !warp
 }
@@ -852,7 +862,7 @@ export function planMoveUnchecked(
   // from the ship's OWN nation, so an AI empire's fleets move on its tech,
   // not the player's.
   const ownerResearched = useTechStore.getState().stateFor(ship.ownerId).researched
-  const warpDrive = ownerResearched.has('warp-theory') ? shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp') : undefined
+  const warpDrive = ownerResearched.has('warp-drives') ? shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp') : undefined
   const hyperDrive = ownerResearched.has('hyperspace-theory')
     ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
     : undefined

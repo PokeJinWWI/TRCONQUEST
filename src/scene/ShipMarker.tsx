@@ -9,7 +9,9 @@ import { RELATION_COLORS } from '../data/shipData'
 import { SHIP_ICON_SIZE, ShipIcon, roleOfClass } from './ShipIcon'
 import { useRelationTo } from '../state/shipRelations'
 import { playerShipRenderPosition } from './commsVisual'
-import { isAdditiveClick } from './selectionInput'
+import { hasOwnShipSelected, openShipFull } from './panelOpen'
+import { isAdditiveClick, isNewTabClick, isNewTabContextMenu } from './selectionInput'
+import { useWorkspaceStore } from '../state/workspaceStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 
@@ -98,10 +100,14 @@ export function ShipMarker({ ships, onOrderFollow, stackIndex = 0, stackCount = 
           }
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
-          onClick={(e) => (isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(lead.id) : selectShip(lead.id))}
+          onClick={(e) => (isNewTabClick(e) ? useWorkspaceStore.getState().openInNewTab({ selectedShipId: lead.id }) : isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(lead.id) : selectShip(lead.id))}
           onContextMenu={(e) => {
             e.preventDefault()
-            onOrderFollow?.(lead.id)
+            // Ctrl-click on a Mac arrives here: open it in a new tab.
+            if (isNewTabContextMenu(e)) useWorkspaceStore.getState().openInNewTab({ selectedShipId: lead.id })
+            // With none of your ships selected, a right click opens its panel full screen.
+            else if (!hasOwnShipSelected()) openShipFull(lead.id)
+            else onOrderFollow?.(lead.id)
           }}
           onWheel={forwardWheelToCanvas}
         >

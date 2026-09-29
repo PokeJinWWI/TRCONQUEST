@@ -83,6 +83,15 @@ export function combatLocationKey(location: ShipLocation): string | null {
   return null
 }
 
+// The system (and body) a fight's location key names: `body:<system>:<body>`
+// or `star:<star>` (see combatStore.combatLocationKey).
+export function combatPlaceOf(locationKey: string): { starId: string; bodyName?: string } | null {
+  const [kind, a, ...rest] = locationKey.split(':')
+  if (kind === 'body' && a) return { starId: a, bodyName: rest.join(':') || undefined }
+  if (kind === 'star' && a) return { starId: a }
+  return null
+}
+
 export function combatLocationLabel(location: ShipLocation): string {
   if (location.kind === 'orbiting') return location.bodyName
   if (location.kind === 'star') return location.starId

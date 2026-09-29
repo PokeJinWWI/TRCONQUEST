@@ -42,7 +42,11 @@ import { starbaseOwnersOf, starbasesAt } from './starbaseLogic'
 import { TerritoryDiscs } from './TerritoryDiscs'
 import { ContextMenu, type ContextMenuItem } from './StarContextMenu'
 import { HoverTip } from '../components/HoverTip'
-import { orderSelectedToDoAt } from './shipCommands'
+import { orderSelectedToDoAt, orderSelectedToSurvey } from './shipCommands'
+import { hasOwnShipSelected, openInViewFull } from './panelOpen'
+import { isNewTabModifierHeld } from './queueModifier'
+import { useWorkspaceStore } from '../state/workspaceStore'
+import { SURVEY_DAYS_PER_BODY } from '../data/surveyData'
 import { isPlayerOwned } from '../state/shipRelations'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { surveyProgress } from './surveyLogic'
@@ -53,6 +57,9 @@ const ENTER_DISTANCE = 6
 const UNCLAIMED: SystemClaim = { kind: 'unclaimed' }
 const MAX_DISTANCE = 4200
 const EXIT_DISTANCE = 3500
+// Where the camera opens when zoomed in from the galaxy: far out, a little
+// inside EXIT_DISTANCE so it doesn't zoom straight back out.
+const GALAXY_ARRIVAL_DISTANCE = 2600
 // The plain "just arrived, nothing selected" camera position — used both as
 // the far-view starting position AND, translated to sit next to whichever
 // star a continuity arrival is returning to (see continuityStarPosition
@@ -264,7 +271,25 @@ export function InterstellarScene() {
   // render is a real, previously-hit bug in this project (see
   // CombatViewScene's own camera-prop memoization note), not just a style
   // preference.
+  // Zoomed in from the galaxy: start far out over the cluster's middle, just
+  // inside the distance that zooms back out (EXIT_DISTANCE), the mirror of
+  // leaving. Read once at mount, like the continuity star.
+  const fromGalaxyRef = useRef(useViewStore.getState().interstellarFromGalaxy && !continuityStarIdRef.current)
+  const clusterCentre = useMemo<[number, number, number]>(() => {
+    if (STARS.length === 0) return [0, 0, 0]
+    const sum = STARS.reduce((acc, s) => {
+      const p = starScenePosition(s)
+      return [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]]
+    }, [0, 0, 0])
+    return [sum[0] / STARS.length, sum[1] / STARS.length, sum[2] / STARS.length]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const initialCameraPosition = useMemo<[number, number, number]>(() => {
+    if (fromGalaxyRef.current) {
+      const len = Math.hypot(...DEFAULT_CAMERA_OFFSET)
+      const k = GALAXY_ARRIVAL_DISTANCE / len
+      return [clusterCentre[0] + DEFAULT_CAMERA_OFFSET[0] * k, clusterCentre[1] + DEFAULT_CAMERA_OFFSET[1] * k, clusterCentre[2] + DEFAULT_CAMERA_OFFSET[2] * k]
+    }
     if (!continuityStarPosition) return DEFAULT_CAMERA_OFFSET
     return [
       continuityStarPosition[0] + DEFAULT_CAMERA_OFFSET[0],
@@ -273,7 +298,10 @@ export function InterstellarScene() {
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const initialTarget = useMemo<[number, number, number]>(() => continuityStarPosition ?? [0, 0, 0], [continuityStarPosition])
+  const initialTarget = useMemo<[number, number, number]>(
+    () => (fromGalaxyRef.current ? clusterCentre : (continuityStarPosition ?? [0, 0, 0])),
+    [continuityStarPosition, clusterCentre],
+  )
 
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
@@ -365,6 +393,7 @@ export function InterstellarScene() {
   // in (CameraFocusRig) only starts once "Enter System" is pressed, or the
   // player manually zooms in close enough on their own.
   const handleSelect = (star: StarData) => {
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: star.id, selectedShipId: null })
     selectInView(star.id)
     selectShip(null)
   }
@@ -387,7 +416,9 @@ export function InterstellarScene() {
   // computes it, caller applies it" split every other MoveResult already
   // follows.
   const handleOrderToStar = (star: StarData, at: { x: number; y: number }) => {
-    if (!selectedShipId) return
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: star.id, selectedShipId: null })
+    // With none of your ships selected, a right click opens the star's panel full screen.
+    if (!hasOwnShipSelected()) return openInViewFull(star.id, 'star')
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
     // With a science or construction ship selected the right-click offers what
@@ -410,7 +441,7 @@ export function InterstellarScene() {
   }
 
   // What the right-click menu offers for this star, given the selected ships.
-  // Exploring IS moving to an unexplored system (the intel comes on arrival), so
+  // Exploring IS moving to an unexplored system (entering it explores it), so
   // "Move to" is for systems already explored; Build Starbase is greyed out,
   // with the reason, unless a selected Construction Ship could build there.
   const starMenuItems = (star: StarData): ContextMenuItem[] => {
@@ -421,13 +452,14 @@ export function InterstellarScene() {
     const builders = ofRole('construction')
     const explored = intel.known(star.id)
     const items: ContextMenuItem[] = []
-    if (!explored && science.length > 0) {
-      items.push({ label: 'Explore system', title: 'Fly there and reveal its owner, borders and worlds on arrival', onClick: () => orderSelectedToDoAt(star.id, { kind: 'explore' }) })
-    } else {
-      items.push({ label: `Move to ${star.name}`, onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }) })
-    }
+    // Entering a system explores it, so "Explore" is just the move.
+    items.push(
+      explored
+        ? { label: `Move to ${star.name}`, onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }) }
+        : { label: 'Explore system', title: 'Fly there: entering the system reveals its owner, borders and worlds', onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }) },
+    )
     if (science.length > 0) {
-      items.push({ label: 'Survey system', title: 'Fly there and survey every body (no exploring needed first)', onClick: () => orderSelectedToDoAt(star.id, { kind: 'survey' }) })
+      items.push({ label: 'Survey system', title: `Fly to each body in turn and survey it (${SURVEY_DAYS_PER_BODY} days each, plus the flights)`, onClick: () => orderSelectedToSurvey(star.id) })
     }
     if (builders.length > 0) {
       const checks = builders.map((b) => canBuildStarbase(b.ownerId, star.id, useStarbaseStore.getState().starbases, b.id, { anywhere: true }))
@@ -666,7 +698,7 @@ export function InterstellarScene() {
                   <>
                     <div className="inspect-row">
                       <span className="inspect-label">System</span>
-                      <span className="inspect-value">Unexplored — send a Science Ship</span>
+                      <span className="inspect-value">Unexplored: send a ship there</span>
                     </div>
                     {unidentifiedBaseStars.has(selectedStar.id) && (
                       <div className="inspect-row">
@@ -734,7 +766,7 @@ export function InterstellarScene() {
                   className="detail-view-btn"
                   onClick={handleEnterSystem}
                   disabled={!intel.known(selectedStar.id)}
-                  title={intel.known(selectedStar.id) ? undefined : 'Unexplored: a Science Ship has to visit first'}
+                  title={intel.known(selectedStar.id) ? undefined : 'Unexplored: one of your ships has to enter it first'}
                 >
                   Enter System
                 </button>

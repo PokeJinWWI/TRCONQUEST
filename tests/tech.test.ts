@@ -5,7 +5,12 @@
 // Run:  npx tsx tests/tech.test.ts
 
 import {
+  ALL_TECHS,
   PHYSICS_TECHS,
+  localRoots,
+  externalPrerequisites,
+  queuePlan,
+  queuedResearchNow,
   SOCIETY_TECHS,
   ENGINEERING_TECHS,
   ANOMALOUS_UNLOCK_THRESHOLD,
@@ -27,27 +32,40 @@ function check(label: string, cond: boolean, detail = '') {
   }
 }
 
-console.log('\n=== 1. Physics tree shape ===')
+console.log('\n=== 1. Tree shape ===')
 {
-  check('Physics has real content', PHYSICS_TECHS.length > 20, `${PHYSICS_TECHS.length} nodes`)
-  check('Society is structurally real but empty', Array.isArray(SOCIETY_TECHS) && SOCIETY_TECHS.length === 0)
-  // Engineering's first real content: the Power Systems chain gating the
-  // ship builder's Power Distribution tiers (see shipModules.ts).
-  check('Engineering has real content', ENGINEERING_TECHS.length > 0, `${ENGINEERING_TECHS.length} nodes`)
-  const ids = PHYSICS_TECHS.map((n) => n.id)
+  check('the three trees are the one list, split by category', PHYSICS_TECHS.length + SOCIETY_TECHS.length + ENGINEERING_TECHS.length === ALL_TECHS.length)
+  check('each tree holds only its own category', PHYSICS_TECHS.every((n) => n.category === 'physics') && SOCIETY_TECHS.every((n) => n.category === 'society') && ENGINEERING_TECHS.every((n) => n.category === 'engineering'))
+  check('every tree has content', PHYSICS_TECHS.length > 5 && SOCIETY_TECHS.length > 0 && ENGINEERING_TECHS.length > 5, `${PHYSICS_TECHS.length}/${SOCIETY_TECHS.length}/${ENGINEERING_TECHS.length}`)
+  const ids = ALL_TECHS.map((n) => n.id)
   check('every node id is unique', new Set(ids).size === ids.length)
-  const roots = PHYSICS_TECHS.filter((n) => n.prerequisites.length === 0)
-  check('exactly 9 roots (8 open + Anomalous)', roots.length === 9, `${roots.length}`)
-  check('Anomalous is the only locked node', PHYSICS_TECHS.filter((n) => n.locked).length === 1 && PHYSICS_TECHS.find((n) => n.locked)?.id === 'anomalous-phenomena')
-  // Every non-root prerequisite id actually resolves to a real node — a typo
-  // in a prerequisite string would silently orphan a branch.
-  for (const node of PHYSICS_TECHS) {
+  const roots = ALL_TECHS.filter((n) => n.prerequisites.length === 0 && !n.id.startsWith('power-distribution'))
+  check('exactly 9 branch roots (8 open + Anomalous)', roots.length === 9, `${roots.length}`)
+  check('Anomalous is the only locked node', ALL_TECHS.filter((n) => n.locked).length === 1 && ALL_TECHS.find((n) => n.locked)?.id === 'anomalous-phenomena')
+  // Every prerequisite id actually resolves to a real node — a typo would
+  // silently orphan a branch.
+  for (const node of ALL_TECHS) {
     for (const set of node.prerequisites) {
       for (const parentId of set) {
-        check(`${node.id}'s prerequisite "${parentId}" resolves to a real node`, PHYSICS_TECHS.some((n) => n.id === parentId))
+        check(`${node.id}'s prerequisite "${parentId}" resolves to a real node`, ALL_TECHS.some((n) => n.id === parentId))
       }
     }
   }
+}
+
+console.log('\n=== 1b. Theory is Physics, hardware is Engineering, life is Society ===')
+{
+  const cat = (id: string) => findTech(id)?.category
+  check('Free-Flight Maneuvering is Engineering', cat('free-flight-maneuvering') === 'engineering')
+  check('Warp Theory stays Physics; Warp Drives and Warp Comms are Engineering', cat('warp-theory') === 'physics' && cat('warp-drives') === 'engineering' && cat('warp-comms') === 'engineering')
+  check('Warp Drives builds on Warp Theory', findTech('warp-drives')!.prerequisites.some((set) => set.includes('warp-theory')))
+  check('Orbital Construction is Engineering and needs Orbital Mechanics', cat('orbital-construction') === 'engineering' && findTech('orbital-construction')!.prerequisites.some((set) => set.includes('orbital-mechanics')))
+  check('Biology and its children are Society', cat('biology') === 'society' && cat('genetic-engineering') === 'society' && cat('xenobiology') === 'society')
+  check('a tree built on another tree starts from its own roots', localRoots(ENGINEERING_TECHS).some((n) => n.id === 'free-flight-maneuvering'))
+  check('...and names the prerequisite it needs from elsewhere', externalPrerequisites(findTech('orbital-construction')!, ENGINEERING_TECHS).map((n) => n.id).join() === 'orbital-mechanics')
+  check('cross-tree links are visible: Orbital Mechanics researched shows Orbital Construction in Engineering', visibleNodeIds(ENGINEERING_TECHS, new Set(['classical-mechanics', 'orbital-mechanics'])).has('orbital-construction'))
+  check('...but not before', !visibleNodeIds(ENGINEERING_TECHS, new Set()).has('orbital-construction'))
+  check('a tree view only returns its own nodes', [...visibleNodeIds(ENGINEERING_TECHS, new Set(['classical-mechanics']))].every((id) => findTech(id)?.category === 'engineering'))
 }
 
 console.log('\n=== 2. prerequisitesMet: AND within a set, OR across sets ===')
@@ -84,7 +102,7 @@ console.log('\n=== 2. prerequisitesMet: AND within a set, OR across sets ===')
 console.log('\n=== 3. Anomalous: aggregate unlock, not an ordinary prerequisite ===')
 {
   check('locked with nothing researched', !anomalousUnlocked(new Set()))
-  const nonAnomalousIds = PHYSICS_TECHS.filter((n) => !n.locked).map((n) => n.id)
+  const nonAnomalousIds = ALL_TECHS.filter((n) => !n.locked).map((n) => n.id)
   const justUnderThreshold = new Set(nonAnomalousIds.slice(0, ANOMALOUS_UNLOCK_THRESHOLD - 1))
   const atThreshold = new Set(nonAnomalousIds.slice(0, ANOMALOUS_UNLOCK_THRESHOLD))
   check('still locked one short of the threshold', !anomalousUnlocked(justUnderThreshold))
@@ -96,12 +114,12 @@ console.log('\n=== 3. Anomalous: aggregate unlock, not an ordinary prerequisite 
 
 console.log('\n=== 4. visibleNodeIds: the "two nodes past anything researched" rule ===')
 {
-  const empty = visibleNodeIds(PHYSICS_TECHS, new Set())
-  check('with nothing researched, every root is visible', PHYSICS_TECHS.filter((n) => n.prerequisites.length === 0).every((n) => empty.has(n.id)))
+  const empty = visibleNodeIds(ALL_TECHS, new Set())
+  check('with nothing researched, every root is visible', ALL_TECHS.filter((n) => n.prerequisites.length === 0).every((n) => empty.has(n.id)))
   check('with nothing researched, a deep node is NOT visible', !empty.has('free-flight-maneuvering'))
   check('Anomalous is visible from the start (locked, not hidden)', empty.has('anomalous-phenomena'))
 
-  const afterClassicalMechanics = visibleNodeIds(PHYSICS_TECHS, new Set(['classical-mechanics']))
+  const afterClassicalMechanics = visibleNodeIds(ALL_TECHS, new Set(['classical-mechanics']))
   check('researching a root reveals its direct child in full', afterClassicalMechanics.has('orbital-mechanics'))
   check(
     'researching a root reveals its GRANDCHILD too (2 hops), matching "two nodes into the future"',
@@ -159,7 +177,7 @@ console.log('\n=== 6. techStore: default seeding, grant, and research ===')
 console.log('\n=== 7. Soliton Warp Theory was removed (dead-end leaf, no children, no other references) ===')
 {
   check('the node no longer exists in the tree', findTech('soliton-warp-theory') === undefined)
-  check('nothing still lists it as a prerequisite', PHYSICS_TECHS.every((n) => n.prerequisites.every((set) => !set.includes('soliton-warp-theory'))))
+  check('nothing still lists it as a prerequisite', ALL_TECHS.every((n) => n.prerequisites.every((set) => !set.includes('soliton-warp-theory'))))
   check("Warp Theory itself is untouched (it had other things depending on it too)", findTech('warp-theory') !== undefined)
 }
 
@@ -188,7 +206,7 @@ console.log('\n=== 9. Biology: the new branch ===')
 {
   const biology = findTech('biology')!
   check('Biology is a real root (no prerequisites)', biology.prerequisites.length === 0)
-  check('Biology is visible from the start, same as every other root', visibleNodeIds(PHYSICS_TECHS, new Set()).has('biology'))
+  check('Biology is visible from the start, same as every other root', visibleNodeIds(SOCIETY_TECHS, new Set()).has('biology'))
   check('Genetic Engineering is not researchable before Biology', !canResearch(findTech('genetic-engineering')!, new Set(), 1000))
   check('Xenobiology is not researchable before Biology', !canResearch(findTech('xenobiology')!, new Set(), 1000))
   check(
@@ -197,9 +215,33 @@ console.log('\n=== 9. Biology: the new branch ===')
   )
   check(
     'both children are visible (not just Biology itself) once Biology is researched, per the 2-hop rule',
-    visibleNodeIds(PHYSICS_TECHS, new Set(['biology'])).has('genetic-engineering') &&
-      visibleNodeIds(PHYSICS_TECHS, new Set(['biology'])).has('xenobiology'),
+    visibleNodeIds(SOCIETY_TECHS, new Set(['biology'])).has('genetic-engineering') &&
+      visibleNodeIds(SOCIETY_TECHS, new Set(['biology'])).has('xenobiology'),
   )
+}
+
+console.log('\n=== 10. The research queue ===')
+{
+  const base = new Set(['warp-theory'])
+  check('queueing a tech with unmet prerequisites queues them first, in order', queuePlan('free-flight-maneuvering', base, []).join() === 'classical-mechanics,orbital-mechanics,free-flight-maneuvering', queuePlan('free-flight-maneuvering', base, []).join())
+  check('...skipping ones already researched or queued', queuePlan('orbital-construction', new Set(['classical-mechanics']), ['orbital-mechanics']).join() === 'orbital-construction')
+  check('an already researched tech queues nothing', queuePlan('warp-theory', base, []).length === 0)
+  const pts = { physics: 120, society: 0, engineering: 60 }
+  const q = ['classical-mechanics', 'orbital-mechanics', 'orbital-construction']
+  check('queued techs are researched in order as points allow, prerequisites first', queuedResearchNow(q, base, pts).join() === 'classical-mechanics,orbital-mechanics,orbital-construction', queuedResearchNow(q, base, pts).join())
+  check('short of points, a tree waits (nothing later in it jumps ahead)', queuedResearchNow(['orbital-mechanics', 'classical-mechanics'], new Set(['classical-mechanics']), { physics: 50, society: 0, engineering: 0 }).length === 0)
+  check('...while another tree carries on', queuedResearchNow(['relativity', 'power-distribution-2'], new Set(), { physics: 0, society: 0, engineering: 100 }).join() === 'power-distribution-2')
+
+  const id = 'queue-test-nation'
+  useTechStore.setState({ byCountry: { [id]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory']) } } })
+  useTechStore.getState().queueTech(id, 'orbital-construction')
+  check('the store queues the whole chain', (useTechStore.getState().stateFor(id).queue ?? []).join() === 'classical-mechanics,orbital-mechanics,orbital-construction')
+  useTechStore.getState().grantResearch(id, 'physics', 110)
+  useTechStore.getState().processQueue(id)
+  const st = useTechStore.getState().stateFor(id)
+  check('points coming in research what they can, and the queue shrinks', st.researched.has('orbital-mechanics') && (st.queue ?? []).join() === 'orbital-construction' && st.researchPoints.physics === 0)
+  useTechStore.getState().unqueueTech(id, 'orbital-construction')
+  check('a queued tech can be taken out again', (useTechStore.getState().stateFor(id).queue ?? []).length === 0)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

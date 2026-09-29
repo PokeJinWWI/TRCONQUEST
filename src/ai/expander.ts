@@ -2,8 +2,9 @@
 //   - Research the road to Orbital Construction (Simple mode's research income).
 //   - Keep a Science Ship, and (once it can) a Construction Ship and a Cargo
 //     Ship, queued at its shipyard.
-//   - The Science Ship works out from the capital: explore and survey the star
-//     it is at, then fly to the nearest star it hasn't fully surveyed.
+//   - The Science Ship works out from the capital: survey the system it is in
+//     (entering it explored it), then fly to the nearest star it hasn't fully
+//     surveyed.
 //   - Simple mode: found a colony on the cheapest surveyed, unowned world it
 //     can afford (a Colony Ship, paid in Influence), and hold each of its
 //     micro-colonies' orbits with a patrol warship until it becomes planetary.
@@ -33,13 +34,13 @@ import { orbitedBody } from '../scene/armyLogic'
 import { cargoCovers, transferCheck } from '../scene/cargoLogic'
 import { missingResources } from '../scene/shipyardLogic'
 import { starbaseOwnersOf } from '../scene/starbaseLogic'
-import { isExplored, isFullySurveyed, restingStarId, unsurveyedBodies } from '../scene/surveyLogic'
+import { isFullySurveyed, restingStarId, systemOfShip, unsurveyedBodies } from '../scene/surveyLogic'
 import { systemClaim } from '../scene/territory'
 import type { ResourceCost } from '../data/shipyardData'
 import { hasOrderInFlight, shipPower, type AiSnapshot, type Blackboard } from './blackboard'
 import { colonyInfluenceCost } from '../scene/colonyLogic'
 import { groundSurface } from '../scene/groundLogic'
-import { bodyStarId, orbitBodyOf } from '../scene/territory'
+import { bodyStarId } from '../scene/territory'
 import { affordable } from './shipwright'
 import type { AgentOutput, AiMemory, Intent } from './types'
 
@@ -97,14 +98,15 @@ function pickStarbaseTarget(bb: Blackboard, snap: AiSnapshot, current: string | 
 }
 
 // The world it would colonize next: surveyed by it, nobody's, with land to
-// settle; the cheapest in Influence, then the nearest.
+// settle, in a system where it has a Starbase; the cheapest in Influence, then
+// the nearest.
 export function pickColonyTarget(bb: Blackboard, snap: AiSnapshot): { bodyName: string; starId: string; cost: number } | null {
   const home = bb.capital.capitalStarId
   const candidates: { bodyName: string; starId: string; cost: number }[] = []
   for (const bodyName of bb.intel?.surveyed ?? []) {
     if (snap.owners[bodyName]) continue
     const starId = bodyStarId(bodyName)
-    if (!starId) continue
+    if (!starId || !starbaseOwnersOf(starId, snap.starbases, snap.simDays).includes(bb.countryId)) continue
     const surface = groundSurface(bodyName, snap.owners)
     if (!surface || surface.mainland < 0) continue
     candidates.push({ bodyName, starId, cost: colonyInfluenceCost(bodyName, starId, home) })
@@ -115,10 +117,9 @@ export function pickColonyTarget(bb: Blackboard, snap: AiSnapshot): { bodyName: 
 
 // Whether `ship` is at, or on its way to, `bodyName`.
 function atOrBound(ship: ShipInstance, bodyName: string): boolean {
-  const orbit = orbitBodyOf(bodyName)
-  if (orbitedBody(ship) === orbit) return true
+  if (orbitedBody(ship) === bodyName) return true
   const dest = ship.order?.destination ?? ship.pendingMoveOrder?.destination
-  return dest?.kind === 'body' && dest.bodyName === orbit
+  return dest?.kind === 'body' && dest.bodyName === bodyName
 }
 
 // Patrol warships for its micro-colonies (one each, never the last idle
@@ -132,20 +133,19 @@ function patrolIntents(bb: Blackboard, snap: AiSnapshot): Intent[] {
   for (const colony of needing) {
     if (bb.mine.some((s) => onDuty(s) && atOrBound(s, colony.bodyName))) continue
     if (spare.length < 2) break
-    const orbit = orbitBodyOf(colony.bodyName)
-    const pick = spare.find((s) => orbitedBody(s) === orbit) ?? spare[0]
+    const pick = spare.find((s) => orbitedBody(s) === colony.bodyName) ?? spare[0]
     spare.splice(spare.indexOf(pick), 1)
     if (snap.ships.some((o) => o.fleetId === pick.fleetId && o.id !== pick.id)) intents.push({ kind: 'split-fleet', shipIds: [pick.id] })
     const starId = bodyStarId(colony.bodyName)
-    if (orbitedBody(pick) !== orbit && starId) intents.push({ kind: 'move-ship', shipId: pick.id, systemId: starId, bodyName: orbit })
+    if (orbitedBody(pick) !== colony.bodyName && starId) intents.push({ kind: 'move-ship', shipId: pick.id, systemId: starId, bodyName: colony.bodyName })
     intents.push({ kind: 'set-patrol', shipId: pick.id, on: true })
   }
   for (const s of bb.mine) {
     if (!s.patrol || s.pendingPatrol || !resting(s, snap)) continue
-    // Still needed while a micro-colony of its own is on this orbit (a planet
+    // Still needed while a micro-colony of its own is on this colony.bodyName (a planet
     // or one of its moons).
     const here = orbitedBody(s)
-    const needed = !!here && Object.values(colonies).some((c) => c.stage === 'micro' && snap.owners[c.bodyName] === bb.countryId && orbitBodyOf(c.bodyName) === here)
+    const needed = !!here && Object.values(colonies).some((c) => c.stage === 'micro' && snap.owners[c.bodyName] === bb.countryId && c.bodyName === here)
     if (!needed) intents.push({ kind: 'set-patrol', shipId: s.id, on: false })
   }
   return intents
@@ -188,13 +188,12 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
     if (resting(s, snap) && snap.ships.some((o) => o.fleetId === s.fleetId && o.id !== s.id)) intents.push({ kind: 'split-fleet', shipIds: [s.id] })
   }
 
-  // --- The Science Ship: explore and survey where it is, then the nearest unknown star ---
-  // Exploring and surveying are separate orders and neither needs the other.
+  // --- The Science Ship: survey the system it is in, then the nearest unknown star ---
+  // Entering a system explores it; the survey job flies it from body to body.
   const science = mineOf('science').find((s) => resting(s, snap))
   if (science && !science.surveyJob) {
-    const here = restingStarId(science)
+    const here = systemOfShip(science)
     const remaining = here ? unsurveyedBodies(bb.intel, bb.countryId, here, snap.owners) : []
-    if (here && !isExplored(bb.intel, bb.countryId, here, snap.owners)) intents.push({ kind: 'explore-system', shipId: science.id })
     if (here && remaining.length > 0) {
       intents.push({ kind: 'survey-system', shipId: science.id })
     } else {
@@ -205,7 +204,7 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
 
   // --- Colonies (Simple mode) ------------------------------------------------
   if (snap.simpleEconomy) {
-    const colonist = mineOf('colony').find((s) => resting(s, snap) && (s.settlers ?? 0) > 0)
+    const colonist = mineOf('colony').find((s) => resting(s, snap) && (s.settlers ?? 0) > 0 && !s.founding)
     if (colonist && colonyTarget && canColonize) {
       intents.push({ kind: 'colonize-body', shipId: colonist.id, systemId: colonyTarget.starId, bodyName: colonyTarget.bodyName })
     }

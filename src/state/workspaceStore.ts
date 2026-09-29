@@ -12,7 +12,7 @@ import { useShipStore } from './shipStore'
 // fields, so nothing else needs its own snapshot slot. See viewStore.ts's
 // activeNavCategory comment for why NavBar's own state was folded in here
 // too rather than staying a special case.
-interface TabViewSnapshot {
+export interface TabViewSnapshot {
   level: ReturnType<typeof useViewStore.getState>['level']
   selectedNeighborhoodId: string
   selectedStarId: string
@@ -61,6 +61,10 @@ interface WorkspaceStore {
   tabs: TabSnapshot[]
   activeTabId: string
   createTab: () => void
+  // Ctrl/Cmd-click: a new tab that starts as a copy of the current one with
+  // `patch` applied (a panel open, a body or ship selected), opened in the
+  // background like a browser link. Shows the tab strip so it can be found.
+  openInNewTab: (patch: Partial<TabViewSnapshot> & { selectedShipId?: string | null }) => void
   closeTab: (id: string) => void
   switchToTab: (id: string) => void
   renameTab: (id: string, name: string | null) => void
@@ -113,6 +117,20 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const fresh: TabSnapshot = { id, view: defaultTabView(), selectedShipId: null, name: null }
     set({ tabs: [...updatedTabs, fresh], activeTabId: id })
     restoreTab(fresh)
+  },
+
+  openInNewTab: (patch) => {
+    const { tabs, activeTabId } = get()
+    const captured = captureActiveTab()
+    const { selectedShipId, ...view } = patch
+    const updatedTabs = tabs.map((t) => (t.id === activeTabId ? { ...t, view: captured, selectedShipId: captured.selectedShipId } : t))
+    const fresh: TabSnapshot = {
+      id: newTabId(),
+      view: { ...captured, ...view },
+      selectedShipId: selectedShipId !== undefined ? selectedShipId : captured.selectedShipId,
+      name: null,
+    }
+    set({ tabs: [...updatedTabs, fresh], showTabBar: true })
   },
 
   // An empty/whitespace-only name clears back to the auto-derived label

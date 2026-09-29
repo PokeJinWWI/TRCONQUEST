@@ -1,4 +1,5 @@
 import { useViewStore } from '../state/viewStore'
+import { combatPlaceOf, useCombatStore } from '../state/combatStore'
 
 export function Breadcrumb() {
   const level = useViewStore((s) => s.level)
@@ -8,6 +9,8 @@ export function Breadcrumb() {
   const enterSystem = useViewStore((s) => s.enterSystem)
   const exitGround = useViewStore((s) => s.exitGround)
   const exitTerrain = useViewStore((s) => s.exitTerrain)
+  const exitCombat = useViewStore((s) => s.exitCombat)
+  const combatKey = useViewStore((s) => (s.level === 'combat' ? useCombatStore.getState().engagements.find((e) => e.id === s.combatEngagementId)?.locationKey : undefined))
 
   return (
     <nav className="breadcrumb">
@@ -24,7 +27,7 @@ export function Breadcrumb() {
           <button
             type="button"
             className="crumb"
-            onClick={() => enterSystem(selectedStarId)}
+            onClick={() => (level === 'combat' ? exitCombat((combatKey && combatPlaceOf(combatKey)) || undefined) : enterSystem(selectedStarId))}
             disabled={level === 'system'}
             title="Back to this star system"
           >

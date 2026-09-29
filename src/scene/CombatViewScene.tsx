@@ -1,5 +1,5 @@
 import { deselectShipsOnEmptyClick } from './deselect'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { KeyboardPan } from './KeyboardPan'
 import { isQueueModifierHeld } from './queueModifier'
 import { Canvas } from '@react-three/fiber'
@@ -15,7 +15,7 @@ import { CombatPanel, combatPanelVerticalOffset } from '../components/CombatPane
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { ARENA_SPAN_UNITS, type ArenaPoint } from './combatArena'
 import { appendParticipantStop, arenaWindowSpan, orderParticipantTo } from './combatResolution'
-import { useCombatStore, isEnemy } from '../state/combatStore'
+import { useCombatStore, isEnemy, combatPlaceOf } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
 import { useViewStore } from '../state/viewStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -72,9 +72,14 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
   // There's nothing left to render, so hand back to the system view rather
   // than sitting in an empty arena. Done in an effect, not during render,
   // since it's a store write.
+  // Where the fight is (remembered, since an ended fight is gone from the
+  // store): zooming out lands on that system and body, not the last one open.
+  const placeRef = useRef<{ starId: string; bodyName?: string } | null>(null)
+  if (engagement) placeRef.current = combatPlaceOf(engagement.locationKey)
+  const leave = useCallback(() => exitCombat(placeRef.current ?? undefined), [exitCombat])
   useEffect(() => {
-    if (!engagement) exitCombat()
-  }, [engagement, exitCombat])
+    if (!engagement) leave()
+  }, [engagement, leave])
 
   const selectedParticipant = useMemo(
     () => engagement?.participants.find((p) => p.shipId === selectedShipId) ?? null,
@@ -233,7 +238,7 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
           />
         ))}
 
-        <DistanceThresholdWatcher mode="max" threshold={frame.exit} onTrigger={exitCombat} controlsRef={controlsRef} />
+        <DistanceThresholdWatcher mode="max" threshold={frame.exit} onTrigger={leave} controlsRef={controlsRef} />
 
         <OrbitControls
           ref={controlsRef}

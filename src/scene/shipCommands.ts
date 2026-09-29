@@ -19,8 +19,10 @@ import { commsInstantContact, orderSelectedFleets, ownerCommsDelayToShip, shipCo
 import { isPlayerOwned } from '../state/shipRelations'
 import { cargoPlus, cargoSpace, clampToSpace, loadingBody, transferCheck, cargoMinus } from './cargoLogic'
 import { spendCost } from './shipyardLogic'
-import { isExplored, restingStarId } from './surveyLogic'
-import { foundColony } from './colonies'
+import { restingStarId, surveyJobBodies, systemOfShip } from './surveyLogic'
+import { bodyStarId } from './territory'
+import { advanceSurveyJob } from '../hooks/useSurveyResolver'
+import { startFounding } from './colonies'
 
 // Signal time for a discovery to reach its nation's capital from where the ship
 // is now — the FTL comms delay (0 with Hyper Comms, and for a nation with no
@@ -36,24 +38,17 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
   const ship = useShipStore.getState().ships.find((s) => s.id === shipId)
   if (!ship) return
   switch (command.kind) {
-    case 'explore': {
-      if (resolveShipClass(ship.classId)?.role !== 'science') return
-      const star = restingStarId(ship)
-      if (!star) return
-      const owners = useTerritoryStore.getState().bodyOwner
-      if (isExplored(useSurveyStore.getState().discovered[ship.ownerId], ship.ownerId, star, owners)) return
-      // Found at once; it reaches the player when the signal does.
-      useSurveyStore.getState().discover(ship.ownerId, { kind: 'explored', starId: star }, simDays + reportDelayDays(ship.ownerId, ship, simDays), simDays)
-      return
-    }
     case 'survey': {
-      // Being there is enough: a system need not be explored to be surveyed.
+      // Being in the system is not needed: the job flies the ship to each body.
       if (resolveShipClass(ship.classId)?.role !== 'science') return
-      const star = restingStarId(ship)
-      if (!star) return
-      // Already at it (a repeat order that crossed the first in transit).
-      if (ship.surveyJob?.starId === star) return
-      useShipStore.getState().setSurveyJob(shipId, { starId: star, startedSimDays: simDays, done: 0 })
+      const starId = command.starId ?? (command.bodyName ? bodyStarId(command.bodyName) : systemOfShip(ship))
+      if (!starId) return
+      const owners = useTerritoryStore.getState().bodyOwner
+      const bodies = surveyJobBodies(useSurveyStore.getState().discovered[ship.ownerId], ship.ownerId, starId, owners, command.bodyName)
+      if (bodies.length === 0) return
+      useShipStore.getState().setSurveyJob(shipId, { starId, bodies, workingSinceSimDays: null })
+      const withJob = useShipStore.getState().ships.find((s) => s.id === shipId)
+      if (withJob) advanceSurveyJob(withJob, simDays)
       return
     }
     case 'load': {
@@ -86,7 +81,7 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
       return
     }
     case 'colonize':
-      foundColony(shipId, command.bodyName, simDays)
+      startFounding(shipId, command.bodyName, simDays)
       return
   }
 }
@@ -120,10 +115,20 @@ export function resolvePendingCommands(simDays: number): void {
 // The role a command belongs to, and so which of the player's selected ships a
 // star's right-click menu hands it to.
 export function commandRole(command: ShipCommand): 'science' | 'construction' | 'colony' | null {
-  if (command.kind === 'explore' || command.kind === 'survey') return 'science'
+  if (command.kind === 'survey') return 'science'
   if (command.kind === 'build-starbase') return 'construction'
   if (command.kind === 'colonize') return 'colony'
   return null
+}
+
+// "Survey" from a right-click menu: every selected Science Ship surveys the
+// system (or one body of it), flying to each body in turn.
+export function orderSelectedToSurvey(starId: string, bodyName?: string): void {
+  const store = useShipStore.getState()
+  for (const s of store.ships) {
+    if (!store.selectedShipIds.includes(s.id) || !isPlayerOwned(s) || resolveShipClass(s.classId)?.role !== 'science') continue
+    queueShipCommand(s.id, { kind: 'survey', starId, bodyName })
+  }
 }
 
 // A star's right-click menu action: every selected ship of the right kind does

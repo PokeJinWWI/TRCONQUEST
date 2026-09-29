@@ -59,7 +59,11 @@ interface ViewState {
   // entering a neighborhood from galactic view. Omit it for a plain jump
   // (breadcrumb, or exiting a system back out) that should keep showing
   // whichever neighborhood was already selected.
-  enterInterstellar: (neighborhoodId?: string) => void
+  enterInterstellar: (neighborhoodId?: string, fromGalaxy?: boolean) => void
+  // True when the interstellar view was entered by zooming in from the galaxy:
+  // it then opens far out, on the whole cluster (the mirror of zooming out,
+  // which leaves at the far edge), instead of beside Sol.
+  interstellarFromGalaxy: boolean
   // `preselectBody` seeds `inViewSelection` — used when arriving here by
   // zooming into a star, so e.g. zooming into Sol from interstellar arrives
   // with Sol already selected (but still framed at the far default, since
@@ -103,7 +107,9 @@ interface ViewState {
   // Leaves combat for the system view. Combat isn't part of the zoom ladder,
   // so there's no "one level up" to return to — system view is the sensible
   // place to land, since that's where the fight is physically happening.
-  exitCombat: () => void
+  // `place`: where the fight was, so the system view opens on it (not on
+  // whichever system was last open).
+  exitCombat: (place?: { starId: string; bodyName?: string }) => void
   // Which terrain battle the terrain map is showing (state/terrainStore).
   terrainBattleId: string | null
   // Opens a terrain battle on `bodyName`.
@@ -146,9 +152,11 @@ export const useViewStore = create<ViewState>((set) => ({
   enterGalactic: () => set({ level: 'galactic', selectedBodyName: null, inViewSelection: null }),
   exitInterstellarToGalactic: () =>
     set((s) => ({ level: 'galactic', selectedBodyName: null, inViewSelection: s.selectedNeighborhoodId })),
-  enterInterstellar: (neighborhoodId) =>
+  interstellarFromGalaxy: false,
+  enterInterstellar: (neighborhoodId, fromGalaxy) =>
     set((s) => ({
       level: 'interstellar',
+      interstellarFromGalaxy: !!fromGalaxy,
       selectedNeighborhoodId: neighborhoodId ?? s.selectedNeighborhoodId,
       selectedBodyName: null,
       inViewSelection: null,
@@ -164,7 +172,16 @@ export const useViewStore = create<ViewState>((set) => ({
   // done from a selected ship, and that selection is exactly what the combat
   // view's panel wants to keep showing.
   enterCombat: (engagementId) => set({ level: 'combat', combatEngagementId: engagementId }),
-  exitCombat: () => set({ level: 'system', combatEngagementId: null, inViewSelection: null }),
+  exitCombat: (place) =>
+    set((s) => ({
+      level: 'system',
+      combatEngagementId: null,
+      selectedStarId: place?.starId ?? s.selectedStarId,
+      // Framed near the body the fight was at, the way zooming out of a
+      // satellite view is (see exitSatelliteToSystem).
+      selectedBodyName: place?.bodyName ?? null,
+      inViewSelection: place?.bodyName ?? null,
+    })),
   terrainBattleId: null,
   enterTerrain: (battleId, bodyName) => set({ level: 'terrain', terrainBattleId: battleId, selectedBodyName: bodyName, inViewSelection: null }),
   exitTerrain: () => set((s) => ({ level: 'ground', terrainBattleId: null, selectedBodyName: s.selectedBodyName })),

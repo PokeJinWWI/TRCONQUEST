@@ -87,7 +87,7 @@ console.log('\n=== Shipyard tech gate ===')
   const refused = queue(NATION, 'construction-ship', 0)
   check('Construction Ship refused without Orbital Construction', !refused.ok && /Orbital Construction/.test(refused.ok ? '' : refused.reason), refused.ok ? '' : refused.reason)
   check('Science and Cargo ships buildable from the start', queue(NATION, 'science-ship', 0).ok && queue(NATION, 'cargo-ship', 0).ok)
-  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory', 'orbital-construction']) } } })
+  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', 'orbital-construction']) } } })
   check('Construction Ship buildable once researched', queue(NATION, 'construction-ship', 0).ok)
 }
 
@@ -138,7 +138,7 @@ console.log('\n=== Ship commands: load, transfer, build ===')
 
   // Build from the hold.
   useTerritoryStore.getState().reset()
-  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'orbital-construction']) } } })
+  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'orbital-construction']) } } })
   useShipStore.setState({ ships: [ship('b', 'construction-ship', { kind: 'star', starId: 'barnards-star', offset: [0, 0, 0] }, { alloys: 220 })] })
   applyShipCommand('b', { kind: 'build-starbase' }, 0)
   check('build refused while the system is not surveyed', useStarbaseStore.getState().starbases.length === 0)
@@ -178,7 +178,7 @@ console.log('\n=== Refill at nearest station ===')
   useGameTimeStore.setState({ simDays: 0, paused: false })
   useResourceStore.setState({ byCountry: {} })
   for (const id of ['alloys', 'energy', 'exoticMatter'] as const) useResourceStore.getState().setAmount(NATION, id, 5000)
-  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperspace-theory', 'hyper-comms']) } } })
+  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', 'hyper-comms']) } } })
   const owners = useTerritoryStore.getState().bodyOwner
   const farOut = ship('haul', 'cargo-ship', { kind: 'orbiting', systemId: 'sol', bodyName: 'Neptune', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 })
   const st = nearestStation(farOut, owners, 0)

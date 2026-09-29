@@ -127,7 +127,7 @@ export function spawnOwnedShip(classId: string, ownerId: string, systemId: strin
     hyperdriveReadySimDays: 0,
     warpReadySimDays: 0,
     warpEnabled: true,
-    warpWhenReady: false,
+    warpWhenReady: true,
     chaffAutoDeploy: true,
     pendingHyperdriveJump: null,
     followingShipId: null,

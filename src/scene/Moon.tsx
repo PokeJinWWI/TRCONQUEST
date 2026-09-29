@@ -15,9 +15,7 @@ interface MoonProps {
   selected: boolean
   onSelect: (moon: MoonData) => void
   /** Right-click — orders the currently-selected ship into orbit around
-   * *this moon's parent body*, synced to sit permanently on the opposite
-   * side of it from this moon (see shipPhysics.oppositeMoonSyncOrbit). A
-   * moon itself still isn't a valid move-order destination. */
+   * this moon. */
   onOrderTo?: (moon: MoonData) => void
 }
 

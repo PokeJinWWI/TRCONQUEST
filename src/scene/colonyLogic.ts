@@ -11,7 +11,6 @@ import { estimateSize } from './bodyStats'
 import { cellsToRad } from './groundLogic'
 import { bodyGroundInfo, terrainAt, type BodySurface } from './planetTerrain'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
-import { orbitBodyOf } from './territory'
 
 export type PatrolShipLike = ShipLike & { patrol?: boolean }
 
@@ -71,12 +70,11 @@ export function withOutpostKey(surface: BodySurface, outpostNode: number | undef
   return { ...surface, keySlots: [...surface.keySlots, { node: outpostNode, kind: 'outpost' }] }
 }
 
-// The owner's patrol ships hold the orbit (a moon's is its planet's), and no
+// The owner's patrol ships hold the body's own orbit, and no
 // hostile warship is there.
 export function orbitSecure(ownerId: string, bodyName: string, ships: PatrolShipLike[], atWarFn: AtWarFn): boolean {
-  const orbit = orbitBodyOf(bodyName)
-  const patrolled = ships.some((s) => s.ownerId === ownerId && s.patrol && orbitedBody(s) === orbit && isArmed(s))
-  return patrolled && hostileWarshipsAt(ownerId, orbit, ships, atWarFn).length === 0
+  const patrolled = ships.some((s) => s.ownerId === ownerId && s.patrol && orbitedBody(s) === bodyName && isArmed(s))
+  return patrolled && hostileWarshipsAt(ownerId, bodyName, ships, atWarFn).length === 0
 }
 
 // Nobody is fighting the owner for the colony: it holds the world, no one else

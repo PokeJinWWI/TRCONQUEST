@@ -4,6 +4,9 @@ import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { bodyIndex } from '../scene/territory'
+import { isNewTabClick, isNewTabContextMenu } from '../scene/selectionInput'
+import { useWorkspaceStore } from '../state/workspaceStore'
+import { battleTabPatch } from '../scene/battleNav'
 import { isAdditiveClick } from '../scene/selectionInput'
 import { useFleetStore } from '../state/fleetStore'
 import { usePlayerStore } from '../state/playerStore'
@@ -308,7 +311,16 @@ function BattleRow({ battle }: { battle: PlayerBattle }) {
   return (
     <li
       className={`outliner-entry clickable outliner-battle${here ? ' selected' : ''}${unknownMsg ? ' disabled' : ''}`}
-      onClick={() => !unknownMsg && openBattle(battle)}
+      onContextMenu={(e) => {
+        if (unknownMsg || !isNewTabContextMenu(e)) return
+        e.preventDefault()
+        useWorkspaceStore.getState().openInNewTab(battleTabPatch(battle))
+      }}
+      onClick={(e) => {
+        if (unknownMsg) return
+        if (isNewTabClick(e)) useWorkspaceStore.getState().openInNewTab(battleTabPatch(battle))
+        else openBattle(battle)
+      }}
       title={
         unknownMsg
           ? `Can't enter yet: ${unknownMsg}`
@@ -431,6 +443,15 @@ function OutlinerSection({
                 key={entry.key}
                 className={`outliner-entry${onEntryClick ? ' clickable' : ''}${entry.key === selectedKey || selectedKeys?.includes(entry.key) ? ' selected' : ''}`}
                 onClick={onEntryClick ? (e) => onEntryClick(entry, e) : undefined}
+                onContextMenu={
+                  onEntryClick
+                    ? (e) => {
+                        if (!isNewTabContextMenu(e)) return
+                        e.preventDefault()
+                        onEntryClick(entry, { shiftKey: false, ctrlKey: true, metaKey: false })
+                      }
+                    : undefined
+                }
               >
                 <OutlinerIcon color={entry.color} kind={entry.kind} />
                 <span className="outliner-entry-name">{entry.name}</span>
@@ -447,8 +468,16 @@ function OutlinerSection({
 // it the player's own country owns (both real, derived from viewStore +
 // planetData's ownerId, plus the player's own Starbases from starbaseStore —
 // see scene/starbaseLogic.ts for what one is).
+type OutlinerTab = 'territory' | 'military' | 'info'
+const OUTLINER_TABS: { id: OutlinerTab; label: string; tip: string }[] = [
+  { id: 'territory', label: 'Territory', tip: 'Colonies, Starbases, your market, and what is in view' },
+  { id: 'military', label: 'Military', tip: 'Battles, fleets and armies' },
+  { id: 'info', label: 'Info', tip: 'Treaties, political movements, interest groups, companies' },
+]
+
 export function Outliner() {
   const [collapsed, setCollapsed] = useState(false)
+  const [tab, setTab] = useState<OutlinerTab>('territory')
   const [fleetTab, setFleetTab] = useState<FleetTab>('military')
   const [search, setSearch] = useState('')
   const [visibleKinds, setVisibleKinds] = useState<Set<FilterKind>>(
@@ -478,13 +507,21 @@ export function Outliner() {
   // it in viewStore (engaging that scene's SelectionTracker camera lock) and
   // drop any ship selection, same as every scene's own handleSelect already
   // does for a marker click.
-  const handleInViewClick = (entry: OutlinerEntry) => {
+  const handleInViewClick = (entry: OutlinerEntry, e: { ctrlKey: boolean; metaKey: boolean }) => {
+    if (isNewTabClick(e)) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: entry.key, selectedShipId: null })
     selectShip(null)
     selectInView(entry.key)
   }
   // A colony can be in any system: go to its system first (a moon: its
   // planet's satellite view), then select it.
-  const handleColonyClick = (entry: OutlinerEntry) => {
+  const handleColonyClick = (entry: OutlinerEntry, e: { ctrlKey: boolean; metaKey: boolean }) => {
+    if (isNewTabClick(e) && entry.starId) {
+      return useWorkspaceStore.getState().openInNewTab(
+        entry.parentPlanet
+          ? { level: 'satellite', selectedStarId: entry.starId, selectedBodyName: entry.parentPlanet, inViewSelection: entry.key, selectedShipId: null }
+          : { level: 'system', selectedStarId: entry.starId, selectedBodyName: null, inViewSelection: entry.key, selectedShipId: null },
+      )
+    }
     const view = useViewStore.getState()
     selectShip(null)
     if (entry.parentPlanet) {
@@ -506,7 +543,10 @@ export function Outliner() {
   // data/starData.getStarsForNeighborhood), so that's the one this jumps
   // into; a future second charted neighbourhood would need this to look the
   // star's neighbourhood up instead of assuming it.
-  const handleStarbaseClick = (entry: OutlinerEntry) => {
+  const handleStarbaseClick = (entry: OutlinerEntry, e: { ctrlKey: boolean; metaKey: boolean }) => {
+    if (isNewTabClick(e) && entry.starId) {
+      return useWorkspaceStore.getState().openInNewTab({ level: 'interstellar', selectedNeighborhoodId: 'solar-neighborhood', selectedBodyName: null, inViewSelection: entry.starId, selectedShipId: null })
+    }
     selectShip(null)
     const view = useViewStore.getState()
     if (view.level !== 'interstellar' || view.selectedNeighborhoodId !== 'solar-neighborhood') view.enterInterstellar('solar-neighborhood')
@@ -516,6 +556,7 @@ export function Outliner() {
   // several fleets can be ordered at once.
   const handleFleetClick = (entry: OutlinerEntry, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
     if (!entry.leadShipId) return
+    if (isNewTabClick(e)) return useWorkspaceStore.getState().openInNewTab({ selectedShipId: entry.leadShipId })
     if (isAdditiveClick(e)) {
       useShipStore.getState().toggleShipSelection(entry.leadShipId)
       return
@@ -545,6 +586,7 @@ export function Outliner() {
     () => fleetEntries.filter((entry) => query === '' || entry.name.toLowerCase().includes(query)),
     [fleetEntries, query],
   )
+  const matches = (entry: OutlinerEntry) => query === '' || entry.name.toLowerCase().includes(query)
   const militaryFleets = filteredFleets.filter((e) => !e.civilian)
   const civilianShips = filteredFleets.filter((e) => e.civilian)
 
@@ -561,6 +603,7 @@ export function Outliner() {
       <div className="outliner-content">
         <div className="outliner-title">Outliner</div>
 
+        {/* Always here, whichever tab is open: it filters every list. */}
         <input
           type="text"
           className="outliner-search-input"
@@ -568,66 +611,82 @@ export function Outliner() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="outliner-filter-pills">
-          {FILTERS.map(({ kind, label }) => (
-            <button
-              key={kind}
-              type="button"
-              className={`outliner-filter-pill${visibleKinds.has(kind) ? ' active' : ''}`}
-              onClick={() => toggleKind(kind)}
-            >
-              {label}
+        <div className="outliner-tabs" role="tablist">
+          {OUTLINER_TABS.map((t) => (
+            <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`outliner-tab${tab === t.id ? ' active' : ''}`} title={t.tip} onClick={() => setTab(t.id)}>
+              {t.label}
             </button>
           ))}
         </div>
 
-        <BattlesSection />
-        <OutlinerSection
-          title="Colonies"
-          entries={colonyEntries}
-          emptyText="No colonies established"
-          selectedKey={inViewSelection}
-          onEntryClick={handleColonyClick}
-        />
+        {tab === 'territory' && (
+          <>
+            <OutlinerSection
+              title="Colonies"
+              entries={colonyEntries.filter(matches)}
+              emptyText={query ? 'No match' : 'No colonies established'}
+              selectedKey={inViewSelection}
+              onEntryClick={handleColonyClick}
+            />
+            <OutlinerSection title="Starbases" entries={starbaseEntries.filter(matches)} emptyText={query ? 'No match' : 'No starbases built'} onEntryClick={handleStarbaseClick} />
+            {/* Your own market, not a list of every market that exists — same
+                player-only scope as Fleets/Colonies, hence singular. */}
+            <OutlinerSection title="Market" entries={[]} emptyText="No market established" />
+            <div className="outliner-filter-pills">
+              {FILTERS.map(({ kind, label }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className={`outliner-filter-pill${visibleKinds.has(kind) ? ' active' : ''}`}
+                  onClick={() => toggleKind(kind)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <OutlinerSection
+              title="In View"
+              entries={filteredInView}
+              emptyText="Nothing charted here"
+              selectedKey={inViewSelection}
+              onEntryClick={handleInViewClick}
+            />
+          </>
+        )}
 
-        {/* Your own market, not a list of every market that exists — same
-            player-only scope as Fleets/Colonies, hence singular. */}
-        <OutlinerSection title="Market" entries={[]} emptyText="No market established" />
-        <OutlinerSection
-          title="In View"
-          entries={filteredInView}
-          emptyText="Nothing charted here"
-          selectedKey={inViewSelection}
-          onEntryClick={handleInViewClick}
-        />
-        <OutlinerSection
-          title="Fleets"
-          entries={fleetTab === 'military' ? militaryFleets : civilianShips}
-          emptyText={fleetTab === 'military' ? 'No fleets deployed' : 'No civilian ships'}
-          tabs={[
-            { id: 'military', label: 'Military', count: militaryFleets.length },
-            { id: 'civilian', label: 'Civilian', count: civilianShips.length },
-          ]}
-          activeTab={fleetTab}
-          onTab={(id) => setFleetTab(id as FleetTab)}
-          selectedKey={selectedFleetId}
-          selectedKeys={selectedFleetIds}
-          onEntryClick={handleFleetClick}
-        />
-        <ArmiesSection />
-        <OutlinerSection title="Starbases" entries={starbaseEntries} emptyText="No starbases built" onEntryClick={handleStarbaseClick} />
-        {/* Reserved sections below, matching categories this game doesn't
-            have a system for yet but that the new bottom ActionBar
-            (Politics/Diplomacy/Buildings) and left NavBar (Economy/Military)
-            categories already gesture at — Army and Navy are the two
-            military branches; Navy is already the real "Fleets" section
-            above, so only Army is new here. Same "reserve the spot, don't
-            invent content" rule as every other empty section in this file. */}
-        <OutlinerSection title="Interest Groups" entries={[]} emptyText="No interest groups formed" />
-        <OutlinerSection title="Political Movements" entries={[]} emptyText="No political movements active" />
-        <OutlinerSection title="Political Lobbies" entries={[]} emptyText="No political lobbies formed" />
-        <OutlinerSection title="Treaties" entries={treatyEntries} emptyText="No treaties signed" />
-        <OutlinerSection title="Companies" entries={[]} emptyText="No companies chartered" />
+        {tab === 'military' && (
+          <>
+            <BattlesSection />
+            <OutlinerSection
+              title="Fleets"
+              entries={fleetTab === 'military' ? militaryFleets : civilianShips}
+              emptyText={fleetTab === 'military' ? 'No fleets deployed' : 'No civilian ships'}
+              tabs={[
+                { id: 'military', label: 'Military', count: militaryFleets.length },
+                { id: 'civilian', label: 'Civilian', count: civilianShips.length },
+              ]}
+              activeTab={fleetTab}
+              onTab={(id) => setFleetTab(id as FleetTab)}
+              selectedKey={selectedFleetId}
+              selectedKeys={selectedFleetIds}
+              onEntryClick={handleFleetClick}
+            />
+            <ArmiesSection />
+          </>
+        )}
+
+        {tab === 'info' && (
+          <>
+            <OutlinerSection title="Treaties" entries={treatyEntries.filter(matches)} emptyText={query ? 'No match' : 'No treaties signed'} />
+            {/* Reserved sections, matching categories this game doesn't have a
+                system for yet. Same "reserve the spot, don't invent content"
+                rule as every other empty section in this file. */}
+            <OutlinerSection title="Political Movements" entries={[]} emptyText="No political movements active" />
+            <OutlinerSection title="Interest Groups" entries={[]} emptyText="No interest groups formed" />
+            <OutlinerSection title="Political Lobbies" entries={[]} emptyText="No political lobbies formed" />
+            <OutlinerSection title="Companies" entries={[]} emptyText="No companies chartered" />
+          </>
+        )}
       </div>
     </div>
   )

@@ -1,8 +1,10 @@
-// Exploration and survey, as pure functions over plain sets. A science ship
-// EXPLORES a star by resting at it (revealing the system's information), then
-// SURVEYS its bodies one after another at SURVEY_DAYS_PER_BODY each. A system
-// is "fully surveyed" once every body in it is — which is what a Construction
-// Ship needs before it can build a Starbase there. Live state is
+// Exploration and survey, as pure functions over plain sets. Any ship EXPLORES
+// a star simply by entering its system (revealing the system's information:
+// owner, borders, its bodies by name). A science ship SURVEYS bodies by flying
+// to each one in turn and spending SURVEY_DAYS_PER_BODY in its orbit (what a
+// world is like: class, size, habitability, and whether it can be settled). A
+// system is "fully surveyed" once every body in it is — which is what a
+// Construction Ship needs before it can build a Starbase there. Live state is
 // state/surveyStore.ts; the daily step is hooks/useSurveyResolver.ts.
 //
 // Two layers of the same facts exist (see the store): `discovered` is what the
@@ -23,12 +25,24 @@ export interface NationIntel {
 
 export const EMPTY_INTEL: NationIntel = { explored: new Set(), surveyed: new Set() }
 
-// A science ship's standing survey job at one star. `done` is how many bodies
-// this job has completed so far; `startedSimDays` is when it (re)started.
+// A science ship's survey job: the bodies still to survey, in visiting order
+// (`bodies[0]` is the one it is flying to or working on), and since when it
+// has been at work in that body's orbit (null until it gets there). `starId`
+// is the system the job was given for.
 export interface SurveyJob {
   starId: string
-  startedSimDays: number
-  done: number
+  bodies: string[]
+  workingSinceSimDays: number | null
+}
+
+// The system a ship is in, if any: resting in it (orbiting a body, at a
+// point, or beside a star), or flying inside it. Null in interstellar transit.
+export function systemOfShip(ship: { order: { space: string; systemId?: string } | null; location: ShipLocation }): string | null {
+  if (ship.order) return ship.order.space === 'system' ? ship.order.systemId ?? null : null
+  const loc = ship.location
+  if (loc.kind === 'orbiting' || loc.kind === 'system-point') return loc.systemId
+  if (loc.kind === 'star') return loc.starId
+  return null
 }
 
 // The star a ship is resting AT, if any: beside it in interstellar space, or
@@ -79,18 +93,46 @@ export function unsurveyedBodies(intel: NationIntel | undefined, nationId: strin
   return systemBodies(starId).filter((b) => !isBodySurveyed(intel, nationId, b, owners))
 }
 
-// One step of a survey job: which bodies it has finished by `simDays` (with the
-// sim-day each was completed, so the report can be dated), the new `done`
-// count, and whether nothing is left to survey. Pure: nothing is written.
-export function stepSurveyJob(
-  job: SurveyJob,
-  simDays: number,
-  remaining: string[],
-  daysPerBody = SURVEY_DAYS_PER_BODY,
-): { completed: { bodyName: string; atSimDays: number }[]; done: number; finished: boolean } {
-  const due = Math.max(0, Math.floor((simDays - job.startedSimDays) / daysPerBody))
-  const fresh = Math.max(0, due - job.done)
-  const take = remaining.slice(0, fresh)
-  const completed = take.map((bodyName, i) => ({ bodyName, atSimDays: job.startedSimDays + (job.done + i + 1) * daysPerBody }))
-  return { completed, done: job.done + take.length, finished: remaining.length - take.length === 0 }
+// The bodies a survey job visits, in order: every unsurveyed body of the
+// system (planets outward, each followed by its moons), or just `onlyBody`.
+export function surveyJobBodies(intel: NationIntel | undefined, nationId: string, starId: string, owners: OwnerMap, onlyBody?: string): string[] {
+  const todo = unsurveyedBodies(intel, nationId, starId, owners)
+  return onlyBody ? todo.filter((b) => b === onlyBody) : todo
+}
+
+// Where a science ship is, as far as its job cares.
+export interface SurveyPlace {
+  // The body it is resting in orbit of, if any.
+  orbiting: string | null
+  // The body it is flying to, if any.
+  headingTo: string | null
+}
+
+export type SurveyStep =
+  // Nothing left to survey: the job ends.
+  | { kind: 'done' }
+  // Fly to this body (the job carries on when it gets there).
+  | { kind: 'fly'; bodyName: string; job: SurveyJob }
+  // Under way to the body, or at work on it.
+  | { kind: 'wait'; job: SurveyJob }
+  // Finished this body at `atSimDays`; `job` is what is left (null: all done).
+  | { kind: 'surveyed'; bodyName: string; atSimDays: number; job: SurveyJob | null }
+
+// One step of a survey job. `remaining` is the job's bodies still unsurveyed
+// (the caller filters them, since someone else may have surveyed one). Pure:
+// nothing is written.
+export function stepSurveyJob(job: SurveyJob, remaining: string[], place: SurveyPlace, simDays: number, daysPerBody = SURVEY_DAYS_PER_BODY): SurveyStep {
+  if (remaining.length === 0) return { kind: 'done' }
+  const target = remaining[0]
+  // Work already started only counts if it was on this same body.
+  const since = job.bodies[0] === target ? job.workingSinceSimDays : null
+  const base: SurveyJob = { ...job, bodies: remaining, workingSinceSimDays: since }
+  if (place.orbiting !== target) {
+    const idle = { ...base, workingSinceSimDays: null }
+    return place.headingTo === target ? { kind: 'wait', job: idle } : { kind: 'fly', bodyName: target, job: idle }
+  }
+  if (since === null) return { kind: 'wait', job: { ...base, workingSinceSimDays: simDays } }
+  if (simDays - since < daysPerBody) return { kind: 'wait', job: base }
+  const rest = remaining.slice(1)
+  return { kind: 'surveyed', bodyName: target, atSimDays: since + daysPerBody, job: rest.length > 0 ? { ...job, bodies: rest, workingSinceSimDays: null } : null }
 }

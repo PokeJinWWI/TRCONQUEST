@@ -2726,6 +2726,46 @@
   fill: rgba(255, 255, 255, 0.35);
 }
 
+/* Research queue. */
+.tech-queue {
+  margin: 6px 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(111, 227, 255, 0.2);
+  border-radius: 3px;
+}
+.tech-research-btn.queued {
+  border-color: rgba(255, 210, 63, 0.6);
+  color: #ffd23f;
+}
+.tech-tree-node.queued rect {
+  stroke: rgba(255, 210, 63, 0.8);
+  stroke-dasharray: 4 2;
+}
+.tech-tree-node.preview,
+.tech-tree-node.unaffordable {
+  cursor: var(--cursor-pointer);
+}
+
+/* Tree view: switching trees, and which pool a node is paid from. */
+.tech-tree-switch {
+  display: flex;
+  gap: 4px;
+}
+.tech-tree-points {
+  display: flex;
+  gap: 10px;
+}
+.tech-cat-bar {
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.tech-cat-physics .tech-cat-bar { stroke: #6fb8ff; }
+.tech-cat-society .tech-cat-bar { stroke: #6fe39a; }
+.tech-cat-engineering .tech-cat-bar { stroke: #ffb45c; }
+.tech-pool.tech-cat-physics { color: #9fd0ff; }
+.tech-pool.tech-cat-society { color: #9ff0bb; }
+.tech-pool.tech-cat-engineering { color: #ffcf94; }
+
 /* Budget controls (tax / welfare +/−) */
 .econ-control-row {
   display: flex;
@@ -3813,6 +3853,33 @@
   border-color: rgba(111, 227, 255, 0.7);
 }
 
+.outliner-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 4px;
+  border-bottom: 1px solid rgba(111, 227, 255, 0.25);
+}
+.outliner-tab {
+  flex: 1 1 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: rgba(159, 232, 255, 0.7);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 5px 4px;
+  cursor: var(--cursor-pointer);
+}
+.outliner-tab.active {
+  color: #eaf8ff;
+  border-color: rgba(111, 227, 255, 0.35);
+  background: rgba(111, 227, 255, 0.1);
+}
+.outliner-tab:hover:not(.active) {
+  color: #cdeeff;
+}
+
 .outliner-filter-pills {
   display: flex;
   flex-wrap: wrap;
@@ -4829,6 +4896,23 @@ div.fleet-row .combat-density-row {
 /* Shipyard panel (Military > Navy > Shipyard) — resource cost chips and the
    stockpile readout. A cost the player can't currently afford turns amber,
    same "not available right now" color the comms-delay notices use. */
+.ship-automation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: flex-end;
+}
+
+.shipyard-tabs {
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.shipyard-reason {
+  font-size: 10px;
+  color: #ffb45c;
+  margin-top: 2px;
+}
+
 .shipyard-stockpile {
   display: flex;
   flex-wrap: wrap;
@@ -5160,6 +5244,8 @@ div.fleet-row .combat-density-row {
 }
 
 .dip-toast {
+  pointer-events: auto;
+  cursor: var(--cursor-pointer);
   background: rgba(4, 10, 20, 0.92);
   border: 1px solid rgba(111, 227, 255, 0.3);
   border-left: 3px solid;
@@ -5168,6 +5254,10 @@ div.fleet-row .combat-density-row {
   font-family: 'Courier New', monospace;
   font-size: 11px;
   color: #e6f4fb;
+}
+
+.dip-toast:hover {
+  background: rgba(14, 30, 48, 0.95);
 }
 
 /* Planetary map (ground war) — see scene/GroundViewScene.tsx. */

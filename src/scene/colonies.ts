@@ -2,6 +2,7 @@
 // the seeded colonies, settlers and the monthly Influence. The rules are pure in
 // scene/colonyLogic.ts; hooks/useColonyResolver.ts promotes micro-colonies.
 import {
+  COLONY_FOUNDING_DAYS,
   INFLUENCE_CAP,
   INFLUENCE_PER_MONTH,
   MICRO_COLONY_LAND,
@@ -27,7 +28,11 @@ import { colonyInfluenceCost, placeOutpostNode } from './colonyLogic'
 import { queueMoveOrder } from './commsVisual'
 import { groundSurface } from './groundLogic'
 import { queueShipCommand } from './shipCommands'
-import { bodyStarId, orbitBodyOf } from './territory'
+import { bodyStarId } from './territory'
+import { starbaseOwnersOf } from './starbaseLogic'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { STARS } from '../data/starData'
 
 function nameOf(id: string): string {
   return ownerDisplay(id).name
@@ -82,14 +87,17 @@ export type ColonizeResult = { ok: true; cost: number } | { ok: false; reason: s
 export function canColonize(ship: ShipInstance, bodyName: string, opts: { anywhere?: boolean } = {}): ColonizeResult {
   if (!isAbstractEconomy()) return { ok: false, reason: 'Colonies need Simple economy mode for now' }
   if (resolveShipClass(ship.classId)?.role !== 'colony') return { ok: false, reason: 'Only a Colony Ship can found a colony' }
-  const orbit = orbitBodyOf(bodyName)
-  if (!opts.anywhere && orbitedBody(ship) !== orbit) return { ok: false, reason: `The ship must be in orbit of ${orbit}` }
+  if (!opts.anywhere && orbitedBody(ship) !== bodyName) return { ok: false, reason: `The ship must be in orbit of ${bodyName}` }
   if (!useSurveyStore.getState().discovered[ship.ownerId]?.surveyed.has(bodyName)) return { ok: false, reason: `Survey ${bodyName} first` }
+  const starId = bodyStarId(bodyName)
+  if (!starId || !starbaseOwnersOf(starId, useStarbaseStore.getState().starbases, useGameTimeStore.getState().simDays).includes(ship.ownerId)) {
+    return { ok: false, reason: `Needs a Starbase of your own in ${STARS.find((s) => s.id === starId)?.name ?? 'that system'}` }
+  }
   const owner = useTerritoryStore.getState().bodyOwner[bodyName]
   if (owner) return { ok: false, reason: owner === ship.ownerId ? `You already hold ${bodyName}` : `${nameOf(owner)} already holds ${bodyName}` }
   const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
   if (!surface || surface.mainland < 0) return { ok: false, reason: `${bodyName} has no land to settle` }
-  if (hostileWarshipsAt(ship.ownerId, orbit, useShipStore.getState().ships, atWar).length > 0) return { ok: false, reason: 'Enemy warships hold the orbit' }
+  if (hostileWarshipsAt(ship.ownerId, bodyName, useShipStore.getState().ships, atWar).length > 0) return { ok: false, reason: 'Enemy warships hold the orbit' }
   if ((ship.settlers ?? 0) <= 0) return { ok: false, reason: 'The ship carries no settlers' }
   const cost = colonyCostFor(ship.ownerId, bodyName)
   const influence = useResourceStore.getState().stateFor(ship.ownerId).amounts.influence ?? 0
@@ -97,8 +105,36 @@ export function canColonize(ship: ShipInstance, bodyName: string, opts: { anywhe
   return { ok: true, cost }
 }
 
-// The `colonize` command landing: the ship's settlers found a micro-colony on
-// `bodyName` (the body it orbits, or a moon of it), and the ship is used up.
+// The `colonize` command landing: the ship starts founding a colony on the body
+// it orbits (if it could found one now). The colony exists COLONY_FOUNDING_DAYS
+// later (resolveFoundings); Influence is paid then.
+export function startFounding(shipId: string, bodyName: string, simDays: number): boolean {
+  const ship = useShipStore.getState().ships.find((s) => s.id === shipId)
+  if (!ship || ship.founding?.bodyName === bodyName) return false
+  if (!canColonize(ship, bodyName).ok) return false
+  useShipStore.getState().setFounding(shipId, { bodyName, sinceSimDays: simDays })
+  return true
+}
+
+// Every Colony Ship at work: abandoned if it can no longer found the colony
+// (it left, enemy warships took the orbit, someone else claimed the world, …),
+// founded once COLONY_FOUNDING_DAYS have passed.
+export function resolveFoundings(simDays: number): void {
+  for (const ship of useShipStore.getState().ships) {
+    const f = ship.founding
+    if (!f) continue
+    const check: ColonizeResult = ship.order ? { ok: false, reason: 'the ship left orbit' } : canColonize(ship, f.bodyName)
+    if (!check.ok) {
+      useShipStore.getState().setFounding(ship.id, null)
+      useDiplomacyStore.getState().pushEvent('colony-abandoned', [ship.ownerId], `${nameOf(ship.ownerId)} abandoned founding a colony on ${f.bodyName}: ${check.reason}`, simDays, { bodyName: f.bodyName })
+      continue
+    }
+    if (simDays - f.sinceSimDays >= COLONY_FOUNDING_DAYS) foundColony(ship.id, f.bodyName, simDays)
+  }
+}
+
+// The founding finished: the ship's settlers found a micro-colony on
+// `bodyName` (the body it orbits), and the ship is used up.
 export function foundColony(shipId: string, bodyName: string, simDays: number): boolean {
   const ship = useShipStore.getState().ships.find((s) => s.id === shipId)
   if (!ship) return false
@@ -115,7 +151,7 @@ export function foundColony(shipId: string, bodyName: string, simDays: number): 
     useArmyStore.getState().addArmy({ ownerId: owner, kind: 'garrison', location: { kind: 'body', bodyName }, anchorNode: outpostNode })
   }
   useShipStore.getState().removeShip(shipId)
-  useDiplomacyStore.getState().pushEvent('colony-founded', [owner], `${nameOf(owner)} founded a colony on ${bodyName}`, simDays)
+  useDiplomacyStore.getState().pushEvent('colony-founded', [owner], `${nameOf(owner)} founded a colony on ${bodyName}`, simDays, { bodyName })
   return true
 }
 
@@ -140,11 +176,10 @@ export function orderSelectedToColonize(systemId: string, bodyName: string): voi
   const ships = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s) && resolveShipClass(s.classId)?.role === 'colony')
   const ship = ships.find((s) => canColonize(s, bodyName, { anywhere: true }).ok)
   if (!ship) return
-  const orbit = orbitBodyOf(bodyName)
-  if (orbitedBody(ship) === orbit) {
+  if (orbitedBody(ship) === bodyName) {
     queueShipCommand(ship.id, { kind: 'colonize', bodyName })
     return
   }
-  store.setArrivalCommand(ship.id, { starId: systemId, bodyName: orbit, command: { kind: 'colonize', bodyName } })
-  queueMoveOrder(ship, { kind: 'body', systemId, bodyName: orbit })
+  store.setArrivalCommand(ship.id, { starId: systemId, bodyName, command: { kind: 'colonize', bodyName } })
+  queueMoveOrder(ship, { kind: 'body', systemId, bodyName })
 }

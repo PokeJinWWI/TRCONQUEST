@@ -1,3 +1,5 @@
+import { isNewTabClick, isNewTabContextMenu } from '../scene/selectionInput'
+import { useWorkspaceStore } from '../state/workspaceStore'
 import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
 import { NationEconomyPanel } from './EconomyPanel'
@@ -151,7 +153,12 @@ export function NavBar() {
 
   const activeCategory = categories.find((c) => c.name === activeCategoryName) ?? null
 
-  const handleCategoryClick = (category: CategoryDef) => {
+  const handleCategoryClick = (category: CategoryDef, e: { ctrlKey: boolean; metaKey: boolean }) => {
+    // Ctrl/Cmd-click: open this panel in a new tab instead.
+    if (isNewTabClick(e)) {
+      useWorkspaceStore.getState().openInNewTab({ activeNavCategory: category.name, activeNavSubcategory: category.subcategories?.[0] ?? null })
+      return
+    }
     if (activeCategoryName === category.name) {
       setNavCategory(null, null)
       return
@@ -174,7 +181,13 @@ export function NavBar() {
                 key={category.name}
                 type="button"
                 className={`nav-category-btn${activeCategoryName === category.name ? ' active' : ''}`}
-                onClick={() => handleCategoryClick(category)}
+                onClick={(e) => handleCategoryClick(category, e)}
+                onContextMenu={(e) => {
+                  if (!isNewTabContextMenu(e)) return
+                  e.preventDefault()
+                  handleCategoryClick(category, e)
+                }}
+                title="Ctrl/Cmd-click: open in a new tab"
               >
                 {category.name}
               </button>
@@ -224,7 +237,16 @@ export function NavBar() {
                     key={sub}
                     type="button"
                     className={`nav-subtab${activeSubcategory === sub ? ' active' : ''}`}
-                    onClick={() => setNavCategory(activeCategoryName, sub)}
+                    onContextMenu={(e) => {
+                      if (!isNewTabContextMenu(e) || !activeCategoryName) return
+                      e.preventDefault()
+                      useWorkspaceStore.getState().openInNewTab({ activeNavCategory: activeCategoryName, activeNavSubcategory: sub })
+                    }}
+                    onClick={(e) =>
+                      isNewTabClick(e)
+                        ? useWorkspaceStore.getState().openInNewTab({ activeNavCategory: activeCategoryName, activeNavSubcategory: sub })
+                        : setNavCategory(activeCategoryName, sub)
+                    }
                   >
                     {sub}
                   </button>

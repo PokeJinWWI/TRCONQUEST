@@ -366,6 +366,7 @@ export function TransportCargo({ ship }: { ship: ShipInstance }) {
           {landing.ok ? (landing.kind === 'invade' ? `Invade ${landing.bodyName} (default site)` : `Unload at ${landing.bodyName}`) : 'Land armies'}
         </button>
       )}
+      {cargo.length > 0 && landing && !landing.ok && <div className="ship-panel-hint">Can't land: {landing.reason}</div>}
       {cargo.length > 0 && landing?.ok && (
         <button
           type="button"

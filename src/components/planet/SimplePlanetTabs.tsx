@@ -234,6 +234,8 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   const [selected, setSelected] = useState<SimpleBuildingId | null>(null)
   const grouped = usePlanetViewStore((s) => s.groupBuildings)
   const setGrouped = usePlanetViewStore((s) => s.setGroupBuildings)
+  // "All" (districts and buildings) or "Construction" (this world's queue).
+  const [view, setView] = useState<'all' | 'construction'>('all')
   if (!w) return <div className="abs-dim">No economy on this world.</div>
 
   const q = (queue ?? []).filter((o) => o.bodyName === bodyName)
@@ -251,8 +253,35 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   }
   const develop = (d: SimpleDistrictId) => countryId && run(queueDistrict(countryId, bodyName, d))
 
+  const queueList = (
+    <div className="pl-queue">
+      {q.length === 0 && <div className="abs-dim">Nothing under construction here. Build from the All tab.</div>}
+      {q.map((o) => {
+        const cost = orderCost(o)
+        return (
+          <div key={o.id} className="abs-order">
+            <span><PlanetIcon id={o.building ?? o.district ?? ''} size={12} /> {orderName(o)}</span>
+            <span className="abs-order-bar"><span style={{ width: `${Math.min(100, (o.progress / cost) * 100)}%` }} /></span>
+            <span className="abs-dim">{Math.round(o.progress)}/{cost}</span>
+            {canBuild && <button type="button" className="abs-x" title="Cancel (progress is lost)" onClick={() => countryId && cancelOrder(countryId, o.id)}>×</button>}
+          </div>
+        )
+      })}
+    </div>
+  )
+
   return (
     <div className="pl-districts">
+      {!only && (
+        <div className="nav-subtabs pl-subtabs">
+          <button type="button" className={`nav-subtab${view === 'all' ? ' active' : ''}`} onClick={() => setView('all')}>All</button>
+          <button type="button" className={`nav-subtab${view === 'construction' ? ' active' : ''}`} onClick={() => setView('construction')}>
+            Construction{q.length > 0 ? ` (${q.length})` : ''}
+          </button>
+        </div>
+      )}
+      {message && <div className="econ-neg pl-message">{message}</div>}
+      {view === 'construction' && !only ? queueList : (<>
       <div className="pl-land" title="Each district level uses one unit of land; a world's land comes from its size.">
         Land <b>{districtLevelsTotal(w)}</b> / {landOf(w)} district levels
         {land > 0 ? <span className="abs-dim"> · {land} free</span> : <span className="econ-neg"> · full</span>}
@@ -260,7 +289,6 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
           <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> Group identical
         </label>
       </div>
-      {message && <div className="econ-neg pl-message">{message}</div>}
 
       {(!only || only === 'urban') && <CivicDistrict bodyName={bodyName} />}
 
@@ -292,7 +320,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                 </span>
               )}
               {canBuild && (
-                <button type="button" className="pl-develop" disabled={land <= 0} title={`Develop another level: +${SLOTS_PER_DISTRICT} slots · ${DISTRICT_COST} construction points · uses 1 land`} onClick={() => develop(d)}>
+                <button type="button" className="pl-develop" disabled={land <= 0} title={land <= 0 ? `Can't: no land left on ${bodyName} (every unit of land already holds a district level, queued ones included)` : `Develop another level: +${SLOTS_PER_DISTRICT} slots · ${DISTRICT_COST} construction points · uses 1 land`} onClick={() => develop(d)}>
                   + Level
                 </button>
               )}
@@ -339,7 +367,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
         <div className="pl-new-district">
           <span className="abs-dim">New district:</span>
           {addable.map((d) => (
-            <button key={d} type="button" className="pl-pick small" disabled={land <= 0} title={`${SIMPLE_DISTRICT_DEFS[d].description}\n${DISTRICT_COST} construction points · uses 1 land`} onClick={() => develop(d)}>
+            <button key={d} type="button" className="pl-pick small" disabled={land <= 0} title={land <= 0 ? `Can't: no land left on ${bodyName}` : `${SIMPLE_DISTRICT_DEFS[d].description}\n${DISTRICT_COST} construction points · uses 1 land`} onClick={() => develop(d)}>
               <PlanetIcon id={d} size={16} />
               <span>{SIMPLE_DISTRICT_DEFS[d].name.replace(' District', '')}</span>
             </button>
@@ -347,22 +375,13 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
         </div>
       )}
 
-      {q.length > 0 && (
-        <div className="pl-queue">
+      {only && q.length > 0 && (
+        <>
           <div className="econ-subtitle">Construction here</div>
-          {q.map((o) => {
-            const cost = orderCost(o)
-            return (
-              <div key={o.id} className="abs-order">
-                <span><PlanetIcon id={o.building ?? o.district ?? ''} size={12} /> {orderName(o)}</span>
-                <span className="abs-order-bar"><span style={{ width: `${Math.min(100, (o.progress / cost) * 100)}%` }} /></span>
-                <span className="abs-dim">{Math.round(o.progress)}/{cost}</span>
-                {canBuild && <button type="button" className="abs-x" title="Cancel (progress is lost)" onClick={() => countryId && cancelOrder(countryId, o.id)}>×</button>}
-              </div>
-            )
-          })}
-        </div>
+          {queueList}
+        </>
       )}
+      </>)}
     </div>
   )
 }

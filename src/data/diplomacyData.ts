@@ -65,6 +65,7 @@ export type DiplomacyEventKind =
   | 'treaty-broken'
   | 'colony-founded'
   | 'colony-promoted'
+  | 'colony-abandoned'
 
 export interface DiplomacyEvent {
   id: string
@@ -73,6 +74,14 @@ export interface DiplomacyEvent {
   // The nations involved, in the order the text reads (e.g. [declarer, target]).
   countryIds: string[]
   text: string
+  // Where it happened, if it happened somewhere: a notification's left-click
+  // goes there.
+  place?: EventPlace
+}
+
+export interface EventPlace {
+  bodyName?: string
+  starId?: string
 }
 
 // How long both sides must wait after a peace before either may declare war

@@ -10,11 +10,13 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { landForBody } from '../scene/bodyLand'
 import { stepColonies } from '../scene/colonyLogic'
 import { controllerOf } from '../scene/territory'
+import { resolveFoundings } from '../scene/colonies'
 
-// One pass over every colony at `simDays`: the patrol clocks, and micro-colonies
+// One pass over every colony at `simDays`: Colony Ships founding, the patrol clocks, and micro-colonies
 // becoming planetary colonies (their land limit lifted). Exported so a headless
 // run (tests) can drive it without React.
 export function resolveColonies(simDays: number): void {
+  resolveFoundings(simDays)
   const { colonies, setColonies } = useColonyStore.getState()
   if (!Object.values(colonies).some((c) => c.stage === 'micro')) return
   const { bodyOwner, bodyController, nodeHolders } = useTerritoryStore.getState()
@@ -36,7 +38,7 @@ export function resolveColonies(simDays: number): void {
     const world = economy.worlds[body]
     if (world) economy.setLand(body, Math.max(world.land ?? 0, landForBody(body)))
     const owner = bodyOwner[body]
-    if (owner) useDiplomacyStore.getState().pushEvent('colony-promoted', [owner], `${ownerDisplay(owner).name}'s colony on ${body} became a planetary colony`, simDays)
+    if (owner) useDiplomacyStore.getState().pushEvent('colony-promoted', [owner], `${ownerDisplay(owner).name}'s colony on ${body} became a planetary colony`, simDays, { bodyName: body })
   }
 }
 

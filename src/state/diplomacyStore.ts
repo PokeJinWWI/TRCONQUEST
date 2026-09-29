@@ -12,6 +12,7 @@ import {
   type ConflictTier,
   type DiplomacyEvent,
   type DiplomacyEventKind,
+  type EventPlace,
   type Relation,
   type War,
 } from '../data/diplomacyData'
@@ -48,7 +49,7 @@ interface DiplomacyState {
   // Adds to a war's attacker-POV battle balance and each side's exhaustion.
   recordWarLosses: (warId: string, attackerLossValue: number, defenderLossValue: number) => void
   addExhaustion: (warId: string, countryId: string, amount: number) => void
-  pushEvent: (kind: DiplomacyEventKind, countryIds: string[], text: string, simDays: number) => void
+  pushEvent: (kind: DiplomacyEventKind, countryIds: string[], text: string, simDays: number, place?: EventPlace) => void
   reset: () => void
 }
 
@@ -167,10 +168,10 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
       wars: s.wars.map((w) => (w.id === warId ? { ...w, exhaustion: { ...w.exhaustion, [countryId]: (w.exhaustion[countryId] ?? 0) + amount } } : w)),
     })),
 
-  pushEvent: (kind, countryIds, text, simDays) =>
+  pushEvent: (kind, countryIds, text, simDays, place) =>
     set((s) => {
       eventCounter += 1
-      const event: DiplomacyEvent = { id: `dip-${eventCounter}`, simDays, kind, countryIds, text }
+      const event: DiplomacyEvent = { id: `dip-${eventCounter}`, simDays, kind, countryIds, text, ...(place ? { place } : {}) }
       const events = [...s.events, event]
       return { events: events.length > MAX_DIPLOMACY_EVENTS ? events.slice(events.length - MAX_DIPLOMACY_EVENTS) : events }
     }),

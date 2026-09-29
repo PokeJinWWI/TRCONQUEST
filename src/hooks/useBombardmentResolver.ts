@@ -73,13 +73,13 @@ export function resolveBombardment(fromSimDays: number, toSimDays: number): void
     const war = warBetweenIn(diplomacy.wars, strike.attackerId, strike.victimId)
     if (war) diplomacy.addExhaustion(war.id, strike.victimId, strike.damage * BOMBARD_EXHAUSTION_PER_DAMAGE)
     if (!bombarding.has(key)) {
-      diplomacy.pushEvent('bombardment', [strike.attackerId, strike.victimId], `${ownerDisplay(strike.attackerId).name} began ${strike.full ? 'a full' : 'an orbital'} bombardment of ${strike.bodyName}`, toSimDays)
+      diplomacy.pushEvent('bombardment', [strike.attackerId, strike.victimId], `${ownerDisplay(strike.attackerId).name} began ${strike.full ? 'a full' : 'an orbital'} bombardment of ${strike.bodyName}`, toSimDays, { bodyName: strike.bodyName })
     }
   }
   bombarding.clear()
   for (const k of now) bombarding.add(k)
   for (const gone of res.destroyedInstallations) {
-    diplomacy.pushEvent('installation-destroyed', [], `${DEFENSE_DEFS[gone.kind].name} on ${gone.bodyName} was destroyed from orbit`, toSimDays)
+    diplomacy.pushEvent('installation-destroyed', [], `${DEFENSE_DEFS[gone.kind].name} on ${gone.bodyName} was destroyed from orbit`, toSimDays, { bodyName: gone.bodyName })
   }
 }
 

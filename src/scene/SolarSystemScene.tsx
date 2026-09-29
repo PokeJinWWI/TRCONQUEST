@@ -42,7 +42,10 @@ import { ownerDisplay } from '../data/countryRoster'
 import { useTerritoryStore } from '../state/territoryStore'
 import { usePlayerStore } from '../state/playerStore'
 import { InspectPanel } from '../components/InspectPanel'
-import { colonizeMenuItem, useBodyOrderMenu } from './BodyOrderMenu'
+import { bodyMenuItems, useBodyOrderMenu } from './BodyOrderMenu'
+import { hasOwnShipSelected, openInViewFull } from './panelOpen'
+import { isNewTabModifierHeld } from './queueModifier'
+import { useWorkspaceStore } from '../state/workspaceStore'
 
 const MAX_DISTANCE = 32000
 const EXIT_DISTANCE = 26000
@@ -279,6 +282,8 @@ export function SolarSystemScene() {
   )
 
   const handleSelect = (name: string) => {
+    // Ctrl/Cmd-click: this body's panel in a new tab.
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: name, selectedShipId: null })
     selectInView(name)
     setFlyingToName(null)
     selectShip(null)
@@ -310,13 +315,15 @@ export function SolarSystemScene() {
   // Still under FTL comms delay: the order applies when the signal reaches
   // the fleet.
   const handleOrderToBody = (bodyName: string) => {
-    if (!selectedShipId) return
+    // Ctrl-click on a Mac is a right click: open it in a new tab.
+    if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: bodyName, selectedShipId: null })
+    if (!hasOwnShipSelected()) return openInViewFull(bodyName)
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
     const move = () => orderSelectedFleets({ kind: 'body', systemId: selectedStarId, bodyName })
     // With a Colony Ship selected, a menu: move there, or found a colony.
-    const colonize = colonizeMenuItem(selectedStarId, bodyName)
-    if (colonize) bodyMenu.open(bodyName, [{ label: `Move to ${bodyName}`, onClick: move }, colonize])
+    const extra = bodyMenuItems(selectedStarId, bodyName)
+    if (extra.length > 0) bodyMenu.open(bodyName, [{ label: `Move to ${bodyName}`, onClick: move }, ...extra])
     else move()
   }
 

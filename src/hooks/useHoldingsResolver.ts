@@ -27,7 +27,7 @@ export function resolveHoldings(fromSimDays: number, toSimDays: number): void {
     store.setHoldings(store.holdings.filter((h) => !lost.includes(h)))
     for (const h of lost) {
       const host = ctx.owners[h.bodyName]
-      diplomacy.pushEvent('holding', [h.ownerId, ...(host ? [host] : [])], `${ownerDisplay(h.ownerId).name}'s ${HOLDING_DEFS[h.kind].name} on ${h.bodyName} was ${h.kind === 'branchOffice' ? 'seized' : 'closed'}`, toSimDays)
+      diplomacy.pushEvent('holding', [h.ownerId, ...(host ? [host] : [])], `${ownerDisplay(h.ownerId).name}'s ${HOLDING_DEFS[h.kind].name} on ${h.bodyName} was ${h.kind === 'branchOffice' ? 'seized' : 'closed'}`, toSimDays, { bodyName: h.bodyName })
     }
   }
 

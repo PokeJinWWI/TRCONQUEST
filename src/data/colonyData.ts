@@ -20,6 +20,11 @@ export const COLONY_SHIP_SETTLERS = 20
 // A world never gives settlers below this (millions).
 export const SETTLER_SOURCE_FLOOR = 50
 
+// Days a Colony Ship spends in orbit founding a colony (landing the settlers
+// and building the outpost) before the colony exists. Leaving, or losing the
+// orbit to enemy warships, abandons the attempt.
+export const COLONY_FOUNDING_DAYS = 60
+
 // A micro-colony's district levels, until it becomes a planetary colony.
 export const MICRO_COLONY_LAND = 3
 // Days the colony's orbit must be held by the owner's patrol ships, with no

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { destinationLabel } from './shipPhysics'
 import { replanForWarpWhenReady } from './warpReplan'
 import { ShipSurveySection } from './ShipSurveySection'
+import { ShipAutomationToggle } from './ShipAutomationToggle'
 import { ShipCargoSection } from './ShipCargoSection'
 import { anyCivilian, mergeCheck } from './fleetRules'
 import { startFleetMerge } from './fleetMerge'
@@ -535,6 +536,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
         </>
       )}
       {owned && <ShipPatrolToggle ship={ship} />}
+      {owned && <ShipAutomationToggle ship={ship} />}
       {owned && <ShipSurveySection ship={ship} />}
       {owned && <ShipColonySection ship={ship} />}
       {owned && <ShipCargoSection ship={ship} />}

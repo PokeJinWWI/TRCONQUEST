@@ -3,8 +3,11 @@
 //
 // Run:  npx tsx tests/colonies.test.ts
 
-import { COLONY_PATROL_DAYS, COLONY_SHIP_SETTLERS, INFLUENCE_CAP, INFLUENCE_PER_MONTH, MICRO_COLONY_LAND, STARTING_INFLUENCE } from '../src/data/colonyData'
+import { COLONY_FOUNDING_DAYS, COLONY_PATROL_DAYS, COLONY_SHIP_SETTLERS, INFLUENCE_CAP, INFLUENCE_PER_MONTH, MICRO_COLONY_LAND, STARTING_INFLUENCE } from '../src/data/colonyData'
 import { usePlayerStore } from '../src/state/playerStore'
+import { useStarbaseStore } from '../src/state/starbaseStore'
+import { useGameTimeStore } from '../src/state/gameTimeStore'
+import { useTechStore } from '../src/state/techStore'
 import { useResourceStore } from '../src/state/resourceStore'
 import { useShipStore } from '../src/state/shipStore'
 import { useArmyStore } from '../src/state/armyStore'
@@ -17,6 +20,7 @@ import { groundKeySurface } from '../src/state/defenseStore'
 import { canRecruitAt } from '../src/state/armyStore'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
 import { applyShipCommand } from '../src/scene/shipCommands'
+import { bodyStarId } from '../src/scene/territory'
 import { applyInfluenceIncome, canColonize, colonyCostFor, embarkSettlers, foundColony, seedInfluence } from '../src/scene/colonies'
 import { colonyInfluenceCost } from '../src/scene/colonyLogic'
 import { payReparations } from '../src/scene/peace'
@@ -45,7 +49,11 @@ const VENUS = 'republic-of-venus'
 const influenceOf = (id: string) => useResourceStore.getState().stateFor(id).amounts.influence ?? 0
 const ship = (id: string) => useShipStore.getState().ships.find((s) => s.id === id)!
 
-function fresh() {
+// Every colony needs a finished Starbase of its nation in the system; `fresh`
+// gives Mars one in Sol unless told not to.
+function fresh(withBase = true) {
+  useStarbaseStore.setState({ starbases: withBase ? [{ id: 'sb-sol-mars', starId: 'sol', ownerId: MARS, integrity: 50, readySimDays: 0 }] : [] })
+  useGameTimeStore.setState({ simDays: 0 })
   usePlayerStore.setState({ selectedCountryId: MARS, sandbox: false, economyModel: 'abstract' })
   useShipStore.setState({ ships: [] })
   useArmyStore.getState().reset()
@@ -84,8 +92,8 @@ console.log('\n=== 2. What a colony costs ===')
 
 console.log('\n=== 3. When a Colony Ship can found a colony ===')
 {
-  fresh()
-  const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Saturn')!
+  fresh(false)
+  const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Titan')!
   const reason = (body = 'Titan', anywhere = false) => {
     const r = canColonize(ship(id), body, { anywhere })
     return r.ok ? 'ok' : r.reason
@@ -95,6 +103,12 @@ console.log('\n=== 3. When a Colony Ship can found a colony ===')
   usePlayerStore.setState({ economyModel: 'abstract' })
   check('not before the world is surveyed', /Survey Titan first/.test(reason()), reason())
   survey(MARS, 'Titan')
+  check('not without a Starbase of your own in the system', /Needs a Starbase of your own in Sol/.test(reason()), reason())
+  useStarbaseStore.setState({ starbases: [{ id: 'sb-sol-venus', starId: 'sol', ownerId: VENUS, integrity: 50, readySimDays: 0 }] })
+  check("...someone else's won't do", /Needs a Starbase of your own/.test(reason()), reason())
+  useStarbaseStore.setState({ starbases: [{ id: 'sb-sol-mars', starId: 'sol', ownerId: MARS, integrity: 50, readySimDays: 5 }] })
+  check('...nor one still being built', /Needs a Starbase of your own/.test(reason()), reason())
+  useStarbaseStore.setState({ starbases: [{ id: 'sb-sol-mars', starId: 'sol', ownerId: MARS, integrity: 50, readySimDays: 0 }] })
   check('not with no settlers aboard', /no settlers/.test(reason()), reason())
   useShipStore.getState().setSettlers(id, COLONY_SHIP_SETTLERS)
   useResourceStore.getState().setAmount(MARS, 'influence', 0)
@@ -108,20 +122,31 @@ console.log('\n=== 3. When a Colony Ship can found a colony ===')
   survey(MARS, 'Venus')
   check("...or someone else's", /Republic of Venus already holds Venus/.test(reason('Venus', true)), reason('Venus', true))
   useDiplomacyStore.getState().forceWar(MARS, VENUS, 0)
-  const foe = spawnOwnedShip('cruiser', VENUS, 'sol', 'Saturn')!
+  const foe = spawnOwnedShip('cruiser', VENUS, 'sol', 'Titan')!
   check('not while enemy warships hold the orbit', /Enemy warships hold the orbit/.test(reason()), reason())
   useShipStore.getState().removeShip(foe)
-  check('otherwise, yes: a ship over Saturn can settle its moon Titan (a moon\'s orbit is its planet\'s)', reason() === 'ok', reason())
+  const overSaturn = spawnOwnedShip('cruiser', VENUS, 'sol', 'Saturn')!
+  check('otherwise, yes: a ship orbiting Titan can settle it (an enemy over Saturn is another orbit)', reason() === 'ok', reason())
+  useShipStore.getState().removeShip(overSaturn)
+  const saturnShip = spawnOwnedShip('colony-ship', MARS, 'sol', 'Saturn')!
+  useShipStore.getState().setSettlers(saturnShip, COLONY_SHIP_SETTLERS)
+  const fromSaturn = canColonize(ship(saturnShip), 'Titan')
+  check('a moon has its own orbit: a ship over Saturn cannot settle Titan', !fromSaturn.ok && /must be in orbit of Titan/.test(fromSaturn.reason), JSON.stringify(fromSaturn))
+  useShipStore.getState().removeShip(saturnShip)
 }
 
 console.log('\n=== 4. Founding a micro-colony ===')
 {
   fresh()
-  const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Saturn')!
+  const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Titan')!
   useShipStore.getState().setSettlers(id, COLONY_SHIP_SETTLERS)
   survey(MARS, 'Titan')
   const cost = colonyCostFor(MARS, 'Titan')
   applyShipCommand(id, { kind: 'colonize', bodyName: 'Titan' }, 10)
+  check('the order starts the founding; no colony yet', ship(id).founding?.bodyName === 'Titan' && !useColonyStore.getState().colonies['Titan'] && !useTerritoryStore.getState().bodyOwner['Titan'])
+  resolveColonies(10 + COLONY_FOUNDING_DAYS - 1)
+  check(`...still none a day short of ${COLONY_FOUNDING_DAYS} days`, !useColonyStore.getState().colonies['Titan'] && influenceOf(MARS) === STARTING_INFLUENCE)
+  resolveColonies(10 + COLONY_FOUNDING_DAYS)
   const colony = useColonyStore.getState().colonies['Titan']
   const world = useAbstractEconomyStore.getState().worlds['Titan']
   check('Titan is now Mars\'s', useTerritoryStore.getState().bodyOwner['Titan'] === MARS)
@@ -135,10 +160,29 @@ console.log('\n=== 4. Founding a micro-colony ===')
   check('...and the founding is logged', useDiplomacyStore.getState().events.some((e) => e.kind === 'colony-founded'))
   check('a micro-colony cannot raise armies', !canRecruitAt(MARS, 'Titan').ok && /micro-colony/.test((canRecruitAt(MARS, 'Titan') as { reason: string }).reason))
   check('a second Colony Ship cannot found another on the same world', (() => {
-    const other = spawnOwnedShip('colony-ship', MARS, 'sol', 'Saturn')!
+    const other = spawnOwnedShip('colony-ship', MARS, 'sol', 'Titan')!
     useShipStore.getState().setSettlers(other, COLONY_SHIP_SETTLERS)
     return !foundColony(other, 'Titan', 11)
   })())
+}
+
+{
+  // Founding is abandoned when the ship leaves or enemy warships take the orbit.
+  fresh()
+  const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Titan')!
+  useShipStore.getState().setSettlers(id, COLONY_SHIP_SETTLERS)
+  survey(MARS, 'Titan')
+  applyShipCommand(id, { kind: 'colonize', bodyName: 'Titan' }, 0)
+  useDiplomacyStore.getState().forceWar(MARS, VENUS, 0)
+  const raider = spawnOwnedShip('cruiser', VENUS, 'sol', 'Titan')!
+  resolveColonies(20)
+  check('enemy warships in orbit abandon the founding, and say why', !ship(id).founding && useDiplomacyStore.getState().events.some((e) => e.kind === 'colony-abandoned' && /Enemy warships/.test(e.text)))
+  useShipStore.getState().removeShip(raider)
+  applyShipCommand(id, { kind: 'colonize', bodyName: 'Titan' }, 30)
+  useShipStore.getState().setShipLocation(id, { kind: 'orbiting', systemId: 'sol', bodyName: 'Saturn', periodDays: 1, phaseDeg: 0, inclinationDeg: 0 })
+  check('a manual order ends it too', !ship(id).founding)
+  resolveColonies(30 + COLONY_FOUNDING_DAYS)
+  check('...and no colony comes of it', !useColonyStore.getState().colonies['Titan'])
 }
 
 console.log('\n=== 5. Settlers come from the capital ===')
@@ -156,12 +200,17 @@ console.log('\n=== 5. Settlers come from the capital ===')
 console.log('\n=== 6. Patrol ships make it a planetary colony ===')
 {
   fresh()
-  const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Saturn')!
+  const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Titan')!
   useShipStore.getState().setSettlers(id, COLONY_SHIP_SETTLERS)
   survey(MARS, 'Titan')
   foundColony(id, 'Titan', 0)
   const stage = () => useColonyStore.getState().colonies['Titan'].stage
-  const guard = spawnOwnedShip('corvette', MARS, 'sol', 'Saturn')!
+  const overSaturn = spawnOwnedShip('corvette', MARS, 'sol', 'Saturn')!
+  useShipStore.getState().setPatrol(overSaturn, true)
+  resolveColonies(5)
+  check("a patrol over Saturn does not hold Titan's orbit", useColonyStore.getState().colonies['Titan'].orbitSecureSinceSimDays === null)
+  useShipStore.getState().removeShip(overSaturn)
+  const guard = spawnOwnedShip('corvette', MARS, 'sol', 'Titan')!
   resolveColonies(10)
   check('a warship merely orbiting is not a patrol', useColonyStore.getState().colonies['Titan'].orbitSecureSinceSimDays === null)
   useShipStore.getState().setPatrol(guard, true)
@@ -178,7 +227,7 @@ console.log('\n=== 6. Patrol ships make it a planetary colony ===')
   // A hostile warship resets the clock; a hostile army on the ground holds it back.
   useColonyStore.getState().setColonies({ ...useColonyStore.getState().colonies, Titan: { ...useColonyStore.getState().colonies['Titan'], stage: 'micro', orbitSecureSinceSimDays: 200 } })
   useDiplomacyStore.getState().forceWar(MARS, VENUS, 0)
-  const raider = spawnOwnedShip('corvette', VENUS, 'sol', 'Saturn')!
+  const raider = spawnOwnedShip('corvette', VENUS, 'sol', 'Titan')!
   resolveColonies(250)
   check('a hostile warship in orbit resets the patrol clock', useColonyStore.getState().colonies['Titan'].orbitSecureSinceSimDays === null)
   useShipStore.getState().removeShip(raider)
@@ -210,12 +259,17 @@ console.log('\n=== 8. AI empires colonize and patrol by the same rules (headless
     seedStrategicResources(c.id)
     seedInfluence(c.id)
   }
+  useStarbaseStore.setState({ starbases: [] })
   let firstColony: { day: number; body: string } | null = null
   let patrolSeen = false
-  for (let day = 1; day <= 1500; day++) {
+  for (let day = 1; day <= 3000; day++) {
+    useGameTimeStore.setState({ simDays: day })
     if (day % 30 === 0) for (const c of COUNTRIES) {
       applyStrategicIncome(c.id, 1)
       applyInfluenceIncome(c.id, 1)
+      // Roughly the starting research rate (Simple mode's labs; no economy runs here).
+      useTechStore.getState().grantResearch(c.id, 'physics', 5)
+      useTechStore.getState().grantResearch(c.id, 'engineering', 2.5)
     }
     runStrategicAI(day)
     resolveCommsSignals(day)
@@ -230,6 +284,7 @@ console.log('\n=== 8. AI empires colonize and patrol by the same rules (headless
   }
   const colony = firstColony ? useColonyStore.getState().colonies[firstColony.body] : undefined
   const owner = firstColony ? useTerritoryStore.getState().bodyOwner[firstColony.body] : undefined
+  check('...only where it has a Starbase', !!firstColony && useStarbaseStore.getState().starbases.some((sb) => sb.ownerId === owner && sb.starId === bodyStarId(firstColony!.body)))
   check('an AI empire builds a Colony Ship and founds a colony', !!firstColony && !!owner && owner !== LALANDE, JSON.stringify(firstColony) + ' by ' + owner)
   check('...puts a warship on patrol there', patrolSeen)
   check('...and the colony becomes planetary', colony?.stage === 'planetary', colony?.stage)

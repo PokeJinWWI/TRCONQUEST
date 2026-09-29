@@ -180,7 +180,7 @@ export function DebugConsole() {
       hyperdriveReadySimDays: 0,
       warpReadySimDays: 0,
       warpEnabled: true,
-      warpWhenReady: false,
+      warpWhenReady: true,
       chaffAutoDeploy: true,
       pendingHyperdriveJump: null,
       followingShipId: null,

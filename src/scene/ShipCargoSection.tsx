@@ -131,6 +131,7 @@ export function ShipCargoSection({ ship }: { ship: ShipInstance }) {
             type="button"
             className="detail-view-btn"
             disabled={!target || cargoTotal(hold) <= 0}
+            title={cargoTotal(hold) <= 0 ? 'The hold is empty' : `Hand everything in the hold to ${target?.name ?? 'that ship'}`}
             onClick={() => target && queueShipCommand(ship.id, { kind: 'transfer', toShipId: target.id, want: hold })}
           >
             Transfer all

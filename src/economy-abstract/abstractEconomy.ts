@@ -309,10 +309,15 @@ export function landOf(w: WorldState): number {
 export function districtSlots(w: WorldState, d: SimpleDistrictId): number {
   return districtsOf(w)[d] * SLOTS_PER_DISTRICT
 }
-// Free slots in the district a building belongs to, counting queued buildings.
+// Free slots in the district a building belongs to, counting queued buildings
+// AND queued levels of that district: a building can be queued into a slot a
+// queued level will add (the monthly step holds a finished building until its
+// slot exists).
 export function freeSlots(w: WorldState, queue: ConstructionOrder[], d: SimpleDistrictId): number {
-  const queued = queue.filter((o) => o.bodyName === w.bodyName && o.building && takesSlot(o.building) && DISTRICT_OF_BUILDING[o.building] === d).length
-  return districtSlots(w, d) - buildingsInDistrict(w, d) - queued
+  const mine = queue.filter((o) => o.bodyName === w.bodyName)
+  const queued = mine.filter((o) => o.building && takesSlot(o.building) && DISTRICT_OF_BUILDING[o.building] === d).length
+  const comingLevels = mine.filter((o) => o.district === d).length
+  return districtSlots(w, d) + comingLevels * SLOTS_PER_DISTRICT - buildingsInDistrict(w, d) - queued
 }
 // Free land for more district levels, counting queued districts.
 export function freeLand(w: WorldState, queue: ConstructionOrder[]): number {

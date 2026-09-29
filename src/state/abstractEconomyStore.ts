@@ -304,6 +304,8 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
       }
       // Each lab feeds its own tree.
       for (const t of TECH_TREES) if (research[id][t] > 0) tech.grantResearch(id, t, research[id][t])
+      // Whatever the nation queued and can now afford gets researched.
+      useTechStore.getState().processQueue(id)
     }
   },
 
@@ -350,7 +352,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     if (controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `${bodyName} is occupied.` }
     if (!SIMPLE_BUILDING_DEFS[building]) return { ok: false, reason: 'Unknown building.' }
     const d = DISTRICT_OF_BUILDING[building]
-    if (takesSlot(building) && freeSlots(w, c.queue, d) <= 0) return { ok: false, reason: `No free slot in ${bodyName}'s ${SIMPLE_DISTRICT_DEFS[d].name} — develop the district first.` }
+    if (takesSlot(building) && freeSlots(w, c.queue, d) <= 0) return { ok: false, reason: `No free slot in ${bodyName}'s ${SIMPLE_DISTRICT_DEFS[d].name}, now or once its queued levels are built. Develop the district (queue a level) first.` }
     set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, building, progress: 0 }], nextOrderId: cur.nextOrderId + 1 })))
     return { ok: true }
   },

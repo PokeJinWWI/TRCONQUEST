@@ -4,12 +4,15 @@ import { Html } from '@react-three/drei'
 import type { Group } from 'three'
 import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
-import { isAdditiveClick } from './selectionInput'
+import { hasOwnShipSelected, openShipFull } from './panelOpen'
+import { isAdditiveClick, isNewTabClick, isNewTabContextMenu } from './selectionInput'
+import { useWorkspaceStore } from '../state/workspaceStore'
 import { useFleetStore } from '../state/fleetStore'
 import { RELATION_COLORS } from '../data/shipData'
 import { ShipIcon, roleOfClass } from './ShipIcon'
 import { useRelationTo } from '../state/shipRelations'
-import { satelliteOrbitLocalPosition } from './shipPhysics'
+import { satelliteShipLocalPosition } from './shipPhysics'
+import type { MoonData } from './moonData'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
 
@@ -25,6 +28,8 @@ interface SatelliteShipMarkerProps {
    * marker. */
   ships: ShipInstance[]
   primaryVisualRadius: number
+  /** The primary's moons — a cluster orbiting one of them circles it. */
+  moons: MoonData[]
   /** Right-click — orders the currently-selected ship (if any, and if it
    * isn't this one) to follow this cluster's lead ship instead of a normal
    * move order. */
@@ -49,6 +54,7 @@ interface SatelliteShipMarkerProps {
 export function SatelliteShipMarker({
   ships,
   primaryVisualRadius,
+  moons,
   onOrderFollow,
   stackIndex = 0,
   stackCount = 1,
@@ -67,7 +73,7 @@ export function SatelliteShipMarker({
   useFrame(() => {
     if (lead.location.kind !== 'orbiting') return
     const simDays = useGameTimeStore.getState().simDays
-    const pos = satelliteOrbitLocalPosition(lead.location, primaryVisualRadius, simDays)
+    const pos = satelliteShipLocalPosition(lead.location, primaryVisualRadius, moons, simDays)
     groupRef.current?.position.set(...pos)
   })
 
@@ -85,10 +91,14 @@ export function SatelliteShipMarker({
           }
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
-          onClick={(e) => (isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(lead.id) : selectShip(lead.id))}
+          onClick={(e) => (isNewTabClick(e) ? useWorkspaceStore.getState().openInNewTab({ selectedShipId: lead.id }) : isAdditiveClick(e) ? useShipStore.getState().toggleShipSelection(lead.id) : selectShip(lead.id))}
           onContextMenu={(e) => {
             e.preventDefault()
-            onOrderFollow?.(lead.id)
+            // Ctrl-click on a Mac arrives here: open it in a new tab.
+            if (isNewTabContextMenu(e)) useWorkspaceStore.getState().openInNewTab({ selectedShipId: lead.id })
+            // With none of your ships selected, a right click opens its panel full screen.
+            else if (!hasOwnShipSelected()) openShipFull(lead.id)
+            else onOrderFollow?.(lead.id)
           }}
           onWheel={forwardWheelToCanvas}
         >

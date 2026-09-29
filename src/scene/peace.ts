@@ -78,7 +78,7 @@ export function makePeace(warId: string, terms: PeaceTerms, beneficiaryId: strin
     for (const body of terms.bodies) {
       if (territory.bodyOwner[body] !== loserId) continue
       territory.cedeBody(body, beneficiaryId)
-      diplomacy.pushEvent('body-ceded', [loserId, beneficiaryId], `${nameOf(loserId)} ceded ${body} to ${nameOf(beneficiaryId)}`, simDays)
+      diplomacy.pushEvent('body-ceded', [loserId, beneficiaryId], `${nameOf(loserId)} ceded ${body} to ${nameOf(beneficiaryId)}`, simDays, { bodyName: body })
     }
   }
 

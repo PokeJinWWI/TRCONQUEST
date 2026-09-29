@@ -88,4 +88,4 @@ export const AI_MAX_STARBASES = 3
 // anything else (orders beyond its own system are useless at light speed).
 // Research income only exists in Simple economy mode (nothing feeds it in
 // Complex), so in Complex an AI stays where it is.
-export const AI_RESEARCH_PATH = ['warp-theory', 'warp-comms', 'classical-mechanics', 'orbital-mechanics', 'orbital-construction'] as const
+export const AI_RESEARCH_PATH = ['warp-theory', 'warp-drives', 'warp-comms', 'classical-mechanics', 'orbital-mechanics', 'orbital-construction'] as const

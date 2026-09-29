@@ -6,6 +6,35 @@ import { resolveShipClass } from '../state/shipClassResolver'
 import { isPlayerOwned } from '../state/shipRelations'
 import { useShipStore } from '../state/shipStore'
 import { bodyStarId } from './territory'
+import { orderSelectedToSurvey } from './shipCommands'
+import { isBodySurveyed } from './surveyLogic'
+import { useSurveyStore } from '../state/surveyStore'
+import { useTerritoryStore } from '../state/territoryStore'
+import { SURVEY_DAYS_PER_BODY } from '../data/surveyData'
+
+// Everything a right-click on a body offers beyond "Move to": Survey (Science
+// Ships) and Colonize (Colony Ships). Empty when nothing selected can do either,
+// and the scene then just moves.
+export function bodyMenuItems(systemId: string, bodyName: string): ContextMenuItem[] {
+  return [surveyMenuItem(bodyName), colonizeMenuItem(systemId, bodyName)].filter((i): i is ContextMenuItem => !!i)
+}
+
+// "Survey <body>" for the player's selected Science Ships, or null if none is
+// selected: greyed out once the body is surveyed.
+export function surveyMenuItem(bodyName: string): ContextMenuItem | null {
+  const store = useShipStore.getState()
+  const science = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s) && resolveShipClass(s.classId)?.role === 'science')
+  const starId = bodyStarId(bodyName)
+  if (science.length === 0 || !starId) return null
+  const owner = science[0].ownerId
+  const done = isBodySurveyed(useSurveyStore.getState().discovered[owner], owner, bodyName, useTerritoryStore.getState().bodyOwner)
+  return {
+    label: `Survey ${bodyName}`,
+    disabled: done,
+    title: done ? `${bodyName} is already surveyed` : `Fly there and survey it (${SURVEY_DAYS_PER_BODY} days in orbit)`,
+    onClick: () => orderSelectedToSurvey(starId, bodyName),
+  }
+}
 
 // "Colonize <body>" for the player's selected Colony Ships, or null if none is
 // selected: greyed out with the reason when it can't be done now.

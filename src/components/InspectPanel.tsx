@@ -20,6 +20,7 @@ import { DefenseTab } from './planet/DefenseTab'
 import { useColonyStore } from '../state/colonyStore'
 import { COLONY_PATROL_DAYS } from '../data/colonyData'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
+import { usePlayerBodySurveyed } from '../scene/intel'
 
 export interface InspectPanelAction {
   label: string
@@ -97,6 +98,7 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
   const controllerId = useTerritoryStore((s) => s.bodyController[body.name])
   const owner = ownerId ? getCountry(ownerId) : undefined
   const occupier = controllerId && controllerId !== ownerId ? ownerDisplay(controllerId) : undefined
+  const surveyed = usePlayerBodySurveyed(body.name)
 
   return (
     <>
@@ -146,7 +148,13 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
         </div>
       )}
 
-      {body.kind !== 'star' && (
+      {body.kind !== 'star' && !surveyed && (
+        <>
+          <div className="inspect-divider" />
+          <div className="inspect-status">Not surveyed: send a Science Ship to learn its class, size and habitability.</div>
+        </>
+      )}
+      {body.kind !== 'star' && surveyed && (
         <>
           <div className="inspect-divider" />
           {body.planetClass && (
@@ -203,13 +211,14 @@ function PlanetHeader({ body }: { body: InspectableBody }) {
   const ownerId = useTerritoryStore((s) => s.bodyOwner[body.name])
   const owner = ownerId ? getCountry(ownerId) : undefined
   const size = estimateSize(body.radiusKm)
+  const surveyed = usePlayerBodySurveyed(body.name)
   return (
     <div className="pl-header" style={{ borderColor: owner?.color ?? 'rgba(255,255,255,0.12)' }}>
       <div className="pl-header-globe" style={{ background: `radial-gradient(circle at 35% 35%, ${body.color ?? '#8ab4ff'}, #0b1622 75%)` }} />
       <div className="pl-header-text">
         <div className="pl-header-name">{body.name}</div>
         <div className="abs-dim">
-          {body.planetClass ? PLANET_CLASS_LABELS[body.planetClass] : KIND_LABEL[body.kind]} · {size.label}
+          {surveyed ? <>{body.planetClass ? PLANET_CLASS_LABELS[body.planetClass] : KIND_LABEL[body.kind]} · {size.label}</> : <>{KIND_LABEL[body.kind]} · not surveyed</>}
           {owner ? <> · <span style={{ color: owner.color }}>{owner.name}</span></> : ' · Unclaimed'}
         </div>
       </div>
@@ -242,7 +251,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   const current = tabs.includes(tab) ? tab : 'summary'
 
   return (
-    <DraggableWindow title={body.name} memoryKey="planet" onClose={onClose} defaultSize={{ width: 520, height: 640 }}>
+    <DraggableWindow title={body.name} memoryKey="planet" onClose={onClose} defaultSize={{ width: 420, height: 480 }}>
       <PlanetHeader body={body} />
       <div className="nav-subtabs">
         {tabs.map((t) => (

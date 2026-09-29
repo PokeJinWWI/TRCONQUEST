@@ -41,9 +41,9 @@ function CostChips({ cost, amounts }: { cost: ResourceCost; amounts: Record<Reso
 // data/shipyardData.ts for costs/timing/supply (all placeholder tuning) and
 // hooks/useShipyardResolver for what actually advances the queue.
 //
-// Laid out top to bottom the way a shipyard is used: what is on the slips now
-// (one box per slot, so the capacity is visible), what is waiting, then what
-// you can order, grouped by kind of ship with what you can afford first.
+// Subtabs: Slips (what is building, one box per slot, and what is waiting),
+// then one tab per kind of ship to order. The stockpile stays on top of every
+// tab, and a hull you can't build says why under it.
 
 // The order hulls are listed in, and what each group holds.
 const GROUPS: { id: string; label: string; hint: string; roles: ShipClass['role'][] }[] = [
@@ -65,7 +65,7 @@ export function ShipyardPanel() {
   const researched = useTechStore((s) => s.stateFor(countryId).researched)
   const [message, setMessage] = useState<string | null>(null)
   const [onlyAffordable, setOnlyAffordable] = useState(false)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [tab, setTab] = useState<string>('slips')
 
   const slots = shipyardSlotsForWorld(world)
   const capital = getCountry(countryId)?.capitalBodyName
@@ -78,7 +78,9 @@ export function ShipyardPanel() {
     const cost = shipBuildCost(shipClass)
     const affordable = COST_RESOURCE_IDS.every((id) => (cost[id] ?? 0) <= (amounts[id] ?? 0))
     const techMissing = shipClass.requiresTech && !researched.has(shipClass.requiresTech) ? (findTech(shipClass.requiresTech)?.name ?? shipClass.requiresTech) : null
-    return { cost, affordable, techMissing, canBuild: affordable && !queueFull && !techMissing }
+    const short = COST_RESOURCE_IDS.filter((id) => (cost[id] ?? 0) > (amounts[id] ?? 0)).map((id) => `${Math.ceil((cost[id] ?? 0) - (amounts[id] ?? 0))} ${RESOURCE_SHORT[id]}`)
+    const reason = techMissing ? `Needs ${techMissing} researched` : queueFull ? `The build queue is full (${MAX_QUEUED_BUILDS} orders)` : !affordable ? `Short of ${short.join(', ')}` : null
+    return { cost, affordable, techMissing, reason, canBuild: affordable && !queueFull && !techMissing }
   }
 
   const sections = useMemo(() => {
@@ -94,13 +96,6 @@ export function ShipyardPanel() {
     const result = queueBuild(countryId, classId, simDays)
     setMessage(result.ok ? null : result.reason)
   }
-  const toggle = (id: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
 
   const orderRow = (o: (typeof orders)[number], started: boolean) => {
     const fraction = started ? Math.min(1, Math.max(0, (simDays - o.startedSimDays!) / o.durationDays)) : 0
@@ -133,26 +128,6 @@ export function ShipyardPanel() {
         Cost is paid up front and refunded in full if you cancel. More slips: build Spaceyards in Economy &gt; Construction.
       </div>
 
-      <div className="fleet-group-header">Slips — {building.length} of {slots} in use</div>
-      <div className="shipyard-slips">
-        {Array.from({ length: slots }, (_, i) => {
-          const o = building[i]
-          return (
-            <div key={i} className={`shipyard-slip${o ? ' busy' : ''}`} title={o ? `${o.className} under construction` : 'Free slip'}>
-              {o ? o.className : 'Free'}
-            </div>
-          )
-        })}
-      </div>
-      {building.map((o) => orderRow(o, true))}
-      {waiting.length > 0 && (
-        <>
-          <div className="fleet-group-header">Waiting for a slip ({waiting.length})</div>
-          {waiting.map((o) => orderRow(o, false))}
-        </>
-      )}
-
-      <div className="fleet-group-header">Stockpile</div>
       <div className="shipyard-stockpile">
         {COST_RESOURCE_IDS.map((id) => (
           <span key={id} className="shipyard-stock" title={RESOURCE_TYPES.find((r) => r.id === id)?.description}>
@@ -162,50 +137,71 @@ export function ShipyardPanel() {
         ))}
       </div>
 
-      <div className="fleet-group-header-row">
-        <div className="fleet-group-header">Order a ship</div>
-        <label className="shipyard-filter" title="Hide hulls you can't build right now">
-          <input type="checkbox" checked={onlyAffordable} onChange={(e) => setOnlyAffordable(e.target.checked)} /> Only what I can build now
-        </label>
+      <div className="nav-subtabs shipyard-tabs">
+        <button type="button" className={`nav-subtab${tab === 'slips' ? ' active' : ''}`} onClick={() => setTab('slips')} title="What is being built, and what is waiting for a slip">
+          Slips ({building.length}/{slots}){waiting.length > 0 ? ` +${waiting.length}` : ''}
+        </button>
+        {sections.map((g) => (
+          <button key={g.id} type="button" className={`nav-subtab${tab === g.id ? ' active' : ''}`} onClick={() => setTab(g.id)} title={g.hint}>
+            {g.label}
+          </button>
+        ))}
       </div>
       {message && <div className="ship-panel-hint shipyard-message">{message}</div>}
-      {sections.map((group) => {
-        const rows = group.classes.map((c) => ({ shipClass: c, ...status(c) })).filter((r) => !onlyAffordable || r.canBuild)
-        const isCollapsed = collapsed.has(group.id)
-        return (
-          <div key={group.id} className="shipyard-group">
-            <button type="button" className="shipyard-group-title" onClick={() => toggle(group.id)} aria-expanded={!isCollapsed} title={group.hint}>
-              <span className={`outliner-section-caret${isCollapsed ? ' collapsed' : ''}`}>▾</span>
-              {group.label} <span className="shipyard-group-count">{rows.length}</span>
-            </button>
-            {!isCollapsed && rows.length === 0 && <div className="ship-panel-hint">Nothing here you can build right now.</div>}
-            {!isCollapsed &&
-              rows.map(({ shipClass, cost, affordable, techMissing, canBuild }) => (
+
+      {tab === 'slips' && (
+        <>
+          <div className="shipyard-slips">
+            {Array.from({ length: slots }, (_, i) => {
+              const o = building[i]
+              return (
+                <div key={i} className={`shipyard-slip${o ? ' busy' : ''}`} title={o ? `${o.className} under construction` : 'Free slip'}>
+                  {o ? o.className : 'Free'}
+                </div>
+              )
+            })}
+          </div>
+          {building.length === 0 && waiting.length === 0 && <div className="ship-panel-hint">Nothing on the slips. Order a ship from one of the other tabs.</div>}
+          {building.map((o) => orderRow(o, true))}
+          {waiting.length > 0 && (
+            <>
+              <div className="fleet-group-header">Waiting for a slip ({waiting.length})</div>
+              {waiting.map((o) => orderRow(o, false))}
+            </>
+          )}
+        </>
+      )}
+
+      {sections
+        .filter((g) => g.id === tab)
+        .map((group) => {
+          const rows = group.classes.map((c) => ({ shipClass: c, ...status(c) })).filter((r) => !onlyAffordable || r.canBuild)
+          return (
+            <div key={group.id} className="shipyard-group">
+              <label className="shipyard-filter" title="Hide hulls you can't build right now">
+                <input type="checkbox" checked={onlyAffordable} onChange={(e) => setOnlyAffordable(e.target.checked)} /> Only what I can build now
+              </label>
+              {rows.length === 0 && <div className="ship-panel-hint">Nothing here you can build right now.</div>}
+              {rows.map(({ shipClass, cost, reason, canBuild }) => (
                 <div key={shipClass.id} className={`fleet-row shipyard-hull${canBuild ? '' : ' unavailable'}`}>
                   <div className="fleet-row-head">
                     <span className="fleet-row-name">{shipClass.name}</span>
                     <span className="fleet-row-class">{SHIP_ROLE_LABELS[shipClass.role]}</span>
-                    <button
-                      type="button"
-                      className="ship-panel-unfollow-btn"
-                      disabled={!canBuild}
-                      onClick={() => handleBuild(shipClass.id)}
-                      title={techMissing ? `Needs ${techMissing} researched` : queueFull ? 'The build queue is full' : affordable ? `Build for ${shipBuildDays(shipClass)} days` : 'Not enough resources'}
-                    >
+                    <button type="button" className="ship-panel-unfollow-btn" disabled={!canBuild} onClick={() => handleBuild(shipClass.id)} title={reason ?? `Build for ${shipBuildDays(shipClass)} days`}>
                       Build
                     </button>
                   </div>
                   <div className="fleet-row-status">
                     {shipClass.ftlDrives.map(describeFtlDrive).join(', ')} · {shipBuildDays(shipClass)} days
                     {shipClass.cargoCapacity ? ` · Hold ${shipClass.cargoCapacity}` : ''}
-                    {techMissing ? ` · Needs ${techMissing}` : ''}
                   </div>
                   <CostChips cost={cost} amounts={amounts} />
+                  {reason && <div className="shipyard-reason">Can't build: {reason}</div>}
                 </div>
               ))}
-          </div>
-        )
-      })}
+            </div>
+          )
+        })}
     </div>
   )
 }

@@ -24,7 +24,7 @@ export function resolveStarbaseSieges(fromSimDays: number, toSimDays: number): v
     const sb = starbases.find((s) => s.id === id)
     if (!sb) continue
     const star = starbaseAnchorBody(sb.starId) ?? sb.starId
-    useDiplomacyStore.getState().pushEvent('installation-destroyed', [sb.ownerId], `${ownerDisplay(sb.ownerId).name}'s Starbase at ${star} was destroyed`, toSimDays)
+    useDiplomacyStore.getState().pushEvent('installation-destroyed', [sb.ownerId], `${ownerDisplay(sb.ownerId).name}'s Starbase at ${star} was destroyed`, toSimDays, { starId: sb.starId })
     recordLoss(sb.ownerId, killersOf[id] ?? [], STARBASE_LOSS_VALUE)
   }
   useStarbaseStore.getState().applyDamage(damaged, destroyedIds)

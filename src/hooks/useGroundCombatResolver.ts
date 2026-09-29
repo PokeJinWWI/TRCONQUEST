@@ -104,7 +104,7 @@ export function resolveGroundWar(simDays: number): void {
     const owner = territory.bodyOwner[gone.bodyName]
     useDiplomacyStore
       .getState()
-      .pushEvent('installation-destroyed', owner ? [owner] : [], `${DEFENSE_DEFS[gone.kind].name} on ${gone.bodyName} was destroyed`, simDays)
+      .pushEvent('installation-destroyed', owner ? [owner] : [], `${DEFENSE_DEFS[gone.kind].name} on ${gone.bodyName} was destroyed`, simDays, { bodyName: gone.bodyName })
   }
 
   // Fights that have come to close quarters move onto terrain maps, and the
@@ -138,7 +138,7 @@ export function resolveGroundWar(simDays: number): void {
       owner === o.countryId
         ? `${nameOf(o.countryId)} liberated ${o.bodyName}`
         : `${nameOf(o.countryId)} occupied ${o.bodyName}${loser ? ` from ${nameOf(loser)}` : ''}`
-    useDiplomacyStore.getState().pushEvent('body-occupied', [o.countryId, ...(loser ? [loser] : [])], text, o.simDays)
+    useDiplomacyStore.getState().pushEvent('body-occupied', [o.countryId, ...(loser ? [loser] : [])], text, o.simDays, { bodyName: o.bodyName })
   }
 }
 

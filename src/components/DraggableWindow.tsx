@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useWindowLayoutStore } from '../state/windowLayoutStore'
+import { DOCKED_WINDOW_KEYS, useWindowLayoutStore, type OpenMode } from '../state/windowLayoutStore'
 
 interface DraggableWindowProps {
   title: string
@@ -336,6 +336,66 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   // the fill-the-screen math below doesn't apply to it, and pinned combat
   // panels have no real reason to want fullscreen anyway — nor for one with
   // `maximizable={false}` (see that prop's own comment).
+  // The fill-the-screen box, and the docked one (the right edge, full height,
+  // as wide as the Outliner it covers).
+  const maximizedLayout = () => {
+    const hudTop = cssVarPx('--hud-top-height', 52)
+    const hudBottom = cssVarPx('--hud-bottom-height', 58)
+    const availableHeight = window.innerHeight - hudTop - hudBottom
+    // The box centers itself at `left: 32%, top: 55%` (see the base CSS
+    // rule) plus this translate offset — solving for the offset that lands
+    // the center at the fill-the-screen box's own center instead.
+    return {
+      pos: { x: window.innerWidth * (0.5 - 0.32), y: hudTop + availableHeight / 2 - window.innerHeight * 0.55 },
+      size: { width: window.innerWidth, height: availableHeight },
+    }
+  }
+  const dockedLayout = () => {
+    const hudTop = cssVarPx('--hud-top-height', 52)
+    const hudBottom = cssVarPx('--hud-bottom-height', 58)
+    const height = window.innerHeight - hudTop - hudBottom
+    const outliner = document.querySelector('.outliner:not(.collapsed)')?.getBoundingClientRect().width
+    const width = Math.max(MIN_WIDTH, Math.round(outliner && outliner > 120 ? outliner : 320))
+    return {
+      pos: { x: window.innerWidth - width / 2 - window.innerWidth * 0.32, y: hudTop + height / 2 - window.innerHeight * 0.55 },
+      size: { width, height },
+    }
+  }
+  const applyOpenMode = (mode: OpenMode) => {
+    if (anchor || !maximizable) return
+    selfCompensatedRef.current = true
+    if (mode === 'maximized') {
+      preMaximizeRef.current = preMaximizeRef.current ?? { pos, size }
+      const m = maximizedLayout()
+      setPos(m.pos)
+      setSize(m.size)
+      setMaximized(true)
+    } else {
+      const d = dockedLayout()
+      setMaximized(false)
+      setPos(d.pos)
+      setSize(d.size)
+    }
+  }
+  // On open: a pending request for this window, else docked if it's one of
+  // the inspector windows. Later requests (a right click while it's open)
+  // re-apply.
+  const handledRequestRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const req = useWindowLayoutStore.getState().openRequests[sizeKey]
+    handledRequestRef.current = req?.n ?? null
+    const mode = req?.mode ?? (DOCKED_WINDOW_KEYS.has(sizeKey) ? 'docked' : null)
+    if (mode) applyOpenMode(mode)
+    return useWindowLayoutStore.subscribe((state) => {
+      const next = state.openRequests[sizeKey]
+      if (!next || next.n === handledRequestRef.current) return
+      handledRequestRef.current = next.n
+      applyOpenMode(next.mode)
+    })
+    // Mount-only (the subscription covers later requests).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleToggleMaximize = () => {
     if (anchor || !maximizable) return
     window.clearTimeout(animationTimeoutRef.current)
@@ -357,18 +417,9 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     applyMaximizeTimeoutRef.current = window.setTimeout(() => {
       if (!maximized) {
         preMaximizeRef.current = { pos, size }
-        const hudTop = cssVarPx('--hud-top-height', 52)
-        const hudBottom = cssVarPx('--hud-bottom-height', 58)
-        const availableHeight = window.innerHeight - hudTop - hudBottom
-        // The box centers itself at `left: 32%, top: 55%` (see the base
-        // CSS rule) plus this translate offset — solving for the offset
-        // that lands the center at the fill-the-screen box's own center
-        // instead (full width, `hudTop` to `hudTop + availableHeight`).
-        setPos({
-          x: window.innerWidth * (0.5 - 0.32),
-          y: hudTop + availableHeight / 2 - window.innerHeight * 0.55,
-        })
-        setSize({ width: window.innerWidth, height: availableHeight })
+        const m = maximizedLayout()
+        setPos(m.pos)
+        setSize(m.size)
         setMaximized(true)
       } else {
         setMaximized(false)

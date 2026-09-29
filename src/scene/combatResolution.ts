@@ -857,9 +857,7 @@ export function obstaclesForLocation(location: ShipLocation, simDays = 0): Comba
       }
       return obstacles
     }
-    // A moon being orbited directly isn't reachable as a rest location today,
-    // but resolve it rather than silently producing an empty arena if it ever
-    // becomes one.
+    // A moon orbited directly: the moon alone sits at the arena's centre.
     for (const p of systemPlanets) {
       const moon = getMoonsForPlanet(p.name).moons.find((m) => m.name === location.bodyName)
       if (moon) {
@@ -867,7 +865,7 @@ export function obstaclesForLocation(location: ShipLocation, simDays = 0): Comba
           {
             name: moon.name,
             kind: 'moon',
-            color: p.color,
+            color: moon.color,
             position: ARENA_ORIGIN,
             radiusUnits: arenaBodyRadius(moon.radiusKm),
             // Only Luna carries real mass data (see MoonRawData.massKg) —

@@ -19,7 +19,7 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import type { Starbase } from './starbaseLogic'
 import { starbaseOwnersOf } from './starbaseLogic'
-import { isExplored, type NationIntel } from './surveyLogic'
+import { isBodySurveyed, isExplored, type NationIntel } from './surveyLogic'
 import type { OwnerMap, SystemClaim } from './territory'
 
 const UNCLAIMED: SystemClaim = { kind: 'unclaimed' }
@@ -77,4 +77,16 @@ export function usePlayerIntel(): PlayerIntel {
     [gated, playerId, knownIntel, owners, starbases, activity],
   )
   return { gated, known }
+}
+
+// Whether the player has a survey of this body (by report, or it is in one of
+// their own systems): what a world is like — class, size, habitability — shows
+// only then. Always true in the sandbox.
+export function usePlayerBodySurveyed(bodyName: string): boolean {
+  const playerId = usePlayerStore((s) => s.selectedCountryId)
+  const sandbox = usePlayerStore((s) => s.sandbox)
+  const knownIntel = useSurveyStore((s) => (playerId ? s.known[playerId] : undefined))
+  const owners = useTerritoryStore((s) => s.bodyOwner)
+  if (!playerId || sandbox) return true
+  return isBodySurveyed(knownIntel, playerId, bodyName, owners)
 }
