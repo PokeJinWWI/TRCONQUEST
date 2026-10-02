@@ -11,6 +11,7 @@ import { useShipStore } from '../state/shipStore'
 import { useArmyStore } from '../state/armyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
+import { economyModel } from '../state/playerStore'
 import { bodiesOwnedBy } from './territory'
 import { spawnOwnedShip } from './shipyardLogic'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -36,6 +37,8 @@ export function setUpNewGame(): void {
   seedStartingArmies()
   seedStartingDefenses()
   seedColonies(useGameTimeStore.getState().simDays)
+  // Complex mode runs the generated empires' economies too (economy/empireSeed.ts).
+  if (economyModel() === 'complex') useEconomyStore.getState().seedEmpires()
 }
 
 // The starting warships sail as one fleet: as separate fleets, "attack

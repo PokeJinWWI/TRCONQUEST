@@ -37,6 +37,8 @@ import {
   ACADEMIC_TO_INDUSTRIAL,
   CLUSTER_MAX,
   CLUSTER_PER_BUILDING,
+  DECONSTRUCT_MONTHS_BUILDING,
+  DECONSTRUCT_MONTHS_DISTRICT,
   DISTRICT_COST,
   DISTRICT_OF_BUILDING,
   LINK_MAX,
@@ -106,6 +108,18 @@ export interface ConstructionOrder {
   progress: number // construction points put in so far
 }
 
+// A building or district level being deconstructed: a bar that runs backwards.
+// `progress` is what is left, in construction points' worth: it starts at the
+// build cost and falls by cost / months each month, independent of the
+// construction queue; at 0 the thing is removed. Never takes a slot.
+export interface Teardown {
+  id: number
+  bodyName: string
+  building?: SimpleBuildingId
+  district?: SimpleDistrictId
+  progress: number
+}
+
 export interface Currency {
   code: string
   name: string
@@ -144,6 +158,8 @@ export interface AbstractEconomyState {
   // Construction queue (worked in order) and the next order id.
   queue: ConstructionOrder[]
   nextOrderId: number
+  // Deconstructions under way (ids share `nextOrderId`). Optional: absent = none.
+  teardowns?: Teardown[]
   currency: Currency
   trade: TradeOrders
 }
@@ -326,6 +342,13 @@ export function freeLand(w: WorldState, queue: ConstructionOrder[]): number {
 }
 export function orderCost(o: Pick<ConstructionOrder, 'building' | 'district'>): number {
   return o.district ? DISTRICT_COST : o.building ? SIMPLE_BUILDING_DEFS[o.building].cost : 0
+}
+// What a teardown started from (its bar's full length) and how long it runs.
+export function teardownCost(t: Pick<Teardown, 'building' | 'district'>): number {
+  return t.district ? DISTRICT_COST : t.building ? SIMPLE_BUILDING_DEFS[t.building].cost : 0
+}
+export function teardownMonths(t: Pick<Teardown, 'building' | 'district'>): number {
+  return t.district ? DECONSTRUCT_MONTHS_DISTRICT : DECONSTRUCT_MONTHS_BUILDING
 }
 export function orderName(o: Pick<ConstructionOrder, 'building' | 'district'>): string {
   return o.district ? `${SIMPLE_DISTRICT_DEFS[o.district].name} level` : o.building ? SIMPLE_BUILDING_DEFS[o.building].name : 'Project'
@@ -831,6 +854,27 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
     } else queue.push(next)
   }
 
+  // Deconstruction: each bar runs down on its own clock (no construction points,
+  // no queue place) and the thing is removed when it reaches zero.
+  const teardowns: Teardown[] = []
+  for (const t of s.teardowns ?? []) {
+    const w = byName.get(t.bodyName)
+    if (!w) {
+      teardowns.push(t) // paused: the world isn't ours to work right now
+      continue
+    }
+    const left = t.progress - teardownCost(t) / teardownMonths(t)
+    if (left > 1e-9) {
+      teardowns.push({ ...t, progress: left })
+      continue
+    }
+    if (t.building && (w.buildings[t.building] ?? 0) > 0) w.buildings[t.building] = w.buildings[t.building]! - 1
+    // A district level only goes if what stands here still fits without it.
+    else if (t.district && districtsOf(w)[t.district] > 0 && buildingsInDistrict(w, t.district) <= districtSlots(w, t.district) - SLOTS_PER_DISTRICT) {
+      w.districts = { ...districtsOf(w), [t.district]: districtsOf(w)[t.district] - 1 }
+    }
+  }
+
   // Population, per world.
   const growth = (POP_GROWTH * (0.5 + r.approval) * (1 + 0.3 * clamp(s.welfare, 0, 1))) / TICKS_PER_YEAR
   const starve = (STARVATION * (1 - r.foodSatisfaction)) / TICKS_PER_YEAR
@@ -877,6 +921,7 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
     treasury,
     debt,
     queue,
+    teardowns,
     currency,
   }
   return { state, worlds: nextWorlds, stock: nextStock, report: r, completed }

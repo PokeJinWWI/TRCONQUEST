@@ -4,6 +4,7 @@ import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { applyFleetMove, plannerFor } from '../scene/commsVisual'
 import { resolveQueueAdds } from '../scene/orderQueue'
 import { resolvePendingCommands } from '../scene/shipCommands'
+import { resolveAggressionNews } from '../scene/aggressionOrders'
 
 // Fires every strategic order queued behind FTL comms delay (see
 // commsVisual.ts's queueMoveOrder/queueStance, and ShipInstance.
@@ -47,6 +48,8 @@ export function resolveCommsSignals(simDays: number): void {
   // Shift-orders whose signal has arrived join their ship's queue.
   resolveQueueAdds(simDays)
   resolvePendingCommands(simDays)
+  // News of unprovoked attacks reaching the victims (scene/aggressionOrders.ts).
+  resolveAggressionNews(simDays)
 }
 
 export function useCommsResolver() {

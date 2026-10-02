@@ -3,7 +3,7 @@
 // pass and shared by every agent, so they all reason from the same facts and
 // nobody recomputes fleet power five times.
 import type { ResourceId } from '../data/resourceData'
-import type { Relation, War } from '../data/diplomacyData'
+import type { Incident, Relation, War } from '../data/diplomacyData'
 import type { ShipInstance } from '../state/shipStore'
 import type { BodySurface } from '../scene/planetTerrain'
 import { atWarFrom, relationIn, type AtWarFn } from '../state/diplomacyStore'
@@ -41,6 +41,8 @@ export interface AiSnapshot {
   nodeHolders: NodeHolderMap
   relations: Record<string, Relation>
   wars: War[]
+  // Unprovoked attacks whose news is still under way. Optional: absent = none.
+  incidents?: Incident[]
   starbases: Starbase[]
   // Colonies (scene/colonies.ts) and whether this game has them (Simple mode).
   // Optional: absent = none.

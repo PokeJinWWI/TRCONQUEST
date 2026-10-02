@@ -12,6 +12,7 @@ import {
   BATTLE_SCORE_SCALE_HP,
   CEDE_EXHAUSTION,
   REPARATIONS_MAX_SHARE,
+  VASSALIZE_SCORE,
   EXHAUSTION_LOSS_HP_PER_POINT,
   EXHAUSTION_PER_YEAR,
   WHITE_PEACE_EXHAUSTED_MAX_SCORE,
@@ -129,8 +130,14 @@ export function evaluatePeace(
     return { accept: true, reason: 'Reparations accepted' }
   }
 
-  // Vassalize/liberate-subject terms are only valid in a total war; that
-  // gating and their evaluation land in a later phase.
+  if (terms.kind === 'vassalize') {
+    const needed = receiverExhaustion >= CEDE_EXHAUSTION ? VASSALIZE_SCORE / 2 : VASSALIZE_SCORE
+    const mine = -receiverScore
+    if (mine < needed) return { accept: false, reason: `Needs war score ${Math.ceil(needed)} (have ${Math.floor(mine)})` }
+    return { accept: true, reason: 'They submit' }
+  }
+
+  // Liberating a subject is not supported yet.
   if (terms.kind !== 'cede') return { accept: false, reason: 'Not yet supported' }
 
   if (terms.bodies.length === 0) return { accept: false, reason: 'No bodies demanded' }

@@ -17,7 +17,8 @@ import { useInternationalOrgStore } from '../state/internationalOrgStore'
 import { useTradePolicyStore } from '../state/tradePolicyStore'
 import { useTreatyStore } from '../state/treatyStore'
 import { resetDynamicCountries } from '../data/countryData'
-import { useEconomyStore } from '../state/economyStore'
+import { useObserverStore } from '../state/observerStore'
+import { cancelEconomyFlight, useEconomyStore } from '../state/economyStore'
 import { useFleetStore } from '../state/fleetStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useGroundViewStore } from '../state/groundViewStore'
@@ -49,6 +50,7 @@ interface Resettable {
   getInitialState: () => unknown
 }
 const GAME_STORES: Resettable[] = [
+  useObserverStore,
   useAbstractEconomyStore,
   useColonyStore,
   useDefenseStore,
@@ -88,6 +90,8 @@ const GAME_STORES: Resettable[] = [
 ] as unknown as Resettable[]
 
 export function resetGame(): void {
+  // An economy month still being worked out belongs to the old game.
+  cancelEconomyFlight()
   for (const store of GAME_STORES) store.setState(store.getInitialState() as never, true)
   resetFightPace()
   resetDynamicCountries()

@@ -285,6 +285,9 @@ export interface CountryAIOptions {
   // Whether two nations are at war — they don't trade (internationalTrade.ts).
   // Absent = nobody is (headless sims and tests).
   atWar?: (a: string, b: string) => boolean
+  // Whether two nations can reach each other at all, for goods and for capital
+  // (internationalTrade, foreignInvestmentAI). Absent = every pair can.
+  canTrade?: (a: string, b: string) => boolean
   // The current tick index, for review cadence. Managers only act on their
   // review ticks.
   tick?: number

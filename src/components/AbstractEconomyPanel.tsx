@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { goToBody } from '../scene/eventNavigation'
 import { usePlayerStore } from '../state/playerStore'
 import { useAbstractEconomyStore, worldsOf, smoothedRealGrowth, GROWTH_MIN_MONTHS } from '../state/abstractEconomyStore'
 import { useResourceStore } from '../state/resourceStore'
@@ -367,7 +368,7 @@ function IndustryTab({ countryId, s, r }: TabProps) {
           const paused = !mine.some((w) => w.bodyName === o.bodyName)
           return (
             <div key={o.id} className="abs-order">
-              <span>{i + 1}. {orderName(o)} — {o.bodyName}{paused ? ' (paused: occupied)' : ''}</span>
+              <span>{i + 1}. {orderName(o)} — <span className="abs-goto" role="button" title={`Go to ${o.bodyName}`} onClick={() => goToBody(o.bodyName)}>{o.bodyName} ↗</span>{paused ? ' (paused: occupied)' : ''}</span>
               <span className="abs-order-bar"><span style={{ width: `${Math.min(100, (o.progress / cost) * 100)}%` }} /></span>
               <span className="abs-dim">{fmt(o.progress)}/{cost}</span>
               <button type="button" className="abs-x" title="Cancel (progress is lost)" onClick={() => cancelOrder(countryId, o.id)}>×</button>
@@ -402,9 +403,9 @@ function WorldRow({ countryId, bodyName }: { countryId: string; bodyName: string
   return (
     <div className="abs-world">
       <button type="button" className="abs-world-toggle" onClick={() => setOpen(!open)} title="Show this world's districts and buildings">
-        <span>{open ? '▾' : '▸'} <b>{w.bodyName}</b></span>
+        <span>{open ? '▾' : '▸'} <b>{w.bodyName}</b> <span className="abs-goto" role="button" title={`Go to ${w.bodyName}`} onClick={(e) => { e.stopPropagation(); goToBody(w.bodyName) }}>↗ go to</span></span>
         <span className="abs-dim">
-          pop {formatPop(w.population)} · jobs {fmt(worldJobs(w))}/{fmt(worldWorkforce(w))}
+          pop {formatPop(w.population)} · workers / jobs {fmt(worldWorkforce(w))} / {fmt(worldJobs(w))}
           {staffing < 1 ? <span className="econ-neg"> · staffed {pct(staffing, 0)}</span> : null} · land {districtLevelsTotal(w)}/{landOf(w)}
         </span>
       </button>

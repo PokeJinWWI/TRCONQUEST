@@ -11,6 +11,7 @@ import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { StarData } from '../data/starData'
 import { getStarsForNeighborhood, starScenePosition, STARS } from '../data/starData'
+import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
 import { useViewStore } from '../state/viewStore'
 import type { ShipInstance, MoveDestination } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
@@ -26,7 +27,8 @@ import { PendingOrderLine } from './PendingOrderLine'
 import { QueuedRouteLine } from './QueuedRouteLine'
 import { CommsSignals } from './CommsSignals'
 import { ShipPanel } from './ShipPanel'
-import { shipSystemId, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
+import { shipSystemId, clusterRestingShipsByFleet, hyperdriveJumpChance } from './shipPhysics'
+import { useShipOrderMenu } from './ShipOrderMenu'
 import { orderSelectedFleets, playerShipRenderPosition } from './commsVisual'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
@@ -40,6 +42,9 @@ import { usePlayerStore } from '../state/playerStore'
 import { canBuildStarbase, useStarbaseStore } from '../state/starbaseStore'
 import { starbaseOwnersOf, starbasesAt } from './starbaseLogic'
 import { TerritoryDiscs } from './TerritoryDiscs'
+import { ObserverLayer } from './ObserverLayer'
+import { empireClaimsByStar } from './observerView'
+import { useObserverStore } from '../state/observerStore'
 import { ContextMenu, type ContextMenuItem } from './StarContextMenu'
 import { HoverTip } from '../components/HoverTip'
 import { orderSelectedToDoAt, orderSelectedToSurvey } from './shipCommands'
@@ -55,6 +60,19 @@ import { unidentifiedStarbaseStars, usePlayerIntel, visibleClaims } from './inte
 
 const ENTER_DISTANCE = 6
 const UNCLAIMED: SystemClaim = { kind: 'unclaimed' }
+const NO_LANES: string[] = []
+const NO_SHIPS: ShipInstance[] = []
+
+// "Jump risk: 43% (by distance and the destination's mass)" for the riskiest of
+// the selected ships that would hyperdrive to `starId`; null if none would.
+function jumpRiskText(selected: ShipInstance[], starId: string): string | null {
+  // Only our own neighbourhood's stars can be jumped to.
+  if (!STARS.some((s) => s.id === starId)) return null
+  const simDays = useGameTimeStore.getState().simDays
+  const chances = selected.map((s) => hyperdriveJumpChance(s, starId, simDays)).filter((c): c is number => c !== null)
+  if (chances.length === 0) return null
+  return `Jump risk: ${Math.round(Math.max(...chances) * 100)}% chance the ship is lost (it grows with distance and the destination's mass)`
+}
 const MAX_DISTANCE = 4200
 const EXIT_DISTANCE = 3500
 // Where the camera opens when zoomed in from the galaxy: far out, a little
@@ -161,13 +179,20 @@ export function claimRingStyle(claim: SystemClaim): React.CSSProperties | null {
 function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelectFleet, claim, unidentifiedBase, explored }: StarNodeProps) {
   const [hovered, setHovered] = useState(false)
   const pos = starScenePosition(star)
+  const [riskTip, setRiskTip] = useState<string | null>(null)
 
   return (
     <group position={pos}>
       <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
         <div
           className={`planet-marker star-node${hovered ? ' hovered' : ''}${selected ? ' selected' : ''}`}
-          onPointerEnter={() => setHovered(true)}
+          // With ships selected that would hyperdrive here: what this jump risks.
+          title={riskTip ?? undefined}
+          onPointerEnter={() => {
+            setHovered(true)
+            const store = useShipStore.getState()
+            setRiskTip(jumpRiskText(store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s)), star.id))
+          }}
           onPointerLeave={() => setHovered(false)}
           onClick={() => onSelect(star)}
           onContextMenu={(e) => {
@@ -237,9 +262,12 @@ export function InterstellarScene() {
   // unlike flying to a star, arriving doesn't transition to system view.
   // Independent of lockOnEnabled (a one-time fly, not continuous follow).
   const [flyingToShip, setFlyingToShip] = useState(false)
-  // Which neighborhood's stars this view is currently showing — see
-  // starData's getStarsForNeighborhood for why only one neighborhood
-  // actually resolves to real data today.
+  // Which neighborhood's stars this view is currently showing: ours, or a
+  // generated one (starData.getStarsForNeighborhood).
+  // Ships, their orders and signals, charted lanes and move orders all live in
+  // OUR neighbourhood's frame (positions in light-years from Sol), so in any
+  // other neighbourhood none of them is drawn and no order can be given.
+  const home = selectedNeighborhoodId === SOLAR_NEIGHBORHOOD_ID
   const STARS = useMemo(() => getStarsForNeighborhood(selectedNeighborhoodId), [selectedNeighborhoodId])
   const selectedStar = useMemo(() => STARS.find((s) => s.id === selectedId) ?? null, [STARS, selectedId])
   const focusedStar = useMemo(() => STARS.find((s) => s.id === focusedId) ?? null, [STARS, focusedId])
@@ -306,11 +334,12 @@ export function InterstellarScene() {
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const setFollowing = useShipStore((s) => s.setFollowing)
-  const lanes = useHyperlaneStore((s) => s.lanes)
+  const shipMenu = useShipOrderMenu()
+  const allLanes = useHyperlaneStore((s) => s.lanes)
+  const lanes = home ? allLanes : NO_LANES
   const interstellarShips = useMemo(
-    () => ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)),
-    [ships],
+    () => (home ? ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)) : []),
+    [ships, home],
   )
   // One marker per fleet resting together, not per ship — see
   // shipPhysics.clusterRestingShipsByFleet.
@@ -354,16 +383,21 @@ export function InterstellarScene() {
   const intel = usePlayerIntel()
   const [starMenu, setStarMenu] = useState<{ x: number; y: number; star: StarData } | null>(null)
   const knownSurvey = useSurveyStore((s) => (playerCountryId ? s.known[playerCountryId] : undefined))
+  // Observer mode (a Debug Console cheat) shows every owner and the empires, whatever
+  // has been explored: a view override, it changes nothing the player knows.
+  const observer = useObserverStore((s) => s.on)
   const claimsByStar = useMemo(
     () => {
       const simDays = useGameTimeStore.getState().simDays
-      return visibleClaims(
-        new Map(STARS.map((star) => [star.id, systemClaim(star.id, bodyOwner, starbaseOwnersOf(star.id, starbases, simDays))])),
-        intel.known,
-      )
+      const all = new Map(STARS.map((star) => [star.id, systemClaim(star.id, bodyOwner, starbaseOwnersOf(star.id, starbases, simDays))]))
+      if (observer) {
+        for (const [id, claim] of empireClaimsByStar(STARS)) all.set(id, claim)
+        return all
+      }
+      return visibleClaims(all, intel.known)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [STARS, bodyOwner, starbases, starbaseActivity, intel.known],
+    [STARS, bodyOwner, starbases, starbaseActivity, intel.known, observer],
   )
   const unidentifiedBaseStars = useMemo(
     () => new Set(unidentifiedStarbaseStars(starbases, intel.known, useGameTimeStore.getState().simDays)),
@@ -419,6 +453,8 @@ export function InterstellarScene() {
     if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: star.id, selectedShipId: null })
     // With none of your ships selected, a right click opens the star's panel full screen.
     if (!hasOwnShipSelected()) return openInViewFull(star.id, 'star')
+    // No ship can leave our neighbourhood yet.
+    if (!home) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
     // With a science or construction ship selected the right-click offers what
@@ -453,10 +489,15 @@ export function InterstellarScene() {
     const explored = intel.known(star.id)
     const items: ContextMenuItem[] = []
     // Entering a system explores it, so "Explore" is just the move.
+    const risk = jumpRiskText(selected, star.id)
     items.push(
       explored
-        ? { label: `Move to ${star.name}`, onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }) }
-        : { label: 'Explore system', title: 'Fly there: entering the system reveals its owner, borders and worlds', onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }) },
+        ? { label: `Move to ${star.name}`, title: risk ?? undefined, onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }) }
+        : {
+            label: 'Explore system',
+            title: `Fly there: entering the system reveals its owner, borders and worlds${risk ? `. ${risk}` : ''}`,
+            onClick: () => orderSelectedFleets({ kind: 'star', starId: star.id }),
+          },
     )
     if (science.length > 0) {
       items.push({ label: 'Survey system', title: `Fly to each body in turn and survey it (${SURVEY_DAYS_PER_BODY} days each, plus the flights)`, onClick: () => orderSelectedToSurvey(star.id) })
@@ -476,22 +517,17 @@ export function InterstellarScene() {
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
-    if (!selectedShipId) return
+    if (!selectedShipId || !home) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
     orderSelectedFleets({ kind: 'interstellar-point', position: point })
   }
 
-  // Right-clicking another ship while one is selected orders the selected
-  // ship to follow it, instead of a normal move order — see
-  // ShipInstance.followingShipId. Selection itself never changes (matches
-  // every other right-click-to-order in this project: it commands whatever
-  // was already selected, it doesn't reselect).
+  // Right-clicking another ship while one is selected opens a menu: Move
+  // (follow it, ShipInstance.followingShipId) or Attack (scene/ShipOrderMenu.tsx).
   const handleFollowShip = (targetShipId: string) => {
-    if (!selectedShipId) return
-    const ship = ships.find((s) => s.id === selectedShipId)
-    if (!ship || !canFollow(ship, targetShipId)) return
-    setFollowing(ship.id, targetShipId)
+    if (!selectedShipId || selectedShipId === targetShipId) return
+    shipMenu.open(targetShipId)
   }
 
   // Same race as system view: r3f's onPointerMissed fires for any click that
@@ -521,7 +557,7 @@ export function InterstellarScene() {
             hyperdriveLossChance), not drawn by the player. A separate,
             future "plot a route" feature may let the player draw their own
             lines here too; this is unrelated to that. */}
-        {lanes.map((key) => {
+        {!observer && lanes.map((key) => {
           const [aId, bId] = laneEndpoints(key)
           const a = STARS.find((s) => s.id === aId)
           const b = STARS.find((s) => s.id === bId)
@@ -529,7 +565,8 @@ export function InterstellarScene() {
           return <HyperlaneLine key={key} from={starScenePosition(a)} to={starScenePosition(b)} />
         })}
 
-        <TerritoryDiscs claimsByStar={claimsByStar} />
+        <TerritoryDiscs claimsByStar={claimsByStar} stars={STARS} />
+        {observer && <ObserverLayer stars={STARS} lanes={allLanes} />}
 
         {STARS.map((star) => (
           <StarNode
@@ -597,7 +634,7 @@ export function InterstellarScene() {
 
         {/* Signals crossing comms delay, from the capital's star to the ship. */}
         <CommsSignals
-          ships={ships.filter((ship) => ship.ownerId === playerCountryId)}
+          ships={home ? ships.filter((ship) => ship.ownerId === playerCountryId) : NO_SHIPS}
           resolveOrigin={resolveInterstellarSignalOrigin}
           resolveShipPosition={resolveInterstellarShipPosition}
         />
@@ -680,6 +717,7 @@ export function InterstellarScene() {
 
       <HoverTip />
 
+      {shipMenu.element}
       {starMenu && <ContextMenu x={starMenu.x} y={starMenu.y} title={starMenu.star.name} items={starMenuItems(starMenu.star)} onClose={() => setStarMenu(null)} />}
 
       {selectedShipId ? (
@@ -687,9 +725,20 @@ export function InterstellarScene() {
       ) : (
         selectedStar && (
           <DraggableWindow title={selectedStar.name} memoryKey="star" onClose={() => selectInView(null)}>
+            {/* The same compact layout as a star in the system view: type, radius, then the door in. */}
+            <div className="inspect-row">
+              <span className="inspect-label">Type</span>
+              <span className="inspect-value">Star</span>
+            </div>
+            <div className="inspect-row">
+              <span className="inspect-label">Radius</span>
+              <span className="inspect-value">{Math.round(selectedStar.radiusKm).toLocaleString()} km</span>
+            </div>
             <div className="inspect-row">
               <span className="inspect-label">Distance</span>
-              <span className="inspect-value">{selectedStar.distanceLy.toFixed(2)} ly from Sol</span>
+              <span className="inspect-value">
+                {selectedStar.distanceLy.toFixed(2)} ly from {home ? 'Sol' : "the neighborhood's centre"}
+              </span>
             </div>
             {(() => {
               const claim = claimsByStar.get(selectedStar.id) ?? UNCLAIMED
@@ -768,7 +817,7 @@ export function InterstellarScene() {
                   disabled={!intel.known(selectedStar.id)}
                   title={intel.known(selectedStar.id) ? undefined : 'Unexplored: one of your ships has to enter it first'}
                 >
-                  Enter System
+                  Detailed View
                 </button>
               )
             ) : (

@@ -17,7 +17,9 @@ import {
   worldStaffing,
   worldStrata,
   worldWorkforce,
+  teardownCost,
   type ConstructionOrder,
+  type Teardown,
   type WorldState,
 } from '../../economy-abstract/abstractEconomy'
 import {
@@ -35,6 +37,7 @@ import {
   type SimpleGood,
   type SimpleProduct,
 } from '../../data/simplisticEconomyData'
+import { DECONSTRUCT_MONTHS_BUILDING, DECONSTRUCT_MONTHS_DISTRICT } from '../../data/simplisticEconomyData'
 import { getCountry } from '../../data/countryData'
 import { formatPop } from '../../economy/format'
 import { PlanetIcon } from './PlanetIcons'
@@ -68,7 +71,7 @@ export function SimpleWorldSummary({ bodyName }: { bodyName: string }) {
     <div className="pl-summary">
       <div className="pl-stat-grid">
         <div className="pl-stat" title="People living here"><span>Population</span><b>{formatPop(w.population)}</b></div>
-        <div className="pl-stat" title="Jobs offered here / workers available"><span>Jobs</span><b>{formatPop(worldJobs(w))} / {formatPop(worldWorkforce(w))}</b></div>
+        <div className="pl-stat" title="Workers available / jobs offered here"><span>Workers / jobs</span><b>{formatPop(worldWorkforce(w))} / {formatPop(worldJobs(w))}</b></div>
         <div className={`pl-stat${unemployed > worldWorkforce(w) * 0.06 ? ' warn' : ''}`} title="Workers without a job here"><span>Unemployed</span><b>{formatPop(unemployed)}</b></div>
         <div className={`pl-stat${staffing < 1 ? ' warn' : ''}`} title="Share of this world's jobs that can be filled"><span>Staffed</span><b>{pct(staffing)}</b></div>
         <div className="pl-stat" title="District levels developed / the land this world has for them"><span>Land used</span><b>{districtLevelsTotal(w)} / {landOf(w)}</b></div>
@@ -135,7 +138,7 @@ const num = (n: number) => n.toFixed(Math.abs(n) < 10 ? 1 : 0)
 function SimpleBuildingDetail({ w, b, countryId, canBuild, onBuild, onClose }: { w: WorldState; b: SimpleBuildingId; countryId: string | null; canBuild: boolean; onBuild: () => void; onClose: () => void }) {
   const owner = useTerritoryStore((s) => s.bodyOwner[w.bodyName])
   const nation = useAbstractEconomyStore((s) => (owner ? s.byCountry[owner] : undefined))
-  const demolish = useAbstractEconomyStore((s) => s.demolish)
+  const queueDemolish = useAbstractEconomyStore((s) => s.queueDemolish)
   const [message, setMessage] = useState<string | null>(null)
   const def = SIMPLE_BUILDING_DEFS[b]
   const d = DISTRICT_OF_BUILDING[b]
@@ -156,9 +159,8 @@ function SimpleBuildingDetail({ w, b, countryId, canBuild, onBuild, onClose }: {
   }
   const doDemolish = () => {
     if (!countryId) return
-    const res = demolish(countryId, w.bodyName, b)
+    const res = queueDemolish(countryId, w.bodyName, b)
     setMessage(res.ok ? null : (res as { reason: string }).reason)
-    if (res.ok && here <= 1) onClose()
   }
   return (
     <div className="pl-detail">
@@ -202,17 +204,41 @@ function SimpleBuildingDetail({ w, b, countryId, canBuild, onBuild, onClose }: {
       {canBuild && (
         <div className="pl-detail-actions">
           <button type="button" className="laws-enact-btn" onClick={onBuild} title={`Queue another level (${def.cost} construction points)`}>+ Build another</button>
-          <button type="button" className="laws-enact-btn" disabled={here <= 0} onClick={doDemolish} title="Tear down one level now — no refund, frees its slot and jobs">Demolish one</button>
+          <button type="button" className="laws-enact-btn" disabled={here <= 0} onClick={doDemolish} title={`Deconstruct one: a bar runs down over ${DECONSTRUCT_MONTHS_BUILDING} months on its own (no construction points, no queue place, no slot). It keeps working until then, no refund; then its slot and jobs are freed.`}>Deconstruct one ({DECONSTRUCT_MONTHS_BUILDING} months)</button>
         </div>
       )}
     </div>
   )
 }
 
-function QueuedTile({ o }: { o: ConstructionOrder }) {
+// A building being deconstructed: its bar runs backwards (full to empty), on
+// its own clock, and the building still stands (and works) until it is empty.
+function TeardownTile({ t, selected, onClick }: { t: Teardown; selected?: boolean; onClick?: () => void }) {
+  const cost = teardownCost(t)
+  const name = t.building ? SIMPLE_BUILDING_DEFS[t.building].name : 'District level'
+  return (
+    <div
+      role="button"
+      className={`pl-tile queued demolishing${selected ? ' selected' : ''}`}
+      title={`Deconstructing ${name}: ${Math.round((t.progress / cost) * 100)}% left. It keeps working until the bar is empty.\nClick to stop it`}
+      onClick={onClick}
+    >
+      <PlanetIcon id={t.building ?? t.district ?? ''} size={22} />
+      <span className="pl-tile-name">− {name}</span>
+      <span className="pl-tile-bar"><span style={{ width: pct(Math.max(0, Math.min(1, t.progress / cost))) }} /></span>
+    </div>
+  )
+}
+
+function QueuedTile({ o, selected, onClick }: { o: ConstructionOrder; selected?: boolean; onClick?: () => void }) {
   const cost = orderCost(o)
   return (
-    <div className="pl-tile queued" title={`Under construction: ${orderName(o)} — ${Math.round(o.progress)}/${cost} construction points`}>
+    <div
+      role="button"
+      className={`pl-tile queued${selected ? ' selected' : ''}`}
+      title={`Under construction: ${orderName(o)} — ${Math.round(o.progress)}/${cost} construction points\nClick to stop it`}
+      onClick={onClick}
+    >
       <PlanetIcon id={o.building ?? o.district ?? ''} size={22} />
       <span className="pl-tile-name">{orderName(o)}</span>
       <span className="pl-tile-bar"><span style={{ width: pct(Math.min(1, o.progress / cost)) }} /></span>
@@ -227,9 +253,15 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   const queue = useAbstractEconomyStore((s) => (owner ? s.byCountry[owner]?.queue : undefined))
   const queueBuilding = useAbstractEconomyStore((s) => s.queueBuilding)
   const queueDistrict = useAbstractEconomyStore((s) => s.queueDistrict)
+  const queueDemolishDistrict = useAbstractEconomyStore((s) => s.queueDemolishDistrict)
+  const teardownsAll = useAbstractEconomyStore((s) => (owner ? s.byCountry[owner]?.teardowns : undefined))
   const cancelOrder = useAbstractEconomyStore((s) => s.cancelOrder)
   const { canBuild } = useBuildRights(countryId, bodyName)
   const [picking, setPicking] = useState<SimpleDistrictId | null>(null)
+  // How many to queue at once from the picker; 0 = fill every free slot.
+  const [qty, setQty] = useState(1)
+  // A queued or progressing tile the player clicked, to stop it.
+  const [stopping, setStopping] = useState<number | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [selected, setSelected] = useState<SimpleBuildingId | null>(null)
   const grouped = usePlanetViewStore((s) => s.groupBuildings)
@@ -239,6 +271,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   if (!w) return <div className="abs-dim">No economy on this world.</div>
 
   const q = (queue ?? []).filter((o) => o.bodyName === bodyName)
+  const tds = (teardownsAll ?? []).filter((t) => t.bodyName === bodyName)
   const ds = districtsOf(w)
   const staffing = worldStaffing(w)
   const land = freeLand(w, queue ?? [])
@@ -246,16 +279,27 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   const addable = only ? [] : SIMPLE_DISTRICTS.filter((d) => !shown.includes(d))
 
   const run = (res: { ok: boolean; reason?: string }) => setMessage(res.ok ? null : res.reason ?? null)
-  const build = (b: SimpleBuildingId) => {
+  const build = (b: SimpleBuildingId, count = qty) => {
     if (!countryId) return
-    run(queueBuilding(countryId, bodyName, b))
+    const room = Math.max(1, freeSlots(w, queue ?? [], DISTRICT_OF_BUILDING[b]))
+    const n = count === 0 ? room : count
+    let last: { ok: boolean; reason?: string } = { ok: true }
+    let made = 0
+    for (let i = 0; i < n; i++) {
+      last = queueBuilding(countryId, bodyName, b)
+      if (!last.ok) break
+      made++
+    }
+    // Some queued but the rest refused: say why for the rest.
+    run(made > 0 && n > made && !last.ok ? { ok: false, reason: `Queued ${made} of ${n}: ${last.reason}` } : last)
     setPicking(null)
   }
   const develop = (d: SimpleDistrictId) => countryId && run(queueDistrict(countryId, bodyName, d))
+  const removeLevel = (d: SimpleDistrictId) => countryId && run(queueDemolishDistrict(countryId, bodyName, d))
 
   const queueList = (
     <div className="pl-queue">
-      {q.length === 0 && <div className="abs-dim">Nothing under construction here. Build from the All tab.</div>}
+      {q.length === 0 && tds.length === 0 && <div className="abs-dim">Nothing under construction or deconstruction here. Build from the All tab.</div>}
       {q.map((o) => {
         const cost = orderCost(o)
         return (
@@ -264,6 +308,17 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
             <span className="abs-order-bar"><span style={{ width: `${Math.min(100, (o.progress / cost) * 100)}%` }} /></span>
             <span className="abs-dim">{Math.round(o.progress)}/{cost}</span>
             {canBuild && <button type="button" className="abs-x" title="Cancel (progress is lost)" onClick={() => countryId && cancelOrder(countryId, o.id)}>×</button>}
+          </div>
+        )
+      })}
+      {tds.map((t) => {
+        const cost = teardownCost(t)
+        return (
+          <div key={t.id} className="abs-order">
+            <span><PlanetIcon id={t.building ?? t.district ?? ''} size={12} /> Deconstruct {t.building ? SIMPLE_BUILDING_DEFS[t.building].name : `${SIMPLE_DISTRICT_DEFS[t.district!].name} level`}</span>
+            <span className="abs-order-bar"><span style={{ width: `${Math.max(0, Math.min(100, (t.progress / cost) * 100))}%` }} /></span>
+            <span className="abs-dim">{Math.round((t.progress / cost) * 100)}% left</span>
+            {canBuild && <button type="button" className="abs-x" title="Stop the deconstruction (it stays)" onClick={() => countryId && cancelOrder(countryId, t.id)}>×</button>}
           </div>
         )
       })}
@@ -276,7 +331,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
         <div className="nav-subtabs pl-subtabs">
           <button type="button" className={`nav-subtab${view === 'all' ? ' active' : ''}`} onClick={() => setView('all')}>All</button>
           <button type="button" className={`nav-subtab${view === 'construction' ? ' active' : ''}`} onClick={() => setView('construction')}>
-            Construction{q.length > 0 ? ` (${q.length})` : ''}
+            Construction{q.length + tds.length > 0 ? ` (${q.length + tds.length})` : ''}
           </button>
         </div>
       )}
@@ -301,8 +356,11 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
         const queuedLevels = q.filter((o) => o.district === d)
         const free = freeSlots(w, queue ?? [], d)
         const tiles: { b: SimpleBuildingId; count?: number }[] = []
+        const levelTearing = tds.filter((t) => t.district === d)
+        const tearingHere = tds.filter((t) => t.building && DISTRICT_OF_BUILDING[t.building] === d)
         for (const b of def.buildings) {
-          const n = w.buildings[b] ?? 0
+          // The ones being deconstructed get their own (reverse-bar) tiles.
+          const n = (w.buildings[b] ?? 0) - tearingHere.filter((t) => t.building === b).length
           if (n <= 0) continue
           if (grouped) tiles.push({ b, count: n })
           else for (let i = 0; i < n; i++) tiles.push({ b })
@@ -324,7 +382,22 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                   + Level
                 </button>
               )}
+              {canBuild && ds[d] > 0 && (
+                <button type="button" className="pl-develop" title={`Deconstruct a level: its bar runs down over ${DECONSTRUCT_MONTHS_DISTRICT} months, then it is gone and its land is free (its buildings must still fit). It takes no construction points and no slot.`} onClick={() => removeLevel(d)}>
+                  − Level
+                </button>
+              )}
             </div>
+            {levelTearing.map((t) => (
+              <div key={t.id} className="pl-stop">
+                <span>Deconstructing a level: {Math.round((t.progress / teardownCost(t)) * 100)}% left</span>
+                {canBuild && (
+                  <button type="button" className="laws-enact-btn" title="Stop it: the level stays" onClick={() => countryId && cancelOrder(countryId, t.id)}>
+                    Cancel deconstruction
+                  </button>
+                )}
+              </div>
+            ))}
             {d === 'military' ? (
               <MilitaryTiles bodyName={bodyName} playerId={countryId} canBuild={canBuild} slots={slots} grouped={grouped} />
             ) : def.buildings.length === 0 ? (
@@ -332,7 +405,8 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
             ) : (
               <div className="pl-grid">
                 {tiles.map(({ b, count }, i) => <BuildingTile key={`${b}-${i}`} b={b} count={count} staffing={staffing} bonus={bonus.total} selected={selected === b} onClick={() => setSelected(selected === b ? null : b)} />)}
-                {queuedHere.map((o) => <QueuedTile key={o.id} o={o} />)}
+                {tearingHere.map((t) => <TeardownTile key={t.id} t={t} selected={stopping === t.id} onClick={() => setStopping(stopping === t.id ? null : t.id)} />)}
+                {queuedHere.map((o) => <QueuedTile key={o.id} o={o} selected={stopping === o.id} onClick={() => setStopping(stopping === o.id ? null : o.id)} />)}
                 {Array.from({ length: grouped ? Math.min(1, Math.max(0, free)) : Math.max(0, free) }, (_, i) =>
                   canBuild ? (
                     <button key={`free-${i}`} type="button" className="pl-tile empty" title={`Build in the ${def.name}`} onClick={() => setPicking(picking === d ? null : d)}>
@@ -348,8 +422,31 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
             {selected && DISTRICT_OF_BUILDING[selected] === d && (
               <SimpleBuildingDetail w={w} b={selected} countryId={countryId} canBuild={canBuild} onBuild={() => build(selected)} onClose={() => setSelected(null)} />
             )}
+            {(() => {
+              const sel = queuedHere.find((o) => o.id === stopping)
+              const tsel = tearingHere.find((t) => t.id === stopping)
+              if (!sel && !tsel) return null
+              return (
+                <div className="pl-stop">
+                  <span>{sel ? `${orderName(sel)}: ${Math.round(sel.progress)}/${orderCost(sel)} construction points` : `Deconstructing ${SIMPLE_BUILDING_DEFS[tsel!.building!].name}: ${Math.round((tsel!.progress / teardownCost(tsel!)) * 100)}% left`}</span>
+                  {canBuild && (
+                    <button type="button" className="laws-enact-btn" title={sel ? 'Stop it. The progress is lost.' : 'Stop it: the building stays.'} onClick={() => { countryId && cancelOrder(countryId, (sel ?? tsel)!.id); setStopping(null) }}>
+                      {sel ? 'Stop construction' : 'Cancel deconstruction'}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
             {picking === d && (
               <div className="pl-picker">
+                <div className="pl-qty">
+                  How many:
+                  {[1, 3, 5, 0].map((n) => (
+                    <button key={n} type="button" className={`nav-subtab${qty === n ? ' active' : ''}`} onClick={() => setQty(n)} title={n === 0 ? 'Fill every free slot in this district' : `Queue ${n} at once`}>
+                      {n === 0 ? `Fill (${Math.max(0, free)})` : n}
+                    </button>
+                  ))}
+                </div>
                 {def.buildings.map((b) => (
                   <button key={b} type="button" className="pl-pick" title={SIMPLE_BUILDING_DEFS[b].description} onClick={() => build(b)}>
                     <PlanetIcon id={b} size={18} />

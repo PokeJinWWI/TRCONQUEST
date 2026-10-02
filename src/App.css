@@ -3125,11 +3125,25 @@
   transition: transform 0.15s;
 }
 
-/* A bit of invisible margin around the icon, so a ship is easy to click. */
+/* A little invisible margin around the icon, so a ship is easy to click. Kept
+   small: a ship resting at a star sits right beside the star's own marker, and
+   a wide margin used to steal clicks meant for the star. */
 .ship-marker-icon::after {
   content: '';
   position: absolute;
-  inset: -7px;
+  inset: -2px;
+}
+
+/* The star's own click target reaches a little past its dot, so the star wins
+   the clicks on and around it. */
+.star-node .marker-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.ship-marker-icon.inline::after {
+  display: none;
 }
 
 .ship-marker-icon.inline {
@@ -3310,35 +3324,23 @@
    for resizing (see DraggableWindow's handleResizePointerDown). Positioned
    over the window's own border so the cursor change reads as "grab the
    edge," not a separate control floating beside it. */
-.draggable-window-resize-right {
+/* Resize handles: edge strips and corner squares, each straddling the border
+   (3px in, 3px out) so they are reachable even against a screen edge. The
+   top strip stops short of the title bar's buttons (see .rz-t), and every
+   handle sits above the title bar, so a press on one is always a resize. */
+.draggable-window-resize {
   position: absolute;
-  top: 0;
-  right: -3px;
-  width: 6px;
-  height: 100%;
-  cursor: ew-resize;
+  z-index: 2;
   touch-action: none;
 }
-
-.draggable-window-resize-bottom {
-  position: absolute;
-  left: 0;
-  bottom: -3px;
-  width: 100%;
-  height: 6px;
-  cursor: ns-resize;
-  touch-action: none;
-}
-
-.draggable-window-resize-corner {
-  position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nwse-resize;
-  touch-action: none;
-}
+.rz-l { top: 12px; bottom: 12px; left: -3px; width: 6px; cursor: ew-resize; }
+.rz-r { top: 12px; bottom: 12px; right: -3px; width: 6px; cursor: ew-resize; }
+.rz-t { left: 12px; right: 96px; top: -3px; height: 6px; cursor: ns-resize; }
+.rz-b { left: 12px; right: 12px; bottom: -3px; height: 6px; cursor: ns-resize; }
+.rz-lt { left: -3px; top: -3px; width: 12px; height: 12px; cursor: nwse-resize; }
+.rz-rt { right: -3px; top: -3px; width: 12px; height: 12px; cursor: nesw-resize; }
+.rz-lb { left: -3px; bottom: -3px; width: 12px; height: 12px; cursor: nesw-resize; }
+.rz-rb { right: -3px; bottom: -3px; width: 12px; height: 12px; cursor: nwse-resize; }
 
 /* Edge-pinned variants (see DraggableWindow's `anchor` prop). Offsets clear
    the nav sidebar on the left and the Outliner on the right — both are 191px
@@ -6318,9 +6320,7 @@ button.pl-tile.empty:hover {
 }
 
 .map-modes-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 8px);
+  position: fixed;
   min-width: 200px;
   display: flex;
   flex-direction: column;
@@ -6468,4 +6468,62 @@ button.pl-tile.empty:hover {
   border: 1px solid currentColor;
   border-radius: 6px;
   background: rgba(2, 6, 12, 0.85);
+}
+
+/* A link-like "go to this world" in lists. */
+.abs-goto {
+  cursor: var(--cursor-pointer);
+  color: #6fe3ff;
+  font-size: 10px;
+}
+.abs-goto:hover {
+  text-decoration: underline;
+}
+
+/* Stop-a-project bar and the build-quantity chips under a district. */
+.pl-stop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  margin-top: 4px;
+  border: 1px solid rgba(255, 180, 92, 0.5);
+  border-radius: 3px;
+  font-size: 11px;
+}
+.pl-qty {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0 6px;
+  font-size: 11px;
+}
+.pl-tile.demolishing {
+  border-color: rgba(255, 110, 92, 0.7);
+}
+
+/* Quick buttons (pinned panels) under the navigation categories. */
+.nav-custom {
+  margin-top: 14px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(111, 227, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nav-custom-title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6fe3ff;
+}
+.nav-custom-pin {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.observer-empire .inspect-value {
+  max-width: 62%;
+  text-align: right;
 }

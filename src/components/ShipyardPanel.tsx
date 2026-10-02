@@ -138,14 +138,14 @@ export function ShipyardPanel() {
       </div>
 
       <div className="nav-subtabs shipyard-tabs">
-        <button type="button" className={`nav-subtab${tab === 'slips' ? ' active' : ''}`} onClick={() => setTab('slips')} title="What is being built, and what is waiting for a slip">
-          Slips ({building.length}/{slots}){waiting.length > 0 ? ` +${waiting.length}` : ''}
-        </button>
         {sections.map((g) => (
           <button key={g.id} type="button" className={`nav-subtab${tab === g.id ? ' active' : ''}`} onClick={() => setTab(g.id)} title={g.hint}>
             {g.label}
           </button>
         ))}
+        <button type="button" className={`nav-subtab${tab === 'slips' ? ' active' : ''}`} onClick={() => setTab('slips')} title="What is being built, and what is waiting for a slip">
+          Slips ({building.length}/{slots}){waiting.length > 0 ? ` +${waiting.length}` : ''}
+        </button>
       </div>
       {message && <div className="ship-panel-hint shipyard-message">{message}</div>}
 

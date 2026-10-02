@@ -62,8 +62,8 @@ interface WorkspaceStore {
   activeTabId: string
   createTab: () => void
   // Ctrl/Cmd-click: a new tab that starts as a copy of the current one with
-  // `patch` applied (a panel open, a body or ship selected), opened in the
-  // background like a browser link. Shows the tab strip so it can be found.
+  // `patch` applied (a panel open, a body or ship selected), opened
+  // in the background like a browser link.
   openInNewTab: (patch: Partial<TabViewSnapshot> & { selectedShipId?: string | null }) => void
   closeTab: (id: string) => void
   switchToTab: (id: string) => void
@@ -130,7 +130,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       selectedShipId: selectedShipId !== undefined ? selectedShipId : captured.selectedShipId,
       name: null,
     }
-    set({ tabs: [...updatedTabs, fresh], showTabBar: true })
+    // Opened in the background: the player stays where they are and switches
+    // to it themselves (the Tabs button shows the strip).
+    set({ tabs: [...updatedTabs, fresh] })
   },
 
   // An empty/whitespace-only name clears back to the auto-derived label

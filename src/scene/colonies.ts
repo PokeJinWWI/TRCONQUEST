@@ -175,11 +175,51 @@ export function orderSelectedToColonize(systemId: string, bodyName: string): voi
   const store = useShipStore.getState()
   const ships = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s) && resolveShipClass(s.classId)?.role === 'colony')
   const ship = ships.find((s) => canColonize(s, bodyName, { anywhere: true }).ok)
-  if (!ship) return
+  if (ship) sendToColonize(ship, systemId, bodyName)
+}
+
+// Colonize from the planet menu: the player's own Colony Ship that can do it
+// (one already at the body first, else any idle one) goes and does it. Says why
+// when none can.
+export function colonizeFromPlanet(bodyName: string): { ok: true; shipName: string } | { ok: false; reason: string } {
+  const systemId = bodyStarId(bodyName)
+  if (!systemId) return { ok: false, reason: 'Unknown world' }
+  const mine = useShipStore.getState().ships.filter((s) => isPlayerOwned(s) && resolveShipClass(s.classId)?.role === 'colony')
+  if (mine.length === 0) return { ok: false, reason: 'You have no Colony Ship: build one in the Shipyard (Science & support)' }
+  const checks = mine.map((s) => ({ s, c: canColonize(s, bodyName, { anywhere: true }) }))
+  const free = checks.filter((x) => x.c.ok && !x.s.founding && !x.s.arrivalCommand)
+  const pick = free.find((x) => orbitedBody(x.s) === bodyName) ?? free[0]
+  if (!pick) {
+    const why = checks.find((x) => !x.c.ok)
+    return { ok: false, reason: why && !why.c.ok ? why.c.reason : 'Your Colony Ships are all busy' }
+  }
+  sendToColonize(pick.s, systemId, bodyName)
+  return { ok: true, shipName: pick.s.name }
+}
+
+// Worlds this Colony Ship could found a colony on now, cheapest first (the
+// chooser's list). Worlds another Colony Ship is already headed for are left out.
+export function colonizeCandidates(ship: ShipInstance): { bodyName: string; cost: number }[] {
+  const taken = new Set<string>()
+  for (const o of useShipStore.getState().ships) {
+    if (o.id === ship.id) continue
+    if (o.founding) taken.add(o.founding.bodyName)
+    if (o.arrivalCommand?.command.kind === 'colonize') taken.add(o.arrivalCommand.command.bodyName)
+  }
+  const out: { bodyName: string; cost: number }[] = []
+  for (const bodyName of useSurveyStore.getState().discovered[ship.ownerId]?.surveyed ?? []) {
+    if (taken.has(bodyName)) continue
+    const c = canColonize(ship, bodyName, { anywhere: true })
+    if (c.ok) out.push({ bodyName, cost: c.cost })
+  }
+  return out.sort((a, b) => a.cost - b.cost || a.bodyName.localeCompare(b.bodyName))
+}
+
+export function sendToColonize(ship: ShipInstance, systemId: string, bodyName: string): void {
   if (orbitedBody(ship) === bodyName) {
     queueShipCommand(ship.id, { kind: 'colonize', bodyName })
     return
   }
-  store.setArrivalCommand(ship.id, { starId: systemId, bodyName, command: { kind: 'colonize', bodyName } })
+  useShipStore.getState().setArrivalCommand(ship.id, { starId: systemId, bodyName, command: { kind: 'colonize', bodyName } })
   queueMoveOrder(ship, { kind: 'body', systemId, bodyName })
 }

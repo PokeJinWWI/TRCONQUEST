@@ -2,6 +2,7 @@
 // scene/warScore.ts. Everything that starts or ends a war goes through here
 // (the Diplomacy panel and the AI's executor alike), so the event log, the
 // territory changes and the armies' homecoming all happen in one place.
+import { useSubjectStore, subjectionOf } from '../state/subjectStore'
 import { COUNTRIES } from '../data/countryData'
 import { ownerDisplay } from '../data/countryRoster'
 import {
@@ -36,10 +37,10 @@ export function liveBodyValue(bodyName: string): number {
   return BODY_VALUE_OUTPOST
 }
 
-export function declareWarOn(attackerId: string, defenderId: string, simDays: number, tier: ConflictTier = 'limited'): DeclareWarResult {
+export function declareWarOn(attackerId: string, defenderId: string, simDays: number, tier: ConflictTier = 'limited', opts: { ignoreTruce?: boolean } = {}): DeclareWarResult {
   if (isNonAggression(attackerId, defenderId)) return { ok: false, reason: 'A non-aggression pact is in effect' }
   if (isGuarantorOf(attackerId, defenderId)) return { ok: false, reason: 'You guarantee their independence' }
-  const result = useDiplomacyStore.getState().declareWar(attackerId, defenderId, simDays, tier)
+  const result = useDiplomacyStore.getState().declareWar(attackerId, defenderId, simDays, tier, opts)
   if (result.ok) {
     const verb = tier === 'skirmish' ? 'started a skirmish with' : 'declared war on'
     useDiplomacyStore.getState().pushEvent('war-declared', [attackerId, defenderId], `${nameOf(attackerId)} ${verb} ${nameOf(defenderId)}`, simDays)
@@ -53,8 +54,13 @@ export function proposePeace(warId: string, proposerId: string, terms: PeaceTerm
   const war = useDiplomacyStore.getState().wars.find((w) => w.id === warId)
   if (!war) return { accept: false, reason: 'No such war' }
   const { bodyOwner, bodyController } = useTerritoryStore.getState()
-  const verdict = evaluatePeace(war, proposerId, terms, bodyOwner, bodyController, liveBodyValue, simDays)
   const receiverId = proposerId === war.attackerId ? war.defenderId : war.attackerId
+  // Vassalization needs both to be free nations (no subject, not each other's).
+  const subjections = useSubjectStore.getState().subjections
+  const verdict =
+    terms.kind === 'vassalize' && (subjectionOf(subjections, receiverId) || subjectionOf(subjections, proposerId))
+      ? { accept: false, reason: subjectionOf(subjections, receiverId) ? 'They are already a subject' : 'A subject cannot take a vassal' }
+      : evaluatePeace(war, proposerId, terms, bodyOwner, bodyController, liveBodyValue, simDays)
   if (verdict.accept) makePeace(warId, terms, proposerId, simDays)
   else {
     useDiplomacyStore
@@ -80,6 +86,11 @@ export function makePeace(warId: string, terms: PeaceTerms, beneficiaryId: strin
       territory.cedeBody(body, beneficiaryId)
       diplomacy.pushEvent('body-ceded', [loserId, beneficiaryId], `${nameOf(loserId)} ceded ${body} to ${nameOf(beneficiaryId)}`, simDays, { bodyName: body })
     }
+  }
+
+  // The loser becomes the winner's subject; the war ends with it.
+  if (terms.kind === 'vassalize') {
+    useSubjectStore.getState().establishSubject(beneficiaryId, loserId, terms.subjectType, simDays)
   }
 
   // Occupations between these two that weren't settled by cession end.
@@ -108,7 +119,9 @@ export function makePeace(warId: string, terms: PeaceTerms, beneficiaryId: strin
         ? `${nameOf(loserId)} made peace with ${nameOf(beneficiaryId)}, ceding ${terms.bodies.join(', ')}`
         : terms.kind === 'reparations'
           ? `${nameOf(loserId)} made peace with ${nameOf(beneficiaryId)}, paying ${Math.round(terms.share * 100)}% of its stockpile in reparations`
-          : `${nameOf(war.attackerId)} and ${nameOf(war.defenderId)} made peace`
+          : terms.kind === 'vassalize'
+            ? `${nameOf(loserId)} submitted to ${nameOf(beneficiaryId)} as its ${terms.subjectType}, ending the war`
+            : `${nameOf(war.attackerId)} and ${nameOf(war.defenderId)} made peace`
   useDiplomacyStore.getState().pushEvent('peace-signed', [war.attackerId, war.defenderId], text, simDays)
 }
 

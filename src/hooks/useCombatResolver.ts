@@ -20,6 +20,7 @@ import { recordLoss } from '../scene/peace'
 import { utilityEffectiveness } from '../data/combatData'
 import { combatLocationLabel, engagementIsContested } from '../state/combatStore'
 import { engagementKnownToPlayer } from '../scene/commsVisual'
+import { aggressionContext, recordIncidents } from '../scene/aggressionOrders'
 
 // How far out into system space a disengaging ship is placed, in system
 // units. Small — this is a nudge clear of whatever it was orbiting so it
@@ -72,7 +73,11 @@ export function resolveSpaceCombat(simDays: number): void {
   const techStore = useTechStore.getState()
   const canFreeFloat = (ship: ShipInstance) => techStore.stateFor(ship.ownerId).researched.has('free-flight-maneuvering')
 
-  const synced = syncEngagements(ships, combat.engagements, simDays)
+  // An unprovoked attack is a fight where it happens, between nations not at
+  // war (scene/aggression.ts).
+  const aggression = aggressionContext(ships, combat.engagements)
+  const synced = syncEngagements(ships, combat.engagements, simDays, undefined, aggression?.context)
+  if (aggression) recordIncidents(aggression.aggressions, synced, simDays)
   const hadEngagements = combat.engagements.length > 0
   // "An engagement object exists" is NOT the same question as "a fight
   // is actually happening" — see engagementIsContested's own comment for

@@ -150,6 +150,7 @@ const ENTRIES: { terms: string[]; term: string; text: string }[] = [
   { terms: ['settings'], term: 'Settings', text: 'Game options.' },
   { terms: ['outliner'], term: 'Outliner', text: 'A quick list of your battles, fleets, armies and colonies — click one to jump to it.' },
   { terms: ['battles'], term: 'Battles', text: 'Fights you are in right now, in space and on the ground. Click one to open it.' },
+  { terms: ['fleet management'], term: 'Fleet Management', text: 'Your fleets and armies: the navy, its shipyard, and the army.' },
   { terms: ['fleets'], term: 'Fleets', text: 'Your groups of ships.' },
   { terms: ['armies'], term: 'Armies', text: 'Ground forces — they garrison worlds and invade enemy ones.' },
   { terms: ['colonies'], term: 'Colonies', text: 'The worlds you own.' },

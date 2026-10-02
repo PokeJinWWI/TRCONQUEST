@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import { CanvasTexture, Color, Vector3 } from 'three'
 import { BattleBadge } from '../components/BattleBadge'
-import { getCountry } from '../data/countryData'
+import { ownerInfoOf } from '../data/ownerInfo'
 import { NEIGHBORHOODS, neighborhoodScenePosition, type NeighborhoodData } from '../data/neighborhoodData'
 import { getStarsForNeighborhood } from '../data/starData'
 import { useBattleStore } from '../state/battleStore'
@@ -104,7 +104,7 @@ export function GalaxyMarkers({
     idx.forEach(({ i, claim }, k) => {
       positions.set(POSITIONS[i], k * 3)
       const owner = claim!.kind === 'owned' ? claim!.countryId : (claim as { countryIds: string[] }).countryIds[0]
-      color.set(getCountry(owner)?.color ?? '#888888')
+      color.set(ownerInfoOf(owner)?.color ?? '#888888')
       colors.set([color.r, color.g, color.b], k * 3)
     })
     return { positions, colors }

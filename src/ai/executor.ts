@@ -19,6 +19,7 @@ import { useConfirmStore } from '../state/confirmStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { fleetMembersOf, queueBombard, queueFleetMoveOrder, queuePatrol } from '../scene/commsVisual'
 import { declareWarOn, makePeace, proposePeace } from '../scene/peace'
+import { sendAttackOrder } from '../scene/aggressionOrders'
 import { useAiStore } from './aiStore'
 import type { Intent } from './types'
 
@@ -93,6 +94,13 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
         const other = war.attackerId === countryId ? war.defenderId : war.attackerId
         if (other === playerCountryId) offerPeaceToPlayer(countryId, intent.warId, intent.terms, simDays)
         else proposePeace(intent.warId, countryId, intent.terms, simDays)
+        break
+      }
+      case 'attack-ship': {
+        // Its own ships only; the order waits on its comms like any other.
+        const ships = useShipStore.getState().ships
+        const own = intent.shipIds.filter((id) => ships.find((s) => s.id === id)?.ownerId === countryId)
+        if (own.length > 0) sendAttackOrder(own, intent.targetShipId)
         break
       }
       case 'adjust-opinion':

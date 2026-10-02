@@ -562,3 +562,43 @@ export function queuedResearchNow(queue: readonly string[], researched: Readonly
   }
   return done
 }
+
+// How many months until each queued tech is researched, given the points in
+// each tree now and what each tree earns a month (0 = it can go right now,
+// null = never at this rate, e.g. a tree with no labs). Plays the queue forward
+// month by month with the same rule the game uses (queuedResearchNow), so a
+// tech that needs another tree's tech waits for it and yields to the ready ones.
+export function researchEtas(
+  queue: readonly string[],
+  researched: ReadonlySet<string>,
+  points: Record<TechCategory, number>,
+  monthly: Record<TechCategory, number>,
+  maxMonths = 360,
+): Map<string, number | null> {
+  const eta = new Map<string, number | null>()
+  const have = new Set(researched)
+  const left = { ...points }
+  let remaining = queue.filter((id) => !have.has(id))
+  for (let month = 0; month <= maxMonths && remaining.length > 0; month++) {
+    const now = queuedResearchNow(remaining, have, left)
+    for (const id of now) {
+      const node = findTech(id)
+      if (!node) continue
+      left[node.category] -= node.cost
+      have.add(id)
+      eta.set(id, month)
+    }
+    remaining = remaining.filter((id) => !have.has(id))
+    for (const c of ['physics', 'society', 'engineering'] as TechCategory[]) left[c] += monthly[c] ?? 0
+  }
+  for (const id of remaining) eta.set(id, null)
+  return eta
+}
+
+// "now", "about 3 months", "about 2 years", or "not at this rate".
+export function formatEta(months: number | null | undefined): string {
+  if (months === null || months === undefined) return 'not at this rate'
+  if (months <= 0) return 'now'
+  if (months < 24) return `about ${months} month${months === 1 ? '' : 's'}`
+  return `about ${Math.round(months / 12)} years`
+}

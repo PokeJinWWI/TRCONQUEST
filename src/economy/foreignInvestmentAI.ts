@@ -25,10 +25,11 @@ function floatOf(corp: Corporation): number {
 
 // The most attractive foreign private company to invest in from `homeCountryId`:
 // profitable, floated, and in a host that is open to foreign capital.
-function bestForeignTarget(homeCountryId: string, corporations: Corporation[], countries: Country[]): Corporation | null {
+function bestForeignTarget(homeCountryId: string, corporations: Corporation[], countries: Country[], canReach?: (a: string, b: string) => boolean): Corporation | null {
   let best: Corporation | null = null
   for (const t of corporations) {
     if (t.countryId === homeCountryId) continue // foreign only
+    if (canReach && !canReach(homeCountryId, t.countryId)) continue
     if (t.kind !== 'private') continue
     if (t.lastProfit <= 0) continue
     if (floatOf(t) <= 0) continue
@@ -46,6 +47,8 @@ export function runForeignInvestmentAI(
   tick: number,
   humanCountryIds: readonly string[],
   sharePrice: (corp: Corporation) => number,
+  // Whether two nations can reach each other (absent = any two can).
+  canReach?: (a: string, b: string) => boolean,
 ): { countries: Country[]; corporations: Corporation[] } {
   const humans = new Set(humanCountryIds)
   const nextCountries = countries.map((c) => ({ ...c }))
@@ -81,8 +84,9 @@ export function runForeignInvestmentAI(
   const queueOffer = (target: Corporation, investorKind: 'state' | 'corporation', investorId: string, investorName: string) => {
     const host = nextCountries.find((c) => c.id === target.countryId)
     if (!host) return
-    offerCounter += 1
-    const offer = { id: `fi-${tick}-${offerCounter}`, investorKind, investorId, investorName, targetCorpId: target.id, shares: STAKE_BLOCK }
+    // One identical offer per investor and target is ever pending (below), so this
+    // id is unique without a global counter: the tick stays a pure function.
+    const offer = { id: `fi-${tick}-${investorId}-${target.id}`, investorKind, investorId, investorName, targetCorpId: target.id, shares: STAKE_BLOCK }
     // Don't re-queue an identical pending offer.
     if (host.pendingForeignInvestment.some((o) => o.investorId === investorId && o.targetCorpId === target.id)) return
     host.pendingForeignInvestment = [...host.pendingForeignInvestment, offer].slice(-8)
@@ -93,7 +97,7 @@ export function runForeignInvestmentAI(
     if (humans.has(country.id)) continue
     if (tick % FI_REVIEW_PERIOD !== phase(country.id, FI_REVIEW_PERIOD)) continue
     if (country.treasury < STATE_TREASURY_BUFFER) continue
-    const target = bestForeignTarget(country.id, nextCorps, nextCountries)
+    const target = bestForeignTarget(country.id, nextCorps, nextCountries, canReach)
     if (!target) continue
     // Cost is set in the host company's currency; convert to the investor's.
     const cost = convertBetween(STAKE_BLOCK * sharePrice(target), target.countryId, country.id, nextCountries)
@@ -111,7 +115,7 @@ export function runForeignInvestmentAI(
     if (corp.kind !== 'private') continue
     if (tick % FI_REVIEW_PERIOD !== phase(corp.id, FI_REVIEW_PERIOD)) continue
     if (corp.cash < CORP_CASH_BUFFER) continue
-    const target = bestForeignTarget(corp.countryId, nextCorps, nextCountries)
+    const target = bestForeignTarget(corp.countryId, nextCorps, nextCountries, canReach)
     if (!target || target.id === corp.id) continue
     // Cost is set in the host company's currency; convert to the firm's own.
     const cost = convertBetween(STAKE_BLOCK * sharePrice(target), target.countryId, corp.countryId, nextCountries)
@@ -126,8 +130,6 @@ export function runForeignInvestmentAI(
 
   return { countries: nextCountries, corporations: nextCorps }
 }
-
-let offerCounter = 0
 
 function sameHolder(a: Corporation['shares'][number]['holder'], b: Corporation['shares'][number]['holder']): boolean {
   if (a.kind !== b.kind) return false

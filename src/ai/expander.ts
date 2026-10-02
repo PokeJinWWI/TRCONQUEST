@@ -25,7 +25,7 @@ import {
   AI_RESEARCH_PATH,
   AI_SCIENCE_SHIPS,
 } from '../data/aiData'
-import { STARBASE_COST } from '../data/starbaseData'
+import { STARBASE_COST, STARBASE_INFLUENCE_COST } from '../data/starbaseData'
 import { STARS, type StarData } from '../data/starData'
 import { canResearch, findTech } from '../data/techData'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -234,7 +234,10 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
     if (builder) {
       const at = restingStarId(builder)
       if (cargoCovers(builder.cargo, kit)) {
-        if (at === target) intents.push({ kind: 'build-starbase', shipId: builder.id, starId: target })
+        // A Starbase costs influence too; it waits (colonies and Starbases share it).
+        if (at === target) {
+          if (influence >= STARBASE_INFLUENCE_COST) intents.push({ kind: 'build-starbase', shipId: builder.id, starId: target })
+        }
         else goTo(builder, target)
       } else if (atCapital(builder)) {
         const need = missingKit(builder)

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INTEGRITY } from '../data/starbaseData'
+import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INFLUENCE_COST, STARBASE_INTEGRITY } from '../data/starbaseData'
+import { useResourceStore } from './resourceStore'
 import { starbaseAnchorBody, starbasesAt, type Starbase } from '../scene/starbaseLogic'
 import { cargoCovers, cargoMinus } from '../scene/cargoLogic'
 import { isFullySurveyed, restingStarId } from '../scene/surveyLogic'
@@ -57,6 +58,10 @@ export function canBuildStarbase(countryId: string, starId: string, starbases: S
   // the system by force (invade/occupy any body there) or defeat the
   // standing Starbase first, same as any other contested territory.
   if (here.some((sb) => atWar(sb.ownerId, countryId))) return { ok: false, reason: "An enemy Starbase already holds this system's claim" }
+  const influence = useResourceStore.getState().stateFor(countryId).amounts.influence ?? 0
+  if (influence < STARBASE_INFLUENCE_COST) {
+    return { ok: false, reason: `Needs ${STARBASE_INFLUENCE_COST} influence to claim a system (have ${Math.floor(influence)})` }
+  }
   if (!cargoCovers(ship.cargo, STARBASE_COST)) {
     return { ok: false, reason: `The hold is short of materials (needs ${Object.entries(STARBASE_COST).map(([id, n]) => `${n} ${id}`).join(', ')})` }
   }
@@ -71,6 +76,7 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
     if (!check.ok) return check
     const ship = useShipStore.getState().ships.find((s) => s.id === shipId)!
     useShipStore.getState().setShipCargo(ship.id, cargoMinus(ship.cargo, STARBASE_COST))
+    useResourceStore.getState().addAmount(countryId, 'influence', -STARBASE_INFLUENCE_COST)
     counter += 1
     const sb: Starbase = {
       id: `starbase-${starId}-${countryId}-${counter}-${Math.round(simDays)}`,

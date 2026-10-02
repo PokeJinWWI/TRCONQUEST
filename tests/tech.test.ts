@@ -11,6 +11,8 @@ import {
   externalPrerequisites,
   queuePlan,
   queuedResearchNow,
+  researchEtas,
+  formatEta,
   SOCIETY_TECHS,
   ENGINEERING_TECHS,
   ANOMALOUS_UNLOCK_THRESHOLD,
@@ -242,6 +244,21 @@ console.log('\n=== 10. The research queue ===')
   check('points coming in research what they can, and the queue shrinks', st.researched.has('orbital-mechanics') && (st.queue ?? []).join() === 'orbital-construction' && st.researchPoints.physics === 0)
   useTechStore.getState().unqueueTech(id, 'orbital-construction')
   check('a queued tech can be taken out again', (useTechStore.getState().stateFor(id).queue ?? []).length === 0)
+}
+
+console.log('\n=== 11. How long research will take ===')
+{
+  const rate = { physics: 10, society: 0, engineering: 5 }
+  const none = { physics: 0, society: 0, engineering: 0 }
+  const e = researchEtas(['classical-mechanics'], new Set(), none, rate)
+  check('40 points at 10 a month is 4 months', e.get('classical-mechanics') === 4, `${e.get('classical-mechanics')}`)
+  check('points already in hand make it "now"', researchEtas(['classical-mechanics'], new Set(), { ...none, physics: 40 }, rate).get('classical-mechanics') === 0)
+  const chain = researchEtas(['orbital-mechanics', 'orbital-construction'], new Set(['classical-mechanics']), none, rate)
+  check('an Engineering tech that needs a Physics one comes after it', (chain.get('orbital-construction') ?? 0) > (chain.get('orbital-mechanics') ?? 99), JSON.stringify([...chain]))
+  const yields = researchEtas(['orbital-mechanics', 'orbital-construction', 'power-distribution-2'], new Set(['classical-mechanics']), { ...none, engineering: 90 }, rate)
+  check('...and yields to an immediate Engineering tech queued after it', (yields.get('power-distribution-2') ?? 99) < (yields.get('orbital-construction') ?? 0), JSON.stringify([...yields]))
+  check('a tree with no income never finishes', researchEtas(['relativity'], new Set(), none, none).get('relativity') === null)
+  check('formatted in plain words', formatEta(0) === 'now' && formatEta(3) === 'about 3 months' && formatEta(48) === 'about 4 years' && formatEta(null) === 'not at this rate')
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

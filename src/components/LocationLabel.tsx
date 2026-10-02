@@ -1,4 +1,4 @@
-import { STARS } from '../data/starData'
+import { findStar } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
 
 export function LocationLabel() {
@@ -8,7 +8,7 @@ export function LocationLabel() {
 
   if (level === 'galactic' || level === 'interstellar') return null
 
-  const starName = STARS.find((s) => s.id === selectedStarId)?.name ?? selectedStarId
+  const starName = findStar(selectedStarId)?.name ?? selectedStarId
 
   const text =
     level === 'terrain' && selectedBodyName

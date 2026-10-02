@@ -50,6 +50,17 @@ export const HYPERDRIVE_BASE_LOSS_CHANCE = 0.5
 // established by any hyperdrive ship successfully completing that exact
 // jump before), the risk drops sharply — a charted route, not a blind jump.
 export const HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE = 0.1
+// Both rates are for an AVERAGE jump and scale with where the jump goes
+// (scene/jumpRisk.ts): risk grows with the square root of the distance and the
+// fourth root of the destination's mass, between these two multipliers. So an
+// uncharted jump runs 25-80% and a charted one 5-16%, before damage or combat.
+export const JUMP_RISK_DISTANCE_EXPONENT = 0.5
+export const JUMP_RISK_MASS_EXPONENT = 0.25
+export const JUMP_RISK_MIN_FACTOR = 0.5
+export const JUMP_RISK_MAX_FACTOR = 1.6
+// The distance between two neighbourhoods that counts as an average jump, in
+// thousands of light-years (stars use their own neighbourhood's real average).
+export const JUMP_RISK_CLUSTER_REF_KLY = 10
 
 export type FtlDrive = WarpDrive | HyperDrive
 

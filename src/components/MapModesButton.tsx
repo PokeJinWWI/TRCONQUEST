@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { bringToFrontZIndex } from '../state/layering'
 import { useMapModeStore, MAP_MODE_LABELS, type MapMode } from '../state/mapModeStore'
 
 const MAP_MODES: MapMode[] = ['none', 'gdp', 'political']
@@ -8,6 +10,9 @@ const MAP_MODES: MapMode[] = ['none', 'gdp', 'political']
 export function MapModesButton() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  // Where the menu hangs (above the button) and its layer, fixed at open time.
+  const [at, setAt] = useState<{ right: number; bottom: number; z: number } | null>(null)
   const mode = useMapModeStore((s) => s.mode)
   const setMode = useMapModeStore((s) => s.setMode)
   const showNames = useMapModeStore((s) => s.showNationNames)
@@ -16,7 +21,7 @@ export function MapModesButton() {
   useEffect(() => {
     if (!open) return
     const close = (e: PointerEvent) => {
-      if (e.target instanceof Node && ref.current?.contains(e.target)) return
+      if (e.target instanceof Node && (ref.current?.contains(e.target) || menuRef.current?.contains(e.target))) return
       setOpen(false)
     }
     const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
@@ -30,11 +35,24 @@ export function MapModesButton() {
 
   return (
     <div className="map-modes" ref={ref}>
-      <button type="button" className={`map-modes-btn${open ? ' active' : ''}`} onClick={() => setOpen((o) => !o)} title="Map modes — what the map's colours show">
+      <button
+        type="button"
+        className={`map-modes-btn${open ? ' active' : ''}`}
+        onClick={() => {
+          const rect = ref.current?.getBoundingClientRect()
+          if (rect) setAt({ right: window.innerWidth - rect.right, bottom: window.innerHeight - rect.top + 8, z: bringToFrontZIndex() })
+          setOpen((o) => !o)
+        }} title="Map modes — what the map's colours show">
         Map Modes{mode !== 'none' ? `: ${MAP_MODE_LABELS[mode]}` : ''}
       </button>
-      {open && (
-        <div className="map-modes-menu">
+      {open && at && createPortal(
+        <div
+          className="map-modes-menu"
+          ref={menuRef}
+          style={{ right: at.right, bottom: at.bottom, zIndex: at.z }}
+          // Clicking anywhere in it brings it to the front, like a window.
+          onPointerDownCapture={() => setAt((a) => (a ? { ...a, z: bringToFrontZIndex() } : a))}
+        >
           <div className="map-modes-title">Colour the map by</div>
           {MAP_MODES.map((m) => (
             <button
@@ -51,7 +69,8 @@ export function MapModesButton() {
             <input type="checkbox" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} />
             Border &amp; nation names
           </label>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

@@ -31,7 +31,7 @@ import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { getPlanetPosition } from './orbitMath'
-import { shipSystemId, canFollow, bodyLivePosition, clusterRestingShipsByFleet, SYSTEM_SHIP_ORBIT_RADIUS } from './shipPhysics'
+import { shipSystemId, bodyLivePosition, clusterRestingShipsByFleet, SYSTEM_SHIP_ORBIT_RADIUS } from './shipPhysics'
 import { orderSelectedFleets, playerShipRenderPosition } from './commsVisual'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
@@ -43,6 +43,7 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { usePlayerStore } from '../state/playerStore'
 import { InspectPanel } from '../components/InspectPanel'
 import { bodyMenuItems, useBodyOrderMenu } from './BodyOrderMenu'
+import { useShipOrderMenu } from './ShipOrderMenu'
 import { hasOwnShipSelected, openInViewFull } from './panelOpen'
 import { isNewTabModifierHeld } from './queueModifier'
 import { useWorkspaceStore } from '../state/workspaceStore'
@@ -130,6 +131,7 @@ function getBodyPosition(name: string, stars: SystemStarRender[], planets: Plane
 export function SolarSystemScene() {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const bodyMenu = useBodyOrderMenu()
+  const shipMenu = useShipOrderMenu()
   const enterSatellite = useViewStore((s) => s.enterSatellite)
   const exitSystemToInterstellar = useViewStore((s) => s.exitSystemToInterstellar)
   const selectedName = useViewStore((s) => s.inViewSelection)
@@ -170,7 +172,6 @@ export function SolarSystemScene() {
   const playerCountryId = usePlayerStore((s) => s.selectedCountryId)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const setFollowing = useShipStore((s) => s.setFollowing)
   const systemShips = useMemo(() => ships.filter((ship) => shipSystemId(ship) === selectedStarId), [ships, selectedStarId])
   // One marker per fleet resting together, not per ship — see
   // shipPhysics.clusterRestingShipsByFleet.
@@ -334,14 +335,11 @@ export function SolarSystemScene() {
     orderSelectedFleets({ kind: 'point', systemId: selectedStarId, position: point })
   }
 
-  // Right-clicking another ship while one is selected orders the selected
-  // ship to follow it, instead of a normal move order — see
-  // ShipInstance.followingShipId.
+  // Right-clicking another ship while one is selected opens a menu: Move
+  // (follow it, ShipInstance.followingShipId) or Attack (scene/ShipOrderMenu.tsx).
   const handleFollowShip = (targetShipId: string) => {
-    if (!selectedShipId) return
-    const ship = ships.find((s) => s.id === selectedShipId)
-    if (!ship || !canFollow(ship, targetShipId)) return
-    setFollowing(ship.id, targetShipId)
+    if (!selectedShipId || selectedShipId === targetShipId) return
+    shipMenu.open(targetShipId)
   }
 
   return (
@@ -558,6 +556,7 @@ export function SolarSystemScene() {
       </Canvas>
 
       {bodyMenu.element}
+      {shipMenu.element}
 
       {selectedShipId ? (
         <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />

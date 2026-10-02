@@ -11,6 +11,8 @@ import {
   emptyStockpile,
   freeLand,
   freeSlots,
+  teardownCost,
+  teardownMonths,
   landOf,
   tickAbstractEconomy,
   type AbstractEconomyState,
@@ -18,7 +20,7 @@ import {
 } from '../src/economy-abstract/abstractEconomy'
 import { applyAbstractEconomyAI } from '../src/economy-abstract/abstractEconomyAI'
 import { useAbstractEconomyStore, landForBody } from '../src/state/abstractEconomyStore'
-import { SLOTS_PER_DISTRICT, DISTRICT_COST, CLUSTER_MAX } from '../src/data/simplisticEconomyData'
+import { SLOTS_PER_DISTRICT, DISTRICT_COST, CLUSTER_MAX, SIMPLE_BUILDING_DEFS, SIMPLE_DISTRICTS } from '../src/data/simplisticEconomyData'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -119,6 +121,71 @@ console.log('\n=== 4. Simple: seeds, land from planet size, store and AI ===')
   const env = { worlds: [crowded], stock: stock(), report: abstractReport(nation, [crowded], stock()), atWar: false }
   const planned = applyAbstractEconomyAI(nation, env)
   check('the AI queues a district level when the district it needs is full', planned.queue.some((o) => o.district !== undefined), JSON.stringify(planned.queue.map((o) => o.district ?? o.building)))
+}
+
+console.log('\n=== 4b. Simple: deconstruction is its own reverse bar; queueing into coming levels ===')
+{
+  const id = 'imperial-state-of-mars'
+  useAbstractEconomyStore.getState().reset()
+  const st = () => useAbstractEconomyStore.getState()
+  const nation = () => st().byCountry[id]
+  const farmCost = SIMPLE_BUILDING_DEFS.farm.cost
+  const before = st().worlds['Mars'].buildings.farm ?? 0
+  // Something in the construction queue to prove it is left alone.
+  st().queueDistrict(id, 'Mars', 'industrial')
+  const queueBefore = nation().queue.map((o) => o.id).join()
+
+  const r = st().queueDemolish(id, 'Mars', 'farm')
+  const td = (nation().teardowns ?? [])[0]
+  check('deconstruction is queued as a teardown', r.ok && !!td && td.building === 'farm' && td.bodyName === 'Mars')
+  check('...its bar starts full (the build cost)', !!td && td.progress === farmCost && teardownCost(td) === farmCost)
+  check('...and it is NOT a construction order: the queue is unchanged', nation().queue.map((o) => o.id).join() === queueBefore && !nation().queue.some((o) => o.building === 'farm'))
+  check('...the building keeps standing', (st().worlds['Mars'].buildings.farm ?? 0) === before)
+  check('...without taking a slot', freeSlots(st().worlds['Mars'], nation().queue, 'agricultural') === freeSlots(st().worlds['Mars'], nation().queue.filter(() => true), 'agricultural'))
+  const months = teardownMonths({ building: 'farm' })
+  st().advance(1)
+  const t1 = (nation().teardowns ?? [])[0]
+  check('each month the bar runs down by cost / months', !!t1 && Math.abs(t1.progress - (farmCost - farmCost / months)) < 1e-6, `${t1?.progress}`)
+  check('...with the building still standing', (st().worlds['Mars'].buildings.farm ?? 0) === before)
+  check('...and the construction points going to the queue, not the teardown', nation().queue.some((o) => o.progress > 0))
+  for (let i = 1; i < months; i++) st().advance(1)
+  check('when the bar reaches zero, one is gone', (st().worlds['Mars'].buildings.farm ?? 0) === before - 1)
+  check('...and the teardown is finished', (nation().teardowns ?? []).length === 0)
+
+  // Stopping one leaves the building.
+  st().queueDemolish(id, 'Mars', 'farm')
+  const tid = (nation().teardowns ?? [])[0].id
+  st().cancelOrder(id, tid)
+  check('stopping a deconstruction keeps the building', (nation().teardowns ?? []).length === 0 && (st().worlds['Mars'].buildings.farm ?? 0) === before - 1)
+  check('nothing to deconstruct is refused', !st().queueDemolish(id, 'Mars', 'nonexistentbuilding' as never).ok)
+  // No more teardowns than buildings.
+  const farms = st().worlds['Mars'].buildings.farm ?? 0
+  for (let i = 0; i < farms; i++) st().queueDemolish(id, 'Mars', 'farm')
+  check('no more than the buildings standing', !st().queueDemolish(id, 'Mars', 'farm').ok)
+
+  // A district level: same, on a longer bar, if what stands still fits.
+  useAbstractEconomyStore.getState().reset()
+  const w0 = st().worlds['Mars']
+  const fits = SIMPLE_DISTRICTS.find((d) => districtsOf(w0)[d] > 0 && buildingsInDistrict(w0, d) <= (districtsOf(w0)[d] - 1) * SLOTS_PER_DISTRICT)
+  const full = SIMPLE_DISTRICTS.find((d) => districtsOf(w0)[d] > 0 && buildingsInDistrict(w0, d) > (districtsOf(w0)[d] - 1) * SLOTS_PER_DISTRICT)
+  if (full) check('a district whose buildings would no longer fit is refused', !st().queueDemolishDistrict(id, 'Mars', full).ok && /fit/.test((st().queueDemolishDistrict(id, 'Mars', full) as { reason: string }).reason))
+  if (fits) {
+    const lv = districtsOf(w0)[fits]
+    check('a district level can be deconstructed', st().queueDemolishDistrict(id, 'Mars', fits).ok && (nation().teardowns ?? [])[0].district === fits)
+    check('...it takes no queue place', nation().queue.length === 0)
+    const dm = teardownMonths({ district: fits })
+    for (let i = 0; i < dm - 1; i++) st().advance(1)
+    check('...the level stands until the bar is empty', districtsOf(st().worlds['Mars'])[fits] === lv)
+    st().advance(1)
+    check('...then it is gone, freeing its land', districtsOf(st().worlds['Mars'])[fits] === lv - 1 && (nation().teardowns ?? []).length === 0)
+  } else console.log('  (no district with room on Mars to test a level teardown)')
+
+  // A building can be queued into a slot a queued district level will add.
+  useAbstractEconomyStore.getState().reset()
+  const fullQ = st().queueBuilding(id, 'Mars', 'civilianFactory')
+  st().queueDistrict(id, 'Mars', 'industrial')
+  const after = st().queueBuilding(id, 'Mars', 'civilianFactory')
+  check('a full district refuses, but takes a building once a level is queued', !fullQ.ok && after.ok)
 }
 
 console.log('\n=== 5. Complex mode: districts that house buildings ===')

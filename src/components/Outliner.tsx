@@ -471,7 +471,7 @@ function OutlinerSection({
 type OutlinerTab = 'territory' | 'military' | 'info'
 const OUTLINER_TABS: { id: OutlinerTab; label: string; tip: string }[] = [
   { id: 'territory', label: 'Territory', tip: 'Colonies, Starbases, your market, and what is in view' },
-  { id: 'military', label: 'Military', tip: 'Battles, fleets and armies' },
+  { id: 'military', label: 'Fleet', tip: 'Battles, fleets and armies' },
   { id: 'info', label: 'Info', tip: 'Treaties, political movements, interest groups, companies' },
 ]
 
@@ -621,17 +621,7 @@ export function Outliner() {
 
         {tab === 'territory' && (
           <>
-            <OutlinerSection
-              title="Colonies"
-              entries={colonyEntries.filter(matches)}
-              emptyText={query ? 'No match' : 'No colonies established'}
-              selectedKey={inViewSelection}
-              onEntryClick={handleColonyClick}
-            />
-            <OutlinerSection title="Starbases" entries={starbaseEntries.filter(matches)} emptyText={query ? 'No match' : 'No starbases built'} onEntryClick={handleStarbaseClick} />
-            {/* Your own market, not a list of every market that exists — same
-                player-only scope as Fleets/Colonies, hence singular. */}
-            <OutlinerSection title="Market" entries={[]} emptyText="No market established" />
+            {/* What the search and the In View list show: right under the search. */}
             <div className="outliner-filter-pills">
               {FILTERS.map(({ kind, label }) => (
                 <button
@@ -644,6 +634,17 @@ export function Outliner() {
                 </button>
               ))}
             </div>
+            <OutlinerSection
+              title="Colonies"
+              entries={colonyEntries.filter(matches)}
+              emptyText={query ? 'No match' : 'No colonies established'}
+              selectedKey={inViewSelection}
+              onEntryClick={handleColonyClick}
+            />
+            <OutlinerSection title="Starbases" entries={starbaseEntries.filter(matches)} emptyText={query ? 'No match' : 'No starbases built'} onEntryClick={handleStarbaseClick} />
+            {/* Your own market, not a list of every market that exists — same
+                player-only scope as Fleets/Colonies, hence singular. */}
+            <OutlinerSection title="Market" entries={[]} emptyText="No market established" />
             <OutlinerSection
               title="In View"
               entries={filteredInView}

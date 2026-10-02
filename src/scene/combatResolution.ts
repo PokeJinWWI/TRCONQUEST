@@ -2202,6 +2202,10 @@ export function stepEngagements(
 // the live stores, so ordinary callers pass nothing.
 export interface NationContext {
   atWar?: AtWarFn
+  // Who fights whom at ONE place, when that differs from `atWar`: an unprovoked
+  // attack is a local fight between nations not at war (scene/aggression.ts).
+  // Absent = `atWar` everywhere.
+  hostileAt?: (locationKey: string) => AtWarFn
   playerCountryId?: string | null
 }
 
@@ -2311,7 +2315,7 @@ export function syncEngagements(
 ): Engagement[] {
   const atWarFn = context.atWar ?? storeAtWar
   const playerCountryId = context.playerCountryId !== undefined ? context.playerCountryId : usePlayerStore.getState().selectedCountryId
-  const hostilePair = (a: ShipInstance, b: ShipInstance) => a.id !== b.id && atWarFn(a.ownerId, b.ownerId)
+  const hostileAt = (key: string) => context.hostileAt?.(key) ?? atWarFn
 
   // Only ships at rest at a real anchor can meet, so a ship mid-order can't
   // be party to a BRAND NEW encounter. But dropping an already-ordered ship
@@ -2336,6 +2340,8 @@ export function syncEngagements(
   const byLocation = new Map<string, ShipInstance[]>()
   for (const [key, raw] of rawByLocation) {
     const prior = existingByKey.get(key)
+    const hostileHere = hostileAt(key)
+    const hostilePair = (a: ShipInstance, b: ShipInstance) => a.id !== b.id && hostileHere(a.ownerId, b.ownerId)
     const hostilePairPresent = raw.some((a) => raw.some((b) => hostilePair(a, b)))
     const kept = raw.filter((ship) => !ship.order || (!!prior && !hostilePairPresent))
     if (kept.length > 0) byLocation.set(key, kept)
@@ -2345,6 +2351,8 @@ export function syncEngagements(
 
   for (const [key, group] of byLocation) {
     const prior = existingByKey.get(key)
+    const hostileHere = hostileAt(key)
+    const hostilePair = (a: ShipInstance, b: ShipInstance) => a.id !== b.id && hostileHere(a.ownerId, b.ownerId)
     // A location is contested only if some pair in it belongs to nations at
     // war — three friendly fleets parked together doesn't spontaneously
     // start a battle. An engagement that already exists is exempt from this
@@ -2369,7 +2377,7 @@ export function syncEngagements(
     const windowSpan = arenaWindowSpan(obstacles)
 
     const nations = assignNations(combatants.map((s) => s.ownerId), prior?.nations, playerCountryId)
-    const hostile = hostileSidesFor(nations, atWarFn)
+    const hostile = hostileSidesFor(nations, hostileHere)
 
     // Ships already in the fight keep their arena position and timers (their
     // hostile sides are refreshed — diplomacy may have changed); newcomers

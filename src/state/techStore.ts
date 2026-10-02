@@ -1,4 +1,7 @@
 import { create } from 'zustand'
+import { useDiplomacyStore } from './diplomacyStore'
+import { usePlayerStore } from './playerStore'
+import { useGameTimeStore } from './gameTimeStore'
 import { canResearch, findTech, queuePlan, queuedResearchNow, type TechCategory } from '../data/techData'
 
 export interface TechState {
@@ -16,7 +19,7 @@ export interface TechState {
 // first scout's report from the nearest star took six years to come home,
 // which left exploring dead for the whole early game. Everything else starts
 // unresearched; there is no other retroactive seeding anywhere else in the tree.
-const DEFAULT_RESEARCHED = ['warp-theory', 'warp-drives', 'hyperspace-theory', 'warp-comms']
+export const DEFAULT_RESEARCHED = ['warp-theory', 'warp-drives', 'hyperspace-theory', 'warp-comms']
 
 function freshTechState(): TechState {
   return {
@@ -100,6 +103,11 @@ export const useTechStore = create<TechStore>((set, get) => ({
         },
       },
     }))
+    // Told to the player (a notification), not for every nation's research.
+    if (countryId === usePlayerStore.getState().selectedCountryId) {
+      const label = { physics: 'Physics', society: 'Society', engineering: 'Engineering' }[node.category]
+      useDiplomacyStore.getState().pushEvent('tech-researched', [countryId], `Researched ${node.name} (${label})`, useGameTimeStore.getState().simDays, { nav: { category: 'Technology', subcategory: label } })
+    }
     return true
   },
 

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { bringToFrontZIndex } from '../state/layering'
 import { DOCKED_WINDOW_KEYS, useWindowLayoutStore, type OpenMode } from '../state/windowLayoutStore'
 
 interface DraggableWindowProps {
@@ -51,18 +52,24 @@ interface DraggableWindowProps {
 const MIN_WIDTH = 200
 const MIN_HEIGHT = 120
 
-type ResizeAxis = 'x' | 'y' | 'xy'
+// The eight resize handles: four edges and four corners. Corners come last so
+// they layer over the edge strips; none overlaps the title bar's buttons.
+const RESIZE_HANDLES: { edges: string; cls: string }[] = [
+  { edges: 'l', cls: 'rz-l' },
+  { edges: 'r', cls: 'rz-r' },
+  { edges: 't', cls: 'rz-t' },
+  { edges: 'b', cls: 'rz-b' },
+  { edges: 'lt', cls: 'rz-lt' },
+  { edges: 'rt', cls: 'rz-rt' },
+  { edges: 'lb', cls: 'rz-lb' },
+  { edges: 'rb', cls: 'rz-rb' },
+]
 
 // A shared stacking counter every window instance draws from — plain module
 // state (not a store) since this is purely "who's on top," nothing any
 // other component needs to read or react to. Starts above the CSS default
 // (see .draggable-window's z-index: 20) so the very first window opened
 // already sits above that base layer.
-let topZIndex = 20
-function bringToFrontZIndex(): number {
-  topZIndex += 1
-  return topZIndex
-}
 
 // A movable, resizable HUD window (title bar drag, edge/corner resize) for
 // the satellite-view inspection panel and the nav sidebar's category
@@ -118,13 +125,17 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     startY: number
     startW: number
     startH: number
-    // The window's own pos at the moment resizing began — resizing needs to
-    // shift pos as size grows (see handleResizePointerMove), and that shift
-    // has to accumulate from a fixed starting point for the whole gesture,
-    // not frame-to-frame, same reasoning dragRef already follows for moves.
+    // The box's edges on screen when the gesture began, for the screen clamps.
+    startLeft: number
+    startRight: number
+    startTop: number
+    startBottom: number
+    // The window's own pos at the moment resizing began — the shift has to
+    // accumulate from a fixed starting point for the whole gesture, not
+    // frame-to-frame, same reasoning dragRef already follows for moves.
     origPosX: number
     origPosY: number
-    axis: ResizeAxis
+    edges: string
   } | null>(null)
   const windowRef = useRef<HTMLDivElement>(null)
   // The body's own rendered height at the moment it was last collapsed —
@@ -136,41 +147,63 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   const lastHeightRef = useRef<number | null>(null)
   const selfCompensatedRef = useRef(false)
 
-  const handleResizePointerDown = (axis: ResizeAxis) => (e: React.PointerEvent) => {
+  // Resizing from any edge or corner (`edges`: any of l r t b). The edge(s)
+  // opposite the one being dragged stay exactly where they are: the box is
+  // centre-hung (transform `calc(-50% + Xpx)`, see below), so every size change
+  // is paired with a shift of `pos` by half of what the size ACTUALLY changed,
+  // (the clamps below are exactly the CSS max-width/max-height, so the size asked
+  // for is the size rendered, and the shift can't drift.) An edge-pinned window's
+  // X is its CSS edge, not its centre, so its shift is whole, not half.
+  const handleResizePointerDown = (edges: string) => (e: React.PointerEvent) => {
+    // Never the start of a title-bar drag, and nothing else reacts to it.
+    e.stopPropagation()
+    e.preventDefault()
+    if (maximized || dragRef.current) return
     const rect = windowRef.current?.getBoundingClientRect()
     resizeRef.current = {
       startX: e.clientX,
       startY: e.clientY,
       startW: rect?.width ?? MIN_WIDTH,
       startH: rect?.height ?? MIN_HEIGHT,
+      startLeft: rect?.left ?? 0,
+      startRight: rect?.right ?? 0,
+      startTop: rect?.top ?? 0,
+      startBottom: rect?.bottom ?? 0,
       origPosX: pos.x,
       origPosY: pos.y,
-      axis,
+      edges,
     }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
   const handleResizePointerMove = (e: React.PointerEvent) => {
-    if (!resizeRef.current) return
-    const { startX, startY, startW, startH, origPosX, origPosY, axis } = resizeRef.current
-    const dx = e.clientX - startX
-    const dy = e.clientY - startY
-    const width = axis === 'y' ? startW : Math.max(MIN_WIDTH, Math.min(window.innerWidth - 32, startW + dx))
-    const height = axis === 'x' ? startH : Math.max(MIN_HEIGHT, Math.min(window.innerHeight - 32, startH + dy))
+    const r = resizeRef.current
+    if (!r) return
+    const { edges, startW, startH, origPosX, origPosY } = r
+    const dx = e.clientX - r.startX
+    const dy = e.clientY - r.startY
+    const hudTop = cssVarPx('--hud-top-height', 52)
+    // What this window may be, by the CSS (max-width / max-height) and by the
+    // screen: a dragged edge stops at the viewport (and the top at the HUD bar),
+    // so a handle can never be carried out of reach.
+    const cssMaxW = window.innerWidth - 32
+    const cssMaxH = window.innerHeight - hudTop - cssVarPx('--hud-bottom-height', 58) - 8
+    let width = startW
+    let height = startH
+    if (edges.includes('r')) width = Math.min(startW + dx, cssMaxW, window.innerWidth - r.startLeft)
+    if (edges.includes('l')) width = Math.min(startW - dx, cssMaxW, r.startRight)
+    if (edges.includes('b')) height = Math.min(startH + dy, cssMaxH, window.innerHeight - r.startTop)
+    if (edges.includes('t')) height = Math.min(startH - dy, cssMaxH, r.startBottom - hudTop)
+    width = Math.max(MIN_WIDTH, width)
+    height = Math.max(MIN_HEIGHT, height)
     setSize({ width, height })
-    // The window's box is center-hung (see the transform below — `calc(-50%
-    // + Xpx)` on both axes), so growing width/height without correcting
-    // `pos` expands the box symmetrically from its own middle: the left/top
-    // edge would drift outward exactly as far as the right/bottom edge
-    // does. Shifting the center by half of whatever each axis just grew by
-    // cancels that drift on the edge that's supposed to stay put, so only
-    // the dragged edge actually moves — a real top-left-anchored resize.
-    // Y always re-centers this way; X only does when the window isn't
-    // edge-anchored (an anchored window's X position is pinned to the
-    // screen edge via CSS instead, see the `anchor` prop and its className).
+    const dW = width - startW
+    const dH = height - startH
+    const grabbedLeft = edges.includes('l')
+    const grabbedTop = edges.includes('t')
     setPos({
-      x: anchor ? origPosX : origPosX + (width - startW) / 2,
-      y: origPosY + (height - startH) / 2,
+      x: anchor === 'left' ? origPosX - (grabbedLeft ? dW : 0) : anchor === 'right' ? origPosX + (grabbedLeft ? 0 : dW) : origPosX + (grabbedLeft ? -dW : dW) / 2,
+      y: origPosY + (grabbedTop ? -dH : dH) / 2,
     })
   }
 
@@ -180,12 +213,21 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
     resizeRef.current = null
   }
 
+  // A pointer that vanishes (pointercancel, lost capture) must not leave a drag
+  // or resize half-started, or the next plain mouse move would carry on with it.
+  const handleGestureLost = () => {
+    dragRef.current = null
+    if (resizeRef.current) handleResizePointerUp()
+  }
+
   const handlePointerDown = (e: React.PointerEvent) => {
     // A maximized window doesn't drag — same as any OS's maximized windows,
     // and it sidesteps the question of what dragging even means once `pos`
     // has been repurposed to describe "fill the screen" (see
     // handleToggleMaximize) rather than a normal offset.
-    if (maximized) return
+    if (maximized || resizeRef.current || e.button !== 0) return
+    // A press on the title bar's own buttons is a click, not a drag.
+    if (e.target instanceof Element && e.target.closest('button')) return
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }
@@ -268,6 +310,11 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
         return
       }
       if (resizeRef.current || dragRef.current) return
+      // An explicit size (the player's resize, a dock, a maximize) fixes the
+      // height: content can't change it, and the change seen here is the
+      // gesture's own, already paired with its shift in pos. (Seen AFTER the
+      // pointer was released, this used to shift the window a second time.)
+      if (sizeRef.current) return
       if (el.classList.contains('maximized') || el.classList.contains('animating')) return
       const delta = rect.height - previous
       const hudTop = cssVarPx('--hud-top-height', 52)
@@ -464,6 +511,8 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handleGestureLost}
+        onLostPointerCapture={handleGestureLost}
       >
         <span>{title}</span>
         <span className="draggable-window-titlebar-controls">
@@ -504,24 +553,17 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
           corner, where they'd otherwise both be hit-testable at once. */}
       {!collapsed && !maximized && (
         <>
-          <div
-            className="draggable-window-resize-right"
-            onPointerDown={handleResizePointerDown('x')}
-            onPointerMove={handleResizePointerMove}
-            onPointerUp={handleResizePointerUp}
-          />
-          <div
-            className="draggable-window-resize-bottom"
-            onPointerDown={handleResizePointerDown('y')}
-            onPointerMove={handleResizePointerMove}
-            onPointerUp={handleResizePointerUp}
-          />
-          <div
-            className="draggable-window-resize-corner"
-            onPointerDown={handleResizePointerDown('xy')}
-            onPointerMove={handleResizePointerMove}
-            onPointerUp={handleResizePointerUp}
-          />
+          {RESIZE_HANDLES.map((h) => (
+            <div
+              key={h.edges}
+              className={`draggable-window-resize ${h.cls}`}
+              onPointerDown={handleResizePointerDown(h.edges)}
+              onPointerMove={handleResizePointerMove}
+              onPointerUp={handleResizePointerUp}
+              onPointerCancel={handleGestureLost}
+              onLostPointerCapture={handleGestureLost}
+            />
+          ))}
         </>
       )}
     </div>

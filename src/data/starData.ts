@@ -3,6 +3,8 @@
 // barycenter from the StarData fields below. A multi-star system (Alpha
 // Centauri's three stars, Sirius's two, Luyten 726-8's two) lists each real
 // star here, positioned by `offsetAU` from the system barycenter.
+import { SOLAR_NEIGHBORHOOD_ID, findGeneratedStar, generatedStarsFor } from './galaxyGen'
+
 export interface StarComponent {
   name: string
   color: string
@@ -47,7 +49,7 @@ export interface StarData {
 // for a single-star system. Kept unit-agnostic (offsetAU stays in AU) so
 // this module never has to import UNITS_PER_AU from planetData.
 export function getSystemStars(starId: string): StarComponent[] {
-  const star = STARS.find((s) => s.id === starId)
+  const star = findStar(starId)
   if (!star) return []
   if (star.components && star.components.length > 0) return star.components
   return [{ name: star.name, color: star.color, radiusKm: star.radiusKm, massKg: star.massKg, offsetAU: [0, 0] }]
@@ -142,12 +144,15 @@ export const STARS: StarData[] = [
 ]
 
 // Interstellar view is generic over "which neighborhood" (see
-// neighborhoodData.ts) even though only one has real interior data today —
-// this is the seam a second populated neighborhood plugs into later without
-// InterstellarScene itself needing another refactor. `hasInterstellarData:
-// false` on every other neighborhood means this never actually gets called
-// for them yet (mirrors how a `hasSystemData: false` star is never entered),
-// but returning [] rather than throwing keeps the function total.
+// neighborhoodData.ts): ours is the hand-authored list above, every other one
+// is generated (data/galaxyGen.ts).
 export function getStarsForNeighborhood(neighborhoodId: string): StarData[] {
-  return neighborhoodId === 'solar-neighborhood' ? STARS : []
+  return neighborhoodId === SOLAR_NEIGHBORHOOD_ID ? STARS : generatedStarsFor(neighborhoodId)
+}
+
+// Any star by id: one of ours, or a generated one in another neighbourhood.
+// STARS itself stays the Solar Neighbourhood only, which is what the running
+// game (ships, AI, territory) works over.
+export function findStar(starId: string): StarData | undefined {
+  return STARS.find((s) => s.id === starId) ?? findGeneratedStar(starId)
 }

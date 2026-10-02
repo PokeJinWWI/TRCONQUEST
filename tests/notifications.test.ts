@@ -4,6 +4,7 @@
 import { TOAST_MS, eventDestination, goToEvent, tickToasts } from '../src/scene/eventNavigation'
 import { combatPlaceOf } from '../src/state/combatStore'
 import { useViewStore } from '../src/state/viewStore'
+import { useWorkspaceStore } from '../src/state/workspaceStore'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -57,6 +58,16 @@ console.log('\n=== 3. Zooming out of a fight lands where the fight is ===')
   useViewStore.getState().exitCombat({ starId: 'alpha-centauri', bodyName: 'Arcadia' })
   const v = useViewStore.getState()
   check('exiting combat opens that system, framed on the body — not Sol', v.level === 'system' && v.selectedStarId === 'alpha-centauri' && v.selectedBodyName === 'Arcadia' && v.inViewSelection === 'Arcadia')
+}
+
+console.log('\n=== 4. Ctrl/Cmd-click opens a new tab in the background ===')
+{
+  const w = useWorkspaceStore.getState()
+  const before = w.tabs.length
+  w.openInNewTab({ activeNavCategory: 'Technology', activeNavSubcategory: 'Physics' })
+  const after = useWorkspaceStore.getState()
+  check('a tab is added but not switched to', after.tabs.length === before + 1 && after.activeTabId !== after.tabs.at(-1)!.id)
+  check('...holding what was clicked', after.tabs.at(-1)!.view.activeNavCategory === 'Technology' && useViewStore.getState().activeNavCategory !== 'Technology')
 }
 
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILED`}`)

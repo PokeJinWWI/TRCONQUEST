@@ -71,6 +71,10 @@ export type ShipCommand =
   // A Colony Ship founds a colony on `bodyName`, the body it orbits
   // (scene/colonies.ts).
   | { kind: 'colonize'; bodyName: string }
+  // Chase `targetShipId` and open fire on it when they meet, whoever owns it
+  // (scene/aggression.ts): firing on a nation you are not at war with is an
+  // incident, with consequences once the news reaches it.
+  | { kind: 'attack'; targetShipId: string }
 
 export interface PendingShipCommand {
   command: ShipCommand
@@ -305,7 +309,11 @@ export interface ShipInstance {
   founding?: { bodyName: string; sinceSimDays: number } | null
   // Stellaris-style automation (scene/automation.ts): the ship finds its own
   // work. Absent = off; any manual order turns it off.
-  automation?: Automation | null
+  automations?: Automation[]
+  // Auto-refill option: after refilling away from where it was, fly back there.
+  automationReturn?: boolean
+  // Where to return to (set when it leaves to refill, cleared once back).
+  autoHome?: MoveDestination | null
   // A short trailing log of this ship's own order/location/combat state,
   // appended once each time any of those actually changes (see
   // setShipOrder/setShipLocation/applyCombatDamage below) — never read by
@@ -330,6 +338,11 @@ export interface ShipInstance {
   // itself since there's no fixed arrival time to compute up front — the
   // target can keep moving.
   followingShipId: string | null
+  // The follow is an ATTACK on that ship: the two fight when they come to rest
+  // in the same place, at war or not (scene/aggression.attackTargetOf). Only
+  // means anything while it equals followingShipId, so whatever cancels the
+  // follow cancels the attack. Absent = a plain follow.
+  attackTargetShipId?: string | null
   // A merge in progress: this ship is following the lead of the fleet with this
   // id (followingShipId) and joins it once both are resting in the same place
   // (scene/fleetMerge.resolveFleetMerges). Cleared when it joins, or as soon as
@@ -458,7 +471,12 @@ interface ShipState {
   setPendingPatrol: (id: string, pending: ShipInstance['pendingPatrol']) => void
   setSettlers: (id: string, settlers: number) => void
   setFounding: (id: string, founding: ShipInstance['founding']) => void
+  // Exactly this one mode (null: none).
   setAutomation: (id: string, automation: Automation | null) => void
+  // Turns one mode on or off, leaving the others (modes combine).
+  toggleAutomation: (id: string, automation: Automation) => void
+  setAutomationReturn: (id: string, on: boolean) => void
+  setAutoHome: (id: string, home: MoveDestination | null) => void
   setPendingStance: (id: string, pending: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null) => void
   // See ShipInstance.orderQueue / pendingQueueAdds.
   setOrderQueue: (id: string, queue: MoveDestination[]) => void
@@ -470,6 +488,8 @@ interface ShipState {
   // scene's right-click-a-ship handler), so no keepFollowing-style guard is
   // needed here the way setShipOrder/setShipLocation have.
   setFollowing: (id: string, targetShipId: string | null) => void
+  // Follows `targetShipId` to attack it — see ShipInstance.attackTargetShipId.
+  setAttackTarget: (id: string, targetShipId: string) => void
   // Marks (or clears, with null) ships as merging into a fleet — see ShipInstance.mergeIntoFleetId.
   setMergeInto: (ids: string[], fleetId: string | null) => void
   // Bulk-applies one combat step's damage results, keyed by ship id, and
@@ -632,7 +652,7 @@ export const useShipStore = create<ShipState>((set) => ({
                   // (keepFollowing) leave it be.
                   surveyJob: keepFollowing ? ship.surveyJob : null,
                   founding: keepFollowing ? ship.founding : null,
-                  automation: keepFollowing ? ship.automation : null,
+                  automations: keepFollowing ? ship.automations : [],
                 },
                 simDays,
               )
@@ -711,7 +731,7 @@ export const useShipStore = create<ShipState>((set) => ({
                 followingShipId: keepFollowing ? sh.followingShipId : null,
                 surveyJob: keepFollowing ? sh.surveyJob : null,
                 founding: keepFollowing ? sh.founding : null,
-                automation: keepFollowing ? sh.automation : null,
+                automations: keepFollowing ? sh.automations : [],
               },
               simDays,
             )
@@ -733,7 +753,17 @@ export const useShipStore = create<ShipState>((set) => ({
   setPendingPatrol: (id, pending) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingPatrol: pending } : ship)) })),
   setSettlers: (id, settlers) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, settlers } : ship)) })),
   setFounding: (id, founding) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, founding } : ship)) })),
-  setAutomation: (id, automation) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automation } : ship)) })),
+  setAutomation: (id, automation) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automations: automation ? [automation] : [], autoHome: null } : ship)) })),
+  toggleAutomation: (id, automation) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => {
+        if (ship.id !== id) return ship
+        const cur = ship.automations ?? []
+        return { ...ship, automations: cur.includes(automation) ? cur.filter((m) => m !== automation) : [...cur, automation], autoHome: null }
+      }),
+    })),
+  setAutomationReturn: (id, on) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automationReturn: on } : ship)) })),
+  setAutoHome: (id, home) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, autoHome: home } : ship)) })),
   setBombardStance: (id, stance) =>
     set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, bombardStance: stance, pendingBombard: null } : ship)) })),
   setPendingBombard: (id, pending) =>
@@ -756,7 +786,11 @@ export const useShipStore = create<ShipState>((set) => ({
     })),
   setFollowing: (id, targetShipId) =>
     set((s) => ({
-      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, followingShipId: targetShipId } : ship)),
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, followingShipId: targetShipId, attackTargetShipId: null } : ship)),
+    })),
+  setAttackTarget: (id, targetShipId) =>
+    set((s) => ({
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, followingShipId: targetShipId, attackTargetShipId: targetShipId } : ship)),
     })),
   setMergeInto: (ids, fleetId) =>
     set((s) => {

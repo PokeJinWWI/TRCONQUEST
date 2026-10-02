@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { COUNTRIES, getCountry } from '../data/countryData'
 import { STRATEGIC_AI_COUNTRY_IDS, ownerDisplay } from '../data/countryRoster'
-import { TRUCE_DAYS, type DiplomacyEvent, type PeaceTerms, type War } from '../data/diplomacyData'
+import { TRUCE_DAYS, VASSALIZE_SCORE, type DiplomacyEvent, type PeaceTerms, type War } from '../data/diplomacyData'
 import { TOAST_MS, goToEvent, tickToasts, type Toast } from '../scene/eventNavigation'
 import { bindsForeignPolicy, paysTribute, SUBJECT_OFFER_MIN_POWER_RATIO, type SubjectType } from '../data/subjectData'
 import { useDiplomacyStore, relationIn, warBetweenIn } from '../state/diplomacyStore'
@@ -612,6 +612,14 @@ function WarCard({ war, viewerId }: { war: War; viewerId: string }) {
               Demand {iHold.join(', ')} ({Math.ceil(demandCost)})
             </button>
           )}
+          <button
+            type="button"
+            className="detail-view-btn"
+            title={`They become your vassal and the war ends. Costs ${VASSALIZE_SCORE} war score (half if they are exhausted). Not possible against a subject.`}
+            onClick={() => offer({ kind: 'vassalize', subjectType: 'vassal' })}
+          >
+            Demand vassalization ({VASSALIZE_SCORE})
+          </button>
           {reparations > 0 && (
             <button
               type="button"

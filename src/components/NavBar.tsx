@@ -1,4 +1,7 @@
 import { isNewTabClick, isNewTabContextMenu } from '../scene/selectionInput'
+import { LeadersPanel } from './LeadersPanel'
+import { useCustomButtonStore } from '../state/customButtonStore'
+import { useFleetTabStore } from '../state/fleetTabStore'
 import { useWorkspaceStore } from '../state/workspaceStore'
 import { useState } from 'react'
 import { DraggableWindow } from './DraggableWindow'
@@ -27,7 +30,7 @@ import { useViewStore } from '../state/viewStore'
 import { getCountry } from '../data/countryData'
 
 const SANDBOX_CATEGORY = 'Sandbox'
-const MILITARY_CATEGORY = 'Military'
+const MILITARY_CATEGORY = 'Fleet Management'
 const NAVY_SUBCATEGORY = 'Navy'
 const ARMY_SUBCATEGORY = 'Army'
 const ECONOMY_CATEGORY = 'Economy'
@@ -51,7 +54,7 @@ interface CategoryDef {
 
 const CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
-  { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
+  { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Leaders', 'Laws', 'Institutions'] },
   { name: 'Economy', subcategories: ['Overview', 'Budget', 'Finance', 'Construction', 'Trade', 'Stockpiles', 'Welfare'] },
   { name: MARKETS_CATEGORY, subcategories: ['Market', 'Stock Exchange', 'Bond Market', 'Forex'] },
   { name: CENTRAL_BANK_CATEGORY, subcategories: ['Overview', 'Monetary Policy', 'Balance Sheet', 'Commercial Banks', 'Currency'] },
@@ -69,7 +72,7 @@ const CATEGORIES: CategoryDef[] = [
 // rest of the game (government, tech, society, diplomacy, military…) is unchanged.
 const ABSTRACT_CATEGORIES: CategoryDef[] = [
   { name: 'Situations' },
-  { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Laws', 'Institutions'] },
+  { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Leaders', 'Laws', 'Institutions'] },
   { name: 'Economy' },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
   { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
@@ -122,6 +125,7 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   if (category.name === CENTRAL_BANK_CATEGORY) return <CentralBankPanel section={CB_SECTIONS[subcategory ?? 'Overview'] ?? 'overview'} />
   if (category.name === TECHNOLOGY_CATEGORY) return <NationTechPanel subcategory={subcategory} />
   if (category.name === GOVERNMENT_CATEGORY && subcategory === LAWS_SUBCATEGORY) return <LawsPanel />
+  if (category.name === GOVERNMENT_CATEGORY && subcategory === 'Leaders') return <LeadersPanel />
   if (category.name === CORPORATIONS_CATEGORY) return <CorporationsPanel subcategory={subcategory} />
   if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return abstractEconomy ? <SimplisticDemographics /> : <DemographicsPanel />
   if (category.name === CHARACTERS_CATEGORY) return <CharactersPanel subcategory={subcategory} />
@@ -153,6 +157,10 @@ export function NavBar() {
 
   const activeCategory = categories.find((c) => c.name === activeCategoryName) ?? null
 
+  const customButtons = useCustomButtonStore((s) => s.buttons)
+  const pinButton = useCustomButtonStore((s) => s.pin)
+  const removeButton = useCustomButtonStore((s) => s.remove)
+  const fleetTab = useFleetTabStore((s) => s.tab)
   const handleCategoryClick = (category: CategoryDef, e: { ctrlKey: boolean; metaKey: boolean }) => {
     // Ctrl/Cmd-click: open this panel in a new tab instead.
     if (isNewTabClick(e)) {
@@ -192,6 +200,41 @@ export function NavBar() {
                 {category.name}
               </button>
             ))}
+          </div>
+          <div className="nav-custom">
+            <div className="nav-custom-title">Quick buttons</div>
+            {customButtons.map((b) => {
+              const active = activeCategoryName === b.category && activeSubcategory === b.subcategory && (!b.fleetTab || fleetTab === b.fleetTab)
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  className={`nav-category-btn nav-custom-btn${active ? ' active' : ''}`}
+                  title={b.builtin ? `Open ${b.label}` : `Open ${b.label}. Right-click to remove.`}
+                  onClick={(e) => {
+                    if (isNewTabClick(e)) return useWorkspaceStore.getState().openInNewTab({ activeNavCategory: b.category, activeNavSubcategory: b.subcategory })
+                    if (b.fleetTab) useFleetTabStore.getState().setTab(b.fleetTab)
+                    setNavCategory(b.category, b.subcategory)
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    if (!b.builtin) removeButton(b.id)
+                  }}
+                >
+                  {b.label}
+                </button>
+              )
+            })}
+            {activeCategoryName && (
+              <button
+                type="button"
+                className="nav-category-btn nav-custom-pin"
+                title="Add the open panel to these buttons"
+                onClick={() => pinButton(activeCategoryName, activeSubcategory)}
+              >
+                + Pin this panel
+              </button>
+            )}
           </div>
         </div>
         <button

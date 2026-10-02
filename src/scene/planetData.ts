@@ -1,4 +1,5 @@
 import { getSystemStars } from '../data/starData'
+import { generatedRawPlanetsFor } from '../data/galaxyGen'
 
 // Single unified scale: 1 AU = UNITS_PER_AU scene units, applied identically
 // to orbital distances and body radii, so positions and sizes are all
@@ -78,7 +79,7 @@ export interface PlanetData {
   parentStar?: string
 }
 
-interface RawPlanet {
+export interface RawPlanet {
   name: string
   radiusKm: number
   massKg: number
@@ -271,8 +272,19 @@ export const PLANETS_BY_STAR: Record<string, PlanetData[]> = {
   'ross-154': buildPlanets('ross-154', ROSS_154_RAW),
 }
 
+// Planets of a star in another neighbourhood (data/galaxyGen.ts), built on
+// first use. PLANETS_BY_STAR stays the hand-authored systems only.
+const generatedPlanets = new Map<string, PlanetData[]>()
+
 export function getPlanetsForStar(starId: string): PlanetData[] {
-  return PLANETS_BY_STAR[starId] ?? []
+  const authored = PLANETS_BY_STAR[starId]
+  if (authored) return authored
+  let planets = generatedPlanets.get(starId)
+  if (!planets) {
+    planets = buildPlanets(starId, generatedRawPlanetsFor(starId))
+    generatedPlanets.set(starId, planets)
+  }
+  return planets
 }
 
 // Backward-compatible alias — the overwhelming majority of scene/physics

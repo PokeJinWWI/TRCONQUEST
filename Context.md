@@ -1045,3 +1045,92 @@ All built; sweep clean (tsc, 61 tests, build); `src/main.tsx` clean. Live-verifi
 - **Warp When Ready** on by default for new ships ✔. **Automation** (science auto-survey avoiding allied targets; construction auto-build / auto-refill) ✔ science live, construction headless.
 - Visible reasons added: shipyard, colonize, landing, survey, district level buttons. Not a full audit of every disabled control.
 - Parked (don't build yet): pre-Free-Flight orbit-locked combat.
+
+## Follow-ups (2026-09-28, later)
+- Cmd/Ctrl-click opens the new tab in the BACKGROUND (user: don't bring it up unless they do); tab strip not forced open. Nav "Military" renamed "Fleet Management" (`NavBar.MILITARY_CATEGORY`, `ShipyardBadge`).
+- Automation modes: cargo `refill` (+ "Return afterwards" option: `automationReturn`/`autoHome`) and `distribute`; construction `receive` (stays put, Cargo Ships bring goods; one hauler per receiver) and auto-build tops up at a world; colony `settle`. Planet panel (unowned surveyed world, Simple mode): Colonize (sends a Colony Ship, shows why not) + "Let ships choose" (all idle Colony Ships → auto-settle).
+- Star-vs-ship click fix: ship icon invisible margin 7px→2px, inline icons none, star dot gets a 4px larger click target (`App.css`). NOT verified live (hit-testing); tell me if it still happens.
+
+## List #3 (2026-09-29) — done
+Quick buttons in nav (Shipyard default, pin/remove); interstellar star panel compact like the system one ("Detailed View"); combinable automation modes; outliner Fleet tab + filters above In View; colonize chooser + cancel-auto + planet-panel Colonize with "influence" units; Starbase costs 50 influence (AI waits for it); Tab/C cycling; tech researched notification; per-tree research queue with ETAs; window layering shared with Map Modes popup; same-empire borders joined; deconstruction orders, click-to-stop tiles, multi-build picker; workers/jobs order; Industry tab go-to links; fleets move/land as one marker; vassalization peace term. Live-verified: tabs/quick button/Tab cycling/planet Colonize/Map Modes layering. NOT live-verified: border joining (needs a same-empire pair), deconstruction UI, ETA text, fleet marker grouping (tests only).
+
+## Fixes round (2026-09-30)
+1. Shipyard: the Slips subtab is now last (the request said "Ships"; there is no such subtab, so I moved Slips — default tab unchanged).
+2. Deconstruction is a `Teardown` with its own reverse bar (see CLAUDE.md); district levels can be deconstructed too (`− Level`). Live-verified: building teardown 100%→50%→removed, stop bar + cancel, refusal text for districts. District success path is tested headless only.
+3. DraggableWindow: root causes found live — (a) the height `ResizeObserver` re-compensated `pos` AFTER pointerup for a size change the resize had already compensated (top edge jumped to the HUD bar, 122→60 px in the repro); (b) resize clamped height to innerHeight-32 while the CSS max-height is smaller, so the pos correction drifted; (c) anchor-right windows grew the wrong way; (d) only right/bottom/corner handles existed, unreachable on a right-docked window. Fixed: observer skips explicitly-sized windows, clamps match CSS, 8 handles, handles stopPropagation, drag/resize mutually exclusive, pointercancel/lostcapture clear state. Live: each edge/corner keeps the opposite edge fixed, title-bar drag and maximize/restore intact. Manual resize can't pass the CSS 100vw-32 width (maximize button does edge to edge).
+
+# Project Context — handoff #5 (2026-09-30, after /newchat)
+
+(`Context.md` == `CONTEXT.md` on this case-insensitive FS: append only. `CLAUDE.md` is the authoritative rules/architecture reference and is current for everything below.)
+
+## Objective
+Make the early game a working loop in SIMPLE economy mode (economy → research → build → explore/survey → expand/colonize → war → invade → peace). Mechanics, not balance. No onboarding, no Complex-mode work (`src/economy/*` is the user's own code).
+
+## Current State
+All built; last full sweep clean (tsc, 65+ tests, build) except `tests/ground.test.ts` flaked once in a slow full run and passes alone (14 s) — suspected timing, not investigated. Nothing committed (user commits). `src/main.tsx` clean. Done since handoff #4 (details in earlier Context.md sections + CLAUDE.md):
+- Moons are real destinations; colony shortcut removed.
+- Survey job flies the Science Ship body to body (15 d/body); ANY ship entering a system explores it; planet class/size/habitability hidden until surveyed.
+- Colonies need an own finished Starbase in the system, 60-day founding in orbit; Starbase costs 50 influence; colonize from planet panel / ship chooser / auto-settle.
+- Tech tree: one `ALL_TECHS` list split by category (theory Physics, hardware Engineering, life Society), Warp Drives tech, "All" tree view, per-tree research queue with ETAs, tech-researched notification.
+- Combinable ship automation modes (survey, settle, distribute, build, refill(+return), receive).
+- UI: notifications (pause-aware, click-to-go, right-click dismiss), docked/full-screen panel opening, Ctrl/Cmd-click → background tab, Outliner tabs Territory/Fleet/Info, shipyard subtabs (Slips last), quick nav buttons (Shipyard default + pin), Tab/C cycling, Map Modes layering via `state/layering.ts`, same-empire border joining, fleets draw/land as one.
+- Deconstruction is a `Teardown` (own reverse-progress bar, no CP/queue/slot) for buildings and district levels; click-to-stop tiles; 1/3/5/fill multi-build.
+- `DraggableWindow` resize rewritten (8 handles, opposite edge fixed; root cause was a post-pointerup ResizeObserver re-shift + clamp mismatch).
+- Vassalization peace term (70 war score, ends war, makes loser a subject); no casus belli system.
+- Latest: Government > Leaders subtab (`components/LeadersPanel.tsx`, data-driven `LEADER_CATEGORIES`: Governors, Envoys, Spies, Fleet Commanders, Scientists) — all honest "Not yet available" (existing Character data is corp leaders only).
+
+## Decisions
+- User-confirmed: Warp Comms at start in both modes; colony tuning (cost 20+10×size+5×ly influence, 100 start +2/mo, 20M settlers, 90 patrol days) fine for now; moons real destinations; vassalization = peace term only.
+- My calls (unconfirmed): Tab cycles fleets, C cycles colonies; Cmd/Ctrl-click opens tab in background (user said "don't bring up the tab unless I do"); "Ships" shipyard subtab request interpreted as moving "Slips" last; "allied" for automation = own ships (+sandbox friendly faction) since no alliances exist; AI does not use vassalization.
+
+## Constraints
+- Never commit unless asked. Standard sweep after any change: `npx tsc -b`, every `tests/*.test.ts` via `npx tsx`, `npm run build` (full sweep can take 3–10 min; run in background).
+- Simple changes must not touch Complex mode. Follow CLAUDE.md performance rules; hooks never after an early return (`tests/arenaContact.test.ts` scans).
+- Store-probe on `window` from `main.tsx` for live checks, ALWAYS revert. Browser pane goes 0×0 when hidden: take a screenshot to wake it; game clock doesn't advance there (step `simDays`/`advance(1)` via the store). Vite HMR: reload after scene edits. macOS: `sed -i ''`, no `timeout`, python heredocs.
+- No invented mechanics; report unverified items honestly.
+
+## Important Details
+- Key files: `scene/automation.ts`, `scene/colonies.ts`, `scene/surveyLogic.ts`+`hooks/useSurveyResolver.ts`, `data/techData.ts`, `state/techStore.ts`, `economy-abstract/abstractEconomy.ts` (queue, teardowns), `components/planet/SimplePlanetTabs.tsx`, `components/DraggableWindow.tsx`, `components/NavBar.tsx`, `components/Outliner.tsx`, `scene/eventNavigation.ts`, `scene/cycling.ts`.
+- Unverified live: border joining (needs a same-empire pair), research ETA text, fleet-as-one marker, district teardown success path, construction-ship automation (tests only).
+
+## Open Questions
+- Confirm the unconfirmed calls above; which "Ships" tab was meant in the shipyard.
+- Colonies v2 (shared planets by region, `docs/colonies-design.md`); Starbase payoff beyond borders; whether perf fixes helped in real play.
+- Should the AI use vassalization / should wars get goals (casus belli)?
+
+## Next Steps
+1. Confirm open calls; playtest a full war as the player (reparations/vassalization peace, AI offers, recruiting at a new colony).
+2. Pick next gap with the user (user says they will specify fixes themselves).
+3. Parked, don't build yet: pre-Free-Flight ships fight while locked in orbit.
+
+## User Preferences
+- Mechanics over balance; short mid-task corrections are authoritative; plain-language UI text with units; reasons shown for "can't do".
+- Ask (AskUserQuestion) before big commitments, plan mode for big features; live-verify UI; a test per mechanic; AI obeys the same rules as the player; honest "not verified".
+
+## Addendum (2026-09-30): Attack any ship
+Built per the approved plan (see the CLAUDE.md "Attack any ship" note for the architecture). User decisions: consequence = skirmish with the aggressor as attacker; opinion = the war declaration's -60; the attack breaks treaties and the truce; AI = surprise first strike only when the Strategist would already declare war AND has a local edge.
+- New: `scene/aggression.ts`, `scene/aggressionOrders.ts`, `scene/ShipOrderMenu.tsx`, `tests/aggression.test.ts` (60 checks).
+- Edited: shipStore (command kind, `attackTargetShipId`, `setAttackTarget`), shipCommands, combatResolution (`NationContext.hostileAt` only), useCombatResolver, useCommsResolver, diplomacyStore/diplomacyData (`Incident`, `ship-attacked`, `ignoreTruce`), peace.ts, the three strategic scenes, ShipPanel ("Attacking" label), ai/types, strategist, executor, blackboard, snapshot.
+- Verified live: the Move/Attack menu, the warning dialog, confirm -> order -> fight -> skirmish + opinion + notifications, and no dialog for a hostile target (system view). Not verified live: interstellar and satellite views (same hook), a long news delay (headless only), the AI strike in a real campaign.
+- Known limits: pre-news hostility is per place and per nation side; overlord/subject pairs get no special handling; Move still is the un-delayed follow while Attack is a delayed signal.
+
+## Addendum (2026-10-01): the wider galaxy, 20 data-only empires, jump risk
+Built per the approved plan (architecture in the CLAUDE.md "The wider galaxy" note). User decisions: all 320 other clusters populated; a separate data layer served through the existing lookups and viewable; no pre-built hyperlane network (lanes stay charted by jumps); jump risk rises with distance AND destination mass (heavier = riskier), live for star jumps.
+- New: `data/galaxyGen.ts`, `data/generatedEmpires.ts`, `data/loreEmpires.ts` (empty list), `scene/jumpRisk.ts`, `tests/galaxyGen.test.ts`, `tests/jumpRisk.test.ts`.
+- Edited: starData (`findStar`, lookups fall through), planetData (`getPlanetsForStar`), asteroidBeltData, neighborhoodData (`hasInterstellarData` true everywhere), shipData (JUMP_RISK_*), shipPhysics (`riskFactor`, `hyperdriveJumpRiskFactor`, `hyperdriveJumpChance`), InterstellarScene (`home` gating, star hover risk), ShipPanel (Jump Risk tooltip), LocationLabel, techStore (export `DEFAULT_RESEARCHED`).
+- Numbers: 2,895 stars, 7,075 planets; the 20 empires sit in 19 clusters. Sol to Sirius 70% uncharted, Sol to Barnard's Star 30%.
+- Verified live: Enter Neighborhood on a generated cluster (12 stars, no Sol ships), back home (ships return), a force-entered generated system (star, planets, belt, name), the Jump Risk tooltip and the per-star hover risk. Not verified live: a generated planet's panel (bodies are not in `bodyIndex`), the star right-click menu's risk line (needs a science/construction ship), an actual jump roll.
+- Calls of mine: "political power/influence" is one `influence` number; empire names come from a made-up root list; the Jump Risk row still shows the average 50% / 10%.
+
+## Addendum (2026-10-01): the 20 empires run the full Complex economy, off the main thread
+Built per the approved plan, with one change that the measurements forced (below). User decisions: derive each empire's worlds from its planets using the existing seeding machinery; Complex mode only.
+- **Measured (headless, `scripts/economy/benchmark.ts`, warm, 48 months):** 4 nations 14.6 ms/month median (p95 ~19-24); 4 + 20 empires 106-112 ms median (p95 132-150, max 150-162); the 20 empires alone resident 87-93 ms; state 302 KB vs 2,116 KB; `structuredClone` in/out 2.7/3.1 ms vs 18.8/23.9 ms. The throwaway numbers in the plan (92 ms / 515 ms) were about 5x too high (cause unknown, probably how that script was run); the benchmark script supersedes them. In the browser pane the same tick took 14.6 ms (4 nations) and 92.4 ms (24) on the main thread.
+- **Budget:** a tick must not block the main thread more than 8 ms; it must finish within the 5 s between ticks at STRAT. Today's 4-nation tick (14.6 ms) already broke the first; 24 broke it by 11x.
+- **Why not just a worker:** posting 24 nations' state costs ~19 ms + ~24 ms on the main thread, still over budget. Since the empires and the nations are exactly independent (proven both ways), the empires live RESIDENT in the worker and only summaries (~20 KB) come back; the nations' request is ~6 ms of cloning. No fidelity lost. After, in the browser: `advance()` call 1.0 ms median / 4.8 ms max, 12 months with 24 nations running, longest main-thread gap 17.6 ms vs 25.7 ms idle baseline (the page's own render jitter), so the economy is not measurable above it.
+- **New:** `economy/economyStep.ts`, `economyWorker.ts`, `empireSim.ts`, `empireSeed.ts`, `empireCalibration.ts` (generated), `state/economyEngine.ts`, `scripts/economy/{benchmark,stability}.ts`, `tests/economyEngine.test.ts`, `tests/economyEmpires.test.ts`. **Edited:** `economyStore` (advance = request/queue/replay; `empireSummaries`...), `economySeed` (`SeedContext`, `seedNationWorlds`; hash-identical for the four nations), `economyTick`/`internationalTrade`/`foreignInvestmentAI`/`countryAI` (optional `canTrade` reach gate, applied to goods, capital and where companies build), `calibrate.ts --empires`, `gameSetup` (Complex starts the empires), `gameReset` (`cancelEconomyFlight`).
+- **Found on the way:** empire companies were building factories on Orion's world (corporation AI picks any open host); gated by reach. A copied central bank kept its template's `countryId` (empires ran under another nation's bank id); fixed.
+- **Not verified live:** the Complex-mode panels with the empires present (nothing shows empires yet, by design), a worker crash in the browser (headless only: stubbed rejection), and the main-thread cost of RECEIVING the nations' 300 KB answer separately from page jitter (estimated ~3 ms by `structuredClone`).
+- **Open:** 8 of 20 empires break at least one of the four nations' stability bounds over five years (prices 6, collapse 2, jobs 2); calibration did not beat the plain seed by much. Tuning, not mechanics. Empire tech and influence-driven politics do not feed the economy beyond influence -> treasury.
+
+## Addendum (2026-10-01): Observer mode
+Debug Console cheat (view override, see CLAUDE.md note). Hyperlanes: user chose charted lanes only (no derived network). Verified live: borders/name label and panel appear on/off in a generated cluster, claim rings in the galaxy view. Not verified live: lanes drawn by the LineSegments layer (none charted in the check), empire economy figures in the panel (Complex mode), the production build's gating (sandbox).

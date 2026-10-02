@@ -1,12 +1,10 @@
 // Stellar neighborhoods — the galaxy-view equivalent of starData's stars.
 // Just as INTERSTELLAR represents a whole star system as a single point (its
 // star), GALACTIC represents a whole neighborhood (a cluster of many star
-// systems) as a single point. Only one neighborhood has real interior data
-// today — our own, the same 8-star cluster starData.ts already models — so
-// `hasInterstellarData` mirrors StarData's `hasSystemData`: false just means
-// "not charted yet," the same honest incomplete-state the rest of this
-// project already uses rather than faking data for hundreds of neighborhoods
-// nothing populates yet.
+// systems) as a single point. Our own neighborhood is the hand-authored 8-star
+// cluster in starData.ts; every other one's stars are generated from a seed
+// (data/galaxyGen.ts). `hasInterstellarData` mirrors StarData's
+// `hasSystemData` (false = "not charted yet"); every neighborhood has it now.
 //
 // Positions are procedural — no real catalog of "stellar neighborhoods"
 // exists to draw from (unlike starData's real nearest-star catalog) — laid
@@ -93,7 +91,7 @@ function generateNeighborhoods(count: number, seed: number): NeighborhoodData[] 
       name: neighborhoodName(rng, usedNames),
       color: '#ffdca0',
       position: [x, y, z],
-      hasInterstellarData: false,
+      hasInterstellarData: true,
     })
   }
 
@@ -115,7 +113,7 @@ function generateNeighborhoods(count: number, seed: number): NeighborhoodData[] 
       name: neighborhoodName(rng, usedNames),
       color: ARM_COLORS[arm],
       position: [x, y, z],
-      hasInterstellarData: false,
+      hasInterstellarData: true,
     })
   }
 

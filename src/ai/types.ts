@@ -11,6 +11,9 @@ export type Intent =
   | { kind: 'declare-war'; targetId: string }
   | { kind: 'propose-peace'; warId: string; terms: PeaceTerms }
   | { kind: 'adjust-opinion'; otherId: string; delta: number }
+  // An unprovoked first strike: these warships attack a ship of a nation this
+  // empire is not at war with (scene/aggression.ts). The news starts the war.
+  | { kind: 'attack-ship'; shipIds: string[]; targetShipId: string }
   | { kind: 'build-ship'; classId: string }
   // A Construction Ship builds a Starbase at the star it rests at, paid from
   // its hold; `starId` is only what the planner meant (for traces).

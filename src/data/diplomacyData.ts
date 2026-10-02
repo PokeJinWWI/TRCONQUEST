@@ -66,6 +66,8 @@ export type DiplomacyEventKind =
   | 'colony-founded'
   | 'colony-promoted'
   | 'colony-abandoned'
+  | 'tech-researched'
+  | 'ship-attacked'
 
 export interface DiplomacyEvent {
   id: string
@@ -79,9 +81,29 @@ export interface DiplomacyEvent {
   place?: EventPlace
 }
 
+// A ship fired on a nation it was not at war with (scene/aggression.ts). The
+// fight is local; the victim's nation reacts only when the news arrives.
+export interface Incident {
+  id: string
+  aggressorId: string
+  victimId: string
+  // Combat location key of the fight (combatLocationKey).
+  locationKey: string
+  place: EventPlace
+  startedSimDays: number
+  // When the news reaches the victim's nearest territory, at the victim's own
+  // comms tier. Null = it never does (the victim holds no territory).
+  newsArrivesSimDays: number | null
+  // The one hook for future espionage: news of this incident never gets out.
+  // Nothing in the game sets it yet.
+  commsSabotaged?: boolean
+}
+
 export interface EventPlace {
   bodyName?: string
   starId?: string
+  // A nav panel to open (a researched tech opens its Technology tab).
+  nav?: { category: string; subcategory: string }
 }
 
 // How long both sides must wait after a peace before either may declare war
@@ -144,6 +166,10 @@ export const CEDE_EXHAUSTION = 80
 // Reparations: a share of the loser's stockpile, one war score per percent
 // (halved past CEDE_EXHAUSTION, like a cession), never more than this share.
 export const REPARATIONS_MAX_SHARE = 0.5
+// Vassalization: the loser becomes the winner's subject and the war ends. It
+// costs this much war score (halved past CEDE_EXHAUSTION): more than most
+// cessions, since it takes the whole nation's independence.
+export const VASSALIZE_SCORE = 70
 
 // --- Conflict tiers ----------------------------------------------------------
 // A skirmish with no hostile engagement for this many sim-days lapses back to

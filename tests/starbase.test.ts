@@ -35,6 +35,7 @@ const VENUS = 'republic-of-venus'
 function reset() {
   useStarbaseStore.setState({ starbases: [] })
   useResourceStore.setState({ byCountry: {} })
+  useResourceStore.getState().setAmount(MARS, 'influence', 500)
   useTechStore.setState({ byCountry: {} })
   useShipStore.setState({ ships: [] })
   useSurveyStore.setState({ discovered: {}, known: {}, reports: [] })

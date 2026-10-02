@@ -5,6 +5,7 @@ import { useGroundViewStore } from '../state/groundViewStore'
 import { useMenuStore } from '../state/menuStore'
 import { usePlayerStore } from '../state/playerStore'
 import { installQueueModifier } from '../scene/queueModifier'
+import { cycleColonies, cycleFleets } from '../scene/cycling'
 
 // Whether a key press is going into a text field (a search box, a tab rename,
 // a number input) — those keep their keys.
@@ -51,6 +52,14 @@ export function useKeyboardControls() {
       if (e.key === 'Escape') {
         e.preventDefault()
         handleEscape()
+      } else if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Tab / Shift+Tab: next / previous fleet of yours.
+        e.preventDefault()
+        cycleFleets(e.shiftKey ? -1 : 1)
+      } else if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // C / Shift+C: next / previous colony of yours.
+        e.preventDefault()
+        cycleColonies(e.shiftKey ? -1 : 1)
       } else if (e.code === 'Space' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // Also stops Space "clicking" whichever button was clicked last.
         e.preventDefault()

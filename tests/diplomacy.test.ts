@@ -12,6 +12,7 @@ import { useEconomyStore, worldByName } from '../src/state/economyStore'
 import { seedBodyOwners, isOccupied } from '../src/scene/territory'
 import { affordableReparations, battleScore, cessionCost, evaluatePeace, occupiedShare, scoreFor, warExhaustion, warScore } from '../src/scene/warScore'
 import { useResourceStore } from '../src/state/resourceStore'
+import { useSubjectStore } from '../src/state/subjectStore'
 import { REPARATIONS_MAX_SHARE } from '../src/data/diplomacyData'
 import { declareWarOn, escalateConflict, liveBodyValue, makePeace, proposePeace, recordLoss } from '../src/scene/peace'
 import { SKIRMISH_LAPSE_DAYS } from '../src/data/diplomacyData'
@@ -246,6 +247,41 @@ console.log('\n=== 9. Reparations: what a win buys when there is no world to tak
   check('...Venus hands over that share of every good', after.stateFor(VENUS).amounts.alloys === 1000 - Math.floor(1000 * share) && after.stateFor(VENUS).amounts.energy === 500 - Math.floor(500 * share))
   check('...and Mars gets it', after.stateFor(MARS).amounts.alloys === Math.floor(1000 * share) && after.stateFor(MARS).amounts.energy === marsEnergy + Math.floor(500 * share))
   check('...which the log records', useDiplomacyStore.getState().events.some((e) => e.kind === 'peace-signed' && /reparations/.test(e.text)))
+}
+
+console.log('\n=== 10. Vassalization: ends the war and makes the loser a subject ===')
+{
+  fresh()
+  useSubjectStore.getState().reset()
+  declareWarOn(MARS, VENUS, 0, 'limited')
+  const w0 = war(MARS, VENUS)
+  const owners = useTerritoryStore.getState().bodyOwner
+  const weak = evaluatePeace(w0, MARS, { kind: 'vassalize', subjectType: 'vassal' }, owners, {}, liveBodyValue, 10)
+  check('without the war score it is refused, saying what it takes', !weak.accept && /Needs war score 70/.test(weak.reason), weak.reason)
+  // Mars wins the battles and occupies every Venusian world.
+  useDiplomacyStore.setState((s) => ({ wars: s.wars.map((w) => ({ ...w, battleBalance: 1e9 })) }))
+  for (const b of Object.keys(owners).filter((x) => owners[x] === VENUS)) useTerritoryStore.getState().occupyBody(b, MARS)
+  const w = war(MARS, VENUS)
+  const controllers = useTerritoryStore.getState().bodyController
+  check('a decisive winner is obeyed', evaluatePeace(w, MARS, { kind: 'vassalize', subjectType: 'vassal' }, owners, controllers, liveBodyValue, 10).accept)
+  check('the loser cannot demand it', !evaluatePeace(w, VENUS, { kind: 'vassalize', subjectType: 'vassal' }, owners, controllers, liveBodyValue, 10).accept)
+  const noOcc = evaluatePeace({ ...w0, battleBalance: 1e9, exhaustion: { [VENUS]: 1e9 } }, MARS, { kind: 'vassalize', subjectType: 'vassal' }, owners, {}, liveBodyValue, 10)
+  check('an exhausted loser asks half the score (35)', !noOcc.accept && /Needs war score 35/.test(noOcc.reason), noOcc.reason)
+  const verdict = proposePeace(w.id, MARS, { kind: 'vassalize', subjectType: 'vassal' }, 10)
+  check('signing it ends the war', verdict.accept && !atWar(MARS, VENUS))
+  const sub = useSubjectStore.getState().subjections.find((x) => x.subjectId === VENUS)
+  check('...and Venus is Mars\'s vassal', sub?.suzerainId === MARS && sub.type === 'vassal')
+  check('...which the log records', useDiplomacyStore.getState().events.some((e) => e.kind === 'peace-signed' && /submitted/.test(e.text)))
+
+  // A subject can't be vassalized again, and a subject can't take one.
+  fresh()
+  useSubjectStore.getState().reset()
+  useSubjectStore.getState().establishSubject(ORION, VENUS, 'vassal', 0)
+  declareWarOn(MARS, VENUS, 0, 'limited')
+  useDiplomacyStore.setState((s) => ({ wars: s.wars.map((x) => ({ ...x, battleBalance: 1e9 })) }))
+  for (const b of Object.keys(useTerritoryStore.getState().bodyOwner).filter((x) => useTerritoryStore.getState().bodyOwner[x] === VENUS)) useTerritoryStore.getState().occupyBody(b, MARS)
+  const again = proposePeace(war(MARS, VENUS).id, MARS, { kind: 'vassalize', subjectType: 'vassal' }, 10)
+  check('an existing subject cannot be vassalized', !again.accept && /already a subject/.test(again.reason), again.reason)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

@@ -1,10 +1,13 @@
 import { create } from 'zustand'
-import { atWar } from './diplomacyStore'
+import { useDiplomacyStore } from './diplomacyStore'
+import { advanceEmpiresInline, onEmpireUpdate, runOffThread, startEmpires, stopEmpires } from './economyEngine'
+import type { EmpireSummary, EmpireUpdate } from '../economy/empireSim'
+import { HISTORY_LENGTH, MAX_CATCH_UP_TICKS, runEconomySteps, unemploymentOf, type EconomyStepInput, type EconomyStepOutput, type FiscalSample } from '../economy/economyStep'
 import { districtOrder, freeLandOfWorld } from '../economy/districts'
 import type { DistrictType } from '../economy/recipes'
 import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies, seedBanks } from '../economy/economySeed'
-import { tickEconomy, sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
+import { sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
 import {
   defaultCentralBank,
@@ -23,7 +26,7 @@ import {
 } from '../economy/centralBank'
 import { convertBetween } from '../economy/fx'
 import { RECIPES, constructionWork } from '../economy/recipes'
-import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, MonetaryAggregates, World, WorldReport } from '../economy/economyTypes'
+import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
 import type { GoodId } from '../economy/goods'
 import { hasInvestmentRights } from './treatyStore'
 
@@ -220,38 +223,6 @@ function syncCorporateHqs(worlds: World[], corporations: Corporation[]): World[]
   return next
 }
 
-// One sampled point of a country's headline fiscal metrics, appended each tick
-// — the series the finance graphs plot.
-export interface FiscalSample {
-  gdp: number
-  priceLevel: number
-  inflation: number
-  revenue: number
-  expenditure: number
-  debtToGdp: number
-  treasury: number
-  // More headline series for the Economy Overview and Central Bank graphs.
-  // Optional so older samples (and anything building one by hand) still fit.
-  balance?: number
-  debt?: number
-  population?: number // millions — for GDP per capita
-  unemployment?: number // share of the labour force without a job, across the country's worlds
-  policyRate?: number
-  realRate?: number
-  inflationExpectation?: number
-  outputGap?: number
-  baseMoney?: number
-  broadMoney?: number
-  loans?: number
-  deposits?: number
-  exchangeRate?: number
-  pegTarget?: number
-  fxReserves?: number
-  credibility?: number
-}
-
-const HISTORY_LENGTH = 104
-const MAX_CATCH_UP_TICKS = 40
 // Fraction of a level's build cost recovered when a building is torn down a
 // level (or demolished). Demolition is quick but you don't get it all back.
 const DOWNGRADE_SALVAGE = 0.3
@@ -273,7 +244,17 @@ interface EconomyStore {
   centralBankEvents: import('../economy/economyTypes').CentralBankEvent[]
   // Per-country fiscal history, oldest first.
   history: Record<string, FiscalSample[]>
+  // The 20 generated empires (economy/empireSim.ts) as the main thread knows them:
+  // their headline numbers as of the last month and a fiscal history. The empires'
+  // economies themselves live inside the worker and are never held here.
+  empireSummaries: Record<string, EmpireSummary>
+  empireHistory: Record<string, FiscalSample[]>
+  // Months the empire simulation has run.
+  empireTick: number
   advance: (ticks: number) => void
+  // Starts the 20 generated empires' economies running alongside this game
+  // (Complex mode; economy/empireSim.ts). A no-op once they are.
+  seedEmpires: () => void
   setTaxRate: (countryId: string, rate: number) => void
   setWelfare: (countryId: string, perCapita: number) => void
   // Transfers a whole world to a new owning country — its pops, buildings and
@@ -422,113 +403,77 @@ interface EconomyStore {
 
 let constructionCounter = 0
 
-// Unemployment across a country's worlds: 1 − employed / labour force. The
-// labour force is the working classes plus the subsistence class's formal
-// jobholders; subsistence people without a formal job are the informal sector
-// (self-provision, the grey economy), not unemployed — counting them read as
-// 60% unemployment on worlds whose working classes were nearly all in work.
-// Investors hold no jobs and aren't in it.
-export function unemploymentOf(countryId: string, worlds: World[], worldReports: Record<string, WorldReport>): number {
-  let force = 0
-  let employed = 0
-  for (const w of worlds) {
-    if (w.ownerId !== countryId) continue
-    const labor = worldReports[w.id]?.labor
-    if (!labor) continue
-    for (const [cls, l] of Object.entries(labor)) {
-      if (cls === 'investor') continue
-      const inWork = l.workers * l.employmentRate
-      force += cls === 'subsistence' ? inWork : l.workers
-      employed += inWork
-    }
-  }
-  return force > 0 ? Math.max(0, 1 - employed / force) : 0
+// The advance in flight (see EconomyStore.advance): whether one is running, the
+// store updates made while it ran (replayed on its result), the months waiting
+// behind it, and an epoch bumped when the game is reset so a late answer from the
+// old game is dropped.
+const flight = { active: false, log: [] as Parameters<typeof useEconomyStore.setState>[0][], pending: 0, epoch: 0 }
+
+// Whether the generated empires' simulation is running beside this game (it lives
+// in the worker: economy/empireSim.ts).
+let empiresOn = false
+
+// Quitting to the menu: whatever is in flight belongs to the old game.
+export function cancelEconomyFlight(): void {
+  flight.active = false
+  flight.log = []
+  flight.pending = 0
+  flight.epoch += 1
+  if (empiresOn) stopEmpires()
+  empiresOn = false
 }
 
-function sampleOf(f: CountryFiscal, country?: Country, money?: MonetaryAggregates, unemployment?: number): FiscalSample {
-  const cb = country?.centralBank
+// Whether the economy is working out a month right now (for tests and the UI).
+export function economyBusy(): boolean {
+  return flight.active
+}
+
+// The request for one advance, from the store's current state and the wars now.
+function stepInputOf(state: Pick<EconomyStore, 'countries' | 'worlds' | 'corporations' | 'banks' | 'tick'>, steps: number): EconomyStepInput {
+  const localPlayer = usePlayerStore.getState().selectedCountryId
+  const wars: string[] = []
+  for (const [key, relation] of Object.entries(useDiplomacyStore.getState().relations)) if (relation.status === 'war') wars.push(key)
   return {
-    gdp: f.gdp,
-    priceLevel: f.priceLevel,
-    inflation: f.inflation,
-    revenue: f.revenue,
-    expenditure: f.expenditure,
-    debtToGdp: f.debtToGdp,
-    treasury: f.treasury,
-    balance: f.balance,
-    debt: f.debt,
-    population: f.population,
-    unemployment,
-    policyRate: f.policyRate,
-    realRate: f.realRate,
-    inflationExpectation: f.inflationExpectation,
-    outputGap: f.outputGap,
-    baseMoney: money?.baseMoney,
-    broadMoney: money?.broadMoney,
-    loans: money?.loans,
-    deposits: money?.deposits,
-    exchangeRate: country?.currency?.rate,
-    pegTarget: cb && cb.exchangeRegime !== 'float' ? country?.currency?.target : undefined,
-    fxReserves: cb?.fxReserves,
-    credibility: cb?.credibility,
+    countries: state.countries,
+    worlds: state.worlds,
+    corporations: state.corporations,
+    banks: state.banks,
+    startTick: state.tick,
+    steps,
+    // Nations NOT controlled by a human player are run by the country AI (see
+    // countryAI.ts). Multiplayer-ready: this local store knows only its own player.
+    humanCountryIds: localPlayer ? [localPlayer] : [],
+    warPairs: wars,
   }
 }
 
-export const useEconomyStore = create<EconomyStore>((set) => ({
-  countries: seedCountries(),
-  worlds: seedWorlds(),
-  corporations: seedCorporations(),
-  characters: seedCharacters(),
-  families: seedFamilies(),
-  banks: seedBanks(),
-  tick: 0,
-  worldReports: {},
-  countryReports: {},
-  moneyReports: {},
-  centralBankEvents: [],
-  history: {},
-  advance: (ticks) =>
-    set((state) => {
-      const steps = Math.max(0, Math.min(MAX_CATCH_UP_TICKS, Math.floor(ticks)))
-      if (steps === 0) return state
-      let countries = state.countries
-      let worlds = state.worlds
-      let corporations = state.corporations
-      let banks = state.banks
-      let worldReports = state.worldReports
-      let countryReports = state.countryReports
-      let moneyReports = state.moneyReports
-      let cbEvents = state.centralBankEvents
+export { unemploymentOf }
+export type { FiscalSample }
+
+export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
+  // Every store action goes through this `set`: while a tick is in flight it also
+  // logs the update, to replay it on the tick's result.
+  const set = ((partial: unknown, replace?: boolean) => {
+    rawSet(partial as never, replace as never)
+    if (flight.active) flight.log.push(partial as Parameters<typeof rawSet>[0])
+  }) as typeof rawSet
+
+  // The advance's result lands: tick, reports and history, plus the yearly
+  // foreign-bond offers.
+  const commit = (out: EconomyStepOutput) =>
+    rawSet((state) => {
       const history: Record<string, FiscalSample[]> = { ...state.history }
-      // Nations NOT controlled by a human player are run by the country AI (see
-      // countryAI.ts). This is multiplayer-ready: humanCountryIds is a set, so a
-      // networked game can exclude every connected player's nation. This local
-      // store knows only its own player, so it contributes that one id; the
-      // authoritative sim would supply the full roster.
-      const localPlayer = usePlayerStore.getState().selectedCountryId
-      const humanCountryIds = localPlayer ? [localPlayer] : []
-      for (let i = 0; i < steps; i++) {
-        const res = tickEconomy(countries, worlds, corporations, { humanCountryIds, tick: state.tick + i + 1, enableAI: true, atWar }, banks)
-        countries = res.countries
-        worlds = res.worlds
-        corporations = res.corporations
-        banks = res.banks
-        worldReports = res.reports.worlds
-        countryReports = res.reports.countries
-        moneyReports = res.reports.money
-        if (res.reports.events.length > 0) cbEvents = [...cbEvents, ...res.reports.events].slice(-60)
-        for (const c of countries) {
-          const series = history[c.id] ? [...history[c.id]] : []
-          series.push(sampleOf(countryReports[c.id], c, moneyReports[c.id], unemploymentOf(c.id, worlds, worldReports)))
-          if (series.length > HISTORY_LENGTH) series.splice(0, series.length - HISTORY_LENGTH)
-          history[c.id] = series
-        }
+      for (const [id, samples] of Object.entries(out.samples)) {
+        const series = [...(history[id] ?? []), ...samples]
+        if (series.length > HISTORY_LENGTH) series.splice(0, series.length - HISTORY_LENGTH)
+        history[id] = series
       }
+      const cbEvents = out.events.length > 0 ? [...state.centralBankEvents, ...out.events].slice(-60) : state.centralBankEvents
+      let countries = out.countries
       // Foreign bond demand: every so often, foreign investors offer to buy a
       // country's debt. Under the approval setting the offer waits for the
       // player; otherwise it is taken up automatically (open markets).
-      const newTick = state.tick + steps
-      if (Math.floor(newTick / 12) > Math.floor(state.tick / 12)) {
+      if (Math.floor(out.tick / 12) > Math.floor(state.tick / 12)) {
         countries = countries.map((c) => {
           if (c.foreignBondPolicy === 'closed') return c
           const totalDebt = c.bonds.pops + c.bonds.corporations + c.bonds.foreign
@@ -541,8 +486,103 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
           return { ...c, bonds: { ...c.bonds, foreign: c.bonds.foreign + amount }, treasury: c.treasury + amount }
         })
       }
-      return { countries, worlds, corporations, banks, worldReports, countryReports, moneyReports, centralBankEvents: cbEvents, history, tick: newTick }
-    }),
+      return { countries, worlds: out.worlds, corporations: out.corporations, banks: out.banks, worldReports: out.worldReports, countryReports: out.countryReports, moneyReports: out.moneyReports, centralBankEvents: cbEvents, history, tick: out.tick }
+    })
+
+  // Lands a finished advance, replays the edits made while it ran, and starts the
+  // months that came due meanwhile.
+  const land = (out: EconomyStepOutput, epoch: number) => {
+    if (epoch !== flight.epoch) return
+    commit(out)
+    const log = flight.log
+    flight.log = []
+    flight.active = false
+    for (const edit of log) rawSet(edit)
+    const next = flight.pending
+    flight.pending = 0
+    if (next > 0) startRun(next)
+  }
+
+  // An empire update (a month or more of the empires' simulation) arrives: the
+  // latest summaries, and their fiscal samples appended to the history.
+  const applyEmpireUpdate = (update: EmpireUpdate | null) => {
+    if (!update || !empiresOn) return
+    rawSet((state) => {
+      const empireHistory: Record<string, FiscalSample[]> = { ...state.empireHistory }
+      for (const [id, samples] of Object.entries(update.samples)) {
+        const series = [...(empireHistory[id] ?? []), ...samples]
+        if (series.length > HISTORY_LENGTH) series.splice(0, series.length - HISTORY_LENGTH)
+        empireHistory[id] = series
+      }
+      return { empireSummaries: update.summaries, empireHistory, empireTick: update.tick }
+    })
+  }
+  onEmpireUpdate(applyEmpireUpdate)
+
+  const startRun = (steps: number) => {
+    const state = get()
+    const input = stepInputOf(state, steps)
+    const epoch = flight.epoch
+    // The empires advance the same number of months, beside the nations (in the
+    // worker; or in-process where there is none).
+    const off = runOffThread(input, empiresOn ? steps : 0)
+    if (!off) {
+      // No Worker (tests, headless): the same function, inline.
+      flight.active = true
+      land(runEconomySteps(input), epoch)
+      if (empiresOn) applyEmpireUpdate(advanceEmpiresInline(steps))
+      return
+    }
+    flight.active = true
+    flight.log = []
+    off.then(
+      (out) => land(out, epoch),
+      // The worker failed (and the empires resident in it with it): run the same
+      // request inline rather than lose the months.
+      () => {
+        empiresOn = false
+        land(runEconomySteps(input), epoch)
+      },
+    )
+  }
+
+  return {
+  countries: seedCountries(),
+  worlds: seedWorlds(),
+  corporations: seedCorporations(),
+  characters: seedCharacters(),
+  families: seedFamilies(),
+  banks: seedBanks(),
+  tick: 0,
+  worldReports: {},
+  countryReports: {},
+  moneyReports: {},
+  centralBankEvents: [],
+  history: {},
+  empireSummaries: {},
+  empireHistory: {},
+  empireTick: 0,
+  // Advances `ticks` months. The tick itself is a pure function (economy/
+  // economyStep.runEconomySteps) run on a Web Worker where there is one, so it
+  // never blocks a frame; one request is in flight at a time and months that come
+  // due meanwhile queue up. Player edits made during a flight apply at once and
+  // are REPLAYED on the result when it lands (`set` below logs them).
+  advance: (ticks) => {
+    const steps = Math.max(0, Math.min(MAX_CATCH_UP_TICKS, Math.floor(ticks)))
+    if (steps === 0) return
+    if (flight.active) {
+      flight.pending = Math.min(MAX_CATCH_UP_TICKS, flight.pending + steps)
+      return
+    }
+    startRun(steps)
+  },
+  // The empires' economies run inside the worker (economy/empireSim.ts) and only
+  // summaries come back (onEmpireUpdate below); starting them is all this does.
+  seedEmpires: () => {
+    if (empiresOn) return
+    empiresOn = true
+    startEmpires()
+  },
   setWorldOwner: (worldId, countryId) =>
     set((state) => ({
       worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, ownerId: countryId } : w)),
@@ -1226,7 +1266,8 @@ export const useEconomyStore = create<EconomyStore>((set) => ({
       )
       return { banks, countries }
     }),
-}))
+  }
+})
 
 // Apply `fn` to a country's central bank if it has one. A country with no
 // central bank (undefined or status 'no-bank') is left untouched — callers use

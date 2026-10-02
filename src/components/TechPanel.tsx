@@ -14,6 +14,9 @@ import {
   localRoots,
   externalPrerequisites,
   findTech,
+  researchEtas,
+  formatEta,
+  queuePlan,
   type TechCategory,
   type TechNode,
 } from '../data/techData'
@@ -47,23 +50,46 @@ function branchNodes(root: TechNode, techs: TechNode[]): TechNode[] {
   return result
 }
 
-// What is queued, in order, with a remove button each.
-function ResearchQueue({ queue, onRemove }: { queue: string[]; onRemove: (id: string) => void }) {
+// What is queued, per research type. Within a type the ones that can go now
+// come first; one that needs a tech from another tree waits behind them until
+// that tech is done. Each shows roughly how long it will take.
+function ResearchQueue({ queue, researched, points, monthly, onRemove }: { queue: string[]; researched: ReadonlySet<string>; points: Record<TechCategory, number>; monthly: Record<TechCategory, number> | null; onRemove: (id: string) => void }) {
   if (queue.length === 0) return null
+  const rate = monthly ?? { physics: 0, society: 0, engineering: 0 }
+  const etas = researchEtas(queue, researched, points, rate)
+  const have = new Set(researched)
   return (
     <div className="tech-queue">
       <div className="combat-orders-title">Research queue</div>
-      {queue.map((id, i) => {
-        const node = findTech(id)
-        if (!node) return null
+      {(['physics', 'society', 'engineering'] as TechCategory[]).map((cat) => {
+        const ids = queue.filter((id) => findTech(id)?.category === cat)
+        if (ids.length === 0) return null
+        // Ready ones first (by when they finish, then queue order).
+        const sorted = [...ids].sort((a, b) => {
+          const na = findTech(a)!
+          const nb = findTech(b)!
+          const ra = prerequisitesMet(na, have) ? 0 : 1
+          const rb = prerequisitesMet(nb, have) ? 0 : 1
+          return ra - rb || (etas.get(a) ?? 1e9) - (etas.get(b) ?? 1e9) || queue.indexOf(a) - queue.indexOf(b)
+        })
         return (
-          <div key={id} className="inspect-row">
-            <span className="inspect-label">
-              {i + 1}. {node.name} <span className={`tech-pool tech-cat-${node.category}`}>({CATEGORY_LABELS[node.category]}, {node.cost})</span>
-            </span>
-            <button type="button" className="abs-x" title="Take it out of the queue" onClick={() => onRemove(id)}>
-              ×
-            </button>
+          <div key={cat}>
+            <div className={`tech-pool tech-cat-${cat}`}>{CATEGORY_LABELS[cat]}</div>
+            {sorted.map((id, i) => {
+              const node = findTech(id)!
+              const waitingOn = externalPrerequisites(node, TECHS_BY_CATEGORY[cat]).filter((p) => !have.has(p.id))[0] ?? (prerequisitesMet(node, have) ? null : node.prerequisites[0]?.map((p) => findTech(p)).find((p) => p && !have.has(p.id)))
+              return (
+                <div key={id} className="inspect-row" title={node.description}>
+                  <span className="inspect-label">
+                    {i + 1}. {node.name} <span className="abs-dim">({node.cost} pts, {formatEta(etas.get(id))})</span>
+                    {waitingOn ? <span className="abs-dim"> · waits for {waitingOn.name}</span> : null}
+                  </span>
+                  <button type="button" className="abs-x" title="Take it out of the queue" onClick={() => onRemove(id)}>
+                    ×
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )
       })}
@@ -104,6 +130,12 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
   const roots = localRoots(techs)
   // A tree's first techs always show (with what they still need from another
   // tree), so a tree built on another one never reads as empty.
+  // Roughly how long a tech would take if queued now (with what it needs).
+  const rate = monthly ?? { physics: 0, society: 0, engineering: 0 }
+  const etaIfQueued = (id: string): number | null => {
+    const q = [...(tech.queue ?? []), ...queuePlan(id, tech.researched, tech.queue ?? [])]
+    return researchEtas(q, tech.researched, tech.researchPoints, rate, 240).get(id) ?? null
+  }
   const visible = new Set([...visibleNodeIds(techs, tech.researched), ...roots.map((n) => n.id)])
 
   return (
@@ -117,7 +149,7 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
       <button type="button" className="tech-tree-view-btn" onClick={() => setShowTree(true)}>
         Tree View
       </button>
-      <ResearchQueue queue={tech.queue ?? []} onRemove={(id) => unqueueTech(country.id, id)} />
+      <ResearchQueue queue={tech.queue ?? []} researched={tech.researched} points={tech.researchPoints} monthly={monthly} onRemove={(id) => unqueueTech(country.id, id)} />
       {showTree && (
         <TechTreeGraph
           queue={tech.queue ?? []}
@@ -177,7 +209,7 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
                         type="button"
                         className="tech-research-btn"
                         onClick={() => queueTech(country.id, node.id)}
-                        title={`${previewOnly ? (external.length > 0 && !prerequisitesMet(node, tech.researched) ? `Needs ${external[0].name} first. ` : 'Needs its prerequisites first. ') : `Needs ${node.cost} pts (have ${formatResearch(tech.researchPoints[category])}). `}Queue it (and what it still needs) to be researched as soon as it can be.`}
+                        title={`${previewOnly ? (external.length > 0 && !prerequisitesMet(node, tech.researched) ? `Needs ${external[0].name} first. ` : 'Needs its prerequisites first. ') : `Needs ${node.cost} pts (have ${formatResearch(tech.researchPoints[category])}). `}Queue it (and what it still needs) to be researched as soon as it can be: ${formatEta(etaIfQueued(node.id))}.`}
                       >
                         Queue · {freeResearchMode ? 0 : node.cost}
                       </button>

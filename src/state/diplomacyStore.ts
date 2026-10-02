@@ -13,6 +13,7 @@ import {
   type DiplomacyEvent,
   type DiplomacyEventKind,
   type EventPlace,
+  type Incident,
   type Relation,
   type War,
 } from '../data/diplomacyData'
@@ -29,7 +30,13 @@ interface DiplomacyState {
   relations: Record<string, Relation>
   wars: War[]
   events: DiplomacyEvent[]
-  declareWar: (attackerId: string, defenderId: string, simDays: number, tier?: ConflictTier) => DeclareWarResult
+  // Unprovoked attacks whose news has not reached the victim yet.
+  incidents: Incident[]
+  // `ignoreTruce`: the war answers an attack that already broke the truce
+  // (scene/aggression.resolveAggressionNews) — never for an ordinary declaration.
+  declareWar: (attackerId: string, defenderId: string, simDays: number, tier?: ConflictTier, opts?: { ignoreTruce?: boolean }) => DeclareWarResult
+  addIncident: (incident: Omit<Incident, 'id'>) => void
+  removeIncident: (id: string) => void
   // Dev-tool only (DebugConsole scenarios): puts two nations at war even
   // inside a truce, so a scenario always gets its fight. A no-op if they're
   // already at war. Never call this from gameplay — declareWar's rules are
@@ -55,6 +62,7 @@ interface DiplomacyState {
 
 let eventCounter = 0
 let warCounter = 0
+let incidentCounter = 0
 
 // Shared default so a read of a never-touched pair doesn't build a new object
 // every call (same reasoning as techStore's UNTOUCHED_COUNTRY_STATE).
@@ -72,13 +80,21 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
   relations: {},
   wars: [],
   events: [],
+  incidents: [],
 
-  declareWar: (attackerId, defenderId, simDays, tier = 'limited') => {
+  addIncident: (incident) =>
+    set((s) => {
+      incidentCounter += 1
+      return { incidents: [...s.incidents, { ...incident, id: `incident-${incidentCounter}` }] }
+    }),
+  removeIncident: (id) => set((s) => ({ incidents: s.incidents.filter((i) => i.id !== id) })),
+
+  declareWar: (attackerId, defenderId, simDays, tier = 'limited', opts = {}) => {
     if (attackerId === defenderId) return { ok: false, reason: 'A nation cannot declare war on itself.' }
     const state = get()
     const relation = relationIn(state.relations, attackerId, defenderId)
     if (relation.status === 'war') return { ok: false, reason: 'Already at war.' }
-    if (simDays < relation.truceUntilSimDays) return { ok: false, reason: 'A truce is still in effect.' }
+    if (!opts.ignoreTruce && simDays < relation.truceUntilSimDays) return { ok: false, reason: 'A truce is still in effect.' }
 
     warCounter += 1
     const war: War = {
@@ -176,7 +192,7 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
       return { events: events.length > MAX_DIPLOMACY_EVENTS ? events.slice(events.length - MAX_DIPLOMACY_EVENTS) : events }
     }),
 
-  reset: () => set({ relations: {}, wars: [], events: [] }),
+  reset: () => set({ relations: {}, wars: [], events: [], incidents: [] }),
 }))
 
 // Whether two nations are currently at war — the one question every hostility

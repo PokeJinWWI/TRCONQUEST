@@ -9,7 +9,7 @@ import { anyCivilian, mergeCheck } from './fleetRules'
 import { startFleetMerge } from './fleetMerge'
 import { viewShip } from './shipNav'
 import { useShipStore } from '../state/shipStore'
-import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
+import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, JUMP_RISK_MAX_FACTOR, JUMP_RISK_MIN_FACTOR, type HyperDrive } from '../data/shipData'
 import { ownerDisplay } from '../data/countryRoster'
 import { isPlayerOwned, shipsHostile, useRelationFn, useRelationTo } from '../state/shipRelations'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -483,7 +483,12 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
       )}
       {jumpRiskNew !== undefined && jumpRiskLane !== undefined && (
         <div className="inspect-row">
-          <span className="inspect-label">Jump Risk</span>
+          <span
+            className="inspect-label"
+            title={`Chance the ship is lost on a hyperdrive jump of average length to an average star. A real jump runs from ${JUMP_RISK_MIN_FACTOR}x to ${JUMP_RISK_MAX_FACTOR}x this: longer jumps and heavier destinations are riskier. Point at a star on the interstellar map to see that jump's risk.`}
+          >
+            Jump Risk
+          </span>
           <span className="inspect-value">
             {jumpRiskNew === jumpRiskLane
               ? formatPercent(jumpRiskNew)
@@ -542,7 +547,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
       {owned && <ShipCargoSection ship={ship} />}
       {ship.followingShipId && (
         <div className="inspect-row">
-          <span className="inspect-label">Following</span>
+          <span className="inspect-label">{ship.attackTargetShipId === ship.followingShipId ? 'Attacking' : 'Following'}</span>
           <span className="inspect-value">
             {followedShip?.name ?? 'Unknown fleet'}
             {owned && (

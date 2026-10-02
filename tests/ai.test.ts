@@ -4,6 +4,7 @@
 //
 // Run:  npx tsx tests/ai.test.ts
 
+import { applyInfluenceIncome, seedInfluence } from '../src/scene/colonies'
 import { COUNTRIES } from '../src/data/countryData'
 import { AI_MAX_STARBASES, AI_WAR_GRACE_DAYS, AI_WAR_RATIO, AI_WAR_RATIO_AT_HATRED } from '../src/data/aiData'
 import { usePlayerStore } from '../src/state/playerStore'
@@ -259,6 +260,7 @@ console.log('\n=== 4b. The Expander ===')
   spawnExtra(MARS, 'construction-ship', 1)
   spawnExtra(MARS, 'cargo-ship', 1)
   for (const id of ['alloys', 'energy', 'exoticMatter'] as const) useResourceStore.getState().setAmount(MARS, id, 1000)
+  useResourceStore.getState().setAmount(MARS, 'influence', 100)
   const sv = useSurveyStore.getState()
   sv.discover(MARS, { kind: 'explored', starId: 'barnards-star' }, 0, 0)
   for (const body of systemBodies('barnards-star')) sv.discover(MARS, { kind: 'surveyed', bodyName: body }, 0, 0)
@@ -505,11 +507,15 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
       }
     }
     const aiIds = [MARS, VENUS, ORION]
+    for (const c of COUNTRIES) seedInfluence(c.id)
     let firstStarbaseDay = -1
     let surveyedBodies = 0
     for (let day = 1; day <= days; day++) {
       if (day % 30 === 0) {
-        for (const c of COUNTRIES) applyStrategicIncome(c.id, 1)
+        for (const c of COUNTRIES) {
+          applyStrategicIncome(c.id, 1)
+          applyInfluenceIncome(c.id, 1)
+        }
         // Simple mode's labs feed every nation's tech trees; Complex mode has none.
         if (grantResearch) for (const id of aiIds) {
           useTechStore.getState().grantResearch(id, 'physics', 25)

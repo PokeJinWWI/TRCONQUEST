@@ -4,6 +4,8 @@ import { Breadcrumb } from './components/Breadcrumb'
 import { HudCenterSwap } from './components/TabBar'
 import { ChatPlaceholder } from './components/ChatPlaceholder'
 import { DebugConsole } from './components/DebugConsole'
+import { ObserverPanel } from './components/ObserverPanel'
+import { useObserverStore } from './state/observerStore'
 import { LocationLabel } from './components/LocationLabel'
 import { LockOnToggle } from './components/LockOnToggle'
 import { MainMenu } from './components/MainMenu'
@@ -133,6 +135,8 @@ function App() {
 
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
   const sandbox = usePlayerStore((s) => s.sandbox)
+  const observer = useObserverStore((s) => s.on)
+  const panelOpen = useObserverStore((s) => s.panelOpen)
   if (!selectedCountryId) return <MainMenu />
 
   return (
@@ -156,6 +160,7 @@ function App() {
           that half is dead-code-eliminated there), and the sandbox in any
           build — cheats are what the sandbox is for. */}
       {(import.meta.env.DEV || sandbox) && <DebugConsole />}
+      {(import.meta.env.DEV || sandbox) && observer && panelOpen && <ObserverPanel />}
 
       <footer ref={bottomBarRef} className="hud-bar hud-bottom">
         <div className="hud-bottom-left">

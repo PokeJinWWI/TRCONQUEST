@@ -72,6 +72,9 @@ export interface TradeInput {
   // Freight capacity each nation has left this tick.
   capacityLeft: Map<string, number>
   atWar: (a: string, b: string) => boolean
+  // Whether two nations may trade at all (reach, not politics: empires in far
+  // clusters never meet Mars's market). Absent = any two may.
+  canTrade?: (a: string, b: string) => boolean
   // Money of `from` country's currency in `to`'s (fx.convertBetween).
   convert: (amount: number, from: string, to: string) => number
 }
@@ -93,7 +96,7 @@ export function tradeBetweenNations(input: TradeInput): { worlds: World[]; ledge
       // Sellers abroad, at peace, whose landed cost undercuts the buyer's price.
       const sellers = worlds
         .map((w, i) => ({ i, landed: input.convert(w.market.prices[g], w.ownerId, buyer) / (1 - TRANSPORT_LOSS) }))
-        .filter(({ i, landed }) => worlds[i].ownerId !== buyer && left[i] > 1e-6 && !input.atWar(buyer, worlds[i].ownerId) && landed < buyPrice)
+        .filter(({ i, landed }) => worlds[i].ownerId !== buyer && left[i] > 1e-6 && !input.atWar(buyer, worlds[i].ownerId) && (input.canTrade?.(buyer, worlds[i].ownerId) ?? true) && landed < buyPrice)
       const offered = sellers.reduce((s, x) => s + left[x.i], 0)
       if (offered <= 1e-6) continue
       // Ship enough that what ARRIVES covers the shortfall, as far as stock allows.

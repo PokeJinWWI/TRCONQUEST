@@ -18,6 +18,7 @@ import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/sc
 import { ARMY_SCENARIOS, type ArmyScenario } from '../data/armyScenarios'
 import { currentScenarioOwners, loadArmyScenario, loadShipScenario } from '../scene/scenarioLoader'
 import { usePlayerStore } from '../state/playerStore'
+import { useObserverStore } from '../state/observerStore'
 import { useDebugConsoleStore } from '../state/debugConsoleStore'
 import { useTechStore } from '../state/techStore'
 import type { TechCategory } from '../data/techData'
@@ -100,6 +101,8 @@ export function DebugConsole() {
   const selectedCountryId = usePlayerStore((s) => s.selectedCountryId)
   const grantResearch = useTechStore((s) => s.grantResearch)
   const freeResearchMode = useTechStore((s) => s.freeResearchMode)
+  const observer = useObserverStore((s) => s.on)
+  const setObserver = useObserverStore((s) => s.setOn)
   const setFreeResearchMode = useTechStore((s) => s.setFreeResearchMode)
 
   // Every real star in the system (component stars for a multi-star system)
@@ -377,6 +380,12 @@ export function DebugConsole() {
         <label className="debug-console-checkbox-row">
           <input type="checkbox" checked={freeResearchMode} onChange={(e) => setFreeResearchMode(e.target.checked)} />
           Free Research (all tech costs 0)
+        </label>
+        {/* A view override: every empire's territory, every charted hyperlane and an
+            empire panel. Never changes game state or what the player knows. */}
+        <label className="debug-console-checkbox-row" title="Show every empire, border and hyperlane, whatever you have explored. View only.">
+          <input type="checkbox" checked={observer} onChange={(e) => setObserver(e.target.checked)} />
+          Observer mode (all empires, borders and hyperlanes)
         </label>
         <div className="debug-console-row">
           <label htmlFor="debug-research-category">Grant research</label>

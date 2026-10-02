@@ -6,6 +6,8 @@ import {
   freeSlots,
   freeLand,
   districtsOf,
+  buildingsInDistrict,
+  teardownCost,
   importUnitCost,
   type AbstractEconomyState,
   type AbstractReport,
@@ -27,6 +29,7 @@ import {
   type SimpleBuildingId,
   type SimpleGood,
   takesSlot,
+  SLOTS_PER_DISTRICT,
 } from '../data/simplisticEconomyData'
 import { STARTING_STOCKPILE } from '../data/shipyardData'
 import type { TechCategory } from '../data/techData'
@@ -200,6 +203,9 @@ interface AbstractEconomyStore {
   cancelOrder: (countryId: string, orderId: number) => void
   // Tear down one level of a building (no refund; frees its slot at once).
   demolish: (countryId: string, bodyName: string, building: SimpleBuildingId) => QueueResult
+  // Deconstruction: its own reverse-progress bar (no queue place, no slot, no construction points); the building works until it runs out.
+  queueDemolish: (countryId: string, bodyName: string, building: SimpleBuildingId) => QueueResult
+  queueDemolishDistrict: (countryId: string, bodyName: string, district: SimpleDistrictId) => QueueResult
   // Orbital bombardment (scene/bombardment.ts): each world's devastation, and
   // population killed by full bombardment (share per body).
   setDevastation: (byBody: Record<string, number>) => void
@@ -427,7 +433,38 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
       const w = s.worlds[bodyName]
       return w ? { worlds: { ...s.worlds, [bodyName]: { ...w, land } } } : s
     }),
-  cancelOrder: (countryId, orderId) => set((s) => patch(s, countryId, (c) => ({ ...c, queue: c.queue.filter((o) => o.id !== orderId) }))),
+  // Stops a construction order or a deconstruction (the building stays, progress is lost).
+  cancelOrder: (countryId, orderId) =>
+    set((s) => patch(s, countryId, (c) => ({ ...c, queue: c.queue.filter((o) => o.id !== orderId), teardowns: (c.teardowns ?? []).filter((t) => t.id !== orderId) }))),
+  queueDemolish: (countryId, bodyName, building) => {
+    const store = get()
+    const c = store.byCountry[countryId]
+    const w = store.worlds[bodyName]
+    if (!c || !w || (w.buildings[building] ?? 0) <= 0) return { ok: false, reason: 'Nothing to deconstruct.' }
+    const { bodyOwner, bodyController } = useTerritoryStore.getState()
+    if (bodyOwner[bodyName] !== countryId || controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `You don't hold ${bodyName}.` }
+    // No more deconstructions than there are buildings standing.
+    const pending = (c.teardowns ?? []).filter((t) => t.bodyName === bodyName && t.building === building).length
+    if (pending >= (w.buildings[building] ?? 0)) return { ok: false, reason: `Every ${SIMPLE_BUILDING_DEFS[building].name} here is already being deconstructed.` }
+    set((s) => patch(s, countryId, (cur) => ({ ...cur, teardowns: [...(cur.teardowns ?? []), { id: cur.nextOrderId, bodyName, building, progress: teardownCost({ building }) }], nextOrderId: cur.nextOrderId + 1 })))
+    return { ok: true }
+  },
+  queueDemolishDistrict: (countryId, bodyName, district) => {
+    const store = get()
+    const c = store.byCountry[countryId]
+    const w = store.worlds[bodyName]
+    if (!c || !w || districtsOf(w)[district] <= 0) return { ok: false, reason: 'No such district level.' }
+    const { bodyOwner, bodyController } = useTerritoryStore.getState()
+    if (bodyOwner[bodyName] !== countryId || controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `You don't hold ${bodyName}.` }
+    const pending = (c.teardowns ?? []).filter((t) => t.bodyName === bodyName && t.district === district).length
+    const levelsAfter = districtsOf(w)[district] - pending - 1
+    if (levelsAfter < 0) return { ok: false, reason: `Every ${SIMPLE_DISTRICT_DEFS[district].name} level here is already being deconstructed.` }
+    // What stands (and is queued) in the district must still fit.
+    const queuedHere = c.queue.filter((o) => o.bodyName === bodyName && o.building && takesSlot(o.building) && DISTRICT_OF_BUILDING[o.building] === district).length
+    if (buildingsInDistrict(w, district) + queuedHere > levelsAfter * SLOTS_PER_DISTRICT) return { ok: false, reason: `Its buildings would no longer fit: deconstruct or move some first (${SIMPLE_DISTRICT_DEFS[district].name}).` }
+    set((s) => patch(s, countryId, (cur) => ({ ...cur, teardowns: [...(cur.teardowns ?? []), { id: cur.nextOrderId, bodyName, district, progress: teardownCost({ district }) }], nextOrderId: cur.nextOrderId + 1 })))
+    return { ok: true }
+  },
   demolish: (countryId, bodyName, building) => {
     const w = get().worlds[bodyName]
     if (!w || (w.buildings[building] ?? 0) <= 0) return { ok: false, reason: 'Nothing to demolish.' }

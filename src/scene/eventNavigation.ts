@@ -15,6 +15,7 @@ export type EventDestination =
   | { kind: 'panel'; category: string; subcategory: string }
 
 export function eventDestination(event: Pick<DiplomacyEvent, 'kind' | 'place'>): EventDestination {
+  if (event.place?.nav) return { kind: 'panel', category: event.place.nav.category, subcategory: event.place.nav.subcategory }
   const body = event.place?.bodyName ? bodyIndex().get(event.place.bodyName) : undefined
   if (body) return { kind: 'body', starId: body.starId, bodyName: body.name, ...(body.kind === 'moon' && body.parentPlanet ? { parentPlanet: body.parentPlanet } : {}) }
   if (event.place?.starId && STARS.some((s) => s.id === event.place!.starId)) return { kind: 'system', starId: event.place.starId }
@@ -30,6 +31,13 @@ export function eventDestination(event: Pick<DiplomacyEvent, 'kind' | 'place'>):
     default:
       return { kind: 'panel', category: 'Diplomacy', subcategory: 'Events' }
   }
+}
+
+// Open a world: its system view with its panel showing (a moon: in its
+// planet's satellite view).
+export function goToBody(bodyName: string): void {
+  useViewStore.getState().setNavCategory(null, null)
+  goToEvent({ kind: 'holding', place: { bodyName } })
 }
 
 export function goToEvent(event: Pick<DiplomacyEvent, 'kind' | 'place'>): void {

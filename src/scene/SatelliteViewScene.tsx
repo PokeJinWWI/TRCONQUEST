@@ -22,7 +22,7 @@ import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
 import { OrbitRing } from './OrbitRing'
 import { getSystemStars } from '../data/starData'
-import { satelliteShipLocalPosition, canFollow, clusterRestingShipsByFleet } from './shipPhysics'
+import { satelliteShipLocalPosition, clusterRestingShipsByFleet } from './shipPhysics'
 import { orderSelectedFleets } from './commsVisual'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
 import { useViewStore } from '../state/viewStore'
@@ -30,6 +30,7 @@ import { useShipStore } from '../state/shipStore'
 import { InspectPanel } from '../components/InspectPanel'
 import { PlanetArmyMarkers, PlanetGroundHud } from './PlanetArmyMarkers'
 import { bodyMenuItems, useBodyOrderMenu } from './BodyOrderMenu'
+import { useShipOrderMenu } from './ShipOrderMenu'
 import { hasOwnShipSelected, openInViewFull } from './panelOpen'
 import { isNewTabModifierHeld } from './queueModifier'
 import { useWorkspaceStore } from '../state/workspaceStore'
@@ -82,6 +83,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   const PLANETS = useMemo(() => getPlanetsForStar(selectedStarId), [selectedStarId])
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const bodyMenu = useBodyOrderMenu()
+  const shipMenu = useShipOrderMenu()
   const [flyingToMoon, setFlyingToMoon] = useState<MoonData | null>(null)
   // Set once CameraFocusRig arrives at a moon — swaps this scene over to
   // MoonDetailScene until the player zooms back out.
@@ -95,7 +97,6 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
   const ships = useShipStore((s) => s.ships)
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
-  const setFollowing = useShipStore((s) => s.setFollowing)
   // Ships resting in orbit around this exact body or one of its moons — the
   // "correct corresponding view" a move order here should actually be
   // visible in, not just an abstract system-AU point only system view could
@@ -258,14 +259,11 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
     else move()
   }
 
-  // Right-clicking another ship while one is selected orders the selected
-  // ship to follow it, instead of a normal move order — see
-  // ShipInstance.followingShipId.
+  // Right-clicking another ship while one is selected opens a menu: Move
+  // (follow it, ShipInstance.followingShipId) or Attack (scene/ShipOrderMenu.tsx).
   const handleFollowShip = (targetShipId: string) => {
-    if (!selectedShipId) return
-    const ship = ships.find((s) => s.id === selectedShipId)
-    if (!ship || !canFollow(ship, targetShipId)) return
-    setFollowing(ship.id, targetShipId)
+    if (!selectedShipId || selectedShipId === targetShipId) return
+    shipMenu.open(targetShipId)
   }
 
   // Same onPointerMissed/marker-click race as every other view — ignore
@@ -456,6 +454,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
         </Canvas>
 
         {bodyMenu.element}
+        {shipMenu.element}
 
         {!isStar && <PlanetGroundHud bodyName={primaryBody.name} />}
 

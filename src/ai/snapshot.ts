@@ -33,6 +33,7 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     controllers: territory.bodyController,
     nodeHolders: territory.nodeHolders,
     relations: diplomacy.relations,
+    incidents: diplomacy.incidents,
     wars: diplomacy.wars,
     starbases: useStarbaseStore.getState().starbases,
     colonies: useColonyStore.getState().colonies,

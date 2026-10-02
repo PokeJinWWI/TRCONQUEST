@@ -1473,6 +1473,7 @@ export function tickEconomy(
       keep: (i, g) => reports.worlds[nextWorlds[i].id]?.goods[g]?.demand ?? 0,
       capacityLeft: freightLeft,
       atWar: ai.atWar ?? (() => false),
+      canTrade: ai.canTrade,
       convert: (amount, from, to) => convertBetween(amount, from, to, nextCountries),
     })
     for (let i = 0; i < nextWorlds.length; i++) nextWorlds[i] = traded.worlds[i]
@@ -1567,13 +1568,16 @@ export function tickEconomy(
     const poolOf = new Map(aiCountries.map((c) => [c.id, c.investmentPool]))
     const openHosts = new Set(aiCountries.filter((c) => c.foreignInvestmentPolicy !== 'closed').map((c) => c.id))
     aiCorporations = aiCorporations.map((corp) => {
-      const decided = runCorporationAI(corp, aiWorlds, tick, poolOf.get(corp.countryId) ?? 0, openHosts, reports.worlds)
+      // A company builds only in hosts its nation can reach (no empire factory on
+      // Orion's world; ai.canTrade absent = everywhere, as always).
+      const reach = ai.canTrade ? new Set([...openHosts].filter((h) => h === corp.countryId || ai.canTrade!(corp.countryId, h))) : openHosts
+      const decided = runCorporationAI(corp, aiWorlds, tick, poolOf.get(corp.countryId) ?? 0, reach, reports.worlds)
       aiWorlds = decided.worlds
       return decided.corp
     })
     // Foreign investment: non-player states and cash-rich firms take equity
     // stakes abroad (cross-border capital), whose dividends repatriate.
-    const fi = runForeignInvestmentAI(aiCountries, aiCorporations, aiWorlds, tick, ai.humanCountryIds ?? [], (c) => sharePrice(c, aiWorlds))
+    const fi = runForeignInvestmentAI(aiCountries, aiCorporations, aiWorlds, tick, ai.humanCountryIds ?? [], (c) => sharePrice(c, aiWorlds), ai.canTrade)
     aiCountries = fi.countries
     aiCorporations = fi.corporations
   }

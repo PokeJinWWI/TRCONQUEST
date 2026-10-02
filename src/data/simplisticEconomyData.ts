@@ -257,6 +257,12 @@ export const DISTRICT_OF_BUILDING = Object.fromEntries(SIMPLE_BUILDINGS.map((b) 
 
 export const SLOTS_PER_DISTRICT = 4 // buildings one district level houses
 export const DISTRICT_COST = 400 // construction points to develop one district level
+// Deconstruction is its own clock, not a construction project: it takes no
+// construction points, no queue place and no slot. Its progress bar starts full
+// (the thing's build cost) and runs DOWN to zero over this many months, when the
+// building (or district level) is removed. It keeps working until then.
+export const DECONSTRUCT_MONTHS_BUILDING = 2
+export const DECONSTRUCT_MONTHS_DISTRICT = 4
 // The ecosystem bonus (see abstractEconomy.districtBonus).
 export const CLUSTER_PER_BUILDING = 0.005 // output per building in the same district beyond the first…
 export const CLUSTER_MAX = 0.15 // …capped

@@ -58,11 +58,48 @@ const CLASS_EDUCATION: Record<PopClass, number> = {
   political: 0.7,
 }
 
+// What the seeding pipeline needs to know about the NATIONS it seeds. The four
+// nations are the default; the generated empires (economy/empireSeed.ts) run the
+// same pipeline under their own context (seedNationWorlds), so both are built by
+// exactly the same code.
+export interface SeedNation {
+  id: string
+  capitalBodyName: string
+  // Its private spaceport & shipping operator's corporation id, if it has one.
+  operatorId?: string
+  // A laissez-faire nation: the plants the seed adds to complete its supply
+  // chains are private (its operator's), not the state's.
+  privateLed: boolean
+}
+interface SeedContext {
+  nations: SeedNation[]
+  stateCorps: () => Set<string>
+  // Standing decrees, each a bureaucracy cost (withAdministration).
+  decreesOf: (nationId: string) => number
+  landOf: (bodyName: string) => number
+  // The balancer's building levels by world id, once computed.
+  balanced: () => Map<string, BuildingSpec[]>
+  nextPopId: () => number
+  nextBuildingId: () => number
+}
 let popCounter = 0
+let buildingCounter = 0
+const DEFAULT_SEED: SeedContext = {
+  nations: NATIONS.map((n) => ({ id: n.id, capitalBodyName: n.capitalBodyName, operatorId: OPERATOR_OF[n.id], privateLed: PRIVATE_LED.has(n.id) })),
+  stateCorps: () => new Set(CORPORATIONS.filter((c) => c.kind === 'state').map((c) => c.id)),
+  decreesOf: (id) => COUNTRIES.find((c) => c.id === id)?.decrees.length ?? 0,
+  landOf: landForBody,
+  balanced: () => BALANCED_BUILDINGS,
+  nextPopId: () => ++popCounter,
+  nextBuildingId: () => ++buildingCounter,
+}
+let seed: SeedContext = DEFAULT_SEED
+const nationOf = (id: string) => seed.nations.find((n) => n.id === id)
+
 function makePop(worldId: string, cls: PopClass, species: string, culture: string, religion: string, size: number): Pop {
-  popCounter += 1
+  const n = seed.nextPopId()
   return {
-    id: `pop-${worldId}-${cls}-${religion}-${popCounter}`,
+    id: `pop-${worldId}-${cls}-${religion}-${n}`,
     class: cls,
     speciesTemplateId: species,
     cultureId: culture,
@@ -82,9 +119,8 @@ function resolveOwner(tag: string | undefined): BuildingOwner {
   return { kind: 'corporation', corporationId: tag }
 }
 
-let buildingCounter = 0
 function makeBuilding(worldId: string, recipeId: string, level: number, owner: string | undefined, methodId?: string): Building {
-  buildingCounter += 1
+  const n = seed.nextBuildingId()
   const method = getMethod(recipeId, methodId)
   const inventory: Building['inventory'] = {}
   // Seeded buildings are established, with a month's output on hand: the
@@ -94,7 +130,7 @@ function makeBuilding(worldId: string, recipeId: string, level: number, owner: s
   // budget lurched. buildWorld scales it to the run the building opens at.)
   if (method) for (const out of method.outputs) inventory[out.good] = out.amount * level * SEED_STOCK_TICKS
   return {
-    id: `bld-${worldId}-${recipeId}-${buildingCounter}`,
+    id: `bld-${worldId}-${recipeId}-${n}`,
     recipeId,
     methodId: method?.id ?? '',
     methodLocked: false,
@@ -159,7 +195,7 @@ const CLASS_SPLIT: Record<PopClass, number> = {
   political: 0.1,
 }
 
-interface BuildingSpec {
+export interface BuildingSpec {
   recipe: string
   level: number
   owner?: string
@@ -168,7 +204,7 @@ interface BuildingSpec {
   // balancer where a nation needs less than one level of it.
   idle?: number
 }
-interface WorldSpec {
+export interface WorldSpec {
   id: string
   ownerId: string
   culture: string
@@ -334,7 +370,7 @@ function balancedSpecs(specs: WorldSpec[]): Map<string, BuildingSpec[]> {
 }
 
 function buildWorld(rawSpec: WorldSpec, calibration?: WorldCalibration): World {
-  const spec = { ...rawSpec, buildings: BALANCED_BUILDINGS.get(rawSpec.id) ?? rawSpec.buildings }
+  const spec = { ...rawSpec, buildings: seed.balanced().get(rawSpec.id) ?? rawSpec.buildings }
   const pops: Pop[] = []
   const split = classSplitFor(spec)
   for (const cls of POP_CLASSES) {
@@ -383,7 +419,7 @@ function buildWorld(rawSpec: WorldSpec, calibration?: WorldCalibration): World {
       industrial: Math.max(16, Math.round(spec.population / 72), usedBy(spec, 'industrial')),
       resource: Math.max(12, Math.round(spec.population / 130), usedBy(spec, 'resource')),
       // A capital starts with one military level: its starting fortress and battery.
-      military: NATIONS.some((c) => c.capitalBodyName === spec.id) ? 1 : 0,
+      military: seed.nations.some((c) => c.capitalBodyName === spec.id) ? 1 : 0,
     }),
     pops,
     buildings,
@@ -409,7 +445,7 @@ function seedDistricts(bodyName: string, capacity: Record<DistrictType, number>)
     districtCapacity[d] = districts[d] * SLOTS_PER_DISTRICT_LEVEL
   }
   const total = DISTRICT_TYPES.reduce((n, d) => n + districts[d], 0)
-  return { districts, districtCapacity, land: Math.max(landForBody(bodyName), total) }
+  return { districts, districtCapacity, land: Math.max(seed.landOf(bodyName), total) }
 }
 
 const WORLD_SPECS: WorldSpec[] = [
@@ -682,7 +718,7 @@ const SPACEPORTS_PER_BILLION = 2
 const SEA_SHARE_FOR_SEAPORT = 0.05
 function withTransport(spec: WorldSpec): WorldSpec {
   const buildings = [...spec.buildings]
-  const operator = OPERATOR_OF[spec.ownerId]
+  const operator = nationOf(spec.ownerId)?.operatorId
   const want = Math.max(1, Math.round((SPACEPORTS_PER_BILLION * spec.population) / 1000))
   let have = buildings.filter((b) => b.recipe === 'spaceport').length
   while (have < want) {
@@ -710,7 +746,7 @@ function seaShareOf(bodyName: string): number {
 const CONSTRUCTION_GOODS: GoodId[] = ['concrete', 'steel', 'lumber', 'tools', 'glass']
 function withSupplyChains(specs: WorldSpec[]): WorldSpec[] {
   const out = specs.map((s) => ({ ...s, buildings: [...s.buildings] }))
-  for (const nation of NATIONS) {
+  for (const nation of seed.nations) {
     const mine = out.filter((s) => s.ownerId === nation.id)
     const capital = mine.find((s) => s.id === nation.capitalBodyName) ?? mine[0]
     if (!capital) continue
@@ -734,7 +770,7 @@ function withSupplyChains(specs: WorldSpec[]): WorldSpec[] {
       if (missing.length === 0) break
       for (const g of missing) {
         const recipe = producerOf(g, made)
-        if (recipe) capital.buildings.push({ recipe, level: 1, owner: PRIVATE_LED.has(nation.id) ? OPERATOR_OF[nation.id] : 'state' })
+        if (recipe) capital.buildings.push({ recipe, level: 1, owner: nation.privateLed ? nation.operatorId : 'state' })
       }
     }
   }
@@ -769,7 +805,7 @@ const WORLDS: World[] = WORLD_SPECS.map((spec) => buildWorld(spec, SEED_CALIBRAT
 // federal reserve system, etc. `governorTermLength` follows the appointment law.
 type SeedCentralBank = Omit<CentralBank, 'countryId' | 'name' | 'governorTermStart' | 'governorTermLength' | 'fxReserves' | 'govSecurities' | 'currencyInCirculation' | 'loansToBanks'> &
   Partial<Pick<CentralBank, 'fxReserves' | 'govSecurities' | 'currencyInCirculation' | 'loansToBanks'>>
-function seedCentralBank(countryId: string, name: string, cb: SeedCentralBank): CentralBank {
+export function seedCentralBank(countryId: string, name: string, cb: SeedCentralBank): CentralBank {
   return {
     countryId,
     name,
@@ -1148,12 +1184,11 @@ const FD = makeFinancialDistricts()
 const ADMIN_HEADROOM = 1.5
 const ADMIN_EXPECTED_RUN = 0.9 // offices rarely run fully staffed
 function withAdministration(worlds: World[]): World[] {
-  const stateCorps = new Set(CORPORATIONS.filter((c) => c.kind === 'state').map((c) => c.id))
+  const stateCorps = seed.stateCorps()
   return worlds.map((w) => {
-    const nation = NATIONS.find((n) => n.capitalBodyName === w.name)
-    const country = COUNTRIES.find((c) => c.id === w.ownerId)
-    if (!nation || !country || nation.id !== w.ownerId) return w
-    let used = country.decrees.length * BUREAUCRACY_PER_DECREE
+    const nation = seed.nations.find((n) => n.capitalBodyName === w.name)
+    if (!nation || nation.id !== w.ownerId) return w
+    let used = seed.decreesOf(nation.id) * BUREAUCRACY_PER_DECREE
     let made = 0
     for (const x of worlds) {
       if (x.ownerId !== w.ownerId) continue
@@ -1192,6 +1227,38 @@ function withAdministration(worlds: World[]): World[] {
 }
 const ADMINISTERED_WORLDS = withAdministration(WORLDS)
 
+// The whole seeding pipeline for ANY set of nations: the same transport, supply
+// chain, balancing, world-building and administration steps the four nations'
+// worlds go through, run under the given nations (economy/empireSeed.ts uses it
+// for the generated empires). Pure: ids come from per-call counters, so the
+// same input always gives the same worlds, whatever was seeded before. Opens at
+// base prices and wages unless `calibration` says where the markets settle.
+export function seedNationWorlds(
+  nations: SeedNation[],
+  rawSpecs: WorldSpec[],
+  opts: { landOf: (bodyName: string) => number; calibration?: SeedCalibration },
+): World[] {
+  const previous = seed
+  let pops = 0
+  let buildings = 0
+  let balanced = new Map<string, BuildingSpec[]>()
+  seed = {
+    nations,
+    stateCorps: () => new Set<string>(),
+    decreesOf: () => 0,
+    landOf: opts.landOf,
+    balanced: () => balanced,
+    nextPopId: () => ++pops,
+    nextBuildingId: () => ++buildings,
+  }
+  try {
+    balanced = balancedSpecs(withSupplyChains(rawSpecs.map(withTransport)))
+    return withAdministration(rawSpecs.map((spec) => buildWorld(spec, opts.calibration?.[spec.id])))
+  } finally {
+    seed = previous
+  }
+}
+
 function withFinancialDistricts(worlds: World[]): World[] {
   return worlds.map((w) => {
     const fdBuilding = FD.buildingByWorld.get(w.id)
@@ -1224,7 +1291,7 @@ export function seedCountriesWith(calibration: Record<string, CountryCalibration
 // deposits (≈12.5% of loans — comfortably above the 8% target) and reserves sit
 // above any seeded reserve requirement, leaving a little room to lend. Larger
 // economies carry more/bigger banks.
-function makeBank(id: string, name: string, countryId: string, deposits: number, riskAppetite: number): Bank {
+export function makeBank(id: string, name: string, countryId: string, deposits: number, riskAppetite: number): Bank {
   return {
     id,
     name,

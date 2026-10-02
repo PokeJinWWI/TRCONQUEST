@@ -23,6 +23,7 @@ import { restingStarId, surveyJobBodies, systemOfShip } from './surveyLogic'
 import { bodyStarId } from './territory'
 import { advanceSurveyJob } from '../hooks/useSurveyResolver'
 import { startFounding } from './colonies'
+import { isArmed } from './armyLogic'
 
 // Signal time for a discovery to reach its nation's capital from where the ship
 // is now — the FTL comms delay (0 with Hyper Comms, and for a nation with no
@@ -83,6 +84,13 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
     case 'colonize':
       startFounding(shipId, command.bodyName, simDays)
       return
+    case 'attack': {
+      // Chase it and fight where they meet (scene/aggression.ts).
+      const target = useShipStore.getState().ships.find((s) => s.id === command.targetShipId)
+      if (!target || target.ownerId === ship.ownerId || !isArmed(ship)) return
+      useShipStore.getState().setAttackTarget(shipId, target.id)
+      return
+    }
   }
 }
 

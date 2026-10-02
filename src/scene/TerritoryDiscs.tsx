@@ -19,7 +19,8 @@ import { AdditiveBlending, Color, DoubleSide, ShaderMaterial, Vector3, Vector4 }
 import { Html } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { STARS, starScenePosition } from '../data/starData'
-import { getCountry } from '../data/countryData'
+import { ownerInfoOf } from '../data/ownerInfo'
+import type { StarData } from '../data/starData'
 import type { SystemClaim } from './territory'
 import { useMapModeStore } from '../state/mapModeStore'
 import { useHoverTipStore } from '../state/hoverTipStore'
@@ -33,6 +34,12 @@ const MAX_REGION_RADIUS = 17
 // reaches. Just past halfway, so two neighbours' bubbles overlap a little and
 // the seam between them is a real plane cut rather than two tangent spheres.
 const NEIGHBOR_REACH = 0.62
+// Same-nation systems this close (scene units, ~3.75 ly) are joined into one
+// region; the overlap factor makes the join a real bridge, not two tangent
+// bubbles, and MAX_LINK_RADIUS bounds how far a link may grow a bubble.
+const LINK_DISTANCE = 30
+const LINK_OVERLAP = 1.15
+const MAX_LINK_RADIUS = 18
 // Shader array size — comfortably above the number of charted stars.
 const MAX_REGIONS = 64
 
@@ -102,14 +109,14 @@ const FRAGMENT = /* glsl */ `
   }
 `
 
-function useRegions(claimsByStar: Map<string, SystemClaim>): Region[] {
+function useRegions(claimsByStar: Map<string, SystemClaim>, stars: StarData[]): Region[] {
   return useMemo(() => {
-    const claimed = STARS.map((star) => {
+    const claimed = stars.map((star) => {
       const claim = claimsByStar.get(star.id)
       if (!claim || claim.kind === 'unclaimed') return null
       const ids = claim.kind === 'owned' ? [claim.countryId] : claim.countryIds
-      const colors = ids.map((id) => getCountry(id)?.color ?? '#888')
-      const names = ids.map((id) => getCountry(id)?.name ?? id)
+      const colors = ids.map((id) => ownerInfoOf(id)?.color ?? '#888')
+      const names = ids.map((id) => ownerInfoOf(id)?.name ?? id)
       return {
         id: star.id,
         pos: new Vector3(...starScenePosition(star)),
@@ -126,10 +133,19 @@ function useRegions(claimsByStar: Map<string, SystemClaim>): Region[] {
         if (i === j) continue
         nearest = Math.min(nearest, entry.pos.distanceTo(claimed[j].pos))
       }
-      const radius = Number.isFinite(nearest) ? Math.min(nearest * NEIGHBOR_REACH, MAX_REGION_RADIUS) : DEFAULT_REGION_RADIUS
+      let radius = Number.isFinite(nearest) ? Math.min(nearest * NEIGHBOR_REACH, MAX_REGION_RADIUS) : DEFAULT_REGION_RADIUS
+      // Systems of the same nation that lie near each other are joined into one
+      // region: each bubble grows until it overlaps its nearest same-nation
+      // neighbour (if within LINK_DISTANCE). Where another nation is in the way
+      // the halfway-plane cut still applies, so this never spills across.
+      let nearestSame = Infinity
+      for (let j = 0; j < claimed.length; j++) {
+        if (i !== j && claimed[j].ownerKey === entry.ownerKey && !entry.contested) nearestSame = Math.min(nearestSame, entry.pos.distanceTo(claimed[j].pos))
+      }
+      if (nearestSame <= LINK_DISTANCE) radius = Math.max(radius, Math.min((nearestSame / 2) * LINK_OVERLAP, MAX_LINK_RADIUS))
       return { key: entry.id, pos: entry.pos, radius, ownerKey: entry.ownerKey, colors: entry.colors, contested: entry.contested, label: entry.label }
     })
-  }, [claimsByStar])
+  }, [claimsByStar, stars])
 }
 
 function RegionBubble({ region, index, regions, showNames }: { region: Region; index: number; regions: Region[]; showNames: boolean }) {
@@ -187,11 +203,11 @@ function NationLabels({ regions, claimsByStar }: { regions: Region[]; claimsBySt
       const claim = claimsByStar.get(region.key)
       if (!claim || claim.kind === 'unclaimed') continue
       if (claim.kind === 'contested') {
-        const names = claim.countryIds.map((id) => getCountry(id)?.name ?? id)
+        const names = claim.countryIds.map((id) => ownerInfoOf(id)?.name ?? id)
         out.set(`contested:${region.key}`, { text: `Contested: ${names.join(' / ')}`, color: '#ffd27a', pos: region.pos, contested: true })
         continue
       }
-      const country = getCountry(claim.countryId)
+      const country = ownerInfoOf(claim.countryId)
       if (!country) continue
       const isCapital = country.capitalStarId === region.key
       if (out.has(claim.countryId) && !isCapital) continue
@@ -215,8 +231,9 @@ function NationLabels({ regions, claimsByStar }: { regions: Region[]; claimsBySt
   )
 }
 
-export function TerritoryDiscs({ claimsByStar }: { claimsByStar: Map<string, SystemClaim> }) {
-  const regions = useRegions(claimsByStar)
+// `stars`: the neighbourhood being drawn (ours by default).
+export function TerritoryDiscs({ claimsByStar, stars = STARS }: { claimsByStar: Map<string, SystemClaim>; stars?: StarData[] }) {
+  const regions = useRegions(claimsByStar, stars)
   const showNames = useMapModeStore((s) => s.showNationNames)
   // A hover tip belongs to the current mode; drop it when the mode flips or this unmounts.
   useEffect(() => () => useHoverTipStore.getState().setTip(null), [showNames])

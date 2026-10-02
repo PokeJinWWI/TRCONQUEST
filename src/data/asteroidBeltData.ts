@@ -1,3 +1,4 @@
+import { generatedBeltsFor } from './galaxyGen'
 // Asteroid/dust belts per system — a small, hand-authored dataset in the
 // same spirit as planetData.ts: real bodies where real data exists (Sol's
 // Main and Kuiper belts, Proxima Centauri's three hypothesized dust belts),
@@ -35,5 +36,6 @@ export const ASTEROID_BELTS_BY_STAR: Record<string, AsteroidBeltData[]> = {
 }
 
 export function getAsteroidBeltsForStar(starId: string): AsteroidBeltData[] {
-  return ASTEROID_BELTS_BY_STAR[starId] ?? []
+  // Other neighbourhoods' belts are generated (data/galaxyGen.ts).
+  return ASTEROID_BELTS_BY_STAR[starId] ?? generatedBeltsFor(starId)
 }

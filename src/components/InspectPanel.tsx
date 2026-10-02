@@ -18,7 +18,12 @@ import { OwnerNote, SimpleDistrictsTab, SimplePopulationTab, SimpleWorldSummary 
 import { ComplexDistrictsTab, ComplexWorldSummary } from './planet/ComplexPlanetTabs'
 import { DefenseTab } from './planet/DefenseTab'
 import { useColonyStore } from '../state/colonyStore'
-import { COLONY_PATROL_DAYS } from '../data/colonyData'
+import { COLONY_FOUNDING_DAYS, COLONY_PATROL_DAYS } from '../data/colonyData'
+import { canColonize, colonizeFromPlanet, colonyCostFor } from '../scene/colonies'
+import { useShipStore } from '../state/shipStore'
+import { useResourceStore } from '../state/resourceStore'
+import { useSurveyStore } from '../state/surveyStore'
+import { resolveShipClass } from '../state/shipClassResolver'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { usePlayerBodySurveyed } from '../scene/intel'
 
@@ -84,6 +89,61 @@ function ColonyRow({ bodyName }: { bodyName: string }) {
         {colony.stage === 'micro' ? `Micro-colony (patrol ${patrolled} / ${COLONY_PATROL_DAYS} days)` : 'Planetary colony'}
       </span>
     </div>
+  )
+}
+
+// Colonize from the planet menu (Simple mode): on a surveyed world nobody
+// holds, with land. "Colonize" sends one of your Colony Ships; "Let ships
+// choose" puts every idle Colony Ship on auto-settle, which picks the cheapest
+// world it may itself. Says why when it can't.
+function ColonizeRows({ bodyName }: { bodyName: string }) {
+  const [message, setMessage] = useState<string | null>(null)
+  const owner = useTerritoryStore((s) => s.bodyOwner[bodyName])
+  const simple = usePlayerStore((s) => s.economyModel === 'abstract')
+  const playerId = usePlayerStore((s) => s.selectedCountryId)
+  const ships = useShipStore((s) => s.ships)
+  // Re-check when what the rules read changes.
+  useResourceStore((s) => (playerId ? s.stateFor(playerId).amounts.influence : 0))
+  useSurveyStore((s) => (playerId ? s.discovered[playerId] : undefined))
+  if (!simple || !playerId || owner || bodyName === 'Sol') return null
+  const owners = useTerritoryStore.getState().bodyOwner
+  if ((groundSurface(bodyName, owners)?.mainland ?? -1) < 0) return null
+  const mine = ships.filter((s) => s.ownerId === playerId && resolveShipClass(s.classId)?.role === 'colony')
+  const checks = mine.map((s) => canColonize(s, bodyName, { anywhere: true }))
+  const okCheck = checks.find((c) => c.ok)
+  const why = mine.length === 0 ? 'You have no Colony Ship: build one in the Shipyard (Science & support)' : okCheck ? null : (checks.find((c) => !c.ok) as { reason: string } | undefined)?.reason ?? null
+  const cost = colonyCostFor(playerId, bodyName)
+  return (
+    <>
+      <div className="inspect-divider" />
+      <div className="ship-panel-btn-row">
+        <button
+          type="button"
+          className="detail-view-btn"
+          disabled={!!why}
+          title={why ?? `Send a Colony Ship to found a micro-colony here (${cost} influence, ${COLONY_FOUNDING_DAYS} days in orbit)`}
+          onClick={() => {
+            const r = colonizeFromPlanet(bodyName)
+            setMessage(r.ok ? `${r.shipName} is on its way` : r.reason)
+          }}
+        >
+          Colonize ({cost} influence)
+        </button>
+        <button
+          type="button"
+          className="detail-view-btn"
+          disabled={mine.length === 0}
+          title="Put every Colony Ship of yours on auto-settle: each picks the cheapest world it may settle, itself"
+          onClick={() => {
+            for (const s of mine) if (!s.founding && !s.arrivalCommand) useShipStore.getState().setAutomation(s.id, 'settle')
+            setMessage('Your Colony Ships will choose where to settle')
+          }}
+        >
+          Let ships choose
+        </button>
+      </div>
+      {(why || message) && <div className="ship-panel-hint">{message ?? `Can't colonize: ${why}`}</div>}
+    </>
   )
 }
 
@@ -181,6 +241,8 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
           )}
         </>
       )}
+
+      {body.kind !== 'star' && <ColonizeRows bodyName={body.name} />}
 
       {/* The way to the planetary map, for anything with ground to stand on —
           planets and moons alike (see BodyArmies for the same button under the

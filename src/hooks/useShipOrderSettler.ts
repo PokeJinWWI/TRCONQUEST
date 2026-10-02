@@ -48,7 +48,8 @@ export function settleShips(simDays: number): void {
       const warpReadySimDays = warpCooldownAfterArrival(ship)
       setShipLocation(
         ship.id,
-        resolveArrivalLocation(ship.order.destination, ship.id),
+        // Seeded by the fleet, so a fleet lands together instead of scattering.
+        resolveArrivalLocation(ship.order.destination, ship.fleetId),
         warpReadySimDays !== undefined ? { warpReadySimDays } : undefined,
         true,
       )

@@ -47,7 +47,7 @@ function YardBadge({ countryId, own }: { countryId: string; own: boolean }) {
               // The marker underneath selects its body on click.
               e.stopPropagation()
               useFleetTabStore.getState().setTab('shipyard')
-              useViewStore.getState().setNavCategory('Military', 'Navy')
+              useViewStore.getState().setNavCategory('Fleet Management', 'Navy')
             }
           : undefined
       }

@@ -15,7 +15,8 @@ import { PLANETS, PLANETS_BY_STAR, getPlanetsForStar, UNITS_PER_AU, AU_IN_KM, ty
 import { getPlanetPosition, getOrbitPosition, angleForYear, getMoonPosition } from './orbitMath'
 import type { MoonData } from './moonData'
 import { bodyIndex } from './territory'
-import { STARS, UNITS_PER_LY, starScenePosition, getSystemStars, findSystemStar, type StarComponent } from '../data/starData'
+import { starJumpRiskFactor } from './jumpRisk'
+import { STARS, UNITS_PER_LY, starScenePosition, getSystemStars, findStar, findSystemStar, type StarComponent } from '../data/starData'
 import { DAYS_PER_YEAR, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { isPlayerOwned } from '../state/shipRelations'
@@ -183,7 +184,7 @@ function starPosition(starId: string): Vector3 {
 }
 
 export function systemDisplayName(systemId: string): string {
-  return STARS.find((s) => s.id === systemId)?.name ?? systemId
+  return findStar(systemId)?.name ?? systemId
 }
 
 // Which system a ship currently belongs to, if any — null while it's out in
@@ -223,7 +224,16 @@ export interface FleetCluster {
 export function clusterRestingShipsByFleet(ships: ShipInstance[]): FleetCluster[] {
   const groups = new Map<string, ShipInstance[]>()
   for (const ship of ships) {
-    const key = ship.order ? null : combatLocationKey(ship.location)
+    // A fleet under way is one marker too: its ships share an order (same
+    // destination, same times), so they'd otherwise draw stacked, each with its
+    // own overlapping label. A bare point in space groups by its position.
+    const key = ship.order
+      ? `move:${ship.order.arrivalSimDays}:${ship.order.departSimDays}:${JSON.stringify(ship.order.destination)}`
+      : ship.location.kind === 'system-point'
+        ? `pt:${ship.location.systemId}:${ship.location.position.map((v) => v.toFixed(4)).join(',')}`
+        : ship.location.kind === 'interstellar-point'
+          ? `ipt:${ship.location.position.map((v) => v.toFixed(3)).join(',')}`
+          : combatLocationKey(ship.location)
     const groupKey = key ? `${ship.fleetId}::${key}` : `solo::${ship.id}`
     const arr = groups.get(groupKey) ?? []
     arr.push(ship)
@@ -707,9 +717,12 @@ export function hyperdriveLossChance(
   laneEstablished: boolean,
   coreFraction = 1,
   activelyEngaged = false,
+  // How this jump compares with an average one, for its distance and the mass
+  // of where it goes (scene/jumpRisk.ts). 1 = average, the default.
+  riskFactor = 1,
 ): number {
   if (hyperDrive.lossChanceOverride !== undefined) return hyperDrive.lossChanceOverride
-  const base = laneEstablished ? HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE : HYPERDRIVE_BASE_LOSS_CHANCE
+  const base = (laneEstablished ? HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE : HYPERDRIVE_BASE_LOSS_CHANCE) * riskFactor
   const modified = base + coreDamageRiskBonus(coreFraction) + (activelyEngaged ? ACTIVE_ENGAGEMENT_RISK_BONUS : 0)
   return Math.max(0, Math.min(1, modified))
 }
@@ -735,6 +748,33 @@ export function warpEscapeLossChance(coreFraction: number, activelyEngaged: bool
 // star to anchor a lane to — the jump still proceeds normally in that case
 // (the roll still happens), it just can't record a lane afterward, a
 // deliberate, documented gap rather than a bug (see Context.md).
+// The risk multiplier for this ship jumping to `starId` from where it is now:
+// the straight-line distance in light-years and the destination system's mass
+// (scene/jumpRisk.ts). 1 if the star is unknown.
+export function hyperdriveJumpRiskFactor(ship: ShipInstance, starId: string, simDays: number): number {
+  const star = STARS.find((s) => s.id === starId)
+  if (!star) return 1
+  const current = getShipRenderPosition(ship, simDays)
+  const here = current.space === 'system' ? STARS.find((s) => s.id === current.systemId) : undefined
+  const from = here ? new Vector3(...starScenePosition(here)) : current.space === 'interstellar' ? current.position : null
+  if (!from) return 1
+  return starJumpRiskFactor(from.distanceTo(new Vector3(...starScenePosition(star))) / UNITS_PER_LY, star)
+}
+
+// The chance this ship is lost jumping to `starId` right now, or null if it
+// would not jump at all (it warps, or has no usable hyperdrive): what planMove
+// rolls against, for showing the player before the order is given.
+export function hyperdriveJumpChance(ship: ShipInstance, starId: string, simDays: number): number | null {
+  const shipClass = resolveShipClass(ship.classId)
+  if (!shipClass) return null
+  const researched = useTechStore.getState().stateFor(ship.ownerId).researched
+  const hyperDrive = researched.has('hyperspace-theory') ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive') : undefined
+  if (!hyperDrive || (researched.has('warp-drives') && shipClass.ftlDrives.some((d) => d.kind === 'warp'))) return null
+  const origin = hyperlaneOriginStarId(ship, simDays)
+  const charted = origin !== null && useHyperlaneStore.getState().hasHyperlane(origin, starId)
+  return hyperdriveLossChance(hyperDrive, charted, coreHealthFraction(ship, shipClass), false, hyperdriveJumpRiskFactor(ship, starId, simDays))
+}
+
 function hyperlaneOriginStarId(ship: ShipInstance, simDays: number): string | null {
   const current = getShipRenderPosition(ship, simDays)
   if (current.space === 'system') return current.systemId ?? null
@@ -881,12 +921,13 @@ export function planMoveUnchecked(
       laneEstablished,
       coreHealthFraction(ship, shipClass),
       riskContext?.activelyEngaged ?? false,
+      hyperdriveJumpRiskFactor(ship, destination.starId, simDays),
     )
     if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
 
     return {
       kind: 'instant',
-      location: resolveArrivalLocation(destination, ship.id),
+      location: resolveArrivalLocation(destination, ship.fleetId),
       hyperdriveReadySimDays: simDays + hyperDrive.cooldownDays,
       hyperlaneEstablished: originStarId !== null ? [originStarId, destination.starId] : undefined,
     }

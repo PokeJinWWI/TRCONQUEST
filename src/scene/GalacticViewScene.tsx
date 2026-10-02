@@ -12,6 +12,8 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { NeighborhoodData } from '../data/neighborhoodData'
 import { NEIGHBORHOODS, neighborhoodScenePosition } from '../data/neighborhoodData'
 import { getStarsForNeighborhood } from '../data/starData'
+import { useObserverStore } from '../state/observerStore'
+import { empireClusterClaims } from './observerView'
 import { useViewStore } from '../state/viewStore'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
@@ -78,11 +80,14 @@ export function GalacticViewScene() {
   // Not the clock: see useStarbaseActivityKey (a scene subscribed to simDays re-rendered every frame).
   const starbaseActivity = useStarbaseActivityKey()
   const intel = usePlayerIntel()
-  const claimsByNeighborhood = useMemo(
-    () => new Map(NEIGHBORHOODS.map((n) => [n.id, neighborhoodClaim(n, bodyOwner, starbases, useGameTimeStore.getState().simDays, intel.known)])),
+  // Observer mode (a cheat) adds every empire's neighbourhood: a view override only.
+  const observer = useObserverStore((s) => s.on)
+  const claimsByNeighborhood = useMemo(() => {
+    const claims = new Map(NEIGHBORHOODS.map((n) => [n.id, neighborhoodClaim(n, bodyOwner, starbases, useGameTimeStore.getState().simDays, intel.known)]))
+    if (observer) for (const [id, claim] of empireClusterClaims()) claims.set(id, claim)
+    return claims
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bodyOwner, starbases, starbaseActivity, intel.known],
-  )
+  }, [bodyOwner, starbases, starbaseActivity, intel.known, observer])
 
   // If we're arriving here because the player zoomed out of a neighborhood's
   // interstellar view, inViewSelection is already seeded to that
