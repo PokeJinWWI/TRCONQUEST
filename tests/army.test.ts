@@ -142,11 +142,11 @@ console.log('\n=== 4. Landing: war, orbital superiority, and a clear site ===')
   const home = landingCheck(orbiting('t1', MARS, 'troop-transport', 'Mars'), cargo, [], owners, {}, atWar)
   check('landing at home is unloading, not an invasion', home.ok && home.kind === 'disembark')
   check('an empty transport has nothing to land', !landingCheck(t, [], [t], owners, {}, atWar).ok)
-  check("an unclaimed body can't be invaded", !landingCheck(orbiting('t1', MARS, 'troop-transport', 'Earth'), cargo, [], owners, {}, atWar).ok)
+  check("an unclaimed body can't be invaded", !landingCheck(orbiting('t1', MARS, 'troop-transport', 'Mercury'), cargo, [], owners, {}, atWar).ok)
   // Sandbox ground never gets an owner, so a no-nation faction needs another
   // way onto it — there's no invasion to fight over ground nobody holds.
   const rogueCargo = [army(SANDBOX_PLAYER_ID, 'assault', aboard('t2'))]
-  const rogueLanding = landingCheck(orbiting('t2', SANDBOX_PLAYER_ID, 'troop-transport', 'Earth'), rogueCargo, [], owners, {}, atWar)
+  const rogueLanding = landingCheck(orbiting('t2', SANDBOX_PLAYER_ID, 'troop-transport', 'Mercury'), rogueCargo, [], owners, {}, atWar)
   check('a sandbox faction can still land on unclaimed ground', rogueLanding.ok && rogueLanding.kind === 'disembark', rogueLanding.ok ? '' : rogueLanding.reason)
 
   // Where on the surface.

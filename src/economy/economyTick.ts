@@ -38,6 +38,7 @@ import { tickMonetary } from './monetaryPolicy'
 import { runForeignInvestmentAI } from './foreignInvestmentAI'
 import { TRANSPORT_LOSS, sellFromWorld, tradeBetweenNations } from './internationalTrade'
 import { goodIsScarce } from './scarcity'
+import { marketAccess, launchCapacity, interstellarFromWorlds, worldInfrastructure, infrastructureUsage } from './transport'
 
 const PRICE_ADJUST = 0.07
 export const WAGE_FLOOR = 5
@@ -125,7 +126,7 @@ export const GOVERNMENT_BASKET: { good: GoodId; weight: number }[] = [
   { good: 'retail', weight: 0.08 },
   { good: 'education', weight: 0.12 },
   { good: 'healthcare', weight: 0.12 },
-  { good: 'infrastructure', weight: 0.14 },
+  { good: 'transportation', weight: 0.14 },
   { good: 'paper', weight: 0.04 },
   { good: 'fuel', weight: 0.06 },
   { good: 'steel', weight: 0.06 },
@@ -155,7 +156,7 @@ const INVENTORY_DECAY = 0.08
 export const CAPITAL_UPKEEP: { good: GoodId; amount: number }[] = [
   { good: 'tools', amount: 6 },
   { good: 'machinery', amount: 3 },
-  { good: 'infrastructure', amount: 4 },
+  { good: 'transportation', amount: 4 },
 ]
 // Spending out of savings: a pop holding more than WEALTH_BUFFER_TICKS of its
 // income wants more of the everyday, comfort and luxury goods, in proportion to
@@ -516,7 +517,7 @@ function tickWorld(
   treasuryAvailable: number,
   poolByCountry: Map<string, number>,
   corpCountry: Map<string, string>,
-  // Currency rate (TSC value) per country id — for converting a cross-border
+  // Currency rate (E$ value) per country id — for converting a cross-border
   // construction draw from the host world's currency into the financing
   // country's currency (Stage 3 FX). Same-country builds convert 1:1.
   fxRate: Map<string, number>,
@@ -1209,10 +1210,16 @@ export function tickEconomy(
   // draws from later-processed nations are reflected.
   const poolByCountry = new Map(countries.map((c) => [c.id, Math.max(0, c.investmentPool)]))
   const corpCountry = new Map(corporations.map((c) => [c.id, c.countryId]))
-  // Currency rate per country (TSC value) for cross-border construction FX.
+  // Currency rate per country (E$ value) for cross-border construction FX.
   const fxRate = new Map(countries.map((c) => [c.id, c.currency?.rate ?? 1]))
 
   const freightLeft = new Map<string, number>() // freight capacity each nation has after domestic shipping
+  // Interstellar (merchant-marine) capacity per nation — what gates INTERNATIONAL
+  // trade (economy/transport.ts + starbase trade-hub modules via ai.interstellarBonus).
+  const interstellarLeft = new Map<string, number>()
+  // Bodies with a completed orbital space-elevator tether above them (set by the
+  // starbase layer); a paired anchor then gives fuel-free launch.
+  const tetheredBodies = ai.tetheredBodies ?? new Set<string>()
   for (const country of countries) {
     const owned = worlds.map((w, idx) => ({ w, idx })).filter(({ w }) => w.ownerId === country.id)
 
@@ -1241,7 +1248,11 @@ export function tickEconomy(
     const discretionary = Math.max(0, country.treasury) * TREASURY_SPEND_RATE
     for (const { w, idx } of owned) {
       const share = ownedPop > 0 ? w.pops.reduce((m, p) => m + p.populationSize, 0) / ownedPop : 0
-      const res = tickWorld(w, country.taxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR)
+      // A Special Economic Zone cuts this world's effective tax (income and
+      // profit) to attract investment (state/economyStore.setSpecialEconomicZone).
+      const sez = w.specialEconomicZone
+      const effTaxRate = sez?.active ? country.taxRate * (1 - sez.taxDiscount) : country.taxRate
+      const res = tickWorld(w, effTaxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR)
       runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
       stockpileSpend += res.stockpileSpend
@@ -1257,6 +1268,13 @@ export function tickEconomy(
       cpiNum += res.cpi * res.population
       prevCpiNum += res.prevCpi * res.population
       nextWorlds[idx] = res.world
+      // Transport capacities for this world (economy/transport.ts), for the UI.
+      const wInfra = worldInfrastructure(res.world)
+      const wUsage = infrastructureUsage(res.world)
+      res.report.infrastructure = wInfra
+      res.report.infrastructureUsage = wUsage
+      res.report.marketAccess = wUsage <= 1e-9 ? 1 : Math.max(0, Math.min(1, wInfra / wUsage))
+      res.report.launch = launchCapacity(res.world, tetheredBodies.has(res.world.id))
       reports.worlds[w.id] = res.report
       for (const [corpId, profit] of res.corpProfit) corpProfitTotal.set(corpId, (corpProfitTotal.get(corpId) ?? 0) + profit)
     }
@@ -1294,6 +1312,13 @@ export function tickEconomy(
     {
       let capacity = effectiveLogistics
       const idxs = owned.map((o) => o.idx)
+      // Market access (infrastructure) and launch (surface↔orbit) per world
+      // (economy/transport.ts). Access scales how much a world can ship/receive;
+      // launch is a per-world budget on moving goods off/onto the planet,
+      // consumed across all goods this tick. Seed worlds are built up enough to
+      // sit at ~full access and ample launch; a poor world is throttled.
+      const access = idxs.map((i) => marketAccess(nextWorlds[i]))
+      const launchLeft = idxs.map((i) => launchCapacity(nextWorlds[i], tetheredBodies.has(nextWorlds[i].id)))
       for (const g of GOOD_IDS) {
         if (capacity <= 1e-6) break
         // Looking ahead to next month (when what's on hand now is what's for
@@ -1304,14 +1329,20 @@ export function tickEconomy(
         // shipped for the next.)
         const own = idxs.map((i) => nextWorlds[i].buildings.reduce((s, b) => s + (b.inventory[g] ?? 0), 0))
         const wanted = idxs.map((i) => reports.worlds[nextWorlds[i].id]?.goods[g]?.demand ?? 0)
-        const surplus = own.map((o, k) => Math.max(0, o - wanted[k]))
-        const deficit = idxs.map((i, k) => Math.max(0, wanted[k] - own[k] - (nextWorlds[i].importStock[g] ?? 0)))
+        // Scaled by market access and capped by each world's remaining launch.
+        const surplus = own.map((o, k) => Math.min(Math.max(0, o - wanted[k]) * access[k], Math.max(0, launchLeft[k])))
+        const deficit = idxs.map((i, k) => Math.min(Math.max(0, wanted[k] - own[k] - (nextWorlds[i].importStock[g] ?? 0)) * access[k], Math.max(0, launchLeft[k])))
         const totalSurplus = surplus.reduce((a, b) => a + b, 0)
         const totalDeficit = deficit.reduce((a, b) => a + b, 0)
         const ship = Math.min(totalSurplus, totalDeficit, capacity)
         if (ship <= 1e-6) continue
         capacity -= ship
         tradeVolume += ship
+        for (let k = 0; k < idxs.length; k++) {
+          // Spend this world's launch budget on what it moved (out + in).
+          if (totalSurplus > 0 && surplus[k] > 0) launchLeft[k] -= ship * (surplus[k] / totalSurplus)
+          if (totalDeficit > 0 && deficit[k] > 0) launchLeft[k] -= ship * (deficit[k] / totalDeficit)
+        }
         idxs.forEach((i, k) => {
           // The state's merchants buy the surplus at the exporting world's
           // price (recovered when it sells where it lands — importSales): its
@@ -1454,6 +1485,9 @@ export function tickEconomy(
     }
     nextCountries.push({ ...country, treasury, bureaucracy, priceIndex: priceLevel, purchaseScale })
     freightLeft.set(country.id, Math.max(0, effectiveLogistics - tradeVolume))
+    // International trade runs on interstellar (merchant-marine) capacity, not the
+    // domestic freight pool: a nation's spaceports + its starbase trade hubs.
+    interstellarLeft.set(country.id, interstellarFromWorlds(owned.map((o) => nextWorlds[o.idx])) + (ai.interstellarBonus?.(country.id) ?? 0))
   }
 
   // --- Trade between nations (economy/internationalTrade.ts): what a world
@@ -1465,16 +1499,23 @@ export function tickEconomy(
       countries: nextCountries,
       // Next month's need, as in domestic shipping: demand less what the world
       // holds and what's already on its way; sellers keep their own demand.
+      // Scaled by the buyer world's market access (economy/transport.ts): a
+      // poorly-connected world imports less from abroad, same as at home.
       shortfall: (i, g) => {
         const w = nextWorlds[i]
         const held = w.buildings.reduce((s, b) => s + (b.inventory[g] ?? 0), 0)
-        return Math.max(0, (reports.worlds[w.id]?.goods[g]?.demand ?? 0) - held - (w.importStock[g] ?? 0))
+        return Math.max(0, (reports.worlds[w.id]?.goods[g]?.demand ?? 0) - held - (w.importStock[g] ?? 0)) * marketAccess(w)
       },
       keep: (i, g) => reports.worlds[nextWorlds[i].id]?.goods[g]?.demand ?? 0,
-      capacityLeft: freightLeft,
+      capacityLeft: interstellarLeft,
       atWar: ai.atWar ?? (() => false),
       canTrade: ai.canTrade,
       convert: (amount, from, to) => convertBetween(amount, from, to, nextCountries),
+      embargoed: ai.embargoed,
+      sharedMarket: ai.sharedMarket,
+      tariffRate: ai.tariffRate as ((buyer: string, good: GoodId) => number) | undefined,
+      importSubvention: ai.importSubvention as ((buyer: string, good: GoodId) => number) | undefined,
+      exportSubvention: ai.exportSubvention as ((seller: string, good: GoodId) => number) | undefined,
     })
     for (let i = 0; i < nextWorlds.length; i++) nextWorlds[i] = traded.worlds[i]
     const { ledger } = traded

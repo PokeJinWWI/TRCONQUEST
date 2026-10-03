@@ -229,6 +229,7 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   railway: 'infrastructure',
   spaceport: 'infrastructure',
   seaport: 'infrastructure',
+  spaceElevatorAnchor: 'infrastructure',
   // Public services
   clinic: 'services',
   school: 'services',
@@ -291,6 +292,10 @@ export interface Recipe {
   // Selectable production methods; the first is the default a fresh building
   // starts on.
   methods: ProductionMethod[]
+  // A tech this building needs before it can be built (data/techData.ts).
+  // Absent = buildable from the start. Enforced in state/economyStore.queueBuild
+  // and hidden in the build picker until researched.
+  requiresTech?: string
 }
 
 // The building roster (design doc Section 4). Real production chains with
@@ -1664,7 +1669,7 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'tools', amount: 50 },
           { good: 'electricity', amount: 80 },
         ],
-        outputs: [{ good: 'infrastructure', amount: 700 }],
+        outputs: [{ good: 'transportation', amount: 700 }],
         jobs: [
           { class: 'subsistence', count: 80 },
           { class: 'labor', count: 220 },
@@ -1687,7 +1692,7 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'fuel', amount: 100 },
           { good: 'electricity', amount: 80 },
         ],
-        outputs: [{ good: 'infrastructure', amount: 1100 }],
+        outputs: [{ good: 'transportation', amount: 1100 }],
         jobs: [
           { class: 'labor', count: 180 },
           { class: 'technical', count: 60 },
@@ -1699,11 +1704,14 @@ export const RECIPES: Record<string, Recipe> = {
     id: 'spaceport',
     label: 'Spaceport',
     category: 'services',
+    // Three production methods (economy/transport.ts reads the chosen method for
+    // the LAUNCH and INTERSTELLAR capacity each gives): a balanced freight hub,
+    // a lift-focused launch complex, and an interstellar merchant port.
     methods: [
       {
         id: 'standard',
         label: 'Orbital Freight Hub',
-        description: 'Aircraft and orbital lift connect the world off-planet — the greatest market access and freight capacity.',
+        description: 'Aircraft and orbital lift connect the world off-planet — balanced launch and interstellar freight capacity.',
         inputs: [
           { good: 'rockets', amount: 6 },
           { good: 'spaceships', amount: 1 },
@@ -1711,11 +1719,71 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'fuel', amount: 200 },
           { good: 'electricity', amount: 200 },
         ],
-        outputs: [{ good: 'infrastructure', amount: 900 }],
+        outputs: [{ good: 'transportation', amount: 900 }],
         jobs: [
           { class: 'labor', count: 120 },
           { class: 'technical', count: 120 },
           { class: 'professional', count: 60 },
+        ],
+      },
+      {
+        id: 'launch-complex',
+        label: 'Launch Complex',
+        description: 'Heavy rocketry maximises surface↔orbit LAUNCH capacity at the cost of interstellar freight.',
+        inputs: [
+          { good: 'rockets', amount: 16 },
+          { good: 'fuel', amount: 320 },
+          { good: 'electricity', amount: 240 },
+        ],
+        outputs: [{ good: 'transportation', amount: 700 }],
+        jobs: [
+          { class: 'labor', count: 160 },
+          { class: 'technical', count: 100 },
+          { class: 'professional', count: 40 },
+        ],
+      },
+      {
+        id: 'interstellar-port',
+        label: 'Interstellar Port',
+        description: 'A merchant-marine berth: maximises INTERSTELLAR freight (trade between stars) at the cost of raw lift.',
+        inputs: [
+          { good: 'spaceships', amount: 6 },
+          { good: 'fuel', amount: 180 },
+          { good: 'electricity', amount: 220 },
+        ],
+        outputs: [{ good: 'transportation', amount: 800 }],
+        jobs: [
+          { class: 'labor', count: 90 },
+          { class: 'technical', count: 140 },
+          { class: 'professional', count: 90 },
+        ],
+      },
+    ],
+  },
+
+  // A space elevator's ground anchor: a tethered ribbon to orbit. Paired with an
+  // orbital tether module on a starbase/ring over the same world it gives huge,
+  // fuel-free LAUNCH capacity (economy/transport.ts); alone it still helps.
+  // Gated by Orbital Tethers (data/techData.ts).
+  spaceElevatorAnchor: {
+    id: 'spaceElevatorAnchor',
+    label: 'Space Elevator Anchor',
+    category: 'services',
+    requiresTech: 'orbital-tethers',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Tether Ribbon',
+        description: 'A ground anchor and climber station for a tether to orbit — fuel-free lift when paired with an orbital tether above.',
+        inputs: [
+          { good: 'semiconductors', amount: 10 },
+          { good: 'electricalMachinery', amount: 8 },
+          { good: 'electricity', amount: 300 },
+        ],
+        outputs: [{ good: 'transportation', amount: 400 }],
+        jobs: [
+          { class: 'technical', count: 100 },
+          { class: 'professional', count: 80 },
         ],
       },
     ],
@@ -1736,7 +1804,7 @@ export const RECIPES: Record<string, Recipe> = {
           { good: 'fuel', amount: 120 },
           { good: 'electricity', amount: 100 },
         ],
-        outputs: [{ good: 'infrastructure', amount: 800 }],
+        outputs: [{ good: 'transportation', amount: 800 }],
         jobs: [
           { class: 'labor', count: 200 },
           { class: 'technical', count: 60 },

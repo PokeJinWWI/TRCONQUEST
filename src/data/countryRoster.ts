@@ -3,12 +3,11 @@ import { getCountry } from './countryData'
 // Which nations take part in which strategic systems. Data-only.
 //
 // Every country in countryData.COUNTRIES is a real nation: it owns ships,
-// territory, resources and a shipyard, and can be at war. What differs is who
-// DRIVES it when the player isn't: the three demo empires below run the
-// strategic AI (src/ai/); anything else (today, the Kingdom of Lalande) is
-// playable but dormant — no AI empire runs it, and AI empires never pick it as
-// a war target, until it gets its own treatment later.
-export const STRATEGIC_AI_COUNTRY_IDS: readonly string[] = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic']
+// territory, resources and a shipyard, can be at war, and runs the strategic AI
+// (src/ai/) when it isn't the player's. (Lalande sits alone in its own system,
+// so with no neighbours it rarely goes to war, but it still researches, surveys
+// and expands; Earth is the declining colossus in Sol.)
+export const STRATEGIC_AI_COUNTRY_IDS: readonly string[] = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic', 'kingdom-of-lalande', 'earth']
 
 // Whether the strategic AI should drive `countryId` right now — never the
 // player's own nation, and never a dormant one.

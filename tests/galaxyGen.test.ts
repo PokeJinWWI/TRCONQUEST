@@ -47,7 +47,7 @@ console.log('\n=== 1. Our own neighbourhood is untouched ===')
   check('STARS is still the 8 hand-authored systems', STARS.length === 8 && STARS[0].id === 'sol')
   check('PLANETS_BY_STAR is still those 8 systems', Object.keys(PLANETS_BY_STAR).length === 8)
   check('the Solar Neighbourhood serves STARS itself', getStarsForNeighborhood(SOLAR_NEIGHBORHOOD_ID) === STARS)
-  check('the four nations are unchanged', COUNTRIES.length === 4)
+  check('the home nations are unchanged', COUNTRIES.length === 5)
   check('no generated star in STARS', STARS.every((s) => !findGeneratedStar(s.id)))
 }
 

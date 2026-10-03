@@ -232,8 +232,11 @@ export const MIN_MAINLAND_FRACTION = 0.08
 // --- Key nodes ---------------------------------------------------------------
 
 // Cities on an inhabited world, by its district count (bodyStats.estimateSize).
+// More, smaller urban areas now that each city's footprint is a single node
+// (planetTerrain) rather than a wide ring — a populous world reads as dotted
+// with arcologies rather than one sprawl.
 export function citiesForDistricts(districts: number): number {
-  return Math.max(1, Math.min(4, Math.round(districts / 6)))
+  return Math.max(1, Math.min(7, Math.round(districts / 4)))
 }
 // Key nodes keep at least this many fine cells apart.
 export const KEY_MIN_SEPARATION_CELLS = 5

@@ -5176,6 +5176,42 @@ div.fleet-row .combat-density-row {
   gap: 6px;
 }
 
+/* Trade Policy tab: a per-good tariff/subvention grid. */
+.trade-policy-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+.trade-policy-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 6px;
+  align-items: center;
+}
+.trade-policy-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  padding-bottom: 2px;
+}
+.trade-policy-good {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trade-policy-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  color: inherit;
+  padding: 2px 4px;
+  font: inherit;
+}
+
 .dip-score {
   display: flex;
   align-items: center;

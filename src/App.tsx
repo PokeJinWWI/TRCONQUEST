@@ -16,6 +16,7 @@ import { ConfirmDialog } from './components/ConfirmDialog'
 import { EscapeMenu } from './components/EscapeMenu'
 import { useKeyboardControls } from './hooks/useKeyboardControls'
 import { DiplomacyToast } from './components/DiplomacyPanel'
+import { StarbasePanel } from './components/StarbasePanel'
 import { TimeControls } from './components/TimeControls'
 import { MapModesButton } from './components/MapModesButton'
 import { useGameClock } from './hooks/useGameClock'
@@ -176,6 +177,7 @@ function App() {
       <ConfirmDialog />
       <EscapeMenu />
       <DiplomacyToast />
+      <StarbasePanel />
     </div>
   )
 }

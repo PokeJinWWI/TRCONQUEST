@@ -32,7 +32,7 @@ import { getMoonsForPlanet } from './moonData'
 import { estimateSize } from './bodyStats'
 import { arc, nodePoint, surfaceMesh, type SurfacePoint } from './surfaceMesh'
 import { fromLonLat } from './mapProjection'
-import { COUNTRIES } from '../data/countryData'
+import { COUNTRIES, type FixedCity } from '../data/countryData'
 import { hasTopography, landValuesOf, realTerrain, reliefOf, topographyOf } from './bodyTopography'
 
 export const TERRAIN_IDS: TerrainId[] = ['ocean', 'plains', 'forest', 'desert', 'tundra', 'mountains', 'urban', 'rock', 'lava', 'cloud', 'aerostat']
@@ -234,15 +234,17 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
 
   const capitalOf = COUNTRIES.find((c) => c.capitalBodyName === bodyName && c.capitalCityAt)
   const capitalAt = capitalOf?.capitalCityAt ? fromLonLat((capitalOf.capitalCityAt[0] * Math.PI) / 180, (capitalOf.capitalCityAt[1] * Math.PI) / 180) : undefined
-  const keySlots = placeKeySlots(info.radiusKm, tier, terrain, components, mainland, elevRank, seed, capitalAt)
-  // Cities are urban ground: the slot and its ring of neighbours. The capital
-  // is the biggest city: two rings.
+  const keySlots = placeKeySlots(info.radiusKm, tier, terrain, components, mainland, elevRank, seed, capitalAt, capitalOf?.cities, capitalOf?.capitalCityName)
+  // Cities are urban ground. These are arcologies, not sprawl, and each map node
+  // already covers a wide area, so keep the footprint tight: a city is just its
+  // own node; the capital is the biggest, its node plus one ring of neighbours.
   for (const slot of keySlots) {
     if (slot.kind === 'outpost') continue
-    const ring = [slot.node, ...mesh.neighbors.fine[slot.node]]
-    const area = slot.kind === 'capital' ? [...new Set(ring.flatMap((k) => [k, ...mesh.neighbors.fine[k]]))] : ring
+    const area = slot.kind === 'capital' ? [slot.node, ...mesh.neighbors.fine[slot.node]] : [slot.node]
     for (const node of area) {
-      if (TERRAIN[TERRAIN_IDS[terrain[node]]].passable === 'all' && components[node] === mainland) terrain[node] = TERRAIN_INDEX.urban
+      // Urban on any walkable land (a capital may sit on a landmass other than
+      // the single biggest one — Earth's is in North America).
+      if (TERRAIN[TERRAIN_IDS[terrain[node]]].passable === 'all' && components[node] >= 0) terrain[node] = TERRAIN_INDEX.urban
     }
   }
 
@@ -347,18 +349,74 @@ function placeKeySlots(
   // Where the capital must be (a real place, as a surface point): the nearest
   // mainland node to it. Omitted: chosen by the terrain.
   capitalAt?: SurfacePoint,
+  // Fixed real-place cities (Earth's survivors + launch sites): each placed at
+  // its true coordinates on whatever landmass it falls on, named explicitly.
+  // When given (with a capital tier), these REPLACE the sampled cities.
+  fixedCities?: readonly FixedCity[],
+  capitalName?: string,
 ): KeySlot[] {
   if (tier === 'wild' || mainland < 0) return []
   const mesh = surfaceMesh()
   const cell = mesh.fineSpacingRad
+
+  // --- Fixed, real-place cities (Earth) ------------------------------------
+  // Place the capital and each named city at its real coordinates, snapped to
+  // the nearest walkable land node on ANY landmass, carrying its own name.
+  if (fixedCities && fixedCities.length > 0 && capitalAt && tier === 'capital') {
+    const nearestLand = (p: SurfacePoint): number => {
+      let best = -1
+      let bestD = Infinity
+      for (let i = 0; i < mesh.count.fine; i++) {
+        if (components[i] < 0 || TERRAIN_IDS[terrain[i]] === 'mountains') continue
+        const d = arc(nodePoint(i), p)
+        if (d < bestD) {
+          bestD = d
+          best = i
+        }
+      }
+      return best
+    }
+    const slots: KeySlot[] = []
+    const used = new Set<number>()
+    const place = (p: SurfacePoint, kind: KeyKind, name?: string) => {
+      let node = nearestLand(p)
+      // Nudge off a node already taken by another fixed city (coarse grid).
+      if (node >= 0 && used.has(node)) node = mesh.neighbors.fine[node].find((j) => components[j] >= 0 && !used.has(j)) ?? node
+      if (node < 0 || used.has(node)) return
+      used.add(node)
+      slots.push({ node, kind, name })
+    }
+    place(capitalAt, 'capital', capitalName)
+    for (const c of fixedCities) place(fromLonLat((c.at[0] * Math.PI) / 180, (c.at[1] * Math.PI) / 180), c.kind, c.name)
+    return slots
+  }
+  // The nation's HOME landmass. Normally the biggest continent, but a capital
+  // placed by capitalCityAt sits on whatever land it actually falls on — Earth's
+  // capital (Chicago) is in North America, not the single largest landmass
+  // (Eurasia–Africa), so forcing it onto `mainland` snapped it to the nearest
+  // Eurasian coast (Chukotka). Pick the landmass under the requested capital.
+  let home = mainland
+  if (capitalAt && tier === 'capital') {
+    let best = -1
+    let bestD = Infinity
+    for (let i = 0; i < mesh.count.fine; i++) {
+      if (components[i] < 0) continue // water
+      const d = arc(nodePoint(i), capitalAt)
+      if (d < bestD) {
+        bestD = d
+        best = i
+      }
+    }
+    if (best >= 0) home = components[best]
+  }
   const candidates: number[] = []
   for (let i = 0; i < mesh.count.fine; i++) {
-    if (components[i] === mainland && TERRAIN_IDS[terrain[i]] !== 'mountains') candidates.push(i)
+    if (components[i] === home && TERRAIN_IDS[terrain[i]] !== 'mountains') candidates.push(i)
   }
   if (candidates.length === 0) {
-    for (let i = 0; i < mesh.count.fine; i++) if (components[i] === mainland) candidates.push(i)
+    for (let i = 0; i < mesh.count.fine; i++) if (components[i] === home) candidates.push(i)
   }
-  const coastal = (i: number) => mesh.neighbors.fine[i].some((j) => components[j] !== mainland)
+  const coastal = (i: number) => mesh.neighbors.fine[i].some((j) => components[j] !== home)
   // Deterministic jitter so equal-looking worlds don't all put the capital
   // in the same place.
   const jitter = (i: number) => hash3(i, 3, 7, seed) * 0.15

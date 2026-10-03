@@ -16,6 +16,9 @@ import { liveBodyValue } from '../scene/peace'
 import { batteryDenial, groundKeySurface, hostileDefenseCount, shieldedFor } from '../state/defenseStore'
 import type { AiSnapshot } from './blackboard'
 import { useColonyStore } from '../state/colonyStore'
+import { useInternationalOrgStore } from '../state/internationalOrgStore'
+import { useSubjectStore } from '../state/subjectStore'
+import { useTradePolicyStore } from '../state/tradePolicyStore'
 
 export function captureSnapshot(simDays: number): AiSnapshot {
   const territory = useTerritoryStore.getState()
@@ -51,5 +54,8 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     hostileDefensesAt: hostileDefenseCount,
     shieldedFor,
     surfaceOf: (bodyName) => groundKeySurface(bodyName, territory.bodyOwner),
+    orgs: useInternationalOrgStore.getState().orgs,
+    subjections: useSubjectStore.getState().subjections,
+    embargoedPairs: new Set(Object.entries(useTradePolicyStore.getState().embargoes).filter(([, on]) => on).map(([k]) => k)),
   }
 }

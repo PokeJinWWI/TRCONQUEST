@@ -71,7 +71,10 @@ console.log('\n=== 4. Worlds still work as worlds ===')
   for (const c of COUNTRIES) {
     const s = surfaceOf(c.capitalBodyName, 'capital')
     const kinds = s.keySlots.map((k) => k.kind)
-    check(`${c.capitalBodyName}: the capital and its spaceport fit on its mainland`, kinds.includes('capital') && kinds.includes('spaceport') && s.keySlots.every((k) => s.landComponent[k.node] === s.mainland), kinds.join(','))
+    // All key slots sit on one connected landmass — the capital's (which for
+    // Earth is North America, not the single biggest continent, Eurasia).
+    const capComp = s.landComponent[s.keySlots.find((k) => k.kind === 'capital')!.node]
+    check(`${c.capitalBodyName}: the capital and its spaceport fit on one landmass`, kinds.includes('capital') && kinds.includes('spaceport') && s.keySlots.every((k) => s.landComponent[k.node] === capComp), kinds.join(','))
     const capital = s.keySlots.find((k) => k.kind === 'capital')!
     const urban = (k: number) => [k, ...surfaceMesh().neighbors.fine[k]].flatMap((j) => [j, ...surfaceMesh().neighbors.fine[j]]).filter((j, i, a) => a.indexOf(j) === i && terrainAt(s, j) === 'urban').length
     const cities = s.keySlots.filter((k) => k.kind === 'city')

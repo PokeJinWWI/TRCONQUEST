@@ -567,17 +567,17 @@ function TradeTab({ countryId, s, r }: TabProps) {
     <>
       <div className="abs-headline">
         <span className="abs-econtype">{s.currency.name} ({s.currency.code})</span>
-        <span className="abs-rating" title="Exchange rate: TSC per unit">{rate.toFixed(3)} TSC</span>
+        <span className="abs-rating" title="Exchange rate: E$ per unit">{rate.toFixed(3)} E$</span>
       </div>
-      <TimeChart title="Exchange rate (TSC per unit)" endTick={tick} format={(v) => v.toFixed(2)} series={[{ label: s.currency.code, color: '#6fe3ff', values: h.map((p) => p.rate) }]} tip="How many Terra Standard Credits one unit of your currency buys. Higher = stronger: imports get cheaper, exports earn less." />
+      <TimeChart title="Exchange rate (E$ per unit)" endTick={tick} format={(v) => v.toFixed(2)} series={[{ label: s.currency.code, color: '#6fe3ff', values: h.map((p) => p.rate) }]} tip="How many Earth Dollars one unit of your currency buys. Higher = stronger: imports get cheaper, exports earn less." />
       <div className="cb-facts">
         <div title="Where fundamentals are pulling the rate: low inflation, stability, low debt and a trade surplus strengthen it"><span className="inspect-label">Fundamentals</span><span className={fund >= rate ? 'econ-pos' : 'econ-neg'}>{fund.toFixed(3)} {fund >= rate ? '▲' : '▼'}</span></div>
         <div><span className="inspect-label">Imports / mo</span><span>{formatMoney(r.importCost)}</span></div>
         <div><span className="inspect-label">Exports / mo</span><span>{formatMoney(r.exportRevenue)}</span></div>
         <div><span className="inspect-label">Trade balance</span><span className={r.tradeBalance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.tradeBalance)}/mo</span></div>
-        <div title="Trade capacity: what your spaceports can move a month, bought and sold together, in TSC of goods at base value. Short of rockets or spaceships they carry less; with no spaceport you trade nothing. Build spaceports (urban district) for more.">
+        <div title="Trade capacity: what your spaceports can move a month, bought and sold together, in E$ of goods at base value. Short of rockets or spaceships they carry less; with no spaceport you trade nothing. Build spaceports (urban district) for more.">
           <span className="inspect-label">Spaceports</span>
-          <span className={traded > r.tradeCapacity * 0.95 ? 'econ-neg' : undefined}>{Math.round(traded).toLocaleString()} / {Math.round(r.tradeCapacity).toLocaleString()} TSC</span>
+          <span className={traded > r.tradeCapacity * 0.95 ? 'econ-neg' : undefined}>{Math.round(traded).toLocaleString()} / {Math.round(r.tradeCapacity).toLocaleString()} E$</span>
         </div>
       </div>
 
@@ -619,7 +619,7 @@ function TradeTab({ countryId, s, r }: TabProps) {
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Nations</div>
       <table className="abs-table">
-        <thead><tr><th>Nation</th><th>Currency</th><th title="GDP converted to TSC at today's rate">GDP (TSC)</th></tr></thead>
+        <thead><tr><th>Nation</th><th>Currency</th><th title="GDP converted to E$ at today's rate">GDP (E$)</th></tr></thead>
         <tbody>
           {Object.values(all).map((n) => (
             <tr key={n.countryId} className={n.countryId === countryId ? 'abs-me' : ''}>

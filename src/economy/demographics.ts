@@ -16,6 +16,7 @@ export const CULTURES: Record<string, Culture> = {
   venusian: { id: 'venusian', name: 'Venusian', color: '#3d7dc9' },
   arcadian: { id: 'arcadian', name: 'Arcadian', color: '#6aa878' },
   tidalian: { id: 'tidalian', name: 'Tidalian', color: '#5ad1a0' },
+  terran: { id: 'terran', name: 'Terran', color: '#b89b5e' },
 }
 
 export interface Religion {

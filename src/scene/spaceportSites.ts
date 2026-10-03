@@ -60,7 +60,9 @@ function placeSites(surface: BodySurface, count: number): { node: number; outlie
   const taken = new Set(surface.keySlots.map((k) => k.node))
   const candidates: number[] = []
   for (let i = 0; i < mesh.count.fine; i++) {
-    if (surface.landComponent[i] !== surface.mainland || taken.has(i)) continue
+    // Any walkable landmass, not just the single biggest one — otherwise a
+    // multi-continent world (Earth) piles every spaceport onto Eurasia–Africa.
+    if (surface.landComponent[i] < 0 || taken.has(i)) continue
     const t = TERRAIN_IDS[surface.terrain[i]]
     if (t === 'mountains' || !TERRAIN[t].paintable) continue
     candidates.push(i)
@@ -76,7 +78,7 @@ function placeSites(surface: BodySurface, count: number): { node: number; outlie
   }
   const height = (i: number) => (relief && hi > lo ? (relief[i] - lo) / (hi - lo) : terrainAt(surface, i) === 'rock' ? 0.7 : 0.3)
   const settlements = surface.keySlots.filter((k) => k.kind === 'capital' || k.kind === 'city' || k.kind === 'outpost').map((k) => nodePoint(k.node))
-  const coastal = (i: number) => mesh.neighbors.fine[i].some((j) => surface.landComponent[j] !== surface.mainland)
+  const coastal = (i: number) => mesh.neighbors.fine[i].some((j) => surface.landComponent[j] < 0)
 
   const picked: { node: number; outlier: boolean }[] = []
   const points = () => [...surface.keySlots.map((k) => nodePoint(k.node)), ...picked.map((p) => nodePoint(p.node))]

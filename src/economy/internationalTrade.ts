@@ -77,6 +77,32 @@ export interface TradeInput {
   canTrade?: (a: string, b: string) => boolean
   // Money of `from` country's currency in `to`'s (fx.convertBetween).
   convert: (amount: number, from: string, to: string) => number
+  // --- Trade policy (state/tradePolicyStore.ts), all absent = no policy. ---
+  // A blanket embargo blocks all trade between the two nations outright.
+  embargoed?: (a: string, b: string) => boolean
+  // Two nations in a shared market (org economic-market pillar, bilateral
+  // trade agreement, or integrated subject) trade tariff-free.
+  sharedMarket?: (a: string, b: string) => boolean
+  // The buyer's ad-valorem import tariff on a good (0..1), raising the landed
+  // cost and feeding the buyer's treasury. Skipped inside a shared market.
+  tariffRate?: (buyer: string, good: GoodId) => number
+  // A subsidy the buyer's treasury pays per unit imported (0..1), lowering the
+  // effective landed cost to encourage bringing a good in.
+  importSubvention?: (buyer: string, good: GoodId) => number
+  // A subsidy the seller's treasury pays per unit exported (0..1), making its
+  // goods more competitive abroad (lowers the landed cost in the buyer's eyes).
+  exportSubvention?: (seller: string, good: GoodId) => number
+}
+
+// The factor trade policy applies to a good's landed cost for one buyer/seller
+// pair: a tariff raises it, either subvention lowers it; a shared market waives
+// the tariff. Clamped so it never goes negative.
+function policyFactor(input: TradeInput, buyer: string, seller: string, g: GoodId): number {
+  const shared = input.sharedMarket?.(buyer, seller) ?? false
+  const tariff = shared ? 0 : (input.tariffRate?.(buyer, g) ?? 0)
+  const impSub = input.importSubvention?.(buyer, g) ?? 0
+  const expSub = input.exportSubvention?.(seller, g) ?? 0
+  return Math.max(0, (1 + tariff) * (1 - impSub) * (1 - expSub))
 }
 
 export function tradeBetweenNations(input: TradeInput): { worlds: World[]; ledger: TradeLedger } {
@@ -95,8 +121,8 @@ export function tradeBetweenNations(input: TradeInput): { worlds: World[]; ledge
       const buyPrice = worlds[b].market.prices[g]
       // Sellers abroad, at peace, whose landed cost undercuts the buyer's price.
       const sellers = worlds
-        .map((w, i) => ({ i, landed: input.convert(w.market.prices[g], w.ownerId, buyer) / (1 - TRANSPORT_LOSS) }))
-        .filter(({ i, landed }) => worlds[i].ownerId !== buyer && left[i] > 1e-6 && !input.atWar(buyer, worlds[i].ownerId) && (input.canTrade?.(buyer, worlds[i].ownerId) ?? true) && landed < buyPrice)
+        .map((w, i) => ({ i, landed: (input.convert(w.market.prices[g], w.ownerId, buyer) / (1 - TRANSPORT_LOSS)) * policyFactor(input, buyer, w.ownerId, g) }))
+        .filter(({ i, landed }) => worlds[i].ownerId !== buyer && left[i] > 1e-6 && !input.atWar(buyer, worlds[i].ownerId) && !(input.embargoed?.(buyer, worlds[i].ownerId) ?? false) && (input.canTrade?.(buyer, worlds[i].ownerId) ?? true) && landed < buyPrice)
       const offered = sellers.reduce((s, x) => s + left[x.i], 0)
       if (offered <= 1e-6) continue
       // Ship enough that what ARRIVES covers the shortfall, as far as stock allows.
@@ -114,6 +140,16 @@ export function tradeBetweenNations(input: TradeInput): { worlds: World[]; ledge
         add(ledger.treasury, buyer, -paid)
         add(ledger.value, buyer, paid)
         add(ledger.volume, buyer, amount)
+        // Trade-policy fiscal flows on top of the goods payment: the buyer's
+        // tariff is revenue to its treasury, an import subvention a cost to it,
+        // an export subvention a cost to the seller's treasury (its currency).
+        const shared = input.sharedMarket?.(buyer, seller.ownerId) ?? false
+        const tariff = shared ? 0 : (input.tariffRate?.(buyer, g) ?? 0)
+        const impSub = input.importSubvention?.(buyer, g) ?? 0
+        const expSub = input.exportSubvention?.(seller.ownerId, g) ?? 0
+        if (tariff) add(ledger.treasury, buyer, tariff * paid)
+        if (impSub) add(ledger.treasury, buyer, -impSub * paid)
+        if (expSub) add(ledger.treasury, seller.ownerId, -expSub * amount * price)
         const w = worlds[b]
         worlds[b] = { ...w, importStock: { ...w.importStock, [g]: (w.importStock[g] ?? 0) + amount * (1 - TRANSPORT_LOSS) } }
       }

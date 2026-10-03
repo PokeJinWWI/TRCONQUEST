@@ -281,13 +281,13 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
           <>
             <div className="cb-facts">
               <div><span className="inspect-label">Currency</span><span>{country.currency.name} ({country.currency.code})</span></div>
-              <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} TSC</span></div>
+              <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} E$</span></div>
               <div><span className="inspect-label">Regime</span><span>{exchangeRateRegimeDef(cb.exchangeRegime).name}</span></div>
               {cb.exchangeRegime !== 'float' && (
                 <div>
                   <span className="inspect-label">Peg target</span>
                   <span>
-                    {country.currency.target.toFixed(3)} TSC{' '}
+                    {country.currency.target.toFixed(3)} E${' '}
                     <span style={{ opacity: 0.6 }}>
                       ({country.currency.rate >= country.currency.target ? 'held' : `−${(((country.currency.target - country.currency.rate) / country.currency.target) * 100).toFixed(1)}%`})
                     </span>
@@ -297,7 +297,7 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
               <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
             </div>
             <div className="ship-panel-hint" style={{ marginTop: 2 }}>
-              1 TSC = the Terra Standard Credit, the interstellar reference. A higher rate is a stronger currency; cross-border
+              1 E$ = the Earth Dollar, the interstellar reference. A higher rate is a stronger currency; cross-border
               trade, dividends and investment convert through it. The full cross-nation table is in Markets → Forex.
             </div>
           </>

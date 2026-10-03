@@ -22,6 +22,9 @@ import { resyncMilitarySlots, useDefenseStore } from '../state/defenseStore'
 import { LANDMARKS } from '../data/landmarks'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { STARBASE_TIERS } from '../data/starbaseData'
+import { useDiplomacyStore, relationIn } from '../state/diplomacyStore'
 
 export function setUpNewGame(): void {
   const { ships } = useShipStore.getState()
@@ -37,8 +40,36 @@ export function setUpNewGame(): void {
   seedStartingArmies()
   seedStartingDefenses()
   seedColonies(useGameTimeStore.getState().simDays)
+  seedRingOfHeaven()
+  seedStartingRelations()
   // Complex mode runs the generated empires' economies too (economy/empireSeed.ts).
   if (economyModel() === 'complex') useEconomyStore.getState().seedEmpires()
+}
+
+// Earth, the old imperial core, eyes the breakaway inner worlds warily: it
+// starts a little cool toward Mars and Venus (no war, just mutual distrust).
+// Guarded so a re-setup doesn't keep stacking the penalty.
+function seedStartingRelations(): void {
+  const diplomacy = useDiplomacyStore.getState()
+  for (const other of ['imperial-state-of-mars', 'republic-of-venus']) {
+    if (relationIn(diplomacy.relations, 'earth', other).opinion === 0) diplomacy.adjustOpinion('earth', other, -15)
+  }
+}
+
+// Earth begins with the "Ring of Heaven": a pre-built orbital-ring Starbase over
+// its home system, a relic of the old empire's power — a shipyard and heavy
+// defences, already operational. Guarded so a reset/re-setup doesn't duplicate it.
+function seedRingOfHeaven(): void {
+  const starbases = useStarbaseStore.getState().starbases
+  if (starbases.some((sb) => sb.ownerId === 'earth')) return
+  useStarbaseStore.getState().addStarbase({
+    starId: 'sol',
+    ownerId: 'earth',
+    integrity: STARBASE_TIERS['orbital-ring'].integrity,
+    readySimDays: 0,
+    tier: 'orbital-ring',
+    modules: ['shipyard', 'defense-battery', 'trade-hub'],
+  })
 }
 
 // The starting warships sail as one fleet: as separate fleets, "attack

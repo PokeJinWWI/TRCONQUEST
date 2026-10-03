@@ -65,8 +65,8 @@ const ENTRIES: { terms: string[]; term: string; text: string }[] = [
   { terms: ['currency in circulation'], term: 'Currency in circulation', text: 'Physical cash in people\'s hands.' },
   // --- Currency & trade -----------------------------------------------------------
   { terms: ['currency'], term: 'Currency', text: "A nation's money. Each nation has its own, and its value against other currencies floats." },
-  { terms: ['exchange rate', 'exchange rate (tsc per unit)'], term: 'Exchange rate', text: 'What one unit of your currency is worth in Terra Standard Credits (TSC). A stronger currency makes imports cheaper and exports earn less.' },
-  { terms: ['tsc', 'terra standard credit'], term: 'Terra Standard Credit (TSC)', text: 'The common yardstick every currency is priced against.' },
+  { terms: ['exchange rate', 'exchange rate (tsc per unit)'], term: 'Exchange rate', text: 'What one unit of your currency is worth in Earth Dollars (E$). A stronger currency makes imports cheaper and exports earn less.' },
+  { terms: ['earth dollar', 'e$', 'tsc', 'terra standard credit'], term: 'Earth Dollar (E$)', text: 'The interstellar reserve currency, issued and regulated by the Central Bank of Earth — the common yardstick every nation\'s currency is priced against.' },
   { terms: ['forex', 'fx'], term: 'Forex', text: 'Foreign exchange — the market where currencies are traded against each other.' },
   { terms: ['fx reserves'], term: 'FX reserves', text: 'Foreign currency the central bank holds, used to defend its own currency\'s value.' },
   { terms: ['peg target', 'peg'], term: 'Currency peg', text: 'A promise to hold the currency at a fixed rate, defended by spending FX reserves. If the reserves run out, the peg breaks.' },

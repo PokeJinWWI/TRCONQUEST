@@ -6,7 +6,7 @@ import { exchangeRateRegimeDef } from '../economy/centralBank'
 import { convert } from '../economy/fx'
 
 // Markets → Forex. The interstellar currency market: every nation's currency,
-// its exchange rate against the Terra Standard Credit (TSC), its regime, and the
+// its exchange rate against the Earth Dollar (E$), its regime, and the
 // reserves its central bank holds to defend it. Rates against YOUR currency are
 // shown too, so you can read what a cross-border deal really costs. Read-only —
 // currency policy is set on your own Central Bank panel.
@@ -26,7 +26,7 @@ export function ForexPanel() {
     <div className="econ-panel">
       <div className="econ-subtitle">Foreign Exchange</div>
       <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
-        1 TSC = the Terra Standard Credit, the common reference. A higher rate is a stronger currency.
+        1 E$ = the Earth Dollar, issued by the Central Bank of Earth — the common reference. A higher rate is a stronger currency.
         {home ? ` Prices are also shown in your ${home.code}.` : ''}
       </div>
       <table className="fx-table">
@@ -34,7 +34,7 @@ export function ForexPanel() {
           <tr>
             <th>Nation</th>
             <th>Currency</th>
-            <th style={{ textAlign: 'right' }}>Rate (TSC)</th>
+            <th style={{ textAlign: 'right' }}>Rate (E$)</th>
             {home && <th style={{ textAlign: 'right' }}>Per {home.code}</th>}
             <th>Regime</th>
             <th style={{ textAlign: 'right' }}>FX reserves</th>

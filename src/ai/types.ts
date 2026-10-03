@@ -3,6 +3,7 @@ import type { BombardStance } from '../data/defenseData'
 // fit together).
 import type { PeaceTerms } from '../data/diplomacyData'
 import type { ResourceId } from '../data/resourceData'
+import type { SubjectType } from '../data/subjectData'
 
 // What an agent wants done. Agents never touch stores: they return intents,
 // and the executor (executor.ts) carries them out through the same store
@@ -36,6 +37,20 @@ export type Intent =
   // AI keeps its transports in their own fleet and gathers its warships.
   | { kind: 'split-fleet'; shipIds: string[] }
   | { kind: 'merge-fleets'; intoFleetId: string; fromFleetId: string }
+  // --- Diplomacy (executor.ts → scene funnels) ---
+  // Found a new international organization of this preset, led by this empire.
+  | { kind: 'found-org'; presetId: string; name: string }
+  // Join an existing organization.
+  | { kind: 'join-org'; orgId: string }
+  // Answer a defense pact: join `allyId`'s war against `enemyId` as a co-attacker.
+  | { kind: 'join-war-as-ally'; allyId: string; enemyId: string }
+  // Offer subjection to a much weaker neighbour at peace (established directly
+  // between AI empires, like an accepted peace offer).
+  | { kind: 'offer-subjection'; targetId: string; subjectType: SubjectType }
+  // Blanket-embargo a nation (trade policy); used against active enemies.
+  | { kind: 'declare-embargo'; targetId: string }
+  // Escalate this empire's own skirmish to a limited war.
+  | { kind: 'escalate-conflict'; warId: string }
 
 export type Posture = 'peace' | 'buildup' | 'defensive' | 'war'
 

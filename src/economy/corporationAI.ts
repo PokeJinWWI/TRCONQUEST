@@ -193,7 +193,9 @@ function invest(corp: Corporation, worlds: World[], tick: number, investmentPool
   let bestFound: { recipeId: string; worldId: string; score: number } | null = null
   for (const w of worlds) {
     const home = w.ownerId === corp.countryId
-    if (!home && !openHosts.has(w.ownerId)) continue // can't invest in a closed nation
+    // Can't invest in a closed nation — unless this very world is a Special
+    // Economic Zone, which is open to foreign capital whatever its nation's policy.
+    if (!home && !openHosts.has(w.ownerId) && !w.specialEconomicZone?.active) continue
     for (const recipeId of FOUNDABLE_SECTORS) {
       if (!districtRoom(w, recipeId) || !scarce(recipeId, w)) continue
       const m = grossMargin(recipeId, w) * (home ? 1 : FOREIGN_BUILD_BIAS)

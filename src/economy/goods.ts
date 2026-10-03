@@ -95,10 +95,12 @@ export type GoodId =
   | 'education'
   | 'retail'
   | 'onlineServices'
-  // Infrastructure — the transport/utility backbone. Consumed by buildings and
-  // pops, and it raises the world's MARKET ACCESS: more infrastructure = more
-  // freight capacity for inter-world trade (see logistics in economyTick).
-  | 'infrastructure'
+  // Transportation — the freight/haulage good (locomotives, trucks, haulers).
+  // Consumed by buildings and pops; the transport buildings (road/rail/port)
+  // that produce it also raise the world's INFRASTRUCTURE capacity, which gates
+  // MARKET ACCESS (see economy/transport.ts). The good and the capacity are
+  // distinct (Vic3-style): this is the good, infrastructure is the capacity.
+  | 'transportation'
 
 export const GOOD_IDS: GoodId[] = [
   'electricity',
@@ -152,7 +154,7 @@ export const GOOD_IDS: GoodId[] = [
   'education',
   'retail',
   'onlineServices',
-  'infrastructure',
+  'transportation',
 ]
 
 export type GoodCategory = 'power' | 'raw' | 'agricultural' | 'intermediate' | 'consumer' | 'service'
@@ -217,7 +219,7 @@ export const GOODS: Record<GoodId, GoodDef> = {
   education: { id: 'education', label: 'Education', category: 'service', basePrice: 11 },
   retail: { id: 'retail', label: 'Retail', category: 'service', basePrice: 7 },
   onlineServices: { id: 'onlineServices', label: 'Online Services', category: 'service', basePrice: 9 },
-  infrastructure: { id: 'infrastructure', label: 'Infrastructure', category: 'service', basePrice: 8 },
+  transportation: { id: 'transportation', label: 'Transportation', category: 'service', basePrice: 8 },
 }
 
 // A price never goes to zero (a good stays worth *something* even in glut, and

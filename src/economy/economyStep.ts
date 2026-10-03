@@ -8,6 +8,7 @@
 // produces goes out through `EconomyStepOutput`.
 import { tickEconomy } from './economyTick'
 import type { Bank, CentralBankEvent, Corporation, Country, CountryFiscal, MonetaryAggregates, World, WorldReport } from './economyTypes'
+import type { TradePolicy } from '../data/tradePolicyData'
 
 // One sampled point of a country's headline fiscal metrics, appended each tick
 // — the series the finance graphs plot.
@@ -115,6 +116,19 @@ export interface EconomyStepInput {
   // 'core' group (the original four, as always). Absent = everyone reaches
   // everyone.
   tradeGroups?: Record<string, string>
+  // --- Trade policy (state/tradePolicyStore.ts), serialized for the worker. ---
+  // Each nation's tariff/subvention schedule by good id; absent = none.
+  tradePolicies?: Record<string, TradePolicy>
+  // Pairs (pairKey strings) under a blanket embargo — no trade at all.
+  embargoPairs?: string[]
+  // Pairs (pairKey strings) in a shared market — trade tariff-free.
+  sharedMarketPairs?: string[]
+  // Body names with a completed orbital space-elevator tether (starbase module):
+  // a paired ground anchor there gives fuel-free launch (economy/transport.ts).
+  tetheredBodyNames?: string[]
+  // Extra national interstellar (merchant-marine) capacity from starbase
+  // trade-hub modules, by country id.
+  interstellarBonusByCountry?: Record<string, number>
 }
 
 export interface EconomyStepOutput {
@@ -140,6 +154,17 @@ export function runEconomySteps(input: EconomyStepInput): EconomyStepOutput {
   const atWar = (a: string, b: string) => a !== b && wars.has(pairKeyOf(a, b))
   const groups = input.tradeGroups
   const canTrade = groups ? (a: string, b: string) => (groups[a] ?? 'core') === (groups[b] ?? 'core') : undefined
+  const policies = input.tradePolicies
+  const tariffRate = policies ? (buyer: string, good: string) => policies[buyer]?.tariffs[good] ?? 0 : undefined
+  const importSubvention = policies ? (buyer: string, good: string) => policies[buyer]?.importSubventions[good] ?? 0 : undefined
+  const exportSubvention = policies ? (seller: string, good: string) => policies[seller]?.exportSubventions[good] ?? 0 : undefined
+  const embargoes = input.embargoPairs ? new Set(input.embargoPairs) : undefined
+  const embargoed = embargoes ? (a: string, b: string) => embargoes.has(pairKeyOf(a, b)) : undefined
+  const sharedPairs = input.sharedMarketPairs ? new Set(input.sharedMarketPairs) : undefined
+  const sharedMarket = sharedPairs ? (a: string, b: string) => sharedPairs.has(pairKeyOf(a, b)) : undefined
+  const tetheredBodies = input.tetheredBodyNames ? new Set(input.tetheredBodyNames) : undefined
+  const interstellarByCountry = input.interstellarBonusByCountry
+  const interstellarBonus = interstellarByCountry ? (id: string) => interstellarByCountry[id] ?? 0 : undefined
   let { countries, worlds, corporations, banks } = input
   let worldReports: Record<string, WorldReport> = {}
   let countryReports: Record<string, CountryFiscal> = {}
@@ -147,7 +172,7 @@ export function runEconomySteps(input: EconomyStepInput): EconomyStepOutput {
   const events: CentralBankEvent[] = []
   const samples: Record<string, FiscalSample[]> = {}
   for (let i = 0; i < input.steps; i++) {
-    const res = tickEconomy(countries, worlds, corporations, { humanCountryIds: input.humanCountryIds, tick: input.startTick + i + 1, enableAI: true, atWar, canTrade }, banks)
+    const res = tickEconomy(countries, worlds, corporations, { humanCountryIds: input.humanCountryIds, tick: input.startTick + i + 1, enableAI: true, atWar, canTrade, embargoed, sharedMarket, tariffRate, importSubvention, exportSubvention, tetheredBodies, interstellarBonus }, banks)
     countries = res.countries
     worlds = res.worlds
     corporations = res.corporations

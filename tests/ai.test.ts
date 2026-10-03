@@ -47,6 +47,10 @@ import { useBombardmentStore } from '../src/state/bombardmentStore'
 import { resolveShipyards } from '../src/hooks/useShipyardResolver'
 import { useTechStore } from '../src/state/techStore'
 import { useStarbaseStore } from '../src/state/starbaseStore'
+import { useInternationalOrgStore } from '../src/state/internationalOrgStore'
+import { useSubjectStore, isSubjectOf } from '../src/state/subjectStore'
+import { useTradePolicyStore, isEmbargoed } from '../src/state/tradePolicyStore'
+import { executeIntents } from '../src/ai/executor'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -77,6 +81,9 @@ function freshWorld() {
   useTechStore.setState({ byCountry: {} })
   useSurveyStore.setState({ discovered: {}, known: {}, reports: [] })
   useStarbaseStore.setState({ starbases: [] })
+  useInternationalOrgStore.getState().reset()
+  useSubjectStore.getState().reset()
+  useTradePolicyStore.getState().reset()
   usePlayerStore.setState({ selectedCountryId: LALANDE })
   setUpNewGame()
   for (const c of COUNTRIES) seedStrategicResources(c.id)
@@ -141,17 +148,19 @@ console.log('\n=== 2. The Strategist ===')
   const truce = strategist(buildBlackboard(MARS, captureSnapshot(late)), captureSnapshot(late))
   check('no war during a truce', !has(truce.intents, 'declare-war'))
 
-  // Lalande: give it a body in Sol so it's a neighbour, and make Mars hate it.
+  // Every nation now runs the AI (no dormant nations): a hated, outgunned
+  // neighbour is a valid war target whether or not it's the player. Lalande,
+  // given a body in Sol so it's a neighbour and a grudge, is fair game.
   freshWorld()
-  usePlayerStore.setState({ selectedCountryId: ORION }) // Lalande is dormant, not the player
+  usePlayerStore.setState({ selectedCountryId: ORION })
   useTerritoryStore.getState().cedeBody('Titan', LALANDE)
   useDiplomacyStore.getState().adjustOpinion(MARS, LALANDE, -90)
   spawnExtra(MARS, 'cruiser', 3)
   const lal = strategist(buildBlackboard(MARS, captureSnapshot(late)), captureSnapshot(late))
-  check('a dormant nation (Lalande) is never an AI war target', !lal.intents.some((i) => i.kind === 'declare-war' && i.targetId === LALANDE))
+  check('a hated, outgunned neighbour (Lalande) is now a valid AI war target', lal.intents.some((i) => i.kind === 'declare-war' && i.targetId === LALANDE))
   usePlayerStore.setState({ selectedCountryId: LALANDE })
   const lalPlayer = strategist(buildBlackboard(MARS, captureSnapshot(late)), captureSnapshot(late))
-  check('...unless it is the player', lalPlayer.intents.some((i) => i.kind === 'declare-war' && i.targetId === LALANDE))
+  check('...and just as much when it is the player', lalPlayer.intents.some((i) => i.kind === 'declare-war' && i.targetId === LALANDE))
 }
 
 console.log('\n=== 3. The Diplomat ===')
@@ -199,6 +208,63 @@ console.log('\n=== 3. The Diplomat ===')
   check('winning battles early with Venus still in reach, Mars presses on', !has(early.intents, 'propose-peace'))
   const later = diplomat(buildBlackboard(MARS, captureSnapshot(400)), captureSnapshot(400), INITIAL_AI_MEMORY)
   check('...a year in, with no world it can claim, it demands reparations', later.intents.some((i) => i.kind === 'propose-peace' && i.terms.kind === 'reparations' && i.terms.share > 0))
+}
+
+console.log('\n=== 3c. The Diplomat: organizations, subjects and trade policy ===')
+{
+  // At war, the Diplomat embargoes the enemy (once).
+  freshWorld()
+  declareWarOn(MARS, VENUS, 0)
+  const atWarOut = diplomat(buildBlackboard(MARS, captureSnapshot(10)), captureSnapshot(10), INITIAL_AI_MEMORY)
+  check('an empire embargoes a nation it is at war with', atWarOut.intents.some((i) => i.kind === 'declare-embargo' && i.targetId === VENUS))
+  useTradePolicyStore.getState().declareEmbargo(MARS, VENUS)
+  const already = diplomat(buildBlackboard(MARS, captureSnapshot(10)), captureSnapshot(10), INITIAL_AI_MEMORY)
+  check('...and does not repeat an embargo already in place', !already.intents.some((i) => i.kind === 'declare-embargo'))
+
+  // A friendly neighbour at peace → found an organization.
+  freshWorld()
+  useDiplomacyStore.getState().adjustOpinion(MARS, VENUS, 40)
+  const friendly = diplomat(buildBlackboard(MARS, captureSnapshot(10)), captureSnapshot(10), INITIAL_AI_MEMORY)
+  check('with a friendly neighbour, an empire founds an organization', friendly.intents.some((i) => i.kind === 'found-org'))
+  // Executing it, then re-planning Venus joins Mars's org.
+  executeIntents(MARS, friendly.intents, 10, LALANDE)
+  const venusJoins = diplomat(buildBlackboard(VENUS, captureSnapshot(12)), captureSnapshot(12), INITIAL_AI_MEMORY)
+  check('a friendly neighbour joins an organization that already exists', venusJoins.intents.some((i) => i.kind === 'join-org'))
+  executeIntents(VENUS, venusJoins.intents, 12, LALANDE)
+  check('both nations are now in the organization', useInternationalOrgStore.getState().orgs[0]?.memberIds.includes(VENUS))
+
+  // Fellow political-forum members keep each other's opinion up.
+  const topUp = diplomat(buildBlackboard(MARS, captureSnapshot(14)), captureSnapshot(14), INITIAL_AI_MEMORY)
+  check('org members top up each other\'s opinion', topUp.intents.some((i) => i.kind === 'adjust-opinion' && i.otherId === VENUS && i.delta > 0))
+
+  // A much weaker, well-liked neighbour → an offer of subjection.
+  freshWorld()
+  useDiplomacyStore.getState().adjustOpinion(MARS, VENUS, 10)
+  spawnExtra(MARS, 'cruiser', 6)
+  const dominant = diplomat(buildBlackboard(MARS, captureSnapshot(10)), captureSnapshot(10), INITIAL_AI_MEMORY)
+  const offer = dominant.intents.find((i) => i.kind === 'offer-subjection')
+  check('a dominant empire offers subjection to a weak neighbour', !!offer)
+  if (offer && offer.kind === 'offer-subjection') {
+    executeIntents(MARS, [offer], 10, LALANDE)
+    check('...and executing it makes that neighbour a subject of Mars', isSubjectOf(offer.targetId, MARS))
+  }
+
+  // A defense pact drags a member into its ally's war.
+  freshWorld()
+  const orgId = useInternationalOrgStore.getState().founded(MARS, 'defense-alliance', 'Pact', 0)
+  useInternationalOrgStore.getState().join(orgId, VENUS)
+  declareWarOn(ORION, VENUS, 5) // Orion attacks Venus, Mars's defense-pact ally
+  const pactOut = diplomat(buildBlackboard(MARS, captureSnapshot(10)), captureSnapshot(10), INITIAL_AI_MEMORY)
+  check('a defense-pact member answers the call against the attacker', pactOut.intents.some((i) => i.kind === 'join-war-as-ally' && i.allyId === VENUS && i.enemyId === ORION))
+  executeIntents(MARS, pactOut.intents.filter((i) => i.kind === 'join-war-as-ally'), 10, LALANDE)
+  check('...and Mars goes to war with the attacker', useDiplomacyStore.getState().wars.some((w) => (w.attackerId === MARS && w.defenderId === ORION) || (w.attackerId === ORION && w.defenderId === MARS)))
+
+  // A skirmish being won is escalated to a real war.
+  freshWorld()
+  declareWarOn(MARS, VENUS, 0, 'skirmish')
+  useTerritoryStore.getState().occupyBody('Venus', MARS)
+  const skirmish = diplomat(buildBlackboard(MARS, captureSnapshot(10)), captureSnapshot(10), INITIAL_AI_MEMORY)
+  check('a skirmish being won is escalated to a limited war', skirmish.intents.some((i) => i.kind === 'escalate-conflict'))
 }
 
 console.log('\n=== 4. The Shipwright ===')

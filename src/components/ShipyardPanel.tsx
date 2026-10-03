@@ -11,6 +11,8 @@ import { usePlayerStore } from '../state/playerStore'
 import { useShipyardStore } from '../state/shipyardStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { shipyardSlotsForWorld } from '../scene/shipyardLogic'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { starbaseShipyardSlots } from '../scene/starbaseLogic'
 import { useTechStore } from '../state/techStore'
 import { findTech } from '../data/techData'
 import { isAbstractEconomy } from '../state/playerStore'
@@ -67,7 +69,7 @@ export function ShipyardPanel() {
   const [onlyAffordable, setOnlyAffordable] = useState(false)
   const [tab, setTab] = useState<string>('slips')
 
-  const slots = shipyardSlotsForWorld(world)
+  const slots = shipyardSlotsForWorld(world) + starbaseShipyardSlots(countryId, useStarbaseStore.getState().starbases, simDays)
   const capital = getCountry(countryId)?.capitalBodyName
   const designClasses = useMemo(() => designs.map((d) => resolveShipClass(`design:${d.id}`)).filter((c): c is ShipClass => !!c), [designs])
   const building = orders.filter((o) => o.startedSimDays !== null)

@@ -1,5 +1,11 @@
 import { create } from 'zustand'
 import { useDiplomacyStore } from './diplomacyStore'
+import { useTradePolicyStore, inSharedMarket } from './tradePolicyStore'
+import { pairKey } from '../data/diplomacyData'
+import { useStarbaseStore } from './starbaseStore'
+import { isStarbaseActive, starbaseModulesOf, starbaseAnchorBody } from '../scene/starbaseLogic'
+import { useGameTimeStore } from './gameTimeStore'
+import { TRADE_HUB_INTERSTELLAR } from '../data/starbaseData'
 import { advanceEmpiresInline, onEmpireUpdate, runOffThread, startEmpires, stopEmpires } from './economyEngine'
 import type { EmpireSummary, EmpireUpdate } from '../economy/empireSim'
 import { HISTORY_LENGTH, MAX_CATCH_UP_TICKS, runEconomySteps, unemploymentOf, type EconomyStepInput, type EconomyStepOutput, type FiscalSample } from '../economy/economyStep'
@@ -26,7 +32,9 @@ import {
 } from '../economy/centralBank'
 import { convertBetween } from '../economy/fx'
 import { RECIPES, constructionWork } from '../economy/recipes'
+import { useTechStore } from './techStore'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
+import { SEZ_DEFAULT_TAX_DISCOUNT } from '../economy/economyTypes'
 import type { GoodId } from '../economy/goods'
 import { hasInvestmentRights } from './treatyStore'
 
@@ -331,6 +339,7 @@ interface EconomyStore {
   // one world. 0 (or below) clears the target — tickWorld then neither fills
   // nor releases against it, though any already-held reserve is left in place.
   setStockpileTarget: (worldId: string, good: GoodId, targetAmount: number) => void
+  setSpecialEconomicZone: (worldId: string, active: boolean, taxDiscount?: number) => void
   // The state buys `shares` of a corporation on the exchange (costs treasury);
   // negative sells. Moves shares between the public float and the state.
   tradeShares: (countryId: string, corporationId: string, shares: number) => void
@@ -433,6 +442,28 @@ function stepInputOf(state: Pick<EconomyStore, 'countries' | 'worlds' | 'corpora
   const localPlayer = usePlayerStore.getState().selectedCountryId
   const wars: string[] = []
   for (const [key, relation] of Object.entries(useDiplomacyStore.getState().relations)) if (relation.status === 'war') wars.push(key)
+  // Trade policy (state/tradePolicyStore.ts), serialized for the worker.
+  const tp = useTradePolicyStore.getState()
+  const embargoPairs = Object.entries(tp.embargoes).filter(([, on]) => on).map(([k]) => k)
+  const ids = state.countries.map((c) => c.id)
+  const sharedMarketPairs: string[] = []
+  for (let i = 0; i < ids.length; i++)
+    for (let j = i + 1; j < ids.length; j++) if (inSharedMarket(ids[i], ids[j])) sharedMarketPairs.push(pairKey(ids[i], ids[j]))
+  // Starbase transport tie-ins: which bodies have an orbital space-elevator
+  // tether, and each nation's interstellar bonus from trade-hub modules.
+  const sim = useGameTimeStore.getState().simDays
+  const tetheredBodyNames: string[] = []
+  const interstellarBonusByCountry: Record<string, number> = {}
+  for (const sb of useStarbaseStore.getState().starbases) {
+    if (!isStarbaseActive(sb, sim)) continue
+    const modules = starbaseModulesOf(sb)
+    if (modules.includes('space-elevator-tether')) {
+      const anchor = starbaseAnchorBody(sb.starId)
+      if (anchor) tetheredBodyNames.push(anchor)
+    }
+    const hubs = modules.filter((m) => m === 'trade-hub').length
+    if (hubs > 0) interstellarBonusByCountry[sb.ownerId] = (interstellarBonusByCountry[sb.ownerId] ?? 0) + hubs * TRADE_HUB_INTERSTELLAR
+  }
   return {
     countries: state.countries,
     worlds: state.worlds,
@@ -444,6 +475,11 @@ function stepInputOf(state: Pick<EconomyStore, 'countries' | 'worlds' | 'corpora
     // countryAI.ts). Multiplayer-ready: this local store knows only its own player.
     humanCountryIds: localPlayer ? [localPlayer] : [],
     warPairs: wars,
+    tradePolicies: tp.policies,
+    embargoPairs,
+    sharedMarketPairs,
+    tetheredBodyNames,
+    interstellarBonusByCountry,
   }
 }
 
@@ -599,6 +635,10 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
     set((state) => ({
       worlds: state.worlds.map((w) => {
         if (w.id !== worldId) return w
+        // Tech gate: a building requiring a tech (e.g. the space-elevator anchor)
+        // can't be queued until the owning nation has researched it.
+        const need = RECIPES[recipeId]?.requiresTech
+        if (need && !useTechStore.getState().stateFor(w.ownerId).researched.has(need)) return w
         if (!canBuild(w, recipeId)) return w // district full — no room
         constructionCounter += 1
         const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionWork(recipeId), progress: 0, owner }
@@ -944,6 +984,13 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
         else stockpileTargets[good] = amt
         return { ...w, stockpileTargets }
       }),
+    })),
+
+  setSpecialEconomicZone: (worldId, active, taxDiscount = SEZ_DEFAULT_TAX_DISCOUNT) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) =>
+        w.id === worldId ? { ...w, specialEconomicZone: active ? { active: true, taxDiscount: Math.max(0, Math.min(1, taxDiscount)) } : undefined } : w,
+      ),
     })),
 
   tradeShares: (countryId, corporationId, shares) =>

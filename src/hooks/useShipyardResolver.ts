@@ -4,6 +4,8 @@ import { useEconomyStore, worldByName } from '../state/economyStore'
 import { useShipyardStore } from '../state/shipyardStore'
 import { COUNTRIES } from '../data/countryData'
 import { shipyardSlotsForWorld, spawnBuiltShip, stepShipyardQueue } from '../scene/shipyardLogic'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { starbaseShipyardSlots } from '../scene/starbaseLogic'
 
 // One step of every nation's shipyard up to `simDays` — exported so a
 // headless run (tests) can drive it without React.
@@ -14,7 +16,8 @@ export function resolveShipyards(simDays: number): void {
     if (orders.length === 0) continue
 
     const world = worldByName(useEconomyStore.getState().worlds, country.capitalBodyName)
-    const step = stepShipyardQueue(orders, shipyardSlotsForWorld(world), simDays)
+    const slots = shipyardSlotsForWorld(world) + starbaseShipyardSlots(country.id, useStarbaseStore.getState().starbases, simDays)
+    const step = stepShipyardQueue(orders, slots, simDays)
     const changed = step.completed.length > 0 || step.orders.some((o, i) => o.startedSimDays !== orders[i]?.startedSimDays)
     if (!changed) continue
 
