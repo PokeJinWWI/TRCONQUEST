@@ -1,6 +1,6 @@
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
-import { formatMoney } from '../economy/format'
+import { formatIED } from '../economy/format'
 import { bankCapital, capitalRatio } from '../economy/banking'
 
 // Economy → Banking. The country's commercial banks (Stage 2 central banking) —
@@ -16,6 +16,8 @@ export function BanksPanel() {
   const money = useEconomyStore((s) => (country ? s.moneyReports[country.id] : undefined))
 
   if (!country) return <div className="nav-placeholder">No national government in context.</div>
+  const rate = country.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   const mine = banks.filter((b) => b.countryId === country.id)
 
   if (mine.length === 0) {
@@ -37,10 +39,10 @@ export function BanksPanel() {
 
       {money && (
         <div className="cb-facts" style={{ marginBottom: 10 }}>
-          <div><span className="inspect-label">System deposits</span><span>{formatMoney(money.deposits)}</span></div>
-          <div><span className="inspect-label">System loans</span><span>{formatMoney(money.loans)}</span></div>
-          <div><span className="inspect-label">System capital</span><span>{formatMoney(money.bankCapital)}</span></div>
-          <div><span className="inspect-label">Discount borrowing</span><span>{formatMoney(money.cbBorrowings)}</span></div>
+          <div><span className="inspect-label">System deposits</span><span>{fmt(money.deposits)}</span></div>
+          <div><span className="inspect-label">System loans</span><span>{fmt(money.loans)}</span></div>
+          <div><span className="inspect-label">System capital</span><span>{fmt(money.bankCapital)}</span></div>
+          <div><span className="inspect-label">Discount borrowing</span><span>{fmt(money.cbBorrowings)}</span></div>
         </div>
       )}
 
@@ -59,19 +61,19 @@ export function BanksPanel() {
             <div className="bank-sheet">
               <div className="bank-col">
                 <div className="bank-col-title">Assets</div>
-                <div><span>Reserves</span><span>{formatMoney(b.reserves)}</span></div>
-                <div><span>Loans</span><span>{formatMoney(b.loans)}</span></div>
-                <div><span>Securities</span><span>{formatMoney(b.securities)}</span></div>
+                <div><span>Reserves</span><span>{fmt(b.reserves)}</span></div>
+                <div><span>Loans</span><span>{fmt(b.loans)}</span></div>
+                <div><span>Securities</span><span>{fmt(b.securities)}</span></div>
               </div>
               <div className="bank-col">
                 <div className="bank-col-title">Liabilities</div>
-                <div><span>Deposits</span><span>{formatMoney(b.deposits)}</span></div>
-                <div><span>CB borrowing</span><span>{formatMoney(b.cbBorrowings)}</span></div>
-                <div><span>Capital</span><span>{formatMoney(cap)}</span></div>
+                <div><span>Deposits</span><span>{fmt(b.deposits)}</span></div>
+                <div><span>CB borrowing</span><span>{fmt(b.cbBorrowings)}</span></div>
+                <div><span>Capital</span><span>{fmt(cap)}</span></div>
               </div>
             </div>
             <div className="bank-foot">
-              <span>Profit / tick <b className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</b></span>
+              <span>Profit / tick <b className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{fmt(b.lastProfit)}</b></span>
               <span>Risk appetite <b>{Math.round(b.riskAppetite * 100)}%</b></span>
             </div>
           </div>

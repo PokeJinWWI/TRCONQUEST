@@ -36,7 +36,9 @@ const RANGES = [
 ] as const
 
 const W = 300
-const PAD_L = 46
+// Wide enough for the longest money label — "IED 197.58T" and negatives — which
+// are drawn right-anchored at PAD_L − 4 and would otherwise clip off the left.
+const PAD_L = 66
 const PAD_R = 6
 const PAD_T = 6
 const PAD_B = 16

@@ -98,6 +98,15 @@ const BRANCH_TECHS: TechNode[] = [
     cost: 120,
     prerequisites: [['orbital-construction']],
   },
+  {
+    id: 'metallic-hydrogen',
+    name: 'Metallic Hydrogen',
+    category: 'engineering',
+    description:
+      'Compressing gas-giant hydrogen into metastable metallic hydrogen — a vast, clean source of rocket fuel skimmed straight from the clouds of a gas giant. Unlocks the Metallic Hydrogen Plant.',
+    cost: 300,
+    prerequisites: [['quantum-mechanics']],
+  },
 
   // --- Thermodynamics ------------------------------------------------------
   {

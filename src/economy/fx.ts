@@ -1,7 +1,7 @@
 // Currencies + foreign exchange (design: Central Banking System, Stage 3 — full
 // multi-currency). Every country issues its own currency with a floating (or
-// pegged) exchange rate against a common numeraire, the Earth Dollar
-// (E$). Domestic economies are unchanged — every treasury, price, wage and cash
+// pegged) exchange rate against a common numeraire, the International Earth
+// Dollar (IED). Domestic economies are unchanged — every treasury, price, wage and cash
 // balance is simply reinterpreted as being denominated in that country's own
 // currency. The exchange rate matters ONLY where value crosses a border:
 // repatriated dividends, buying foreign equity, and cross-border construction

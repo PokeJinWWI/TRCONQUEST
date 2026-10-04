@@ -52,12 +52,16 @@ export const BASELINE_ORGANIC: SpeciesTemplate = {
       // and grain). Weights are the preferred mix; shortages shift it.
       { id: 'staple-food', label: 'Staple Food', base: 0.55, goods: [{ good: 'grains', weight: 3 }, { good: 'groceries', weight: 2 }] },
       { id: 'protein', label: 'Protein', base: 0.22, goods: [{ good: 'meat', weight: 1 }, { good: 'fish', weight: 1 }] },
+      // Drinking water — the one thing every pop needs. Cheap, inelastic.
+      { id: 'water', label: 'Water', base: 0.08, goods: [{ good: 'water', weight: 1 }] },
     ],
     everyday: [
       { id: 'clothing', label: 'Clothing', base: 0.12, goods: [{ good: 'textiles', weight: 1 }] },
       { id: 'household-goods', label: 'Household Goods', base: 0.3, goods: [{ good: 'consumerGoods', weight: 3 }, { good: 'furniture', weight: 1 }] },
       { id: 'energy', label: 'Energy', base: 0.15, goods: [{ good: 'electricity', weight: 1 }] },
       { id: 'everyday-services', label: 'Services', base: 0.12, goods: [{ good: 'retail', weight: 1 }] },
+      // Coffee, tea and sugar — the everyday cup and sweetener (substitutable).
+      { id: 'beverages', label: 'Beverages & Sweets', base: 0.06, goods: [{ good: 'coffee', weight: 2 }, { good: 'tea', weight: 2 }, { good: 'sugar', weight: 2 }] },
       { id: 'transportation', label: 'Transportation', base: 0.06, goods: [{ good: 'transportation', weight: 1 }] },
     ],
     healthcare: [
@@ -71,6 +75,8 @@ export const BASELINE_ORGANIC: SpeciesTemplate = {
     luxury: [
       { id: 'luxuries', label: 'Luxuries', base: 0.02, goods: [{ good: 'luxuryGoods', weight: 2 }, { good: 'art', weight: 1 }] },
       { id: 'fine-transport', label: 'Fine Transport', base: 0.0025, goods: [{ good: 'aircraft', weight: 1 }] },
+      // The rich buy pleasure craft — yachts and private boats (ocean-going ships).
+      { id: 'pleasure-craft', label: 'Pleasure Craft', base: 0.0018, goods: [{ good: 'oceanGoingShips', weight: 1 }] },
     ],
   },
 }
@@ -86,6 +92,8 @@ export const TIDALIAN: SpeciesTemplate = {
       // Tidalians (aquatic) lean toward fish over meat, but the same substitution.
       { id: 'staple-food', label: 'Staple Food', base: 0.55, goods: [{ good: 'grains', weight: 3 }, { good: 'groceries', weight: 2 }] },
       { id: 'protein', label: 'Protein', base: 0.26, goods: [{ good: 'fish', weight: 3 }, { good: 'meat', weight: 1 }] },
+      // Aquatic pops still need fresh (drinking/habitat) water.
+      { id: 'water', label: 'Water', base: 0.09, goods: [{ good: 'water', weight: 1 }] },
     ],
     everyday: [
       { id: 'clothing', label: 'Clothing', base: 0.12, goods: [{ good: 'textiles', weight: 1 }] },

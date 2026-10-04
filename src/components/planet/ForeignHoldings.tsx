@@ -7,7 +7,7 @@ import { useTerritoryStore } from '../../state/territoryStore'
 import { canOpen } from '../../scene/holdings'
 import { holdingContext, worldGdpYearOf } from '../../state/nationEconomy'
 import { BRANCH_PROFIT_SHARE } from '../../data/holdingsData'
-import { formatMoney } from '../../economy/format'
+import { formatIED } from '../../economy/format'
 import { PlanetIcon } from './PlanetIcons'
 
 // Foreign buildings in a world's Urban district (both economy modes): a tile
@@ -42,7 +42,7 @@ export function ForeignHoldingsRow({ bodyName, playerId }: { bodyName: string; p
           const income = h.kind === 'branchOffice' ? worldGdpYearOf(bodyName) * BRANCH_PROFIT_SHARE : 0
           return (
             <div key={h.id} className="pl-tile foreign" style={{ borderColor: owner.color, color: owner.color }}
-              title={`${owner.name}'s ${def.name}\n${def.description}${income > 0 ? `\nEarns its owner about ${formatMoney(income)} a year` : ''}`}>
+              title={`${owner.name}'s ${def.name}\n${def.description}${income > 0 ? `\nEarns its owner about ${formatIED(income)} a year` : ''}`}>
               <PlanetIcon id={h.kind} size={22} />
               <span className="pl-tile-name">{def.name}</span>
               <span className="pl-flag" style={{ background: owner.color }} />
@@ -54,7 +54,7 @@ export function ForeignHoldingsRow({ bodyName, playerId }: { bodyName: string; p
         })}
         {offers.map(({ kind, check }) => (
           <button key={kind} type="button" className="pl-tile empty" disabled={!check.ok}
-            title={check.ok ? `Open a ${HOLDING_DEFS[kind].name} here — costs ${formatMoney(check.cost)}\n${HOLDING_DEFS[kind].description}` : `${HOLDING_DEFS[kind].name}: ${(check as { reason: string }).reason}`}
+            title={check.ok ? `Open a ${HOLDING_DEFS[kind].name} here — costs ${formatIED(check.cost)}\n${HOLDING_DEFS[kind].description}` : `${HOLDING_DEFS[kind].name}: ${(check as { reason: string }).reason}`}
             onClick={() => doOpen(kind)}>
             <PlanetIcon id={kind} size={18} />
             <span className="pl-tile-name">Open {HOLDING_DEFS[kind].name}</span>
@@ -87,7 +87,7 @@ export function HoldingsAbroad({ playerId }: { playerId: string }) {
                 <PlanetIcon id={h.kind} size={12} /> {HOLDING_DEFS[h.kind].name} — {h.bodyName}
                 <span className="abs-dim"> ({host ? ownerDisplay(host).name : '—'})</span>
               </span>
-              <span className="abs-dim">{h.kind === 'branchOffice' ? `+${formatMoney(income)}/yr` : 'opinion ↑'}</span>
+              <span className="abs-dim">{h.kind === 'branchOffice' ? `+${formatIED(income)}/yr` : 'opinion ↑'}</span>
               <span />
               <button type="button" className="abs-x" title="Close it" onClick={() => close(h.id)}>×</button>
             </div>

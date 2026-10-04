@@ -1,7 +1,7 @@
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { sharePrice, corporationValue } from '../economy/economyTick'
-import { formatMoney } from '../economy/format'
+import { formatIED } from '../economy/format'
 import { getCountry } from '../data/countryData'
 
 const BLOCK = 50 // shares traded per click
@@ -20,6 +20,8 @@ export function StockExchangePanel() {
 
   if (!countryId) return <div className="nav-placeholder">No nation selected.</div>
   const treasury = countries.find((c) => c.id === countryId)?.treasury ?? 0
+  const rate = countries.find((c) => c.id === countryId)?.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   // Listed: every corporation (you can invest across the board).
   const listed = corporations
 
@@ -27,7 +29,7 @@ export function StockExchangePanel() {
     <div className="econ-panel">
       <div className="econ-summary">
         <span>
-          <span className="econ-summary-label">Stock Exchange</span> · Treasury {formatMoney(treasury)}
+          <span className="econ-summary-label">Stock Exchange</span> · Treasury {fmt(treasury)}
         </span>
       </div>
       {listed.length === 0 ? (
@@ -67,8 +69,8 @@ export function StockExchangePanel() {
                     {c.name}
                     {foreign && <span className="econ-owner-tag econ-owner-corporation" style={{ marginLeft: 5, fontSize: 9 }} title={`Foreign — based in ${getCountry(c.countryId)?.name ?? c.countryId}${hostClosed ? '; closed to foreign capital' : ''}`}>foreign</span>}
                   </td>
-                  <td>{formatMoney(price)}</td>
-                  <td>{formatMoney(corporationValue(c, worlds))}</td>
+                  <td>{fmt(price)}</td>
+                  <td>{fmt(corporationValue(c, worlds))}</td>
                   <td title={foreign ? 'Your government’s stake' : 'Home-state stake'}>{Math.round((myStake / c.totalShares) * 100)}%</td>
                   <td>{Math.round((float / c.totalShares) * 100)}%</td>
                   <td>
@@ -77,7 +79,7 @@ export function StockExchangePanel() {
                         type="button"
                         className="stock-btn stock-buy"
                         disabled={!canBuy}
-                        title={hostClosed ? `${getCountry(c.countryId)?.name ?? 'This country'} is closed to foreign capital` : canBuy ? `Buy ${Math.min(BLOCK, float)} shares for ${formatMoney(buyCost)}${foreign ? ' (foreign investment)' : ''}` : 'No float available or treasury too low'}
+                        title={hostClosed ? `${getCountry(c.countryId)?.name ?? 'This country'} is closed to foreign capital` : canBuy ? `Buy ${Math.min(BLOCK, float)} shares for ${fmt(buyCost)}${foreign ? ' (foreign investment)' : ''}` : 'No float available or treasury too low'}
                         onClick={buy}
                       >
                         Buy

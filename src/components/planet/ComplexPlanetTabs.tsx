@@ -14,7 +14,7 @@ import {
 } from '../../economy/districts'
 import { useEconomyStore } from '../../state/economyStore'
 import { useTerritoryStore } from '../../state/territoryStore'
-import { formatMoney, formatPop } from '../../economy/format'
+import { formatIED, formatPop } from '../../economy/format'
 import type { Building, BuildingOwner, ConstructionOrder, Country, World } from '../../economy/economyTypes'
 import { PlanetIcon } from './PlanetIcons'
 import { usePlanetViewStore } from '../../state/planetViewStore'
@@ -37,6 +37,7 @@ function ownerLabel(owner: BuildingOwner, corpName: (id: string) => string): str
 }
 
 export function ComplexWorldSummary({ world }: { world: World }) {
+  const ownerRate = useEconomyStore((s) => s.countries.find((c) => c.id === world.ownerId)?.currency?.rate ?? 1)
   const pop = world.pops.reduce((n, p) => n + p.populationSize, 0)
   const jobs = world.buildings.reduce((n, b) => n + (b.jobsPosted ?? 0), 0)
   const employed = world.buildings.reduce((n, b) => n + (b.employed ?? 0), 0)
@@ -44,7 +45,7 @@ export function ComplexWorldSummary({ world }: { world: World }) {
     <div className="pl-summary">
       <div className="pl-stat-grid">
         <div className="pl-stat"><span>Population</span><b>{formatPop(pop)}</b></div>
-        <div className="pl-stat" title="This world's output per year at current prices"><span>GDP / yr</span><b>{formatMoney(estimateWorldGdp(world) * TICKS_PER_YEAR)}</b></div>
+        <div className="pl-stat" title="This world's output per year at current prices"><span>GDP / yr</span><b>{formatIED(estimateWorldGdp(world) * TICKS_PER_YEAR, ownerRate)}</b></div>
         <div className="pl-stat" title="People employed / jobs posted"><span>Employed</span><b>{formatPop(employed)} / {formatPop(jobs)}</b></div>
         <div className="pl-stat" title="District levels developed / the land this world has"><span>Land used</span><b>{districtLevelsTotal(world)} / {landOfWorld(world)}</b></div>
         <div className="pl-stat"><span>Buildings</span><b>{world.buildings.length}</b></div>
@@ -77,7 +78,7 @@ function BuildingTile({ b, corpName, selected, onClick }: { b: Building; corpNam
     <button
       type="button"
       className={`pl-tile owner-${b.owner.kind}${run < 0.6 ? ' understaffed' : ''}${selected ? ' selected' : ''}`}
-      title={`${r?.label ?? b.recipeId} — level ${b.level}\nOwner: ${ownerLabel(b.owner, corpName)}\nRunning at ${pct(run)} · last profit ${formatMoney(b.lastProfit)}${b.idle ? `\n${pct(b.idle)} mothballed` : ''}\nClick for details`}
+      title={`${r?.label ?? b.recipeId} — level ${b.level}\nOwner: ${ownerLabel(b.owner, corpName)}\nRunning at ${pct(run)} · last profit ${formatIED(b.lastProfit)}${b.idle ? `\n${pct(b.idle)} mothballed` : ''}\nClick for details`}
       onClick={onClick}
     >
       <PlanetIcon id={buildingGroup(b.recipeId)} size={22} />
@@ -101,6 +102,7 @@ function QueuedTile({ o }: { o: ConstructionOrder }) {
 
 export function ComplexDistrictsTab({ playerId, world, country }: { playerId: string | null; world: World; country?: Country }) {
   const corporations = useEconomyStore((s) => s.corporations)
+  const ownerRate = useEconomyStore((s) => s.countries.find((c) => c.id === world.ownerId)?.currency?.rate ?? 1)
   const queueConstruction = useEconomyStore((s) => s.queueConstruction)
   const queueDistrict = useEconomyStore((s) => s.queueDistrict)
   const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
@@ -223,7 +225,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
                   const room = canBuild(world, r.id)
                   return (
                     <button key={r.id} type="button" className="pl-pick" disabled={!room}
-                      title={`${r.label} — about ${formatMoney(estimateConstructionCost(r.id, world.market.prices))} of materials`}
+                      title={`${r.label} — about ${formatIED(estimateConstructionCost(r.id, world.market.prices), ownerRate)} of materials`}
                       onClick={() => { queueConstruction(world.id, r.id, owner); setPicking(null) }}>
                       <PlanetIcon id={buildingGroup(r.id)} size={16} />
                       <span>{r.label}</span>

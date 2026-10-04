@@ -59,7 +59,15 @@ console.log('\n=== 2. The map ===')
   check('the Himalaya are mountains', at(85, 31) === 'mountains')
   check('East Antarctica is ice', at(80, -80) === 'tundra')
   check('Siberia in the north is ice or forest, not desert', ['tundra', 'forest'].includes(at(100, 62)))
-  check('a node is land exactly when at least half of it is', Array.from({ length: mesh.count.fine }, (_, i) => (values[i] >= 0.5) === (earth.terrain[i] !== 0)).every(Boolean))
+  // Earth fills its coasts and archipelagos above the risen +70 m sea: a cell is
+  // land when even ~a sixth of it stands above water (water mask < 210), not only
+  // at the half-way mark — so Japan, Indonesia, the UK and the like don't drown
+  // between the grid's nodes. Land share = 1 − water/255, so the cutoff is 1 − 210/255.
+  // The invariant is one-directional: every LAND node genuinely has ground above
+  // the sea (no spurious land). The reverse does not hold — the big inland lakes
+  // (the Great Lakes, Caspian, Baikal…) are painted ocean though their cells are land.
+  const EARTH_LAND_CUT = 1 - 210 / 255
+  check('every land node genuinely has ground above the risen sea (no spurious land)', Array.from({ length: mesh.count.fine }, (_, i) => earth.terrain[i] === 0 || values[i] > EARTH_LAND_CUT).every(Boolean))
   check('there is a walkable mainland (Eurasia and Africa are one landmass)', earth.mainland >= 0)
   check('Earth has 5+ biomes', new Set(earth.terrain).size >= 5, `${new Set(earth.terrain).size} kinds`)
   check('the terrain map gets the real relief', !!earth.reliefM && earth.reliefM[node(88, 32)] > 3000)

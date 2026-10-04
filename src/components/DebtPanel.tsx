@@ -1,7 +1,7 @@
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { FOREIGN_BOND_POLICIES, foreignBondPolicyDef } from '../economy/laws'
-import { formatMoney } from '../economy/format'
+import { formatIED } from '../economy/format'
 
 const BLOCK = 20000 // internal-unit block of bonds issued/redeemed per click
 
@@ -21,6 +21,8 @@ export function DebtPanel() {
   const rejectForeignOffer = useEconomyStore((s) => s.rejectForeignOffer)
 
   if (!country) return <div className="nav-placeholder">No national government in context.</div>
+  const rate = country.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   const f = reports[country.id]
   const total = country.bonds.pops + country.bonds.corporations + country.bonds.foreign
   const foreignAllowed = country.foreignBondPolicy !== 'closed'
@@ -29,10 +31,10 @@ export function DebtPanel() {
     <div className="econ-panel">
       <div className="econ-fiscal-headline">
         <span>
-          Treasury <b className={country.treasury >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(country.treasury)}</b>
+          Treasury <b className={country.treasury >= 0 ? 'econ-pos' : 'econ-neg'}>{fmt(country.treasury)}</b>
         </span>
         <span>
-          National debt <b className="econ-neg">{formatMoney(total)}</b>
+          National debt <b className="econ-neg">{fmt(total)}</b>
         </span>
         <span>
           Debt/GDP <b>{f ? `${(f.debtToGdp * 100).toFixed(0)}%` : '—'}</b>
@@ -41,26 +43,26 @@ export function DebtPanel() {
           Rating <b className={`rating-${f?.rating ?? 'AAA'}`}>{f?.rating ?? '—'}</b>
         </span>
         <span>
-          Interest/mo <b className="econ-neg">{f ? formatMoney(f.interest) : '—'}</b>
+          Interest/mo <b className="econ-neg">{f ? fmt(f.interest) : '—'}</b>
         </span>
       </div>
 
       <div className="econ-subtitle">Bonds outstanding, by holder</div>
       <div className="inspect-row">
         <span className="inspect-label">Domestic pops</span>
-        <span className="inspect-value">{formatMoney(country.bonds.pops)}</span>
+        <span className="inspect-value">{fmt(country.bonds.pops)}</span>
       </div>
       <div className="inspect-row">
         <span className="inspect-label">Corporations</span>
-        <span className="inspect-value">{formatMoney(country.bonds.corporations)}</span>
+        <span className="inspect-value">{fmt(country.bonds.corporations)}</span>
       </div>
       <div className="inspect-row">
         <span className="inspect-label">Foreign holders</span>
-        <span className="inspect-value">{formatMoney(country.bonds.foreign)}</span>
+        <span className="inspect-value">{fmt(country.bonds.foreign)}</span>
       </div>
 
       <div className="econ-subtitle" style={{ marginTop: 8 }}>
-        Issue bonds (raise {formatMoney(BLOCK)})
+        Issue bonds (raise {fmt(BLOCK)})
       </div>
       <div className="econ-build-buttons">
         <button type="button" className="corp-btn" onClick={() => issueBonds(country.id, BLOCK, 'pops')}>
@@ -110,7 +112,7 @@ export function DebtPanel() {
           {country.pendingForeign.map((o) => (
             <div key={o.id} className="debt-offer">
               <span className="debt-offer-text">
-                {o.investor} offers to buy {formatMoney(o.amount)} in bonds
+                {o.investor} offers to buy {fmt(o.amount)} in bonds
               </span>
               <span className="debt-offer-actions">
                 <button type="button" className="stock-btn stock-buy" onClick={() => approveForeignOffer(country.id, o.id)}>

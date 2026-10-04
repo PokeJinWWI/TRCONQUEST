@@ -38,7 +38,7 @@ export function MainMenu() {
           title="A detailed economy: individual pops, markets with prices for dozens of goods, banks, a central bank, corporations and currencies. Deep but demanding."
         >
           <span className="main-menu-econ-name">Complex mode (mr1noobfatfish’s attempt at economic modeling)</span>
-          <span className="main-menu-econ-desc">The deep simulation — pops, goods markets, banking, currencies. Detailed and emergent.</span>
+          <span className="main-menu-econ-desc">A weird mix-and-mash of game mechanics mr1noobfatfish has observed, to try and make a somewhat realistic and cool economic simulation.</span>
         </button>
         <button
           type="button"
@@ -47,7 +47,7 @@ export function MainMenu() {
           title="A streamlined economy: eight goods, six kinds of building, factories as production units, Stellaris-style pops and happiness, and a simple budget. Easy to read and manage."
         >
           <span className="main-menu-econ-name">Simple mode</span>
-          <span className="main-menu-econ-desc">A macro national economy (Stellaris/HOI4/TNO-inspired) — a few goods, factories and buildings on your worlds, a budget and a currency. Legible and fast.</span>
+          <span className="main-menu-econ-desc">Simpler and more macro. Lots of stuff was stripped away here, and it makes the game more clear-cut.</span>
         </button>
       </div>
 
