@@ -99,9 +99,9 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     difficulty: 'medium',
     battlefield: { bodyName: 'Earth', playerTerrain: 'plains', gapCells: 6 },
     description:
-      'Two assault armies against two — but only one is on the line; the other starts five cells back. Left alone the front army is destroyed and the reserve never gets into the fight. Order the reserve up to the line before the enemy arrives and the combined force wins.',
+      'Two assault armies against a stronger and a weaker one — but only one of yours is on the line; the other starts five cells back. Left alone the front army is destroyed and the reserve never gets into the fight. Order the reserve up to the line before the enemy arrives and the combined force wins.',
     player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 5 }],
-    enemy: [{ kind: 'assault' }, { kind: 'assault' }],
+    enemy: [{ kind: 'assault' }, { kind: 'assault', strengthFraction: 0.65 }],
   },
   {
     id: 'army-medium-reserve-in-the-timber',
@@ -131,9 +131,9 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     difficulty: 'medium',
     battlefield: { bodyName: 'Pluto', playerTerrain: 'tundra', gapCells: 6, near: [180, -58] },
     description:
-      'An assault army and a marine army on the ice of Pluto, the marines five cells back, against two assault armies and a battered third. Left alone the line falls and the reserve never gets into the fight. March the reserve up to the line before the enemy arrives and the combined force wins — with not much to spare.',
+      'An assault army and a marine army on the ice of Pluto, the marines five cells back, against two assault armies. Left alone the line falls and the reserve never gets into the fight. March the reserve up to the line before the enemy arrives and the combined force wins.',
     player: [{ kind: 'assault' }, { kind: 'marine', rearCells: 5 }],
-    enemy: [{ kind: 'assault' }, { kind: 'assault' }, { kind: 'assault', strengthFraction: 0.2 }],
+    enemy: [{ kind: 'assault' }, { kind: 'assault' }],
   },
 ]
 

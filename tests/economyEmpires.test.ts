@@ -25,18 +25,19 @@ function check(label: string, cond: boolean, detail = '') {
   }
 }
 
-const NATIONS = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic', 'kingdom-of-lalande']
+const NATIONS = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic', 'kingdom-of-lalande', 'earth']
 const empires = galaxyEmpires()
 const hash = (x: unknown) => createHash('sha256').update(JSON.stringify(x)).digest('hex').slice(0, 16)
 
-console.log('\n=== 1. The four nations\' seed is unchanged by the refactor ===')
+console.log('\n=== 1. The home nations\' seed is stable ===')
 {
-  // Recorded before economySeed.ts was made reusable for the empires.
-  check('worlds', hash(seedWorlds()) === '17805bcb404ac006')
-  check('countries', hash(seedCountries()) === 'f4c2d9b06e3db593')
-  check('corporations', hash(seedCorporations()) === 'c16e6cd60e1ec651')
+  // Rehashed when `infrastructure`→`transportation` and when Earth was added as
+  // the fifth nation (the Northern Federal Command).
+  check('worlds', hash(seedWorlds()) === '9d0c523f09231946')
+  check('countries', hash(seedCountries()) === 'b2edfd4fec2c91f2')
+  check('corporations', hash(seedCorporations()) === 'c4949843a4c08459')
   check('banks', hash(seedBanks()) === '7bccfcac62561d47')
-  check('characters', hash(seedCharacters()) === '1a93eb568a378a30')
+  check('characters', hash(seedCharacters()) === 'fe9da9a53a59c43d')
   check('families', hash(seedFamilies()) === '6c211d4cc3df1023')
 }
 

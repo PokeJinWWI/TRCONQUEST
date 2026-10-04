@@ -13,6 +13,7 @@ import { NationTechPanel } from './TechPanel'
 import { FleetManagement } from './FleetManagement'
 import { ArmyPanel } from './ArmyViews'
 import { DiplomacyPanel } from './DiplomacyPanel'
+import { InternationalOrgPanel } from './InternationalOrgPanel'
 import { LawsPanel } from './LawsPanel'
 import { CentralBankPanel, type CentralBankSection } from './CentralBankPanel'
 import { BanksPanel } from './BanksPanel'
@@ -64,7 +65,7 @@ const CATEGORIES: CategoryDef[] = [
   { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private', 'Financial Districts'] },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
   { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
-  { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Treaties', 'Subjects', 'Events'] },
+  { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Treaties', 'Subjects', 'Trade Policy', 'Events'] },
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
   { name: CHARACTERS_CATEGORY, subcategories: ['Characters', 'Families'] },
@@ -79,7 +80,7 @@ const ABSTRACT_CATEGORIES: CategoryDef[] = [
   { name: 'Economy' },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
   { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
-  { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Treaties', 'Subjects', 'Events'] },
+  { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Treaties', 'Subjects', 'Trade Policy', 'Events'] },
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
   { name: CHARACTERS_CATEGORY, subcategories: ['Characters', 'Families'] },
@@ -135,6 +136,7 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   if (category.name === MILITARY_CATEGORY && subcategory === ARMY_SUBCATEGORY) return <ArmyPanel />
   if (category.name === DIPLOMACY_CATEGORY) return <DiplomacyPanel subcategory={subcategory} />
+  if (category.name === 'International Organizations') return <InternationalOrgPanel />
   return <div className="nav-placeholder">Not yet available</div>
 }
 

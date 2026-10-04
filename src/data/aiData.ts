@@ -102,3 +102,20 @@ export const AI_RESEARCH_PATH = ['warp-theory', 'classical-mechanics', 'orbital-
 // which charts the lanes the rest follow, a higher one (ai/jumpRules.ts).
 export const AI_JUMP_MAX_LOSS = 0.05
 export const AI_SCOUT_JUMP_MAX_LOSS = 0.4
+
+// --- Diplomacy (diplomat.ts): orgs, subjects, trade policy ---------------------
+// Opinion at or above which a nation is "friendly" enough to form or join an
+// international organization with at peace.
+export const AI_ORG_FRIENDLY_OPINION = 25
+// A member keeps opinion of fellow org members topped up to at least this, by
+// the org's political-forum/cultural bonus (above the friendly threshold, so
+// membership actively builds goodwill rather than just reflecting it).
+export const AI_ORG_OPINION_FLOOR = 50
+// How much opinion a shared org adds per planning pass, up to the floor.
+export const AI_ORG_OPINION_STEP = 1
+// The AI offers subjection to a neighbour it is this much stronger than (on top
+// of the base ratio rule in subjectData) and at peace with.
+export const AI_SUBJUGATE_OPINION = 0
+// A nation escalates its own skirmish to a limited war when it is winning it by
+// at least this war score.
+export const AI_ESCALATE_SCORE = 20

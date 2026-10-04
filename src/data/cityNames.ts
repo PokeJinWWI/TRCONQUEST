@@ -51,4 +51,13 @@ export const CITY_NAMES: Record<string, CityName[]> = {
     'Montclair', 'Beaulieu', 'Valmont', 'Rochefort', 'Clairvaux', 'Belfort', 'Mirabeau', 'Fontenay', 'Chantilly', 'Beauregard',
     'Mont-Jérôme', 'Aurillac', 'Vaucouleurs', 'Bellecombe', 'Rivebelle', 'Clairmarais', 'Valcourt', 'Sainte-Étoile', 'Hautrive', 'Lysmont',
   ].map((name) => ({ name })),
+  // Earth's surviving urban areas: after the +70 m sea rise most coastal cities
+  // are gone, and only high-ground interior centres remain (the P12 survivors)
+  // plus a handful of other upland holdouts. The old imperial core under the
+  // Northern Federal Command.
+  earth: [
+    'Chicago', 'Chengdu', 'Delhi', 'São Paulo', 'Nairobi', 'Kano', 'Moscow',
+    'Denver', 'Addis Ababa', 'Kunming', 'Bogotá', 'Lhasa', 'Harare', 'Almaty',
+    'Kigali', 'Guadalajara', 'Toluca', 'Ulaanbaatar', 'Johannesburg', 'Tashkent',
+  ].map((name) => ({ name })),
 }

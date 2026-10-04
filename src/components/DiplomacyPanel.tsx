@@ -11,6 +11,9 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { useSubjectStore, subjectsOf, subjectionOf, isSubjectOf } from '../state/subjectStore'
 import { useTreatyStore, treatiesBetween, treatiesOf } from '../state/treatyStore'
 import { useInternationalOrgStore } from '../state/internationalOrgStore'
+import { useTradePolicyStore, tradePolicyOf, isEmbargoed, inSharedMarket } from '../state/tradePolicyStore'
+import { GOOD_IDS, GOODS } from '../economy/goods'
+import { SIMPLE_GOODS } from '../data/simplisticEconomyData'
 import { ARTICLE_LABELS, describeArticle, expiresSimDays, isBinding, TREATY_DURATIONS_YEARS, type ArticleKind, type TreatyArticle, type TreatyDurationYears } from '../data/treatyData'
 import { useGameTimeStore, simDaysToDate } from '../state/gameTimeStore'
 import { useConfirmStore } from '../state/confirmStore'
@@ -111,7 +114,7 @@ function RelationsTab() {
             </div>
             <div className="inspect-row">
               <span className="inspect-label">Government</span>
-              <span className="inspect-value">{ai ? 'AI empire' : 'Dormant'}</span>
+              <span className="inspect-value">{c.government ?? (ai ? 'AI empire' : 'Dormant')}</span>
             </div>
           </div>
         )
@@ -279,7 +282,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
         </div>
         <div className="inspect-row">
           <span className="inspect-label">Government</span>
-          <span className="inspect-value">{ai ? 'AI empire' : 'Dormant'}</span>
+          <span className="inspect-value">{getCountry(id)?.government ?? (ai ? 'AI empire' : 'Dormant')}</span>
         </div>
         {theyAreMySubject && (
           <div className="inspect-row">
@@ -904,10 +907,113 @@ function EventsTab() {
   )
 }
 
+// Pretty name for a good in either economy mode.
+function goodLabel(id: string, complex: boolean): string {
+  if (complex) return GOODS[id as keyof typeof GOODS]?.label ?? id
+  return id.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
+}
+
+// Per-nation tariffs, import/export subventions and blanket embargoes. The
+// mechanics live in internationalTrade.ts (Complex) / tradeMatching.ts (Simple);
+// a shared market (an org's economic-market pillar, a trade agreement, or an
+// integrated subject) waives tariffs — shown here per nation.
+function TradePolicyTab() {
+  const playerId = usePlayerStore((s) => s.selectedCountryId)
+  const economyModel = usePlayerStore((s) => s.economyModel)
+  const policies = useTradePolicyStore((s) => s.policies)
+  const embargoes = useTradePolicyStore((s) => s.embargoes)
+  if (!playerId) return null
+
+  const complex = economyModel !== 'abstract'
+  const goods: string[] = complex ? GOOD_IDS : SIMPLE_GOODS
+  const policy = tradePolicyOf(policies, playerId)
+  const store = useTradePolicyStore.getState
+  const toPct = (v: number) => Math.round((v ?? 0) * 100)
+  const setRate = (fn: (id: string, g: string, rate: number) => void, g: string, raw: string) => {
+    const n = Math.max(0, Math.min(100, Number(raw) || 0)) / 100
+    fn(playerId, g, n)
+  }
+
+  return (
+    <div className="dip-list">
+      <div className="dip-card">
+        <div className="dip-card-head">
+          <span className="dip-card-name">Embargoes</span>
+        </div>
+        <div className="inspect-status">A blanket embargo stops all trade with a nation; a shared market with it waives your tariffs.</div>
+        {COUNTRIES.filter((c) => c.id !== playerId).map((c) => {
+          const embargoed = isEmbargoed(embargoes, playerId, c.id)
+          const shared = inSharedMarket(playerId, c.id)
+          return (
+            <div key={c.id} className="inspect-row">
+              <span className="inspect-label">
+                <Swatch id={c.id} /> {nameOf(c.id)}
+                {shared ? ' · shared market' : ''}
+              </span>
+              <button
+                type="button"
+                className={`detail-view-btn${embargoed ? ' danger' : ''}`}
+                onClick={() => (embargoed ? store().liftEmbargo(playerId, c.id) : store().declareEmbargo(playerId, c.id))}
+              >
+                {embargoed ? 'Lift embargo' : 'Embargo'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="dip-card">
+        <div className="dip-card-head">
+          <span className="dip-card-name">Tariffs & subventions (per good, %)</span>
+        </div>
+        <div className="inspect-status">Tariff: import tax (revenue to you). Import subvention: you subsidise bringing a good in. Export subvention: you subsidise selling it abroad.</div>
+        <div className="trade-policy-grid">
+          <div className="trade-policy-row trade-policy-head">
+            <span>Good</span>
+            <span>Tariff</span>
+            <span>Import sub.</span>
+            <span>Export sub.</span>
+          </div>
+          {goods.map((g) => (
+            <div key={g} className="trade-policy-row">
+              <span className="trade-policy-good">{goodLabel(g, complex)}</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="trade-policy-input"
+                value={toPct(policy.tariffs[g] ?? 0)}
+                onChange={(e) => setRate(store().setTariff, g, e.target.value)}
+              />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="trade-policy-input"
+                value={toPct(policy.importSubventions[g] ?? 0)}
+                onChange={(e) => setRate(store().setImportSubvention, g, e.target.value)}
+              />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="trade-policy-input"
+                value={toPct(policy.exportSubventions[g] ?? 0)}
+                onChange={(e) => setRate(store().setExportSubvention, g, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function DiplomacyPanel({ subcategory }: { subcategory: string | null }) {
   if (subcategory === 'Wars') return <WarsTab />
   if (subcategory === 'Treaties') return <TreatiesTab />
   if (subcategory === 'Subjects') return <SubjectsTab />
+  if (subcategory === 'Trade Policy') return <TradePolicyTab />
   if (subcategory === 'Events') return <EventsTab />
   return <RelationsTab />
 }

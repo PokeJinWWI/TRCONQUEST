@@ -28,12 +28,21 @@ uniform vec2 uTriSize;
 varying vec2 vUv;
 
 void main() {
+  // Unpack the 20-bit triangle index and two 6-bit corner weights (flatLookup.ts
+  // packPixel): R/G are the low 16 bits, the low 2 bits of B/A the top 4 bits.
   vec4 L = texture2D(uLookup, vUv);
-  float t = floor(L.r * 255.0 + 0.5) * 256.0 + floor(L.g * 255.0 + 0.5);
+  float rB = floor(L.r * 255.0 + 0.5);
+  float gB = floor(L.g * 255.0 + 0.5);
+  float bB = floor(L.b * 255.0 + 0.5);
+  float aB = floor(L.a * 255.0 + 0.5);
+  float hiNib = mod(bB, 4.0) * 4.0 + mod(aB, 4.0);
+  float t = hiNib * 65536.0 + rB * 256.0 + gB;
   float row = floor((t + 0.5) / uTriSize.x);
   float tcol = t - row * uTriSize.x;
   vec4 ids = texture2D(uTris, (vec2(tcol, row) + 0.5) / uTriSize);
-  vec3 w = vec3(L.b, L.a, max(0.0, 1.0 - L.b - L.a));
+  float wA = floor(bB / 4.0) / 63.0;
+  float wB = floor(aB / 4.0) / 63.0;
+  vec3 w = vec3(wA, wB, max(0.0, 1.0 - wA - wB));
   vec4 a = node(floor(ids.x + 0.5));
   vec4 b = node(floor(ids.y + 0.5));
   vec4 c = node(floor(ids.z + 0.5));

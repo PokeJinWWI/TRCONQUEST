@@ -74,12 +74,14 @@ export type SimpleBuildingId =
   | 'entertainmentCenter'
   | 'commercialZone'
   | 'spaceport'
+  | 'railway'
+  | 'spaceElevatorAnchor'
 
 // What a building makes: goods, construction points, research in a tree,
 // amenities (planet services people need) or services GDP ($B a month).
 export type SimpleProduct = SimpleGood | 'construction' | 'physics' | 'society' | 'engineering' | 'amenities' | 'services'
 
-export const TRADE_PER_SPACEPORT = 60 // TSC of trade per spaceport level per month
+export const TRADE_PER_SPACEPORT = 60 // E$ of trade per spaceport level per month
 
 export interface SimpleBuildingDef {
   name: string
@@ -94,7 +96,7 @@ export interface SimpleBuildingDef {
   pu?: number
   // Extra annual population growth per level per billion people (clinics).
   popGrowth?: number
-  // Trade between nations one level can move, in TSC of goods (at GOOD_VALUE)
+  // Trade between nations one level can move, in E$ of goods (at GOOD_VALUE)
   // per month, bought and sold together — spaceports only. A nation's trade is
   // capped by its spaceports (economy-abstract/tradeMatching.ts).
   tradeCapacity?: number
@@ -103,6 +105,9 @@ export interface SimpleBuildingDef {
   noSlot?: boolean
   // A tech its nation must have researched before it can build one (queueBuilding).
   requiresTech?: string
+  // How much this building raises the world's INFRASTRUCTURE capacity per level
+  // (economy-abstract market access). Absent = 0.
+  infrastructure?: number
 }
 
 export const SIMPLE_BUILDING_DEFS: Record<SimpleBuildingId, SimpleBuildingDef> = {
@@ -209,7 +214,17 @@ export const SIMPLE_BUILDING_DEFS: Record<SimpleBuildingId, SimpleBuildingDef> =
   spaceport: {
     name: 'Spaceport',
     description: 'Landing fields and orbital lift: the gate for trade with other nations. Each level adds trade capacity and is a key node on the ground map (it takes no district slot); it burns rockets and wears out spaceships.',
-    district: 'urban', jobs: 5, stratum: 'workers', cost: 600, outputs: { amenities: 3, services: 6 }, upkeep: { rockets: 1, spaceships: 0.2 }, tradeCapacity: TRADE_PER_SPACEPORT, noSlot: true,
+    district: 'urban', jobs: 5, stratum: 'workers', cost: 600, outputs: { amenities: 3, services: 6 }, upkeep: { rockets: 1, spaceships: 0.2 }, tradeCapacity: TRADE_PER_SPACEPORT, noSlot: true, infrastructure: 50,
+  },
+  railway: {
+    name: 'Railway',
+    description: 'Rail and road across the planet: raises the world\'s infrastructure, and so its MARKET ACCESS — how much of its trade it can actually run.',
+    district: 'urban', jobs: 25, stratum: 'workers', cost: 500, outputs: { services: 8 }, upkeep: { alloys: 2, energy: 4 }, infrastructure: 130,
+  },
+  spaceElevatorAnchor: {
+    name: 'Space Elevator Anchor',
+    description: 'A tether to orbit: huge fuel-free LAUNCH capacity when paired with an orbital-ring tether above the world. Needs Orbital Tethers.',
+    district: 'urban', jobs: 15, stratum: 'specialists', cost: 1200, outputs: { services: 4 }, upkeep: { electronics: 1, energy: 8 }, requiresTech: 'orbital-tethers', noSlot: true,
   },
 }
 export const SIMPLE_BUILDINGS = Object.keys(SIMPLE_BUILDING_DEFS) as SimpleBuildingId[]
@@ -296,6 +311,11 @@ export const SIMPLE_WORLD_SEEDS: Record<string, SimpleWorldSeed> = {
   'Proxima b': { population: 450, buildings: { civilianFactory: 1, consumerFactory: 1, farm: 2, mine: 1, powerPlant: 1, spaceport: 1 } },
   // Kingdom of Lalande
   'Lalande 21185 d': { population: 2000, buildings: { civilianFactory: 3, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, farm: 6, mine: 5, powerPlant: 4, physicsLab: 1, entertainmentCenter: 1, spaceport: 4, spaceyard: 1, rocketWorks: 1 } },
+  // Earth — the declining colossus: a huge, overcrowded population on limited,
+  // ageing developed land (resource- and farm-heavy, thin on advanced plants).
+  // Its land caps like Venus's, so a 9-billion populace is underdeveloped and
+  // underemployed — the struggling giant. 18 spaceports (2 per billion).
+  Earth: { population: 4000, buildings: { civilianFactory: 6, alloyFoundry: 3, consumerFactory: 4, electronicsPlant: 1, farm: 8, mine: 7, powerPlant: 7, physicsLab: 1, engineeringLab: 1, clinic: 1, entertainmentCenter: 1, commercialZone: 1, railway: 2, spaceport: 8, spaceyard: 1, rocketWorks: 1 } },
 }
 
 export const OUTPOST_SEED: SimpleWorldSeed = { population: 48, buildings: { mine: 1 } }
@@ -312,7 +332,7 @@ export const SIMPLE_STARTING_STOCK: Partial<Record<SimpleGood, number>> = {
 
 // --- Currencies ----------------------------------------------------------------
 // Each nation's currency and its starting exchange rate against the Terra
-// Standard Credit (TSC): the TSC value of one unit (higher = stronger).
+// Standard Credit (E$): the E$ value of one unit (higher = stronger).
 export interface SimpleCurrencySeed {
   code: string
   name: string

@@ -13,12 +13,41 @@ export const TRI_TEX_WIDTH = 128
 export interface FlatLookup {
   width: number
   height: number
-  // RGBA8 per pixel: triangle index high byte, low byte, weight of corner A,
-  // weight of corner B (corner C's weight is what is left of 1).
+  // RGBA8 per pixel, packing a 20-bit triangle index and two corner weights:
+  //   R = triangle index bits [15:8]
+  //   G = triangle index bits [7:0]
+  //   B = weight of corner A (top 6 bits) | triangle index bits [19:18] (low 2)
+  //   A = weight of corner B (top 6 bits) | triangle index bits [17:16] (low 2)
+  // Corner C's weight is what is left of 1. The 2-byte index (max 65,535) used to
+  // overflow at mesh level 6 (~81,920 triangles); the two spare low bits of each
+  // weight byte lift it to 20 bits (~1M triangles), costing the weights two bits
+  // of precision (6 bits ≈ 1/64 of a cell, far inside the half-pixel tolerance).
   pixels: Uint8Array
   // Per triangle, RGBA float32: its three node ids (and 0), TRI_TEX_WIDTH per row.
   triangles: Float32Array
   triRows: number
+}
+
+// Pack/unpack the pixel so the bake, the thumbnail and the shader can never
+// disagree. The shader (FlatMap.tsx) carries an equivalent decode in GLSL.
+export function packPixel(pixels: Uint8Array, o: number, t: number, wa: number, wb: number): void {
+  const hiNib = (t >> 16) & 0xf
+  const wa6 = Math.round(Math.min(1, Math.max(0, wa)) * 63)
+  const wb6 = Math.round(Math.min(1, Math.max(0, wb)) * 63)
+  pixels[o] = (t >> 8) & 255
+  pixels[o + 1] = t & 255
+  pixels[o + 2] = (wa6 << 2) | ((hiNib >> 2) & 3)
+  pixels[o + 3] = (wb6 << 2) | (hiNib & 3)
+}
+
+export function unpackPixel(pixels: Uint8Array, o: number): { t: number; wa: number; wb: number; wc: number } {
+  const b = pixels[o + 2]
+  const a = pixels[o + 3]
+  const hiNib = ((b & 3) << 2) | (a & 3)
+  const t = (hiNib << 16) | (pixels[o] << 8) | pixels[o + 1]
+  const wa = (b >> 2) / 63
+  const wb = (a >> 2) / 63
+  return { t, wa, wb, wc: Math.max(0, 1 - wa - wb) }
 }
 
 let cached: FlatLookup | null = null
@@ -71,11 +100,7 @@ export function flatLookup(): FlatLookup {
         }
         if (min >= 0) break
       }
-      const o = (j * w + i) * 4
-      pixels[o] = bestT >> 8
-      pixels[o + 1] = bestT & 255
-      pixels[o + 2] = Math.round(Math.min(1, bw[0]) * 255)
-      pixels[o + 3] = Math.round(Math.min(1, bw[1]) * 255)
+      packPixel(pixels, (j * w + i) * 4, bestT, bw[0], bw[1])
     }
   }
   cached = { width: w, height: h, pixels, triangles, triRows }

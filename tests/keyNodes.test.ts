@@ -31,12 +31,19 @@ console.log('=== 1. Every capital world names its key nodes ===')
     const names = keyNamesOf(s)
     const capital = s.keySlots.find((k) => k.kind === 'capital')!
     check(`${c.capitalBodyName}: the capital is ${c.capitalCityName}`, names.get(capital.node)?.name === c.capitalCityName, names.get(capital.node)?.label)
-    const list = CITY_NAMES[c.id].map((x) => x.name)
     const others = s.keySlots.filter((k) => k.kind !== 'capital').map((k) => names.get(k.node)!)
-    check(`${c.capitalBodyName}: its other key nodes take names from ${c.name}'s list`, others.every((n) => n.name !== null && list.includes(n.name)), others.map((n) => n.label).join(', '))
+    if (c.cities) {
+      // A fixed-city nation (Earth): its key nodes carry the real names it defines
+      // (survivor cities + real launch sites), not pool names or "<name> Spaceport".
+      const fixedNames = new Set(c.cities.map((x) => x.name))
+      check(`${c.capitalBodyName}: its key nodes use its fixed real names`, others.every((n) => n.name !== null && fixedNames.has(n.name!)), others.map((n) => n.label).join(', '))
+    } else {
+      const list = CITY_NAMES[c.id].map((x) => x.name)
+      check(`${c.capitalBodyName}: its other key nodes take names from ${c.name}'s list`, others.every((n) => n.name !== null && list.includes(n.name)), others.map((n) => n.label).join(', '))
+      const port = s.keySlots.find((k) => k.kind === 'spaceport')
+      check(`${c.capitalBodyName}: the spaceport reads "<name> Spaceport"`, !port || /Spaceport$/.test(names.get(port.node)!.label), port ? names.get(port.node)!.label : 'none')
+    }
     check(`${c.capitalBodyName}: no two key nodes share a name`, new Set([...names.values()].map((n) => n.name)).size === names.size)
-    const port = s.keySlots.find((k) => k.kind === 'spaceport')
-    check(`${c.capitalBodyName}: the spaceport reads "<name> Spaceport"`, !port || /Spaceport$/.test(names.get(port.node)!.label), port ? names.get(port.node)!.label : 'none')
   }
   const mars = surfaceOf('Mars', 'capital')
   const m = [...keyNamesOf(mars).values()].find((n) => n.native)

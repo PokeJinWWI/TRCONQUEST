@@ -20,7 +20,10 @@ const rand = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 429496729
 console.log('\n=== 1. Structure ===')
 {
   const m = surfaceMesh()
-  check('coarse / standard / fine have 162 / 642 / 2562 nodes', m.count.coarse === 162 && m.count.standard === 642 && m.count.fine === 2562)
+  // coarse=level 2, standard=level 3, fine=level 6 (40,962 nodes) — the ground
+  // war runs on the fine mesh; fineSpacingRad is pinned to the old level-4 value
+  // (REFERENCE_CELL_RAD) so gameplay distances are resolution-independent.
+  check('coarse / standard / fine have 162 / 642 / 40962 nodes', m.count.coarse === 162 && m.count.standard === 642 && m.count.fine === 40962)
   check('every node is on the unit sphere', Array.from({ length: m.count.fine }, (_, i) => Math.abs(Math.hypot(nodePoint(i).x, nodePoint(i).y, nodePoint(i).z) - 1)).every((d) => d < 1e-5))
   let symmetric = true
   let degreesOk = true

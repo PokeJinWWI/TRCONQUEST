@@ -10,6 +10,7 @@ import { seedBodyOwners } from '../src/scene/territory'
 import { atWar, useDiplomacyStore } from '../src/state/diplomacyStore'
 import { hasOrbitalSuperiority, type Army } from '../src/scene/armyLogic'
 import { groundSurface, type NodeHolderMap } from '../src/scene/groundLogic'
+import { passableFor, terrainAt } from '../src/scene/planetTerrain'
 import { stepGroundWar, type GroundWorld } from '../src/scene/groundResolution'
 import { arc, nodePoint, surfaceMesh } from '../src/scene/surfaceMesh'
 import {
@@ -57,6 +58,26 @@ const worldOf = (armies: Army[], installations: Installation[], holders: NodeHol
   armies, owners, controllers: {}, nodeHolders: holders, atWar, isAutonomous: () => false, surfaceOf: (b) => groundSurface(b, owners), installations,
 })
 
+// A node a fixed reference-distance (~0.9 cell) from the fort: inside a unit's
+// firing range (~1 cell) but outside the node-capture radius (0.75 cell), so the
+// attacker besieges the installation instead of capturing its node. The raw mesh
+// neighbour is only ~0.25 cell away on the fine level-6 mesh — inside capture
+// range — so pick by distance, not by adjacency.
+function besiegerNode(center: number): number {
+  const target = mesh.fineSpacingRad * 0.9
+  let best = -1
+  let bestErr = Infinity
+  for (let i = 0; i < mesh.count.fine; i++) {
+    if (i === center || !passableFor(terrainAt(venus, i), 'infantry')) continue
+    const err = Math.abs(arc(nodePoint(i), nodePoint(center)) - target)
+    if (err < bestErr) {
+      bestErr = err
+      best = i
+    }
+  }
+  return best
+}
+
 console.log('=== 1. Placement ===')
 const fortNode = placeInstallation(venus, [], 'fortress')!
 {
@@ -90,8 +111,9 @@ console.log('\n=== 3. Capture: whoever holds the node holds the installation ===
 console.log('\n=== 4. Destroyed by ground fire ===')
 {
   const bat = inst('defenseBattery', fortNode)
-  // A Mars unit parked right next to the battery with nothing else to shoot at.
-  const neighbour = mesh.neighbors.fine[fortNode][0]
+  // A Mars unit parked within firing range of the battery (but beyond capture
+  // range, so it besieges rather than taking the node) with nothing else to shoot.
+  const neighbour = besiegerNode(fortNode)
   const w = worldOf([lone(MARS, 'infantry', neighbour)], [bat])
   let res = stepGroundWar(w, 0, 1)
   check('an enemy unit in range damages it', (res.installations?.[0]?.integrity ?? bat.integrity) < bat.integrity, `${bat.integrity} → ${res.installations?.[0]?.integrity.toFixed(2)}`)

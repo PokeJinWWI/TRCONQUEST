@@ -78,17 +78,17 @@ function run(n: number, mutate?: (c: Country[], w: World[], corp: Corporation[])
   return { countries, worlds, corporations, reports }
 }
 
-console.log('\n=== 1. Seed: 4 countries, 6 inhabited worlds, 4-axis pops ===')
+console.log('\n=== 1. Seed: 5 countries, 7 inhabited worlds, 4-axis pops ===')
 {
   const worlds = seedWorlds()
   const countries = seedCountries()
-  check('4 countries load', countries.length === 4, `${countries.length}`)
-  check('6 worlds load', worlds.length === 6, `${worlds.length}`)
+  check('5 countries load', countries.length === 5, `${countries.length}`)
+  check('7 worlds load', worlds.length === 7, `${worlds.length}`)
   check('the Kingdom of Lalande exists', countries.some((c) => c.id === 'kingdom-of-lalande'))
   check('Lalande 21185 d is a Tidalian world', worlds.some((w) => w.id === 'Lalande 21185 d' && w.pops.every((p) => p.speciesTemplateId === 'tidalian')))
   check('pops carry all four axes (species/culture/religion/class)', worlds[0].pops.every((p) => p.speciesTemplateId && p.cultureId && p.religionId && p.class))
   check('pops carry a standard of living', worlds[0].pops.every((p) => Number.isFinite(p.standardOfLiving)))
-  check('Earth is NOT an inhabited world (it is a relict)', !worlds.some((w) => w.id === 'Earth'))
+  check('Earth is now an inhabited world (the Northern Federal Command)', worlds.some((w) => w.id === 'Earth' && w.ownerId === 'earth'))
   check('every world has a power plant (energy building)', worlds.every((w) => w.buildings.some((b) => RECIPES[b.recipeId]?.category === 'energy')))
 }
 

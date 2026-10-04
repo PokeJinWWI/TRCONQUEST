@@ -18,7 +18,9 @@ export function MainMenu() {
 
   const handleSelect = (countryId: string) => {
     const country = COUNTRIES.find((c) => c.id === countryId)
-    if (country) enterSystem(country.capitalStarId, country.capitalBodyName)
+    // Enter the capital's system but DON'T pre-select the capital body — that
+    // would auto-open its planet panel on game start, which the player didn't ask for.
+    if (country) enterSystem(country.capitalStarId)
     selectCountry(countryId)
   }
 

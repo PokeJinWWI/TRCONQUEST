@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INFLUENCE_COST, STARBASE_INTEGRITY } from '../data/starbaseData'
+import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INFLUENCE_COST, STARBASE_INTEGRITY, STARBASE_MODULES, STARBASE_TIERS, STARBASE_TIER_ORDER, type StarbaseModuleType } from '../data/starbaseData'
 import { useResourceStore } from './resourceStore'
-import { starbaseAnchorBody, starbasesAt, type Starbase } from '../scene/starbaseLogic'
+import { starbaseAnchorBody, starbasesAt, starbaseTierOf, starbaseModulesOf, freeModuleSlots, starbaseMaxIntegrity, type Starbase } from '../scene/starbaseLogic'
 import { cargoCovers, cargoMinus } from '../scene/cargoLogic'
 import { isFullySurveyed, restingStarId } from '../scene/surveyLogic'
 import { resolveShipClass } from './shipClassResolver'
@@ -23,6 +23,20 @@ interface StarbaseState {
   starbases: Starbase[]
   build: (countryId: string, starId: string, simDays: number, shipId: string | null) => StarbaseResult
   applyDamage: (updates: Record<string, number>, destroyedIds: string[]) => void
+  upgradeTier: (starbaseId: string, simDays: number) => StarbaseResult
+  buildModule: (starbaseId: string, moduleType: StarbaseModuleType, simDays: number) => StarbaseResult
+  // Add a fully-built Starbase outright (seeding — e.g. Earth's Ring of Heaven).
+  addStarbase: (sb: Omit<Starbase, 'id'> & { id?: string }) => string
+}
+
+// Pay a ResourceCost out of a nation's stockpile; returns false (and spends
+// nothing) if it can't afford it.
+function spendResources(countryId: string, cost: Record<string, number>): boolean {
+  const res = useResourceStore.getState()
+  const have = res.stateFor(countryId).amounts
+  for (const [id, n] of Object.entries(cost)) if ((have[id as keyof typeof have] ?? 0) < n) return false
+  for (const [id, n] of Object.entries(cost)) res.addAmount(countryId, id as Parameters<typeof res.addAmount>[1], -n)
+  return true
 }
 
 let counter = 0
@@ -84,9 +98,52 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
       ownerId: countryId,
       integrity: STARBASE_INTEGRITY,
       readySimDays: simDays + STARBASE_BUILD_DAYS,
+      tier: 'starbase',
+      modules: [],
     }
     set({ starbases: [...starbases, sb] })
     return { ok: true }
+  },
+  // Upgrade to the next tier, paid from the nation's stockpile. Applied at once
+  // (the claim must not drop mid-upgrade), restoring integrity to the new max.
+  upgradeTier: (starbaseId) => {
+    const sb = get().starbases.find((s) => s.id === starbaseId)
+    if (!sb) return { ok: false, reason: 'No such starbase' }
+    const cur = starbaseTierOf(sb)
+    const idx = STARBASE_TIER_ORDER.indexOf(cur)
+    const next = STARBASE_TIER_ORDER[idx + 1]
+    if (!next) return { ok: false, reason: 'Already at the highest tier' }
+    const cost = STARBASE_TIERS[next].upgradeCost
+    if (!spendResources(sb.ownerId, cost)) {
+      return { ok: false, reason: `Needs ${Object.entries(cost).map(([id, n]) => `${n} ${id}`).join(', ')}` }
+    }
+    const upgraded = { ...sb, tier: next }
+    set((s) => ({ starbases: s.starbases.map((x) => (x.id === starbaseId ? { ...upgraded, integrity: starbaseMaxIntegrity(upgraded) } : x)) }))
+    return { ok: true }
+  },
+  buildModule: (starbaseId, moduleType) => {
+    const sb = get().starbases.find((s) => s.id === starbaseId)
+    if (!sb) return { ok: false, reason: 'No such starbase' }
+    if (starbaseModulesOf(sb).includes(moduleType)) return { ok: false, reason: 'Already has that module' }
+    if (freeModuleSlots(sb) <= 0) return { ok: false, reason: 'No free module slot (upgrade the tier)' }
+    if (!spendResources(sb.ownerId, STARBASE_MODULES[moduleType].cost)) {
+      return { ok: false, reason: `Needs ${Object.entries(STARBASE_MODULES[moduleType].cost).map(([id, n]) => `${n} ${id}`).join(', ')}` }
+    }
+    set((s) => ({
+      starbases: s.starbases.map((x) => {
+        if (x.id !== starbaseId) return x
+        const withModule = { ...x, modules: [...starbaseModulesOf(x), moduleType] }
+        // A defense battery adds hit points — raise current integrity too.
+        return moduleType === 'defense-battery' ? { ...withModule, integrity: starbaseMaxIntegrity(withModule) } : withModule
+      }),
+    }))
+    return { ok: true }
+  },
+  addStarbase: (sb) => {
+    counter += 1
+    const id = sb.id ?? `starbase-seed-${counter}`
+    set((s) => ({ starbases: [...s.starbases, { tier: 'starbase', modules: [], ...sb, id }] }))
+    return id
   },
   // Writes back one siege step's result (see scene/starbaseLogic.stepStarbaseSieges,
   // stepped by hooks/useStarbaseResolver.ts). A destroyed Starbase's claim

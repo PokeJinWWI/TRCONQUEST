@@ -5,7 +5,8 @@
 
 import { STARBASE_COST, STARBASE_INTEGRITY } from '../src/data/starbaseData'
 import { STARBASE_LOSS_VALUE } from '../src/data/starbaseData'
-import { starbaseAnchorBody, starbaseOwnersOf, stepStarbaseSieges } from '../src/scene/starbaseLogic'
+import { starbaseAnchorBody, starbaseOwnersOf, stepStarbaseSieges, starbaseTierOf, starbaseModulesOf, freeModuleSlots, starbaseMaxIntegrity, starbaseFirepower, starbaseShipyardSlots, type Starbase, type SiegeShip } from '../src/scene/starbaseLogic'
+import { STARBASE_TIERS } from '../src/data/starbaseData'
 import type { ShipLike } from '../src/scene/armyLogic'
 import { canBuildStarbase, useStarbaseStore } from '../src/state/starbaseStore'
 import { useResourceStore } from '../src/state/resourceStore'
@@ -219,6 +220,48 @@ console.log('\n=== 5. Destroying a Starbase moves the war score (scene/peace.rec
   const afterWar = warBetweenIn(useDiplomacyStore.getState().wars, MARS, VENUS)!
   const after = scoreFor(afterWar, MARS, useTerritoryStore.getState().bodyOwner, useTerritoryStore.getState().bodyController, liveBodyValue)
   check("Venus losing a Starbase to Mars' fleet improves Mars' war score", after > before, `${before} -> ${after}`)
+}
+
+console.log('\n=== 6. Tiers, modules, shipyard & fire-back ===')
+{
+  reset()
+  research(MARS)
+  spawnBuilder('bt', MARS, 'sol')
+  useStarbaseStore.getState().build(MARS, 'sol', 0, 'bt')
+  const built = useStarbaseStore.getState().starbases[0]
+  check('a fresh build is a starbase tier with no modules', starbaseTierOf(built) === 'starbase' && starbaseModulesOf(built).length === 0)
+  check('it has the starbase tier\'s module slots', freeModuleSlots(built) === STARBASE_TIERS.starbase.moduleSlots)
+
+  // Give Mars alloys to build modules / upgrade.
+  useResourceStore.getState().addAmount(MARS, 'alloys', 5000)
+  const mod = useStarbaseStore.getState().buildModule(built.id, 'defense-battery', 10)
+  check('a module can be built when affordable with a free slot', mod.ok)
+  const defended = useStarbaseStore.getState().starbases[0]
+  check('a defense battery raises firepower and max integrity', starbaseFirepower(defended) > starbaseFirepower(built) && starbaseMaxIntegrity(defended) > starbaseMaxIntegrity(built))
+  check('it used a slot', freeModuleSlots(defended) === STARBASE_TIERS.starbase.moduleSlots - 1)
+  check('the same module can\'t be built twice', !useStarbaseStore.getState().buildModule(defended.id, 'defense-battery', 10).ok)
+
+  const up = useStarbaseStore.getState().upgradeTier(defended.id, 20)
+  check('it can be upgraded to an orbital ring', up.ok)
+  const ring = useStarbaseStore.getState().starbases[0]
+  check('the orbital ring has more slots and firepower', starbaseTierOf(ring) === 'orbital-ring' && freeModuleSlots(ring) > freeModuleSlots(built) && starbaseFirepower(ring) > starbaseFirepower(defended))
+
+  // Shipyard slips.
+  check('a base with no shipyard module grants no build slips', starbaseShipyardSlots(MARS, [ring], 100) === 0)
+  const withYard = useStarbaseStore.getState().buildModule(ring.id, 'shipyard', 25)
+  check('a shipyard module can be added', withYard.ok)
+  check('an orbital-ring shipyard grants build slips', starbaseShipyardSlots(MARS, useStarbaseStore.getState().starbases, 100) > 0)
+
+  // Fire-back: a defended base damages a besieger that has combat state.
+  useDiplomacyStore.getState().declareWar(MARS, VENUS, 0)
+  const anchor = starbaseAnchorBody('sol')!
+  const cruiserCombat = SHIP_CLASSES.find((c) => c.id === 'cruiser')!.combat
+  const enemy: SiegeShip = { ...orbiting('e1', VENUS, 'cruiser', anchor), combat: pristineCombatState(cruiserCombat) }
+  const before = enemy.combat.armorHp + (enemy.combat.componentHp.core ?? 0) + enemy.combat.shieldHp
+  const sb: Starbase = { ...useStarbaseStore.getState().starbases[0], readySimDays: 0 }
+  const res = stepStarbaseSieges(5, [sb], [enemy], atWar, 100)
+  const after = (res.shipDamage['e1']?.armorHp ?? 0) + (res.shipDamage['e1']?.componentHp.core ?? 0) + (res.shipDamage['e1']?.shieldHp ?? 0)
+  check('a defended base returns fire on the besieger', !!res.shipDamage['e1'] && after < before, `${before} -> ${after}`)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

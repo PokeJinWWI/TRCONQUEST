@@ -140,7 +140,7 @@ const SOL_RAW: RawPlanet[] = [
   // Terraformed in this game's lore — a global ocean replaces the real toxic
   // greenhouse (see the Republic of Venus in countryData.ts).
   { name: 'Venus', radiusKm: 6051.8, massKg: 4.8675e24, auDistance: 0.723, color: '#3d7dc9', periodYears: 0.615, inclinationDeg: 3.39, ascendingNodeDeg: 76.68, phaseDeg: 120, planetClass: 'ocean', ownerId: 'republic-of-venus' },
-  { name: 'Earth', radiusKm: 6371, massKg: 5.972e24, auDistance: 1.0, color: '#4da6ff', periodYears: 1.0, inclinationDeg: 0.0, ascendingNodeDeg: 0.0, phaseDeg: 200, planetClass: 'continental' },
+  { name: 'Earth', radiusKm: 6371, massKg: 5.972e24, auDistance: 1.0, color: '#4da6ff', periodYears: 1.0, inclinationDeg: 0.0, ascendingNodeDeg: 0.0, phaseDeg: 200, planetClass: 'continental', ownerId: 'earth' },
   // Also terraformed — engineered seas/lakes in the lowlands (see the
   // Imperial State of Mars in countryData.ts).
   { name: 'Mars', radiusKm: 3389.5, massKg: 6.4171e23, auDistance: 1.524, color: '#c9704a', periodYears: 1.881, inclinationDeg: 1.85, ascendingNodeDeg: 49.56, phaseDeg: 10, planetClass: 'continental', ownerId: 'imperial-state-of-mars' },

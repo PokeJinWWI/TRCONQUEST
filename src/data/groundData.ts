@@ -27,6 +27,7 @@ export type TerrainId =
   | 'desert'
   | 'tundra'
   | 'mountains'
+  | 'plateau'
   | 'urban'
   | 'rock'
   | 'lava'
@@ -56,6 +57,7 @@ export const TERRAIN: Record<TerrainId, TerrainSpec> = {
   desert: { id: 'desert', name: 'Desert', tint: '#8a744a', passable: 'all', moveCost: 1.2, defense: 0.95, paintable: true },
   tundra: { id: 'tundra', name: 'Tundra / Ice', tint: '#8a9aa8', passable: 'all', moveCost: 1.4, defense: 1.05, paintable: true },
   mountains: { id: 'mountains', name: 'Mountains', tint: '#7a7470', passable: 'all', moveCost: 2.5, defense: 1.5, paintable: true },
+  plateau: { id: 'plateau', name: 'Plateau', tint: '#9b8c66', passable: 'all', moveCost: 1.3, defense: 1.15, paintable: true },
   urban: { id: 'urban', name: 'Urban', tint: '#a0a0ae', passable: 'all', moveCost: 1.3, defense: 1.4, paintable: true },
   rock: { id: 'rock', name: 'Barren Rock', tint: '#66605a', passable: 'all', moveCost: 1.1, defense: 1, paintable: true },
   lava: { id: 'lava', name: 'Lava', tint: '#5a1a0a', passable: 'none', moveCost: 99, defense: 1, paintable: false },
@@ -232,8 +234,11 @@ export const MIN_MAINLAND_FRACTION = 0.08
 // --- Key nodes ---------------------------------------------------------------
 
 // Cities on an inhabited world, by its district count (bodyStats.estimateSize).
+// More, smaller urban areas now that each city's footprint is a single node
+// (planetTerrain) rather than a wide ring — a populous world reads as dotted
+// with arcologies rather than one sprawl.
 export function citiesForDistricts(districts: number): number {
-  return Math.max(1, Math.min(4, Math.round(districts / 6)))
+  return Math.max(1, Math.min(7, Math.round(districts / 4)))
 }
 // Key nodes keep at least this many fine cells apart.
 export const KEY_MIN_SEPARATION_CELLS = 5
@@ -298,6 +303,7 @@ export const TERRAIN_RELIEF: Record<TerrainId, { base: number; amp: number }> = 
   desert: { base: 250, amp: 180 },
   tundra: { base: 200, amp: 120 },
   mountains: { base: 2600, amp: 1400 },
+  plateau: { base: 1900, amp: 300 },
   urban: { base: 120, amp: 60 },
   rock: { base: 700, amp: 400 },
   lava: { base: 0, amp: 0 },

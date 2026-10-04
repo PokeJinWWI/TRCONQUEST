@@ -26,7 +26,7 @@
 //   Budget     taxes on GDP vs civil/welfare/military/debt spending; deficits
 //              are borrowed or printed (inflation). A price level tracks
 //              cumulative inflation; nominal GDP = real × price level.
-//   Currency   a floating exchange rate vs the Terra Standard Credit, driven by
+//   Currency   a floating exchange rate vs the Earth Dollar, driven by
 //              inflation, stability, debt and the trade balance; it prices
 //              imports/exports on the interstellar market.
 //
@@ -123,7 +123,7 @@ export interface Teardown {
 export interface Currency {
   code: string
   name: string
-  rate: number // TSC value of one unit (higher = stronger)
+  rate: number // E$ value of one unit (higher = stronger)
   baseRate: number // where fundamentals-neutral sits
 }
 
@@ -162,7 +162,28 @@ export interface AbstractEconomyState {
   teardowns?: Teardown[]
   currency: Currency
   trade: TradeOrders
+  // Special Economic Zone (optional, default false): Simple mode has no
+  // per-world building sim to hang a tax override on, so the nation's SEZ is a
+  // flag that lifts its trade capacity (its abstract equivalent of attracting
+  // foreign capital and freight). See SEZ_TRADE_BONUS.
+  specialEconomicZone?: boolean
+  // Spaceport production method (Simple parity with Complex's spaceport methods):
+  // which way the nation's spaceports specialise — balanced, lift, or merchant
+  // marine. Absent = 'standard'. Reshapes launch vs interstellarTransport.
+  spaceportMethod?: SimpleSpaceportMethod
 }
+
+export type SimpleSpaceportMethod = 'standard' | 'launch-complex' | 'interstellar-port'
+
+// Simple-mode transport capacity tuning (parallels economy/transport.ts).
+export const SIMPLE_INFRA_BASE = 40
+export const SIMPLE_LAUNCH_BASE = 3000
+export const SIMPLE_INTERSTELLAR_BASE = 1500
+const SIMPLE_SPACEPORT_LAUNCH: Record<SimpleSpaceportMethod, number> = { standard: 1400, 'launch-complex': 3200, 'interstellar-port': 500 }
+const SIMPLE_SPACEPORT_INTERSTELLAR: Record<SimpleSpaceportMethod, number> = { standard: 1200, 'launch-complex': 300, 'interstellar-port': 3000 }
+
+// How much a Special Economic Zone lifts a Simple-mode nation's trade capacity.
+export const SEZ_TRADE_BONUS = 0.25
 
 // --- Balance constants ---------------------------------------------------------
 const WORKFORCE_SHARE = 0.42 // share of a world's population in the labour force (the rest: children, retirees, carers)
@@ -453,7 +474,15 @@ export interface AbstractReport {
   importCost: number
   exportRevenue: number
   tradeBalance: number // exports − imports, per month
-  tradeCapacity: number // TSC of goods (at GOOD_VALUE) its spaceports can trade a month, bought and sold together
+  tradeCapacity: number // E$ of goods (at GOOD_VALUE) its spaceports can trade a month, bought and sold together
+  // Transport capacities (Vic3-style, Simple parity with Complex's transport.ts):
+  // infrastructure gates MARKET ACCESS (how much of its trade a nation can run);
+  // launch is surface↔orbit lift; interstellarTransport is merchant-marine freight.
+  infrastructure: number
+  infrastructureUsage: number
+  marketAccess: number // 0..1
+  launch: number
+  interstellarTransport: number
   // National accounts (annual)
   realGdp: number
   gdp: number // nominal
@@ -569,6 +598,26 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   // slowed when short of rockets or spaceships).
   let tradeCapacity = 0
   for (const b of SIMPLE_BUILDINGS) tradeCapacity += active[b] * runs[b] * (SIMPLE_BUILDING_DEFS[b].tradeCapacity ?? 0)
+  if (s.specialEconomicZone) tradeCapacity *= 1 + SEZ_TRADE_BONUS
+
+  // --- Transport capacities (Vic3-style, Simple parity with economy/transport.ts) ---
+  const popTotal = worlds.reduce((n, w) => n + w.population, 0)
+  let infrastructure = SIMPLE_INFRA_BASE + Math.min(100, popTotal * 0.02)
+  let infrastructureUsage = 0
+  for (const b of SIMPLE_BUILDINGS) {
+    infrastructure += (SIMPLE_BUILDING_DEFS[b].infrastructure ?? 0) * active[b] * runs[b]
+  }
+  // Usage is on RAW built levels (a built mine needs the roads whether or not it
+  // is fully staffed), summed over the nation's worlds.
+  for (const w of worlds) for (const b of SIMPLE_BUILDINGS) infrastructureUsage += w.buildings[b] ?? 0
+  const marketAccess = infrastructureUsage <= 1e-9 ? 1 : Math.max(0, Math.min(1, infrastructure / infrastructureUsage))
+  const spMethod = s.spaceportMethod ?? 'standard'
+  const spLevels = active.spaceport * runs.spaceport
+  const elevatorLevels = active.spaceElevatorAnchor * runs.spaceElevatorAnchor
+  const launch = SIMPLE_LAUNCH_BASE + SIMPLE_SPACEPORT_LAUNCH[spMethod] * spLevels + 3000 * elevatorLevels
+  const interstellarTransport = SIMPLE_INTERSTELLAR_BASE + SIMPLE_SPACEPORT_INTERSTELLAR[spMethod] * spLevels
+  // A poorly-connected nation runs less of its trade (market access).
+  tradeCapacity *= marketAccess
   // The worst-supplied input, over the goods buildings need (a diagnostic).
   const inputSatisfaction = Math.min(1, ...SIMPLE_GOODS.filter((g) => need[g] > 0).map((g) => goodSat[g]))
 
@@ -766,6 +815,11 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     exportRevenue,
     tradeBalance: exportRevenue - importCost,
     tradeCapacity,
+    infrastructure,
+    infrastructureUsage,
+    marketAccess,
+    launch,
+    interstellarTransport,
     realGdp,
     gdp,
     revenue,

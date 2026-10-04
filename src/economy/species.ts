@@ -58,7 +58,7 @@ export const BASELINE_ORGANIC: SpeciesTemplate = {
       { id: 'household-goods', label: 'Household Goods', base: 0.3, goods: [{ good: 'consumerGoods', weight: 3 }, { good: 'furniture', weight: 1 }] },
       { id: 'energy', label: 'Energy', base: 0.15, goods: [{ good: 'electricity', weight: 1 }] },
       { id: 'everyday-services', label: 'Services', base: 0.12, goods: [{ good: 'retail', weight: 1 }] },
-      { id: 'infrastructure', label: 'Infrastructure', base: 0.06, goods: [{ good: 'infrastructure', weight: 1 }] },
+      { id: 'transportation', label: 'Transportation', base: 0.06, goods: [{ good: 'transportation', weight: 1 }] },
     ],
     healthcare: [
       { id: 'healthcare', label: 'Healthcare', base: 0.15, goods: [{ good: 'healthcare', weight: 3 }, { good: 'dental', weight: 1 }] },
@@ -92,7 +92,7 @@ export const TIDALIAN: SpeciesTemplate = {
       { id: 'household-goods', label: 'Household Goods', base: 0.25, goods: [{ good: 'consumerGoods', weight: 3 }, { good: 'furniture', weight: 1 }] },
       { id: 'energy', label: 'Energy', base: 0.12, goods: [{ good: 'electricity', weight: 1 }] },
       { id: 'everyday-services', label: 'Services', base: 0.1, goods: [{ good: 'retail', weight: 1 }] },
-      { id: 'infrastructure', label: 'Infrastructure', base: 0.05, goods: [{ good: 'infrastructure', weight: 1 }] },
+      { id: 'transportation', label: 'Transportation', base: 0.05, goods: [{ good: 'transportation', weight: 1 }] },
     ],
     healthcare: [
       { id: 'healthcare', label: 'Healthcare', base: 0.13, goods: [{ good: 'healthcare', weight: 3 }, { good: 'dental', weight: 1 }] },

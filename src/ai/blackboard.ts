@@ -17,6 +17,8 @@ import type { Starbase } from '../scene/starbaseLogic'
 import type { NationIntel } from '../scene/surveyLogic'
 import type { TechCategory } from '../data/techData'
 import type { Colony } from '../state/colonyStore'
+import type { InternationalOrg, OrgPillar } from '../data/internationalOrgData'
+import type { Subjection } from '../data/subjectData'
 
 export interface CountryInfo {
   id: string
@@ -74,6 +76,12 @@ export interface AiSnapshot {
   // jump (scene/shipPhysics.hyperdriveJumpChance): what ai/jumpRules caps. Optional:
   // absent = no jump is ever refused.
   jumpChanceOf?: (ship: ShipInstance, destination: MoveDestination) => number | null
+  // Diplomacy layers (optional, absent = none): the international organizations
+  // and subject relationships the Diplomat reasons about.
+  orgs?: InternationalOrg[]
+  subjections?: Subjection[]
+  // Pairs (pairKey) already under a blanket embargo. Optional: absent = none.
+  embargoedPairs?: Set<string>
 }
 
 export interface Threat {
@@ -122,6 +130,16 @@ export interface Blackboard {
   queuedClassIds: string[]
   intel: NationIntel | undefined
   researchPoints: Record<TechCategory, number>
+  // --- Diplomacy ---
+  // Organizations this empire belongs to.
+  myOrgs: InternationalOrg[]
+  // Its subjects, and its suzerain if it is itself a subject.
+  mySubjects: string[]
+  mySuzerain: string | undefined
+  // Whether this empire and `other` share an org carrying `pillar`.
+  sharesOrgPillar: (other: string, pillar: OrgPillar) => boolean
+  // Whether `other` is already embargoed by this empire.
+  embargoes: (other: string) => boolean
 }
 
 export function shipPower(ship: ShipInstance): number {
@@ -192,6 +210,13 @@ export function buildBlackboard(countryId: string, snap: AiSnapshot): Blackboard
 
   const assault = snap.armies.filter((a) => a.ownerId === countryId && a.kind === 'assault')
 
+  const orgs = snap.orgs ?? []
+  const myOrgs = orgs.filter((o) => o.memberIds.includes(countryId))
+  const subjections = snap.subjections ?? []
+  const mySubjects = subjections.filter((s) => s.suzerainId === countryId).map((s) => s.subjectId)
+  const mySuzerain = subjections.find((s) => s.subjectId === countryId)?.suzerainId
+  const pairKeyOf = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
+
   return {
     countryId,
     capital,
@@ -222,6 +247,11 @@ export function buildBlackboard(countryId: string, snap: AiSnapshot): Blackboard
     queuedClassIds: snap.queuedClassesOf(countryId),
     intel: snap.discoveredOf(countryId),
     researchPoints: snap.researchPointsOf(countryId),
+    myOrgs,
+    mySubjects,
+    mySuzerain,
+    sharesOrgPillar: (other, pillar) => orgs.some((o) => o.pillars.includes(pillar) && o.memberIds.includes(countryId) && o.memberIds.includes(other)),
+    embargoes: (other) => snap.embargoedPairs?.has(pairKeyOf(countryId, other)) ?? false,
   }
 }
 

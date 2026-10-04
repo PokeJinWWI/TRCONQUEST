@@ -288,6 +288,19 @@ export interface CountryAIOptions {
   // Whether two nations can reach each other at all, for goods and for capital
   // (internationalTrade, foreignInvestmentAI). Absent = every pair can.
   canTrade?: (a: string, b: string) => boolean
+  // Trade policy (state/tradePolicyStore.ts), applied in internationalTrade.ts.
+  // All absent = no tariffs, subventions or embargoes.
+  embargoed?: (a: string, b: string) => boolean
+  sharedMarket?: (a: string, b: string) => boolean
+  tariffRate?: (buyer: string, good: string) => number
+  importSubvention?: (buyer: string, good: string) => number
+  exportSubvention?: (seller: string, good: string) => number
+  // Bodies with a completed orbital space-elevator tether (economy/transport.ts):
+  // a paired ground anchor there gives fuel-free launch. Absent = none.
+  tetheredBodies?: Set<string>
+  // Extra national interstellar (merchant-marine) capacity from a nation's
+  // starbase trade-hub modules, by country id. Absent = none.
+  interstellarBonus?: (countryId: string) => number
   // The current tick index, for review cadence. Managers only act on their
   // review ticks.
   tick?: number

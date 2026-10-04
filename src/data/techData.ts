@@ -129,6 +129,15 @@ const BRANCH_TECHS: TechNode[] = [
     // (scene/colonies.canColonize), so it stays cheap.
     prerequisites: [['orbital-mechanics']],
   },
+  {
+    id: 'orbital-tethers',
+    name: 'Orbital Tethers',
+    category: 'engineering',
+    description:
+      'A tether from the ground to orbit — the space elevator. Fuel-free surface↔orbit lift when paired with an orbital-ring tether, and the backbone of a world cheap to supply from space.',
+    cost: 120,
+    prerequisites: [['orbital-construction']],
+  },
 
   // The warship ladder: Corvette is free; each larger hull needs the tech for the
   // one before it. No other effects (shipData.requiresTech / hullChassis.requiresTech).

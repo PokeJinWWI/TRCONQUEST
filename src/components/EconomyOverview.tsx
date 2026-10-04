@@ -123,8 +123,8 @@ export function EconomyOverview() {
   return (
     <div className="econ-panel">
       <div className="abs-headline">
-        <span className="abs-econtype" title="Your currency and its value in Terra Standard Credits">
-          {country.currency ? `${country.currency.code} · ${country.currency.rate.toFixed(3)} TSC` : 'National economy'}
+        <span className="abs-econtype" title="Your currency and its value in Earth Dollars">
+          {country.currency ? `${country.currency.code} · ${country.currency.rate.toFixed(3)} E$` : 'National economy'}
         </span>
         <span className={`abs-rating rating-${fiscal.rating}`} title="Credit rating — how safe lenders think your debt is, from AAA down to CCC. It follows debt-to-GDP.">{fiscal.rating}</span>
       </div>
@@ -138,7 +138,7 @@ export function EconomyOverview() {
         <Card label="POLICY RATE" value={fiscal.policyRate === undefined ? '—' : pct(fiscal.policyRate, 2)} color="#6fe3ff" active={metric === 'rate'} onClick={() => setMetric('rate')} tip="The central bank's interest rate." />
         <Card label="DEBT / GDP" value={pct(fiscal.debtToGdp, 0)} color="#ff9a6b" active={metric === 'debt'} onClick={() => setMetric('debt')} tip="National debt as a share of a year's GDP." />
         <Card label="BALANCE / YR" value={formatMoney(fiscal.balance * Y)} color={fiscal.balance >= 0 ? '#4ade80' : '#ff6b6b'} active={metric === 'balance'} onClick={() => setMetric('balance')} tip="Revenue minus spending over a year — negative is a deficit." />
-        <Card label="EXCHANGE RATE" value={country.currency ? country.currency.rate.toFixed(3) : '—'} color="#6fe3ff" active={metric === 'currency'} onClick={() => setMetric('currency')} tip="Your currency's value in Terra Standard Credits." />
+        <Card label="EXCHANGE RATE" value={country.currency ? country.currency.rate.toFixed(3) : '—'} color="#6fe3ff" active={metric === 'currency'} onClick={() => setMetric('currency')} tip="Your currency's value in Earth Dollars." />
       </div>
       {metric === 'gdp' && <GdpChart h={h} tick={tick} />}
       {metric === 'perCapita' && <GdpPerCapitaChart h={h} tick={tick} />}
@@ -220,7 +220,7 @@ export function EconomyOverview() {
         <div className="cb-facts">
           <div title="Goods shipped between your worlds this month"><span className="inspect-label">Trade volume</span><span>{fiscal.tradeVolume.toFixed(0)}</span></div>
           <div title="How much freight your logistics can move a month"><span className="inspect-label">Freight capacity</span><span>{fiscal.logisticsCapacity.toFixed(0)}</span></div>
-          {country.currency && <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} TSC</span></div>}
+          {country.currency && <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} E$</span></div>}
           <div title="Private capital pooled to finance construction"><span className="inspect-label">Investment pool</span><span>{formatMoney(country.investmentPool)}</span></div>
         </div>
       </Section>

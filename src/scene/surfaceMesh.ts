@@ -7,9 +7,12 @@
 // unit's position is a continuous point on the sphere; a density only
 // decides which nodes are drawn and which node a click snaps to.
 //
-//   coarse    subdivision level 2 —   162 nodes
-//   standard  subdivision level 3 —   642 nodes
-//   fine      subdivision level 4 — 2,562 nodes
+//   coarse    subdivision level 2 —    162 nodes
+//   standard  subdivision level 3 —    642 nodes
+//   fine      subdivision level 6 — 40,962 nodes (raised from level 4 for sharper
+//             coastlines/continents). Gameplay distances go through
+//             REFERENCE_CELL_RAD, pinned to the level-4 cell, so unit speeds,
+//             ranges and the terrain-battle patch are unchanged by the level.
 //
 // Nesting is exact: each subdivision keeps every existing vertex index and
 // appends the new midpoints, so the coarse nodes ARE fine nodes 0..161 and
@@ -40,7 +43,7 @@ export interface SurfaceMesh {
   fineSpacingRad: number
 }
 
-const LEVEL_OF: Record<GridDensity, number> = { coarse: 2, standard: 3, fine: 4 }
+const LEVEL_OF: Record<GridDensity, number> = { coarse: 2, standard: 3, fine: 6 }
 
 let cached: SurfaceMesh | null = null
 
@@ -95,24 +98,13 @@ export function surfaceMesh(): SurfaceMesh {
     return sets.map((s) => Int32Array.from([...s].sort((x, y) => x - y)))
   }
   const countOf = (level: number) => 10 * 4 ** level + 2
-  const count: Record<GridDensity, number> = { coarse: countOf(2), standard: countOf(3), fine: countOf(4) }
+  const count: Record<GridDensity, number> = { coarse: countOf(LEVEL_OF.coarse), standard: countOf(LEVEL_OF.standard), fine: countOf(LEVEL_OF.fine) }
   const neighbors = {
     coarse: neighborsFor(facesAtLevel[LEVEL_OF.coarse], count.coarse),
     standard: neighborsFor(facesAtLevel[LEVEL_OF.standard], count.standard),
     fine: neighborsFor(facesAtLevel[LEVEL_OF.fine], count.fine),
   }
   const flat = (f: number[][]) => Uint16Array.from(f.flat())
-
-  // Mean fine edge length.
-  let total = 0
-  let edges = 0
-  neighbors.fine.forEach((ns, i) => {
-    for (const j of ns) {
-      if (j <= i) continue
-      total += arcIdx(positions, i, j)
-      edges++
-    }
-  })
 
   cached = {
     positions,
@@ -124,19 +116,24 @@ export function surfaceMesh(): SurfaceMesh {
       standard: flat(facesAtLevel[LEVEL_OF.standard]),
       fine: flat(facesAtLevel[LEVEL_OF.fine]),
     },
-    fineSpacingRad: total / edges,
+    // Pinned to a fixed REFERENCE cell size (the level-4 spacing), NOT the actual
+    // spacing of the current fine level. "A cell" is thus a constant real distance
+    // (~450 km on Earth) used as the unit for ground-war radii, key-node spacing
+    // and the terrain-battle patch — so raising the mesh resolution (for sharper
+    // land/sea) leaves every gameplay distance unchanged. Rendering uses
+    // `positions` directly, so nothing visual depends on this value.
+    fineSpacingRad: REFERENCE_CELL_RAD,
   }
   return cached
 }
 
+// The level-4 fine-cell angular size. Kept fixed so gameplay distances measured
+// in "cells" don't shift when the fine mesh is subdivided further (see above).
+export const REFERENCE_CELL_RAD = 0.07551726911369615
+
 function normalizeArr(v: number[]): number[] {
   const l = Math.hypot(v[0], v[1], v[2])
   return [v[0] / l, v[1] / l, v[2] / l]
-}
-
-function arcIdx(positions: Float64Array, i: number, j: number): number {
-  const at = (k: number) => ({ x: positions[k * 3], y: positions[k * 3 + 1], z: positions[k * 3 + 2] })
-  return arc(at(i), at(j))
 }
 
 export function nodePoint(node: number): SurfacePoint {

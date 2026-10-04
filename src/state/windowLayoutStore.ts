@@ -14,8 +14,10 @@ export interface WindowSize {
 // click on one with none of your ships selected). DraggableWindow applies it
 // when it opens, and again whenever a new request for its key comes in.
 export type OpenMode = 'docked' | 'maximized'
-// Windows that open docked unless asked otherwise.
-export const DOCKED_WINDOW_KEYS: ReadonlySet<string> = new Set(['planet', 'ship', 'ships', 'star'])
+// Windows that open docked unless asked otherwise. The planet panel is a normal
+// floating window (its own remembered position) like every other menu — the
+// player found the full-height right-edge dock intrusive for it.
+export const DOCKED_WINDOW_KEYS: ReadonlySet<string> = new Set(['ship', 'ships', 'star'])
 
 interface WindowLayoutStore {
   sizes: Record<string, WindowSize>

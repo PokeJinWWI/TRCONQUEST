@@ -14,6 +14,8 @@ import { useShipDeconstructionStore } from '../state/shipDeconstructionStore'
 import { deconstructionRemaining } from '../scene/shipDeconstruction'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { shipyardRows, shipyardSlotsForWorld, techBlock } from '../scene/shipyardLogic'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { starbaseShipyardSlots } from '../scene/starbaseLogic'
 import { useTechStore } from '../state/techStore'
 import { isAbstractEconomy } from '../state/playerStore'
 
@@ -93,7 +95,7 @@ export function ShipyardPanel() {
     useFleetTabStore.getState().setShipyardNow(tab)
   }, [tab])
 
-  const slots = shipyardSlotsForWorld(world)
+  const slots = shipyardSlotsForWorld(world) + starbaseShipyardSlots(countryId, useStarbaseStore.getState().starbases, simDays)
   const capital = getCountry(countryId)?.capitalBodyName
   const designClasses = useMemo(() => designs.map((d) => resolveShipClass(`design:${d.id}`)).filter((c): c is ShipClass => !!c), [designs])
   const building = orders.filter((o) => o.startedSimDays !== null)

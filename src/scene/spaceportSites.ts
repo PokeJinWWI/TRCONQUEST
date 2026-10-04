@@ -10,9 +10,17 @@
 
 import { equatorialPull } from '../data/bodyRotation'
 import { TERRAIN } from '../data/groundData'
+import { COUNTRIES } from '../data/countryData'
 import { lonLatOf } from './mapProjection'
 import { TERRAIN_IDS, terrainAt, type BodySurface, type KeySlot } from './planetTerrain'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
+
+// A world whose spaceports are hand-curated (a country's fixed FixedCity
+// spaceports, e.g. Earth): the economy places no extra pool-named sites — the
+// curated key slots are the whole set.
+function isCuratedSpaceportWorld(bodyName: string): boolean {
+  return COUNTRIES.some((c) => c.capitalBodyName === bodyName && (c.cities?.some((city) => city.kind === 'spaceport') ?? false))
+}
 
 export interface SpaceportSite {
   operator: string // who runs it: 'state', or a company id
@@ -50,6 +58,9 @@ export function extraSpaceportNodes(surface: BodySurface, count: number): { node
 }
 
 function placeSites(surface: BodySurface, count: number): { node: number; outlier: boolean }[] {
+  // Curated worlds (Earth): the fixed spaceport key slots are the whole set — no
+  // auto-placed, pool-named extras.
+  if (isCuratedSpaceportWorld(surface.bodyName)) return []
   const main = surface.keySlots.some((k) => k.kind === 'spaceport') ? 1 : 0
   const need = count - main
   if (need <= 0 || surface.keySlots.length === 0) return []
@@ -60,7 +71,9 @@ function placeSites(surface: BodySurface, count: number): { node: number; outlie
   const taken = new Set(surface.keySlots.map((k) => k.node))
   const candidates: number[] = []
   for (let i = 0; i < mesh.count.fine; i++) {
-    if (surface.landComponent[i] !== surface.mainland || taken.has(i)) continue
+    // Any walkable landmass, not just the single biggest one — otherwise a
+    // multi-continent world (Earth) piles every spaceport onto Eurasia–Africa.
+    if (surface.landComponent[i] < 0 || taken.has(i)) continue
     const t = TERRAIN_IDS[surface.terrain[i]]
     if (t === 'mountains' || !TERRAIN[t].paintable) continue
     candidates.push(i)
@@ -76,7 +89,7 @@ function placeSites(surface: BodySurface, count: number): { node: number; outlie
   }
   const height = (i: number) => (relief && hi > lo ? (relief[i] - lo) / (hi - lo) : terrainAt(surface, i) === 'rock' ? 0.7 : 0.3)
   const settlements = surface.keySlots.filter((k) => k.kind === 'capital' || k.kind === 'city' || k.kind === 'outpost').map((k) => nodePoint(k.node))
-  const coastal = (i: number) => mesh.neighbors.fine[i].some((j) => surface.landComponent[j] !== surface.mainland)
+  const coastal = (i: number) => mesh.neighbors.fine[i].some((j) => surface.landComponent[j] < 0)
 
   const picked: { node: number; outlier: boolean }[] = []
   const points = () => [...surface.keySlots.map((k) => nodePoint(k.node)), ...picked.map((p) => nodePoint(p.node))]
@@ -130,11 +143,15 @@ function placeSites(surface: BodySurface, count: number): { node: number; outlie
 export function withSpaceportKeys(surface: BodySurface, sites: SpaceportSite[]): BodySurface {
   if (sites.length === 0) return surface
   const extra = extraSpaceportNodes(surface, sites.length)
-  const main = surface.keySlots.some((k) => k.kind === 'spaceport') ? 1 : 0
-  const keySlots: KeySlot[] = surface.keySlots.map((k) => (k.kind === 'spaceport' && main ? { ...k, operator: sites[0].operatorName } : k))
-  extra.forEach((e, n) => {
-    const site = sites[n + main]
+  // Assign operators to the existing spaceport key slots in order (a curated world
+  // like Earth has several), then append auto-placed sites for any remaining ones.
+  let si = 0
+  const keySlots: KeySlot[] = surface.keySlots.map((k) =>
+    k.kind === 'spaceport' && si < sites.length ? { ...k, operator: sites[si++].operatorName } : k,
+  )
+  for (const e of extra) {
+    const site = sites[si++]
     if (site) keySlots.push({ node: e.node, kind: 'spaceport', operator: site.operatorName, site: e.outlier ? 'outlier' : 'extra' })
-  })
+  }
   return { ...surface, keySlots }
 }

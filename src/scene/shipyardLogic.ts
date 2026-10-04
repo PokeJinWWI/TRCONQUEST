@@ -28,6 +28,8 @@ import { useShipyardStore, type ShipBuildOrder } from '../state/shipyardStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from './shipPhysics'
 import { embarkSettlers } from './colonies'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { starbaseShipyardSlots } from './starbaseLogic'
 
 const RESOURCE_NAMES = Object.fromEntries(RESOURCE_TYPES.map((r) => [r.id, r.name])) as Record<ResourceId, string>
 
@@ -175,7 +177,7 @@ export function advanceShipyard(country: Pick<Country, 'id' | 'capitalStarId' | 
   }
   if (orders.length === 0) return
   const world = worldByName(useEconomyStore.getState().worlds, country.capitalBodyName)
-  const step = stepShipyardQueue(orders, shipyardSlotsForWorld(world), simDays)
+  const step = stepShipyardQueue(orders, shipyardSlotsForWorld(world) + starbaseShipyardSlots(country.id, useStarbaseStore.getState().starbases, simDays), simDays)
   const changed = step.completed.length > 0 || step.orders.some((o, i) => o.startedSimDays !== orders[i]?.startedSimDays)
   if (!changed) return
   setOrders(country.id, step.orders)

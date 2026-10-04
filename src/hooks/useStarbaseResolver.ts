@@ -18,7 +18,9 @@ export function resolveStarbaseSieges(fromSimDays: number, toSimDays: number): v
   const starbases = useStarbaseStore.getState().starbases
   if (starbases.length === 0) return
   const ships = useShipStore.getState().ships
-  const { damaged, destroyedIds, killersOf } = stepStarbaseSieges(days, starbases, ships, atWar, toSimDays)
+  const { damaged, destroyedIds, killersOf, shipDamage, shipDestroyedIds } = stepStarbaseSieges(days, starbases, ships, atWar, toSimDays)
+  // Defended bases return fire: apply the hull damage to the besiegers.
+  if (Object.keys(shipDamage).length > 0) useShipStore.getState().applyCombatDamage(shipDamage, shipDestroyedIds)
   if (Object.keys(damaged).length === 0 && destroyedIds.length === 0) return
   for (const id of destroyedIds) {
     const sb = starbases.find((s) => s.id === id)

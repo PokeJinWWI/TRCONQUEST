@@ -222,7 +222,15 @@ export interface World {
   // not. Optional — a world without it treats emergent goods as fully demanded
   // (pre-feature behavior); seeded worlds carry real values.
   adoption?: Partial<Record<GoodId, number>>
+  // Special Economic Zone (optional, default absent). When active, this world is
+  // taxed at taxDiscount less than the national rate (economyTick) and is open
+  // to foreign construction regardless of the nation's foreignInvestmentPolicy
+  // (state/economyStore.setSpecialEconomicZone). taxDiscount is 0..1.
+  specialEconomicZone?: { active: boolean; taxDiscount: number }
 }
+
+// Default tax cut a Special Economic Zone grants (half the national rate).
+export const SEZ_DEFAULT_TAX_DISCOUNT = 0.5
 
 // A country — the NATIONAL government layer. One treasury, one tax/welfare
 // policy, one debt, spanning all the worlds it owns.
@@ -432,6 +440,12 @@ export interface WorldReport {
   // the cleared wage. `qualifiedRate` is qualified/workers — how job-ready the
   // class's labor pool is.
   labor: Record<PopClass, { workers: number; qualified: number; qualifiedRate: number; jobs: number; employmentRate: number; wage: number }>
+  // Transport capacities (economy/transport.ts). Optional: absent on reports
+  // built before this feature / in direct tickWorld tests.
+  infrastructure?: number
+  infrastructureUsage?: number
+  marketAccess?: number // 0..1
+  launch?: number // surface↔orbit throughput this tick
 }
 
 export type CreditRating = 'AAA' | 'AA' | 'A' | 'BBB' | 'BB' | 'B' | 'CCC'

@@ -28,6 +28,7 @@ import { openBattle } from '../scene/battleNav'
 import { playerArmyGroups, type ArmyGroup } from '../scene/armyOutliner'
 import { useBattleStore } from '../state/battleStore'
 import { useStarbaseStore } from '../state/starbaseStore'
+import { useStarbasePanelStore } from '../state/starbasePanelStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { engagementIntel, unknownShipsMessage } from '../scene/commsVisual'
 import { useColonyStore } from '../state/colonyStore'
@@ -552,6 +553,8 @@ export function Outliner() {
     const view = useViewStore.getState()
     if (view.level !== 'interstellar' || view.selectedNeighborhoodId !== 'solar-neighborhood') view.enterInterstellar('solar-neighborhood')
     if (entry.starId) selectInView(entry.starId)
+    // Also open the Starbase management panel (tier, modules, upgrade).
+    useStarbasePanelStore.getState().open(entry.key)
   }
   // Shift/Ctrl/Cmd-click adds or removes the fleet from the selection, so
   // several fleets can be ordered at once.

@@ -1,7 +1,7 @@
 // Currencies + foreign exchange (design: Central Banking System, Stage 3 — full
 // multi-currency). Every country issues its own currency with a floating (or
-// pegged) exchange rate against a common numeraire, the Terra Standard Credit
-// (TSC). Domestic economies are unchanged — every treasury, price, wage and cash
+// pegged) exchange rate against a common numeraire, the Earth Dollar
+// (E$). Domestic economies are unchanged — every treasury, price, wage and cash
 // balance is simply reinterpreted as being denominated in that country's own
 // currency. The exchange rate matters ONLY where value crosses a border:
 // repatriated dividends, buying foreign equity, and cross-border construction
@@ -10,7 +10,7 @@
 // defend a peg — and a peg it can no longer fund breaks, devaluing and costing
 // credibility.
 //
-// Rate convention: `Currency.rate` is the TSC value of ONE unit of that currency
+// Rate convention: `Currency.rate` is the E$ value of ONE unit of that currency
 // (so a stronger currency has a higher rate). To move value from country A to
 // country B: amount_B = amount_A * rateA / rateB. Pure/headless.
 
@@ -20,7 +20,7 @@ import { exchangeRateRegimeDef, hasCentralBank, type DebtFinancingRegime } from 
 export interface Currency {
   name: string
   code: string // short ticker, e.g. 'VNC'
-  // TSC value of one unit of this currency. Floats over time; defended toward
+  // E$ value of one unit of this currency. Floats over time; defended toward
   // `target` under a peg/band/managed regime.
   rate: number
   // The rate the central bank steers toward under a non-floating regime (the peg
@@ -72,7 +72,7 @@ function clampRate(r: number): number {
   return Math.max(RATE_FLOOR, Math.min(RATE_CEIL, r))
 }
 
-// Convert an amount from one currency to another given their TSC rates.
+// Convert an amount from one currency to another given their E$ rates.
 export function convert(amount: number, fromRate: number, toRate: number): number {
   if (toRate <= 0) return amount
   return (amount * fromRate) / toRate

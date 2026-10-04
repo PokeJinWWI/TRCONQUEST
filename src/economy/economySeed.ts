@@ -40,6 +40,7 @@ const OPERATOR_OF: Record<string, string> = {
   'republic-of-venus': 'kypris-astroporia',
   'orion-republic': 'arcadian-starlines',
   'kingdom-of-lalande': 'compagnie-stellaire',
+  earth: 'terran-spacelift',
 }
 // The laissez-faire nations (their seeded economicSystem, below): plants the
 // seed adds to complete their supply chains are private (their operator's),
@@ -707,6 +708,71 @@ const WORLD_SPECS: WorldSpec[] = [
       { recipe: 'governmentOffice', level: 2 },
     ],
   },
+  // Earth — the old imperial core under the Northern Federal Command. A huge
+  // population on ageing, state-run industry: a "struggling giant" (big total
+  // output from sheer size, but low productivity, a resource-heavy mix, and a
+  // weak treasury). The seed balancer sizes producers to its workforce; its
+  // poverty comes from the command economy, low-value mix and weak fiscal, not
+  // mass unemployment. State-owned throughout (command economy).
+  {
+    id: 'Earth',
+    ownerId: 'earth',
+    culture: 'terran',
+    species: 'baseline-organic',
+    population: 4000,
+    capacity: 24000,
+    religions: [
+      { religion: 'non-affiliated', share: 0.55 },
+      { religion: 'old-earth-theravada', share: 0.25 },
+      { religion: 'axiomatic', share: 0.2 },
+    ],
+    buildings: [
+      // Power — an old, coal-heavy grid.
+      { recipe: 'coalPowerPlant', level: 7 },
+      { recipe: 'solarPlant', level: 3 },
+      // Extraction — a vast raw-materials base (the empire lives off its mines).
+      { recipe: 'coalMine', level: 7 },
+      { recipe: 'ironMine', level: 6 },
+      { recipe: 'oilWell', level: 5 },
+      { recipe: 'rareMetalsMine', level: 2 },
+      { recipe: 'phosphateMine', level: 3 },
+      { recipe: 'loggingCamp', level: 3 },
+      { recipe: 'sulfurMine', level: 2 },
+      // Agriculture — feeding billions, on tired land.
+      { recipe: 'wheatFarm', level: 8 },
+      { recipe: 'riceFarm', level: 5 },
+      { recipe: 'livestockRanch', level: 4 },
+      { recipe: 'fishery', level: 3 },
+      // Industry — broad but shallow heavy industry, thin on the advanced end.
+      { recipe: 'steelMill', level: 6 },
+      { recipe: 'cementWorks', level: 3 },
+      { recipe: 'chemicalPlant', level: 2 },
+      { recipe: 'fertilizerPlant', level: 2 },
+      { recipe: 'toolWorkshop', level: 4 },
+      { recipe: 'machineryFactory', level: 3 },
+      { recipe: 'heavyMachineryPlant', level: 1 },
+      { recipe: 'foodProcessor', level: 5 },
+      { recipe: 'consumerGoodsFactory', level: 3 },
+      { recipe: 'semiconductorFab', level: 1 },
+      { recipe: 'electronicsFactory', level: 1 },
+      { recipe: 'oilRefinery', level: 2 },
+      { recipe: 'constructionSector', level: 2 },
+      { recipe: 'shipyard', level: 1 },
+      { recipe: 'spaceyard', level: 1 },
+      { recipe: 'rocketFactory', level: 1 },
+      // Services & infrastructure — ageing (roads over rail), stretched thin.
+      { recipe: 'clinic', level: 3 },
+      { recipe: 'school', level: 2 },
+      { recipe: 'retailShop', level: 3 },
+      { recipe: 'roadNetwork', level: 4 },
+      { recipe: 'railway', level: 1 },
+      { recipe: 'spaceport', level: 2 },
+      // Government — a vast, ossified bureaucracy.
+      { recipe: 'ministry', level: 3 },
+      { recipe: 'governmentOffice', level: 3 },
+      { recipe: 'corporateHq', level: 1, owner: 'terran-spacelift' },
+    ],
+  },
 ]
 // --- Spaceports, seaports and whole supply chains, before the balancer ---
 
@@ -971,6 +1037,46 @@ const COUNTRIES: Country[] = [
       fxReserves: 45000,
     }),
   },
+  {
+    // Earth — the declining colossus. A command economy run by the Northern
+    // Federal Command: huge but ossified, heavily indebted, with a thin treasury.
+    // Its currency, the Earth Dollar, is the interstellar reserve (rate 1.0, the
+    // FX anchor), run by the Central Bank of Earth.
+    id: 'earth',
+    taxRate: 0.14,
+    welfarePerCapita: 1.2,
+    treasury: 20000,
+    economicSystem: 'command',
+    publicServices: { healthcare: 0.5, dental: 0.1, education: 0.4 },
+    bonds: { pops: 140000, corporations: 50000, foreign: 50000 },
+    bondRate: 0.005,
+    foreignBondPolicy: 'approval',
+    foreignInvestmentPolicy: 'closed',
+    foreignInvestmentAutoApprove: false,
+    pendingForeignInvestment: [],
+    requireForeignApproval: true,
+    pendingForeign: [],
+    bureaucracy: 5000,
+    decrees: [],
+    logisticsCapacity: 9000,
+    subsidies: { corporations: {}, buildings: {} },
+    investmentPool: 20000,
+    currency: { name: 'Earth Dollar', code: 'E$', rate: 1.0, target: 1.0 },
+    centralBank: seedCentralBank('earth', 'Central Bank of Earth', {
+      status: 'state-bank',
+      structure: 'regional-branches',
+      policyAuthority: 'finance-ministry',
+      appointment: 'head-of-state',
+      mandate: 'multiple',
+      debtFinancing: 'direct',
+      exchangeRegime: 'float',
+      credibility: 0.5,
+      governmentPressure: 0.4,
+      governorName: 'Director-General Aleksei Varga',
+      policyRate: 0.04,
+      reserveRequirement: 0.1,
+    }),
+  },
 ]
 
 // --- Characters, families, corporations ---
@@ -1058,6 +1164,7 @@ const CHARACTERS: Character[] = [
     { id: 'char-theodora-anthemis', name: 'Theodora Anthemis', age: 47, corporationId: 'kypris-astroporia', cultureId: 'venusian', religionId: 'axiomatic', speciesTemplateId: 'baseline-organic', traits: ['Shrewd', 'Gregarious'], log: ['Founder of Kypris Astroporia, the Republic’s spaceport and shipping line.'] },
     { id: 'char-solenne-hart', name: 'Solenne Hart', age: 44, corporationId: 'arcadian-starlines', cultureId: 'arcadian', religionId: 'arcadian-idyll', speciesTemplateId: 'baseline-organic', traits: ['Reformer', 'Ambitious'], log: ['Founder of Arcadian Starlines.'] },
     { id: 'char-augustin-delorme', name: 'Augustin Delorme', age: 58, corporationId: 'compagnie-stellaire', cultureId: 'tidalian', religionId: 'non-affiliated', speciesTemplateId: 'tidalian', traits: ['Cautious', 'Shrewd'], log: ['Founder of the Compagnie Stellaire de Bellerive.'] },
+    { id: 'char-marcus-thorne', name: 'Marcus Thorne', age: 63, corporationId: 'terran-spacelift', cultureId: 'terran', religionId: 'non-affiliated', speciesTemplateId: 'baseline-organic', traits: ['Cautious', 'Shrewd'], log: ['Director of Terran Spacelift, the state-chartered haulier of the old homeworld.'] },
   ].map(
     (c): Character => ({ ...c, role: 'corp-leader', wealth: 600, skills: { administration: 6, finance: 7, diplomacy: 5 } }),
   ),
@@ -1100,6 +1207,7 @@ const CORPORATIONS: Corporation[] = [
     { id: 'kypris-astroporia', name: 'Kypris Astroporia', countryId: 'republic-of-venus', leaderId: 'char-theodora-anthemis' },
     { id: 'arcadian-starlines', name: 'Arcadian Starlines', countryId: 'orion-republic', leaderId: 'char-solenne-hart' },
     { id: 'compagnie-stellaire', name: 'Compagnie Stellaire de Bellerive', countryId: 'kingdom-of-lalande', leaderId: 'char-augustin-delorme' },
+    { id: 'terran-spacelift', name: 'Terran Spacelift', countryId: 'earth', leaderId: 'char-marcus-thorne' },
   ].map(
     (c): Corporation => ({
       ...c,

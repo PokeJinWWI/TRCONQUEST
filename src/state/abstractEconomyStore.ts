@@ -41,6 +41,7 @@ import { useResourceStore } from './resourceStore'
 import { useTechStore } from './techStore'
 import { atWar } from './diplomacyStore'
 import { matchTrade } from '../economy-abstract/tradeMatching'
+import { useTradePolicyStore, tradePolicyOf, isEmbargoed, inSharedMarket } from './tradePolicyStore'
 
 // Simple mode's economy store: one macro state per nation, plus every
 // world's population and buildings (keyed by body name — a world's economy
@@ -123,7 +124,9 @@ function seedWorlds(): Record<string, WorldState> {
     // urban district on inhabited worlds (for embassies and foreign firms).
     // A capital also starts with one military level (its starting fortress and battery).
     const capital = COUNTRIES.some((c) => c.capitalBodyName === bodyName)
-    const districts = { ...districtsOf(base), urban: inhabited ? 1 : 0, military: capital ? 1 : 0 }
+    // Urban holds the seed's urban buildings (clinics, commerce, railways…),
+    // at least 1 on an inhabited world for embassies/foreign firms.
+    const districts = { ...districtsOf(base), urban: inhabited ? Math.max(1, districtsOf(base).urban) : 0, military: capital ? 1 : 0 }
     const levels = Object.values(districts).reduce((n, v) => n + v, 0)
     worlds[bodyName] = { ...base, districts, land: Math.max(landForBody(bodyName), levels) }
   }
@@ -199,6 +202,7 @@ interface AbstractEconomyStore {
   setMoneyCreation: (countryId: string, rate: number) => void
   setWarTaxes: (countryId: string, on: boolean) => void
   setWelfare: (countryId: string, level: number) => void
+  setSpecialEconomicZone: (countryId: string, on: boolean) => void
   setMonetaryStance: (countryId: string, stance: MonetaryStance) => void
   // A standing monthly trade order: + import, − export, 0 clears it.
   setTrade: (countryId: string, good: SimpleGood, perMonth: number) => void
@@ -277,6 +281,8 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
       // …then trade between nations (economy-abstract/tradeMatching.ts): the
       // standing orders fill from real partners at peace, matched each month
       // on what every nation holds and can pay now, through its spaceports.
+      const tp = useTradePolicyStore.getState()
+      const tradeFiscal = new Map<string, number>()
       const filled = matchTrade(
         ids.map((id) => {
           const tradeCapacity = abstractReport(byCountry[id], worldsOf(id, worlds, owners, controllers), stocks[id]).tradeCapacity
@@ -286,13 +292,22 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
           return { id, orders: byCountry[id].trade, stock: stocks[id], monthlyUse, monthlyNet, cash: byCountry[id].treasury, unitCost: (g: SimpleGood) => importUnitCost(byCountry[id], g), tradeCapacity }
         }),
         atWar,
+        {
+          embargoed: (a, b) => isEmbargoed(tp.embargoes, a, b),
+          sharedMarket: (a, b) => inSharedMarket(a, b),
+          tariffRate: (buyer, g) => tradePolicyOf(tp.policies, buyer).tariffs[g] ?? 0,
+          importSubvention: (buyer, g) => tradePolicyOf(tp.policies, buyer).importSubventions[g] ?? 0,
+          exportSubvention: (seller, g) => tradePolicyOf(tp.policies, seller).exportSubventions[g] ?? 0,
+          fiscal: tradeFiscal,
+        },
       )
       for (const id of ids) {
         const s = byCountry[id]
         const mine = worldsOf(id, worlds, owners, controllers)
         // Tick with the orders as filled; the nation's standing orders stay as set.
         const res = tickAbstractEconomy({ ...s, trade: filled[id] ?? {} }, mine, stocks[id])
-        byCountry[id] = { ...res.state, trade: s.trade }
+        const policyDelta = tradeFiscal.get(id) ?? 0
+        byCountry[id] = { ...res.state, treasury: res.state.treasury + policyDelta, trade: s.trade }
         stocks[id] = res.stock
         const r = res.report
         reports[id] = r
@@ -327,6 +342,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
   setMoneyCreation: (countryId, rate) => set((s) => patch(s, countryId, (c) => ({ ...c, moneyCreation: Math.max(0, Math.min(1, rate)) }))),
   setWarTaxes: (countryId, on) => set((s) => patch(s, countryId, (c) => ({ ...c, warTaxes: on }))),
   setWelfare: (countryId, level) => set((s) => patch(s, countryId, (c) => ({ ...c, welfare: Math.max(0, Math.min(1, level)) }))),
+  setSpecialEconomicZone: (countryId, on) => set((s) => patch(s, countryId, (c) => ({ ...c, specialEconomicZone: on }))),
   setMonetaryStance: (countryId, stance) => set((s) => patch(s, countryId, (c) => ({ ...c, monetaryStance: stance }))),
   setTrade: (countryId, good, perMonth) =>
     set((s) =>

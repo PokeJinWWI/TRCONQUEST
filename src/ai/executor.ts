@@ -19,8 +19,11 @@ import { useShipStore } from '../state/shipStore'
 import { useConfirmStore } from '../state/confirmStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { fleetMembersOf, queueBombard, queueFleetMoveOrder, queuePatrol } from '../scene/commsVisual'
-import { declareWarOn, makePeace, proposePeace } from '../scene/peace'
+import { declareWarOn, escalateConflict, makePeace, proposePeace } from '../scene/peace'
 import { sendAttackOrder } from '../scene/aggressionOrders'
+import { useInternationalOrgStore } from '../state/internationalOrgStore'
+import { useSubjectStore } from '../state/subjectStore'
+import { useTradePolicyStore } from '../state/tradePolicyStore'
 import { useAiStore } from './aiStore'
 import type { Intent } from './types'
 
@@ -201,6 +204,39 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
         queueFleetMoveOrder(fleetMembersOf(ship, ships), { kind: 'body', systemId: intent.systemId, bodyName: intent.bodyName })
         break
       }
+      case 'found-org':
+        useInternationalOrgStore.getState().founded(countryId, intent.presetId, intent.name, simDays)
+        break
+      case 'join-org': {
+        // Still a real, open org and the empire isn't in it already.
+        const org = useInternationalOrgStore.getState().orgs.find((o) => o.id === intent.orgId)
+        if (org && !org.memberIds.includes(countryId)) useInternationalOrgStore.getState().join(intent.orgId, countryId)
+        break
+      }
+      case 'join-war-as-ally': {
+        // The defender is still at war with the attacker, and we aren't in it.
+        const wars = useDiplomacyStore.getState().wars
+        const stillOn = wars.some((w) => (w.attackerId === intent.enemyId && w.defenderId === intent.allyId) || (w.attackerId === intent.allyId && w.defenderId === intent.enemyId))
+        const alreadyIn = wars.some((w) => (w.attackerId === countryId && w.defenderId === intent.enemyId) || (w.attackerId === intent.enemyId && w.defenderId === countryId))
+        if (stillOn && !alreadyIn) declareWarOn(countryId, intent.enemyId, simDays, 'limited')
+        break
+      }
+      case 'offer-subjection': {
+        // AI → AI only: established directly, like an accepted peace offer. The
+        // diplomat already applied the acceptance rule (power edge + opinion).
+        if (intent.targetId === playerCountryId) break
+        const subjections = useSubjectStore.getState().subjections
+        if (subjections.some((s) => s.subjectId === intent.targetId)) break
+        useSubjectStore.getState().establishSubject(countryId, intent.targetId, intent.subjectType, simDays)
+        useDiplomacyStore.getState().pushEvent('peace-signed', [countryId, intent.targetId], `${nameOf(intent.targetId)} became a ${intent.subjectType} of ${nameOf(countryId)}`, simDays)
+        break
+      }
+      case 'declare-embargo':
+        useTradePolicyStore.getState().declareEmbargo(countryId, intent.targetId)
+        break
+      case 'escalate-conflict':
+        escalateConflict(intent.warId, countryId, simDays)
+        break
     }
   }
 }

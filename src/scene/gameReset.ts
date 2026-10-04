@@ -31,6 +31,7 @@ import { useShipStore } from '../state/shipStore'
 import { useSurveyStore } from '../state/surveyStore'
 import { useClusterVisitStore } from '../state/clusterVisitStore'
 import { useStarbaseStore } from '../state/starbaseStore'
+import { useStarbasePanelStore } from '../state/starbasePanelStore'
 import { useShipyardStore } from '../state/shipyardStore'
 import { useShipDeconstructionStore } from '../state/shipDeconstructionStore'
 import { useTechStore } from '../state/techStore'
@@ -68,6 +69,7 @@ const GAME_STORES: Resettable[] = [
   useSurveyStore,
   useClusterVisitStore,
   useStarbaseStore,
+  useStarbasePanelStore,
   useArmyStore,
   useBattleStore,
   useCombatStore,

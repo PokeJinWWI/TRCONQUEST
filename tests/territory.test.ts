@@ -28,7 +28,7 @@ console.log('\n=== 1. Starting borders come from the authored body data ===')
   check('...and its moons Phobos and Deimos', owners['Phobos'] === MARS && owners['Deimos'] === MARS)
   check('...and Luna (a moon of a planet it does NOT own)', owners['Luna'] === MARS)
   check('Venus owns Venus', owners['Venus'] === VENUS)
-  check('Earth is unclaimed', owners['Earth'] === undefined)
+  check('Earth owns Earth', owners['Earth'] === 'earth')
   check('Orion owns Arcadia', owners['Arcadia'] === ORION)
   check('Lalande owns its homeworld', owners['Lalande 21185 d'] === LALANDE)
   check('a moon knows which system it is in', bodyStarId('Luna') === 'sol' && bodyStarId('Arcadia') === 'alpha-centauri')
@@ -39,7 +39,7 @@ console.log('\n=== 2. System claims: "every claimed body", not "every body" ==='
 {
   const owners = seedBodyOwners()
   const sol = systemClaim('sol', owners)
-  check('Sol is contested between Mars and Venus', sol.kind === 'contested' && sol.countryIds.includes(MARS) && sol.countryIds.includes(VENUS) && sol.countryIds.length === 2)
+  check('Sol is contested between Mars, Venus and Earth', sol.kind === 'contested' && sol.countryIds.includes(MARS) && sol.countryIds.includes(VENUS) && sol.countryIds.includes('earth') && sol.countryIds.length === 3)
   const ac = systemClaim('alpha-centauri', owners)
   check('Orion owns Alpha Centauri outright, despite its unclaimed dwarf planets', ac.kind === 'owned' && ac.countryId === ORION)
   check("Lalande owns its home system", (() => {
@@ -88,8 +88,9 @@ console.log('\n=== 4. Cession transfers ownership — and the world economy with
   const { bodyOwner, bodyController } = useTerritoryStore.getState()
   check('the ceded body now belongs to the new owner', bodyOwner['Venus'] === MARS)
   check('...and is no longer "occupied" — the occupier owns it outright', !isOccupied('Venus', bodyOwner, bodyController))
-  check('with Venus gone, Mars now claims all of Sol', (() => {
-    const c = systemClaim('sol', bodyOwner)
+  useTerritoryStore.getState().cedeBody('Earth', MARS) // and Earth, so Mars holds every claimed Sol body
+  check('with Venus and Earth gone, Mars now claims all of Sol', (() => {
+    const c = systemClaim('sol', useTerritoryStore.getState().bodyOwner)
     return c.kind === 'owned' && c.countryId === MARS
   })())
   check("the world's economy transferred with it", worldByName(useEconomyStore.getState().worlds, 'Venus')?.ownerId === MARS)

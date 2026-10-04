@@ -284,7 +284,10 @@ console.log('\n=== 8. The ground AI, and the player\'s units ===')
     venus.landComponent[i] === venus.mainland && passableFor(terrainAt(venus, i), 'armour') &&
     venus.keySlots.every((k) => arc(nodePoint(i), nodePoint(k.node)) > 4 * cell) &&
     venus.keySlots.some((k) => arc(nodePoint(i), nodePoint(k.node)) < 8 * cell))!
-  const ai = stepGroundWar(world([army(MARS, 'assault', 'Venus', away)]), 0, 3)
+  // A dozen days: on the fine level-6 mesh the planned path has more waypoints and
+  // routes around terrain first, so the first few days are lateral — net progress
+  // toward the key nodes shows clearly over a slightly longer window.
+  const ai = stepGroundWar(world([army(MARS, 'assault', 'Venus', away)]), 0, 12)
   const nearestKey = (p: { x: number; y: number; z: number }) => Math.min(...venus.keySlots.map((k) => arc(p, nodePoint(k.node))))
   const before = nearestKey(nodePoint(away))
   const after = Math.min(...units(ai.armies).map((u) => nearestKey(u.position!)))

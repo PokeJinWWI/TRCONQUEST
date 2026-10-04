@@ -38,4 +38,9 @@ export const LANDMARKS: Record<string, NationLandmarks> = {
     others: [{ name: 'Chambre des États', description: 'The chamber of the Kingdom’s estates.' }],
     fortress: { name: 'Château-Fort de Mont-Jérôme', description: 'The Kingdom’s castle, guarding the capital.' },
   },
+  earth: {
+    seat: { name: 'Northern Federal Command HQ', description: 'The fortified seat of the military government that rules Earth, in Chicago — the nerve centre of a declining empire.' },
+    others: [{ name: 'Grand Federal Assembly', description: 'The old imperial assembly, now a rubber stamp for the Command.' }],
+    fortress: { name: 'Citadel of the Great Lakes', description: 'The hardened command bunker guarding the capital.' },
+  },
 }

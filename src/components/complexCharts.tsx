@@ -266,14 +266,14 @@ export function MoneySupplyChart({ h, tick }: ChartProps) {
 export function ExchangeRateChart({ h, tick, code, showPeg }: ChartProps & { code: string; showPeg: boolean }) {
   return (
     <TimeChart
-      title="Exchange rate (TSC per unit)"
+      title="Exchange rate (E$ per unit)"
       endTick={tick}
       format={(v) => v.toFixed(3)}
       series={[
         { label: code, color: CHART_COLORS.rate, values: trailingSeries(h, (p) => p.exchangeRate) },
         ...(showPeg ? [{ label: 'Target', color: CHART_COLORS.peg, values: trailingSeries(h, (p) => p.pegTarget) }] : []),
       ]}
-      tip="What one unit of your currency is worth in Terra Standard Credits. Under a peg or managed float the bank spends FX reserves to steer it toward the target."
+      tip="What one unit of your currency is worth in Earth Dollars. Under a peg or managed float the bank spends FX reserves to steer it toward the target."
     />
   )
 }

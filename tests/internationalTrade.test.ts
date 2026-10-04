@@ -121,5 +121,59 @@ console.log('\n=== 5. Simple mode: orders fill from real partners ===')
   check('what is bought is exactly what the partners sold', Math.abs((f.A.alloys ?? 0) + (f.B.alloys ?? 0) + (f.C.alloys ?? 0)) < 1e-9 && f.A.alloys === 90)
 }
 
+console.log('\n=== 6. Complex mode: trade policy shapes trade and treasury ===')
+{
+  // A tariff just big enough to push the landed cost above the buyer's price
+  // kills the trade; a smaller one still trades but feeds the buyer's treasury.
+  const worlds = market(5, 20)
+  const noTariff = tradeBetweenNations(input(worlds))
+  const baseVol = noTariff.ledger.volume.get(VENUS) ?? 0
+
+  const blocked = tradeBetweenNations(input(market(5, 20), { tariffRate: () => 5 }))
+  check('a prohibitive tariff blocks the trade', (blocked.ledger.volume.get(VENUS) ?? 0) === 0)
+
+  const tariffed = tradeBetweenNations(input(market(5, 20), { tariffRate: () => 0.5 }))
+  const base = -(noTariff.ledger.treasury.get(VENUS) ?? 0)
+  const withTariff = tariffed.ledger.treasury.get(VENUS) ?? 0
+  check('a modest tariff still trades', (tariffed.ledger.volume.get(VENUS) ?? 0) > 0)
+  check('tariff revenue offsets some of the buyer treasury outflow', withTariff > -base, `${withTariff.toFixed(0)} vs ${(-base).toFixed(0)}`)
+
+  const shared = tradeBetweenNations(input(market(5, 20), { tariffRate: () => 5, sharedMarket: () => true }))
+  check('a shared market waives the tariff', Math.abs((shared.ledger.volume.get(VENUS) ?? 0) - baseVol) < 1e-6)
+
+  const embargoed = tradeBetweenNations(input(market(5, 20), { embargoed: () => true }))
+  check('an embargo blocks trade outright', (embargoed.ledger.volume.get(VENUS) ?? 0) === 0)
+
+  // At a price where the good is just too dear to cross, an export subvention
+  // (paid by the seller's treasury) makes it competitive.
+  const noSub = tradeBetweenNations(input(market(21, 20)))
+  const expSub = tradeBetweenNations(input(market(21, 20), { exportSubvention: () => 0.3 }))
+  check('without a subvention the dear good does not cross', (noSub.ledger.volume.get(VENUS) ?? 0) === 0)
+  check('an export subvention makes a near-uncompetitive good trade', (expSub.ledger.volume.get(VENUS) ?? 0) > 0)
+  // The subvention is a cost to the seller: at a price that trades either way,
+  // the seller's treasury ends up poorer with the subvention than without.
+  const sellerNoSub = tradeBetweenNations(input(market(5, 20))).ledger.treasury.get(MARS) ?? 0
+  const sellerWithSub = tradeBetweenNations(input(market(5, 20), { exportSubvention: () => 0.3 })).ledger.treasury.get(MARS) ?? 0
+  check('an export subvention costs the seller’s treasury', sellerWithSub < sellerNoSub, `${sellerWithSub.toFixed(0)} < ${sellerNoSub.toFixed(0)}`)
+}
+
+console.log('\n=== 7. Simple mode: trade policy shapes trade and treasury ===')
+{
+  const nation = (id: string, over: Partial<TradeNation> = {}): TradeNation => ({ id, orders: {}, stock: emptyStockpile(), monthlyUse: {}, cash: 1e9, unitCost: () => 1, ...over })
+  const peace = () => false
+  const emb = matchTrade([nation('A', { orders: { alloys: 100 } }), nation('B', { orders: { alloys: -100 }, stock: { ...emptyStockpile(), alloys: 500 } })], peace, { embargoed: () => true })
+  check('an embargo blocks trade', (emb.A.alloys ?? 0) === 0)
+
+  const fiscal = new Map<string, number>()
+  const tar = matchTrade([nation('A', { orders: { alloys: 100 }, cash: 120, unitCost: () => 1 }), nation('B', { orders: { alloys: -100 }, stock: { ...emptyStockpile(), alloys: 500 } })], peace, { tariffRate: () => 0.2, fiscal })
+  // Buyer can afford 120 / (1*1.2) = 100 units; tariff revenue = 100 * 1 * 0.2 = 20.
+  check('a tariff raises the effective import cost', Math.abs((tar.A.alloys ?? 0) - 100) < 1e-9, `${tar.A.alloys}`)
+  check('tariff revenue is booked to the buyer', Math.abs((fiscal.get('A') ?? 0) - 20) < 1e-6, `${fiscal.get('A')}`)
+
+  const shareFiscal = new Map<string, number>()
+  matchTrade([nation('A', { orders: { alloys: 100 } }), nation('B', { orders: { alloys: -100 }, stock: { ...emptyStockpile(), alloys: 500 } })], peace, { tariffRate: () => 0.2, sharedMarket: () => true, fiscal: shareFiscal })
+  check('a shared market collects no tariff', (shareFiscal.get('A') ?? 0) === 0)
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)
 process.exit(failures === 0 ? 0 : 1)
