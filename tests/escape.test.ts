@@ -89,7 +89,7 @@ console.log('\n=== Escape behavior: requireChartedFrom (the risk fix) ===')
   // CHANCE) — an autonomous decision the player never asked for should
   // never gamble the ship on that. Only an already-charted lane (~10%) is
   // ever offered when the caller asks for one.
-  useHyperlaneStore.setState({ lanes: [] })
+  useHyperlaneStore.setState({ lanes: {} })
   const fleeingShip = makeShip('destroyer', 'p1', 'player', 'sol') // destroyer: hyperdrive only, no warp
 
   const noLanesYet = pickSafeStar(fleeingShip, 'sol', [fleeingShip], 'sol')
@@ -101,10 +101,10 @@ console.log('\n=== Escape behavior: requireChartedFrom (the risk fix) ===')
   const withoutRequiring = pickSafeStar(fleeingShip, 'sol', [fleeingShip])
   check('...but the star is genuinely reachable, just not SAFELY reachable', withoutRequiring?.id === 'alpha-centauri')
 
-  useHyperlaneStore.getState().addHyperlane('sol', 'alpha-centauri')
+  useHyperlaneStore.getState().addHyperlane(fleeingShip.ownerId, 'sol', 'alpha-centauri')
   const nowCharted = pickSafeStar(fleeingShip, 'sol', [fleeingShip], 'sol')
   check('once that lane is charted, it becomes a valid safe destination', nowCharted?.id === 'alpha-centauri')
-  useHyperlaneStore.setState({ lanes: [] })
+  useHyperlaneStore.setState({ lanes: {} })
 }
 
 console.log('\n=== Escape behavior: shipCurrentStarId ===')

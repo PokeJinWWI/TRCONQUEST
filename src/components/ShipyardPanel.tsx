@@ -1,20 +1,22 @@
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getCountry } from '../data/countryData'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
-import { SHIP_CLASSES, SHIP_ROLE_LABELS, describeFtlDrive, type ShipClass } from '../data/shipData'
+import { PLAYER_SHIP_CLASSES, SHIP_ROLE_LABELS, describeFtlDrive, type ShipClass } from '../data/shipData'
 import { MAX_QUEUED_BUILDS, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerResources } from '../hooks/usePlayerResources'
 import { usePlayerStore } from '../state/playerStore'
 import { useShipyardStore } from '../state/shipyardStore'
+import { useFleetTabStore } from '../state/fleetTabStore'
+import { useShipDeconstructionStore } from '../state/shipDeconstructionStore'
+import { deconstructionRemaining } from '../scene/shipDeconstruction'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
-import { shipyardSlotsForWorld } from '../scene/shipyardLogic'
+import { shipyardRows, shipyardSlotsForWorld, techBlock } from '../scene/shipyardLogic'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { starbaseShipyardSlots } from '../scene/starbaseLogic'
 import { useTechStore } from '../state/techStore'
-import { findTech } from '../data/techData'
 import { isAbstractEconomy } from '../state/playerStore'
 
 // The resources a hull can actually cost — the ones worth a row in the
@@ -53,6 +55,11 @@ const GROUPS: { id: string; label: string; hint: string; roles: ShipClass['role'
   { id: 'transport', label: 'Troop transports', hint: 'Carry armies between worlds', roles: ['transport'] },
   { id: 'support', label: 'Science & support', hint: 'Science, colony, construction, cargo and other civilian ships', roles: ['science', 'colony', 'construction', 'cargo', 'civilian'] },
 ]
+// The display name of one of the Shipyard's subtabs, by id (a quick button's label).
+export function shipyardTabLabel(id: string): string {
+  if (id === 'slips') return 'Slips'
+  return [...GROUPS, DESIGNS_GROUP].find((g) => g.id === id)?.label ?? id
+}
 const DESIGNS_GROUP = { id: 'designs', label: 'Your designs', hint: 'Hulls you made in the Ship Designer' }
 
 export function ShipyardPanel() {
@@ -63,11 +70,30 @@ export function ShipyardPanel() {
   const queueBuild = useShipyardStore((s) => s.queueBuild)
   const cancelBuild = useShipyardStore((s) => s.cancelBuild)
   const designs = useShipDesignStore((s) => s.designs)
+  // Ships being scrapped: a list of their own under Slips, holding no slip.
+  const allDeconstructions = useShipDeconstructionStore((s) => s.jobs)
+  const deconstructions = useMemo(() => allDeconstructions.filter((j) => j.ownerId === countryId), [allDeconstructions, countryId])
   const simDays = useThrottledSimDays()
   const researched = useTechStore((s) => s.stateFor(countryId).researched)
   const [message, setMessage] = useState<string | null>(null)
   const [onlyAffordable, setOnlyAffordable] = useState(false)
-  const [tab, setTab] = useState<string>('slips')
+  // Always opens on the first subtab (Warships); Slips is the last one, and only the player's click gets there.
+  // (A quick button can ask for another one: it is taken here, on opening and while open.)
+  const [tab, setTabState] = useState<string>(() => useFleetTabStore.getState().shipyardRequest ?? GROUPS[0].id)
+  const setTab = (id: string) => {
+    setTabState(id)
+    useFleetTabStore.getState().setShipyardNow(id)
+  }
+  const requested = useFleetTabStore((s) => s.shipyardRequest)
+  useEffect(() => {
+    if (requested) {
+      setTabState(requested)
+      useFleetTabStore.getState().requestShipyardTab(null)
+    }
+  }, [requested])
+  useEffect(() => {
+    useFleetTabStore.getState().setShipyardNow(tab)
+  }, [tab])
 
   const slots = shipyardSlotsForWorld(world) + starbaseShipyardSlots(countryId, useStarbaseStore.getState().starbases, simDays)
   const capital = getCountry(countryId)?.capitalBodyName
@@ -79,20 +105,20 @@ export function ShipyardPanel() {
   const status = (shipClass: ShipClass) => {
     const cost = shipBuildCost(shipClass)
     const affordable = COST_RESOURCE_IDS.every((id) => (cost[id] ?? 0) <= (amounts[id] ?? 0))
-    const techMissing = shipClass.requiresTech && !researched.has(shipClass.requiresTech) ? (findTech(shipClass.requiresTech)?.name ?? shipClass.requiresTech) : null
+    const techMissing = techBlock(shipClass, researched)
     const short = COST_RESOURCE_IDS.filter((id) => (cost[id] ?? 0) > (amounts[id] ?? 0)).map((id) => `${Math.ceil((cost[id] ?? 0) - (amounts[id] ?? 0))} ${RESOURCE_SHORT[id]}`)
-    const reason = techMissing ? `Needs ${techMissing} researched` : queueFull ? `The build queue is full (${MAX_QUEUED_BUILDS} orders)` : !affordable ? `Short of ${short.join(', ')}` : null
+    const reason = techMissing ? `needs ${techMissing}` : queueFull ? `The build queue is full (${MAX_QUEUED_BUILDS} orders)` : !affordable ? `Short of ${short.join(', ')}` : null
     return { cost, affordable, techMissing, reason, canBuild: affordable && !queueFull && !techMissing }
   }
 
   const sections = useMemo(() => {
     const all = [
       // Colonies exist in Simple mode only (scene/colonies.ts).
-      ...GROUPS.map((g) => ({ ...g, classes: SHIP_CLASSES.filter((c) => g.roles.includes(c.role) && (c.role !== 'colony' || isAbstractEconomy())) })),
-      { ...DESIGNS_GROUP, roles: [] as ShipClass['role'][], classes: designClasses },
+      ...GROUPS.map((g) => ({ ...g, classes: shipyardRows(PLAYER_SHIP_CLASSES.filter((c) => g.roles.includes(c.role) && (c.role !== 'colony' || isAbstractEconomy())), researched, resolveShipClass) })),
+      { ...DESIGNS_GROUP, roles: [] as ShipClass['role'][], classes: shipyardRows(designClasses, researched, resolveShipClass) },
     ]
     return all.filter((g) => g.classes.length > 0)
-  }, [designClasses])
+  }, [designClasses, researched])
 
   const handleBuild = (classId: string) => {
     const result = queueBuild(countryId, classId, simDays)
@@ -105,7 +131,7 @@ export function ShipyardPanel() {
     return (
       <div key={o.id} className="fleet-row">
         <div className="fleet-row-head">
-          <span className="fleet-row-name">{o.className}</span>
+          <span className="fleet-row-name">{o.upgradeShipId ? `Upgrade: ${o.upgradeShipName} → ${o.className}` : o.className}</span>
           <span className="fleet-row-class">{started ? `${daysLeft.toFixed(1)}d left` : `${o.durationDays}d once a slot frees`}</span>
           <button type="button" className="ship-panel-unfollow-btn" onClick={() => cancelBuild(countryId, o.id)} title="Cancel and refund the full cost">
             Cancel
@@ -157,18 +183,43 @@ export function ShipyardPanel() {
             {Array.from({ length: slots }, (_, i) => {
               const o = building[i]
               return (
-                <div key={i} className={`shipyard-slip${o ? ' busy' : ''}`} title={o ? `${o.className} under construction` : 'Free slip'}>
-                  {o ? o.className : 'Free'}
+                <div key={i} className={`shipyard-slip${o ? ' busy' : ''}`} title={o ? (o.upgradeShipId ? `${o.upgradeShipName} being upgraded to ${o.className}` : `${o.className} under construction`) : 'Free slip'}>
+                  {o ? (o.upgradeShipId ? `Upgrade: ${o.upgradeShipName}` : o.className) : 'Free'}
                 </div>
               )
             })}
           </div>
-          {building.length === 0 && waiting.length === 0 && <div className="ship-panel-hint">Nothing on the slips. Order a ship from one of the other tabs.</div>}
+          {building.length === 0 && waiting.length === 0 && deconstructions.length === 0 && <div className="ship-panel-hint">Nothing on the slips. Order a ship from one of the other tabs.</div>}
           {building.map((o) => orderRow(o, true))}
           {waiting.length > 0 && (
             <>
               <div className="fleet-group-header">Waiting for a slip ({waiting.length})</div>
               {waiting.map((o) => orderRow(o, false))}
+            </>
+          )}
+          {deconstructions.length > 0 && (
+            <>
+              <div className="fleet-group-header" title="Ships being scrapped: they hold no slip, and the bar runs from full to empty">Deconstructing ({deconstructions.length})</div>
+              {deconstructions.map((j) => {
+                const left = deconstructionRemaining(j, simDays)
+                return (
+                  <div key={j.shipId} className="fleet-row shipyard-deconstruction">
+                    <div className="fleet-row-head">
+                      <span className="fleet-row-name">{j.shipName}</span>
+                      <span className="fleet-row-class">{Math.max(0, j.finishSimDays - simDays).toFixed(1)}d left</span>
+                      <button type="button" className="ship-panel-unfollow-btn" onClick={() => useShipDeconstructionStore.getState().cancel(j.shipId)} title="Stop: the ship stays as it is now">
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="fleet-row-bar">
+                      <span className="health-bar-track tone-overall combat-roster-bar">
+                        <span className="health-bar-fill" style={{ width: `${left * 100}%` }} />
+                      </span>
+                      <span className="combat-roster-pct">{Math.round(left * 100)}%</span>
+                    </div>
+                  </div>
+                )
+              })}
             </>
           )}
         </>

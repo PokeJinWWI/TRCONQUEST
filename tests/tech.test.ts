@@ -59,8 +59,8 @@ console.log('\n=== 1b. Theory is Physics, hardware is Engineering, life is Socie
 {
   const cat = (id: string) => findTech(id)?.category
   check('Free-Flight Maneuvering is Engineering', cat('free-flight-maneuvering') === 'engineering')
-  check('Warp Theory stays Physics; Warp Drives and Warp Comms are Engineering', cat('warp-theory') === 'physics' && cat('warp-drives') === 'engineering' && cat('warp-comms') === 'engineering')
-  check('Warp Drives builds on Warp Theory', findTech('warp-drives')!.prerequisites.some((set) => set.includes('warp-theory')))
+  check('Warp Theory stays Physics; Warp Drive Mk I and Warp Comms are Engineering', cat('warp-theory') === 'physics' && cat('warp-drive-mk1') === 'engineering' && cat('warp-comms') === 'engineering')
+  check('Warp Drive Mk I builds on Warp Theory', findTech('warp-drive-mk1')!.prerequisites.some((set) => set.includes('warp-theory')))
   check('Orbital Construction is Engineering and needs Orbital Mechanics', cat('orbital-construction') === 'engineering' && findTech('orbital-construction')!.prerequisites.some((set) => set.includes('orbital-mechanics')))
   check('Biology and its children are Society', cat('biology') === 'society' && cat('genetic-engineering') === 'society' && cat('xenobiology') === 'society')
   check('a tree built on another tree starts from its own roots', localRoots(ENGINEERING_TECHS).some((n) => n.id === 'free-flight-maneuvering'))

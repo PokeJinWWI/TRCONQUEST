@@ -9,7 +9,7 @@ import {
   type SandboxRelation,
 } from '../data/countryRoster'
 import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/scenarios'
-import { SHIP_CLASSES, type ShipClass } from '../data/shipData'
+import { PLAYER_SHIP_CLASSES, type ShipClass } from '../data/shipData'
 import { STARS, getSystemStars } from '../data/starData'
 import { currentScenarioOwners, loadArmyScenario, loadShipScenario } from '../scene/scenarioLoader'
 import { clearSandboxArmies, clearSandboxShips, spawnSandboxArmy } from '../scene/sandboxSetup'
@@ -49,7 +49,7 @@ const RELATION_HINTS: Record<SandboxRelation, string> = {
 // it there. Ships and armies of any of them, or a ready-made scenario.
 export function SandboxPanel() {
   const [relation, setRelation] = useState<SandboxRelation>('own')
-  const [classId, setClassId] = useState(SHIP_CLASSES[0].id)
+  const [classId, setClassId] = useState(PLAYER_SHIP_CLASSES[0].id)
   const [count, setCount] = useState(1)
   const [starId, setStarId] = useState(SOL_SYSTEM_ID)
   const [nearBody, setNearBody] = useState('Earth')
@@ -67,7 +67,7 @@ export function SandboxPanel() {
   const owner = ownerDisplay(ownerId)
 
   const spawnableClasses: ShipClass[] = [
-    ...SHIP_CLASSES,
+    ...PLAYER_SHIP_CLASSES,
     ...designs.map((d) => resolveShipClass(`design:${d.id}`)).filter((c): c is ShipClass => !!c),
   ]
   // Every real star in the system plus its planets — anything a ship can orbit.

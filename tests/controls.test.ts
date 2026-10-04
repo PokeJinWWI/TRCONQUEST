@@ -4,6 +4,7 @@
 //
 // Run:  npx tsx tests/controls.test.ts
 
+import { warpCommsOnly } from './testComms'
 import { PIRATES_ID, SANDBOX_PLAYER_ID } from '../src/data/countryRoster'
 import { handleEscape, handleSpace } from '../src/hooks/useKeyboardControls'
 import { fightPace } from '../src/hooks/fightPace'
@@ -188,6 +189,7 @@ console.log('\n=== 6. Shift-orders behind comms delay travel as signals ===')
   useDiplomacyStore.getState().reset()
   usePlayerStore.getState().selectCountry('imperial-state-of-mars')
   useShipStore.setState({ ships: [] })
+  warpCommsOnly()
   time.setState({ simDays: 100 })
   // A Mars ship at Alpha Centauri: far from the capital, so behind delay.
   const id = spawnOwnedShip('cruiser', 'imperial-state-of-mars', 'alpha-centauri', 'Arcadia')!

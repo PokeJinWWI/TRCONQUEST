@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
-import { applyFleetMove, plannerFor } from '../scene/commsVisual'
+import { applyFleetMove, applyFreeFlight, plannerFor } from '../scene/commsVisual'
 import { resolveQueueAdds } from '../scene/orderQueue'
 import { resolvePendingCommands } from '../scene/shipCommands'
 import { resolveAggressionNews } from '../scene/aggressionOrders'
@@ -39,6 +39,7 @@ export function resolveCommsSignals(simDays: number): void {
 
   for (const ship of ships) {
     if (ship.pendingBombard && simDays >= ship.pendingBombard.arrivesSimDays) useShipStore.getState().setBombardStance(ship.id, ship.pendingBombard.stance)
+    if (ship.pendingFreeFlight && simDays >= ship.pendingFreeFlight.arrivesSimDays) applyFreeFlight(ship.id, ship.pendingFreeFlight.on)
     if (ship.pendingPatrol && simDays >= ship.pendingPatrol.arrivesSimDays) useShipStore.getState().setPatrol(ship.id, ship.pendingPatrol.on)
     if (ship.pendingStance && simDays >= ship.pendingStance.arrivesSimDays) {
       setStance(ship.id, ship.pendingStance.stance)

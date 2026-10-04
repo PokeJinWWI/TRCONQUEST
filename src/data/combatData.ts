@@ -298,6 +298,11 @@ export const SWARM_RANGE_FRACTION = 0.8
 // stops it landing exactly on top of the target once caught.
 export const CHASE_STANDOFF_UNITS = 0.6
 
+// The most a body's gravity pulls a ship that still has thrust and flies without
+// Free Flight (combatResolution.integrateMotion), as a share of that ship's own
+// acceleration: its engines always win, at this cost.
+export const POWERED_GRAVITY_ACCEL_SHARE = 0.5
+
 // --- Hull speed / handling, expressed against the speed of light ----------
 //
 // `lightFraction` is "this hull is N times slower than light across the same

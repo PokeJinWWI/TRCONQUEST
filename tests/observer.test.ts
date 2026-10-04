@@ -38,13 +38,13 @@ check('owner info finds nations and empires', ownerInfoOf('orion-republic')?.nam
 const m = empireMarkers(stars)
 check('one marker per owned star, one buffer', m.positions.length === claims.size * 3 && m.colors.length === m.positions.length)
 
-useHyperlaneStore.setState({ lanes: [] })
+useHyperlaneStore.setState({ lanes: {} })
 const a = STARS[0].id
 const b = STARS[1].id
-useHyperlaneStore.getState().addHyperlane(a, b)
-const seg = laneSegments(useHyperlaneStore.getState().lanes, STARS)
+useHyperlaneStore.getState().addHyperlane('some-nation', a, b)
+const seg = laneSegments(useHyperlaneStore.getState().allLanes(), STARS)
 check('lanes become one segment buffer (2 points each)', seg.length === 6)
-check('a lane outside the neighbourhood shown draws nothing', laneSegments(useHyperlaneStore.getState().lanes, generatedStarsFor(e.clusterId)).length === 0)
+check('a lane outside the neighbourhood shown draws nothing', laneSegments(useHyperlaneStore.getState().allLanes(), generatedStarsFor(e.clusterId)).length === 0)
 
 // A view override: nothing it reads is written.
 const before = JSON.stringify([useHyperlaneStore.getState().lanes, useTerritoryStore.getState().bodyOwner, useSurveyStore.getState().known, useDiplomacyStore.getState().relations])
@@ -52,7 +52,7 @@ useObserverStore.getState().setOn(true)
 empireClaimsByStar(stars)
 empireClusterClaims()
 empireMarkers(stars)
-laneSegments(useHyperlaneStore.getState().lanes, STARS)
+laneSegments(useHyperlaneStore.getState().allLanes(), STARS)
 check('turning it on and drawing writes no game state or knowledge', before === JSON.stringify([useHyperlaneStore.getState().lanes, useTerritoryStore.getState().bodyOwner, useSurveyStore.getState().known, useDiplomacyStore.getState().relations]))
 useObserverStore.getState().setOn(false)
 check('off again', useObserverStore.getState().on === false)

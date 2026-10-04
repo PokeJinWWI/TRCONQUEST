@@ -4,7 +4,7 @@
 // selection tracking to frame it.
 import { useViewStore } from '../state/viewStore'
 import type { ShipInstance } from '../state/shipStore'
-import { shipSystemId } from './shipPhysics'
+import { isShipInGalacticSpace, shipSystemId } from './shipPhysics'
 
 export function viewShip(ship: Pick<ShipInstance, 'order' | 'location'>): void {
   const view = useViewStore.getState()
@@ -12,6 +12,9 @@ export function viewShip(ship: Pick<ShipInstance, 'order' | 'location'>): void {
   if (systemId) {
     const there = view.selectedStarId === systemId && (view.level === 'system' || view.level === 'satellite')
     if (!there) view.enterSystem(systemId)
+  } else if (isShipInGalacticSpace(ship)) {
+    // Out between clusters: its place is the galactic view.
+    if (view.level !== 'galactic') view.enterGalactic()
   } else if (view.level !== 'interstellar') {
     view.enterInterstellar('solar-neighborhood')
   }

@@ -38,8 +38,8 @@ const ENTRIES: { terms: string[]; term: string; text: string }[] = [
   { terms: ['military'], term: 'Military', text: 'The armed forces. In the budget: what it costs to maintain them. In production: the share of industry making war material (alloys).' },
   { terms: ['debt servicing', 'debt service'], term: 'Debt servicing', text: 'Interest paid on the national debt each year — money that buys nothing.' },
   // --- Colonies ------------------------------------------------------------------
-  { terms: ['influence'], term: 'Influence', text: 'Political reach, spent to found colonies. Every nation earns a little each month (+2), up to 1,000. Bigger and more distant worlds cost more. It cannot be traded or taken in a peace.' },
-  { terms: ['colony', 'colonies'], term: 'Colony', text: 'A world your nation has settled. A Colony Ship founds one on a surveyed, unowned world, using its settlers and some Influence; it starts as a micro-colony.' },
+  { terms: ['influence'], term: 'Influence', text: 'Political reach, spent to claim a system with a Starbase. Every nation earns a little each month (+2), up to 1,000. Founding a colony costs none. It cannot be traded or taken in a peace.' },
+  { terms: ['colony', 'colonies'], term: 'Colony', text: 'A world your nation has settled. A Colony Ship founds one on a surveyed, unowned world, using its settlers (no Influence); it starts as a micro-colony.' },
   { terms: ['micro-colony', 'micro colony'], term: 'Micro-colony', text: 'A new colony: little land to build on and no armies of its own. It becomes a planetary colony after 90 days with a patrol ship holding its orbit, no hostile warship there and no enemy on the ground.' },
   { terms: ['planetary colony'], term: 'Planetary colony', text: 'A full colony: all its land, and it can raise armies. Every world a nation starts with is one.' },
   { terms: ['patrol duty', 'patrol'], term: 'Patrol duty', text: "An armed ship on patrol duty holds the orbit of the colony it circles. That is what turns a micro-colony into a planetary colony." },
@@ -134,8 +134,9 @@ const ENTRIES: { terms: string[]; term: string; text: string }[] = [
   { terms: ['alloys'], term: 'Alloys', text: 'Refined structural metal — what ship hulls and military equipment are built from.' },
   { terms: ['electronics'], term: 'Electronics', text: 'Circuits and computers — used by research labs and wanted by the population.' },
   { terms: ['consumer goods'], term: 'Consumer goods', text: 'Everyday manufactured products people want — shortages make them unhappy.' },
-  { terms: ['exotic matter'], term: 'Exotic Matter', text: 'Rare matter that fuels warp drives.' },
-  { terms: ['hyperium'], term: 'Hyperium', text: 'Extremely rare fuel for hyperdrives.' },
+  { terms: ['exotic matter'], term: 'Exotic Matter', text: 'Rare matter that fuels warp drives. Found only in a few small natural deposits near Sol; nothing makes more.' },
+  { terms: ['hyperium'], term: 'Hyperium', text: 'Extremely rare fuel for hyperdrives. Drawn from finite natural deposits on a few worlds near Sol, or refined from exotic matter once Hyperium Synthesis is researched.' },
+  { terms: ['deposit', 'deposits'], term: 'Deposit', text: 'A finite natural reserve of hyperium or exotic matter on a planet, revealed by survey. A nation that owns the body and has the matching Extraction tech draws it a month at a time until it runs dry.' },
   // --- Screens ---------------------------------------------------------------------
   { terms: ['situations'], term: 'Situations', text: 'Ongoing events and crises affecting your nation.' },
   { terms: ['government'], term: 'Government', text: 'How your nation is ruled: its branches, offices, laws and institutions.' },

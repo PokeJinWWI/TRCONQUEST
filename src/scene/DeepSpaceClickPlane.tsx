@@ -4,7 +4,9 @@ import { wasDrag } from './dragGuard'
 
 interface DeepSpaceClickPlaneProps {
   onDeselect: () => void
-  onOrderTo: (point: [number, number, number]) => void
+  // `event` is the right-click itself (a view that must tell a click on one of its markers from one on
+  // empty space, like the galaxy's point-cloud markers, reads its screen position).
+  onOrderTo: (point: [number, number, number], event: MouseEvent) => void
   size?: number
   // Gets the click first; returning true means it was on something else (a
   // marker drawn without its own click handler), so nothing is deselected.
@@ -42,7 +44,7 @@ export function DeepSpaceClickPlane({ onDeselect, onOrderTo, size = 100000, cons
     e.nativeEvent.preventDefault()
     if (e.nativeEvent.target instanceof Element && e.nativeEvent.target.closest('.planet-marker, .ship-marker')) return
     e.stopPropagation()
-    onOrderTo([e.point.x, 0, e.point.z])
+    onOrderTo([e.point.x, 0, e.point.z], e.nativeEvent)
   }
 
   return (

@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import type { ShipInstance, ShipLocation, MoveDestination, MoveOrder, FtlCharge } from '../state/shipStore'
+import { DEEP_SPACE_JUMP, type ShipInstance, type ShipLocation, type MoveDestination, type MoveOrder, type FtlCharge } from '../state/shipStore'
 import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { findEngagementFor, planFtlCharge } from './combatResolution'
 import {
@@ -15,7 +15,11 @@ import { PLANETS, PLANETS_BY_STAR, getPlanetsForStar, UNITS_PER_AU, AU_IN_KM, ty
 import { getPlanetPosition, getOrbitPosition, angleForYear, getMoonPosition } from './orbitMath'
 import type { MoonData } from './moonData'
 import { bodyIndex } from './territory'
-import { starJumpRiskFactor } from './jumpRisk'
+import { hyperdriveMkRiskFactor, hyperdriveRiskFactorOf } from './jumpRisk'
+import { hyperdriveMkOf, warpMkOf, warpSpeedCOfMk } from '../data/warpData'
+import { effectiveDrive, type ShipDrive } from './driveChoice'
+import { NEIGHBORHOODS, UNITS_PER_KLY, neighborhoodScenePosition } from '../data/neighborhoodData'
+import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
 import { STARS, UNITS_PER_LY, starScenePosition, getSystemStars, findStar, findSystemStar, type StarComponent } from '../data/starData'
 import { DAYS_PER_YEAR, formatDate, simDaysToDate, useGameTimeStore } from '../state/gameTimeStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
@@ -33,6 +37,8 @@ export const LY_IN_KM = SPEED_OF_LIGHT_KM_S * SECONDS_PER_DAY * DAYS_PER_YEAR
 
 export const KM_PER_SYSTEM_UNIT = AU_IN_KM / UNITS_PER_AU
 export const KM_PER_INTERSTELLAR_UNIT = LY_IN_KM / UNITS_PER_LY
+// One galactic scene unit (data/neighborhoodData.UNITS_PER_KLY per thousand light-years).
+export const KM_PER_GALACTIC_UNIT = (LY_IN_KM * 1000) / UNITS_PER_KLY
 
 // "Normal thrusters" — a modest, deliberately unglamorous sublight cruise
 // speed (~0.01c). Real enough to be meaningfully slow at real distances
@@ -131,7 +137,7 @@ export function warpSpeedKmS(speedC: number): number {
 }
 
 export interface ShipRenderInfo {
-  space: 'system' | 'interstellar'
+  space: 'system' | 'interstellar' | 'galactic'
   systemId?: string
   position: Vector3
 }
@@ -181,6 +187,57 @@ export function moonParent(bodyName: string): string | undefined {
 function starPosition(starId: string): Vector3 {
   const star = STARS.find((s) => s.id === starId)
   return star ? new Vector3(...starScenePosition(star)) : new Vector3(0, 0, 0)
+}
+
+// A cluster's position in galactic scene units (the galactic view's own frame).
+export function clusterScenePosition(clusterId: string): Vector3 {
+  const n = NEIGHBORHOODS.find((x) => x.id === clusterId)
+  return n ? new Vector3(...neighborhoodScenePosition(n)) : new Vector3(0, 0, 0)
+}
+
+// Where a position is in galactic space: itself if already out between clusters,
+// or the Solar Neighbourhood's own point if it is anywhere inside it (the whole
+// neighbourhood is ~20 ly across, 0.6 galactic units: the same "free in-system leg"
+// simplification interstellarAnchor makes one scale down).
+export function galacticPosition(info: ShipRenderInfo): Vector3 {
+  return info.space === 'galactic' ? info.position.clone() : clusterScenePosition(SOLAR_NEIGHBORHOOD_ID)
+}
+
+// The cluster a ship is resting beside out in galactic space, or null (in flight,
+// at a bare point, or anywhere in the Solar Neighbourhood).
+export function restingClusterId(ship: Pick<ShipInstance, 'order' | 'location'>): string | null {
+  return !ship.order && ship.location.kind === 'cluster' ? ship.location.clusterId : null
+}
+
+// Whether a ship is out between clusters right now (under a galactic order, or resting
+// beside a foreign cluster or at a bare point of galactic space).
+export function isShipInGalacticSpace(ship: Pick<ShipInstance, 'order' | 'location'>): boolean {
+  if (ship.order) return ship.order.space === 'galactic'
+  return ship.location.kind === 'cluster' || ship.location.kind === 'galactic-point'
+}
+
+// A short "where" for a fleet row: where it is, or where it is going.
+export function shipPlaceLabel(ship: Pick<ShipInstance, 'order' | 'location'>): string {
+  if (ship.order) return `to ${destinationLabel(ship.order.destination)}`
+  const l = ship.location
+  switch (l.kind) {
+    case 'orbiting':
+      return l.bodyName
+    case 'system-point':
+      return systemDisplayName(l.systemId)
+    case 'star':
+      return findStar(l.starId)?.name ?? l.starId
+    case 'interstellar-point':
+      return 'interstellar space'
+    case 'cluster':
+      return NEIGHBORHOODS.find((n) => n.id === l.clusterId)?.name ?? l.clusterId
+    case 'galactic-point':
+      return 'between clusters'
+  }
+}
+
+export function isGalacticDestination(destination: MoveDestination): destination is Extract<MoveDestination, { kind: 'cluster' | 'galactic-point' }> {
+  return destination.kind === 'cluster' || destination.kind === 'galactic-point'
 }
 
 export function systemDisplayName(systemId: string): string {
@@ -233,7 +290,11 @@ export function clusterRestingShipsByFleet(ships: ShipInstance[]): FleetCluster[
         ? `pt:${ship.location.systemId}:${ship.location.position.map((v) => v.toFixed(4)).join(',')}`
         : ship.location.kind === 'interstellar-point'
           ? `ipt:${ship.location.position.map((v) => v.toFixed(3)).join(',')}`
-          : combatLocationKey(ship.location)
+          : ship.location.kind === 'cluster'
+            ? `cl:${ship.location.clusterId}`
+            : ship.location.kind === 'galactic-point'
+              ? `gpt:${ship.location.position.map((v) => v.toFixed(3)).join(',')}`
+              : combatLocationKey(ship.location)
     const groupKey = key ? `${ship.fleetId}::${key}` : `solo::${ship.id}`
     const arr = groups.get(groupKey) ?? []
     arr.push(ship)
@@ -261,6 +322,13 @@ function hashAngleRad(id: string): number {
 // star, so there's no second scale this position ever needs to translate
 // into, and a static nudge is enough.
 const RESTING_OFFSET_RADIUS = 0.6
+
+// A ship resting beside a cluster, in galactic scene units (a cluster's marker is ~1 unit across).
+const GALACTIC_RESTING_OFFSET_UNITS = 1.4
+function galacticRestingOffset(shipId: string): [number, number, number] {
+  const angle = hashAngleRad(shipId)
+  return [Math.cos(angle) * GALACTIC_RESTING_OFFSET_UNITS, 0, Math.sin(angle) * GALACTIC_RESTING_OFFSET_UNITS]
+}
 
 function restingOffset(shipId: string): [number, number, number] {
   const angle = hashAngleRad(shipId)
@@ -402,6 +470,10 @@ function resolveLocation(location: ShipLocation, simDays: number): ShipRenderInf
     }
     case 'interstellar-point':
       return { space: 'interstellar', position: new Vector3(...location.position) }
+    case 'cluster':
+      return { space: 'galactic', position: clusterScenePosition(location.clusterId).add(new Vector3(...location.offset)) }
+    case 'galactic-point':
+      return { space: 'galactic', position: new Vector3(...location.position) }
   }
 }
 
@@ -415,6 +487,10 @@ function resolveDestination(destination: MoveDestination, simDays: number): Ship
       return { space: 'interstellar', position: starPosition(destination.starId) }
     case 'interstellar-point':
       return { space: 'interstellar', position: new Vector3(...destination.position) }
+    case 'cluster':
+      return { space: 'galactic', position: clusterScenePosition(destination.clusterId) }
+    case 'galactic-point':
+      return { space: 'galactic', position: new Vector3(...destination.position) }
   }
 }
 
@@ -431,7 +507,7 @@ function resolveDestination(destination: MoveDestination, simDays: number): Ship
 // silently discarding the entire interstellar leg it actually needs to make
 // first, instead of just the (correctly negligible) in-system hop at the end.
 function interstellarAnchor(info: ShipRenderInfo): Vector3 {
-  return info.space === 'interstellar' ? info.position.clone() : starPosition(info.systemId ?? SOL_SYSTEM_ID)
+  return info.space === 'interstellar' ? info.position.clone() : info.space === 'galactic' ? new Vector3(0, 0, 0) : starPosition(info.systemId ?? SOL_SYSTEM_ID)
 }
 
 // A ship's current on-screen position — always derived from its order (if
@@ -476,6 +552,10 @@ export function destinationLabel(destination: MoveDestination): string {
       return STARS.find((s) => s.id === destination.starId)?.name ?? destination.starId
     case 'interstellar-point':
       return 'deep space'
+    case 'cluster':
+      return NEIGHBORHOODS.find((n) => n.id === destination.clusterId)?.name ?? destination.clusterId
+    case 'galactic-point':
+      return 'deep space between clusters'
   }
 }
 
@@ -530,7 +610,8 @@ export function getShipStatusText(ship: ShipInstance, simDays: number, ships?: S
   // until the player resumes time.
   if (ship.pendingHyperdriveJump) {
     const star = STARS.find((s) => s.id === ship.pendingHyperdriveJump)
-    const starName = star?.name ?? ship.pendingHyperdriveJump
+    const to = ship.pendingHyperdriveJumpTo
+    const starName = to ? destinationLabel(to) : (star?.name ?? ship.pendingHyperdriveJump)
     if (useGameTimeStore.getState().paused) {
       return `${prefix}Jump to ${starName} queued — resume time to jump`
     }
@@ -550,6 +631,10 @@ export function getShipStatusText(ship: ShipInstance, simDays: number, ships?: S
     }
     case 'interstellar-point':
       return `${prefix}In Deep Space`
+    case 'cluster':
+      return `${prefix}At ${NEIGHBORHOODS.find((n) => n.id === location.clusterId)?.name ?? location.clusterId}`
+    case 'galactic-point':
+      return `${prefix}Between clusters`
   }
 }
 
@@ -610,6 +695,14 @@ export function resolveArrivalLocation(destination: MoveDestination, shipId: str
     }
     case 'interstellar-point':
       return { kind: 'interstellar-point', position: destination.position }
+    // Home: arriving at the Solar Neighbourhood lands beside Sol in interstellar space, where
+    // the interstellar machinery takes over. Anywhere else the ship rests beside the cluster.
+    case 'cluster':
+      return destination.clusterId === SOLAR_NEIGHBORHOOD_ID
+        ? { kind: 'interstellar-point', position: restingOffset(shipId) }
+        : { kind: 'cluster', clusterId: destination.clusterId, offset: galacticRestingOffset(shipId) }
+    case 'galactic-point':
+      return { kind: 'galactic-point', position: destination.position }
   }
 }
 
@@ -629,6 +722,10 @@ export function restingDestinationOf(location: ShipLocation): MoveDestination {
       return { kind: 'star', starId: location.starId }
     case 'interstellar-point':
       return { kind: 'interstellar-point', position: location.position }
+    case 'cluster':
+      return { kind: 'cluster', clusterId: location.clusterId }
+    case 'galactic-point':
+      return { kind: 'galactic-point', position: location.position }
   }
 }
 
@@ -642,6 +739,10 @@ function destinationKey(d: MoveDestination): string {
       return `star:${d.starId}`
     case 'interstellar-point':
       return `ipoint:${d.position.join(',')}`
+    case 'cluster':
+      return `cluster:${d.clusterId}`
+    case 'galactic-point':
+      return `gpoint:${d.position.join(',')}`
   }
 }
 
@@ -751,39 +852,178 @@ export function warpEscapeLossChance(coreFraction: number, activelyEngaged: bool
 // The risk multiplier for this ship jumping to `starId` from where it is now:
 // the straight-line distance in light-years and the destination system's mass
 // (scene/jumpRisk.ts). 1 if the star is unknown.
-export function hyperdriveJumpRiskFactor(ship: ShipInstance, starId: string, simDays: number): number {
-  const star = STARS.find((s) => s.id === starId)
-  if (!star) return 1
-  const current = getShipRenderPosition(ship, simDays)
-  const here = current.space === 'system' ? STARS.find((s) => s.id === current.systemId) : undefined
-  const from = here ? new Vector3(...starScenePosition(here)) : current.space === 'interstellar' ? current.position : null
-  if (!from) return 1
-  return starJumpRiskFactor(from.distanceTo(new Vector3(...starScenePosition(star))) / UNITS_PER_LY, star)
+export function hyperdriveJumpRiskFactor(ship: ShipInstance, to: string | MoveDestination, simDays: number): number {
+  const destination = jumpDestination(to)
+  const distance = jumpDistanceLy(ship, destination, simDays)
+  if (distance === null) return 1
+  const mk = hyperdriveMkOf(useTechStore.getState().stateFor(ship.ownerId).researched)
+  // A whole cluster or a bare point of space has no star to weigh (kly distances dwarf it).
+  if (isGalacticDestination(destination)) return hyperdriveRiskFactorOf(mk, distance, 1)
+  const systemId = destinationSystemId(destination)
+  // Open interstellar space has no star to weigh: an average destination.
+  if (systemId === null) return hyperdriveRiskFactorOf(mk, distance, 1)
+  const star = STARS.find((s) => s.id === systemId)
+  return star ? hyperdriveMkRiskFactor(mk, distance, star) : 1
 }
 
-// The chance this ship is lost jumping to `starId` right now, or null if it
-// would not jump at all (it warps, or has no usable hyperdrive): what planMove
-// rolls against, for showing the player before the order is given.
-export function hyperdriveJumpChance(ship: ShipInstance, starId: string, simDays: number): number | null {
+// A hyperdrive can jump anywhere, as a warp drive can fly anywhere: to a star, into
+// the orbit of a world or to a point of another system, to a spot in open
+// interstellar space, or out to another cluster or a point between clusters. These
+// read a destination either way (a bare id is a star).
+function jumpDestination(to: string | MoveDestination): MoveDestination {
+  return typeof to === 'string' ? { kind: 'star', starId: to } : to
+}
+
+// The system a destination lies in, or null for open interstellar space (and for
+// galactic destinations: see jumpPlaceKey).
+export function destinationSystemId(destination: MoveDestination): string | null {
+  if (destination.kind === 'star') return destination.starId
+  return destination.kind === 'interstellar-point' || isGalacticDestination(destination) ? null : destination.systemId
+}
+
+// What a queued jump is listed under (ShipInstance.pendingHyperdriveJump): the system
+// it goes into, the cluster, or DEEP_SPACE_JUMP for a bare point.
+export function jumpPlaceKey(destination: MoveDestination): string {
+  return destinationSystemId(destination) ?? (destination.kind === 'cluster' ? destination.clusterId : DEEP_SPACE_JUMP)
+}
+
+// Whether going to `destination` is a JUMP for a hyperdrive ship: anywhere outside
+// the system it is in now. Inside its own system (its star included) it flies on
+// its reaction drive: there is no lane to chart and nothing worth the risk. Out
+// between clusters, anywhere but the cluster it already rests at.
+export function isJumpDestination(ship: ShipInstance, destination: MoveDestination, simDays: number): boolean {
+  if (isGalacticDestination(destination)) return !(destination.kind === 'cluster' && restingClusterId(ship) === destination.clusterId)
+  if (destination.kind === 'interstellar-point') return true
+  // In a system, or resting beside its star: the same place as far as a jump goes.
+  return hyperlaneOriginId(ship, destination, simDays) !== destinationSystemId(destination)
+}
+
+// The straight-line length in light-years of a jump from where the ship is now to
+// the destination's system (or its point in open space), or null if there is no
+// star or point to measure from or to. Measured star to star: where in the
+// system the ship lands does not matter. A galactic jump is measured between
+// positions in the galactic view (kly), the Solar Neighbourhood's own point for
+// anything inside it.
+export function jumpDistanceLy(ship: ShipInstance, to: string | MoveDestination, simDays: number): number | null {
+  const destination = jumpDestination(to)
+  const current = getShipRenderPosition(ship, simDays)
+  if (isGalacticDestination(destination)) {
+    const target = destination.kind === 'cluster' ? clusterScenePosition(destination.clusterId) : new Vector3(...destination.position)
+    return (galacticPosition(current).distanceTo(target) / UNITS_PER_KLY) * 1000
+  }
+  const systemId = destinationSystemId(destination)
+  const star = systemId === null ? undefined : STARS.find((s) => s.id === systemId)
+  const target = destination.kind === 'interstellar-point' ? new Vector3(...destination.position) : star ? new Vector3(...starScenePosition(star)) : null
+  if (!target) return null
+  const here = current.space === 'system' ? STARS.find((s) => s.id === current.systemId) : undefined
+  const from = here ? new Vector3(...starScenePosition(here)) : current.space === 'interstellar' ? current.position : null
+  if (!from) return null
+  return from.distanceTo(target) / UNITS_PER_LY
+}
+
+// The drive this ship's next move uses: the player's pick (ShipInstance.driveChoice, else its
+// class's default, else 'auto' = the planner's original rule), through scene/driveChoice.ts.
+// The one place every drive question below (planMove, the jump chance, the fleet's jump
+// hold, automation, the AI) is answered, so they cannot disagree.
+export function driveOfShip(ship: ShipInstance, shipClass: ShipClass | null = resolveShipClass(ship.classId)): ShipDrive {
+  if (!shipClass) return 'reaction'
+  const researched = useTechStore.getState().stateFor(ship.ownerId).researched
+  return effectiveDrive(ship.driveChoice ?? shipClass.defaultDrive, shipClass.ftlDrives, researched, ship.warpEnabled)
+}
+
+// The chance this ship is lost jumping to `to` right now, or null if it would not
+// jump at all (it warps, has no usable hyperdrive, or the destination is in its own
+// system): what planMove rolls against, for showing the player before the order is
+// given and for the AI's own cap (ai/jumpRules.ts).
+export function hyperdriveJumpChance(ship: ShipInstance, to: string | MoveDestination, simDays: number): number | null {
+  const destination = jumpDestination(to)
   const shipClass = resolveShipClass(ship.classId)
   if (!shipClass) return null
   const researched = useTechStore.getState().stateFor(ship.ownerId).researched
-  const hyperDrive = researched.has('hyperspace-theory') ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive') : undefined
-  if (!hyperDrive || (researched.has('warp-drives') && shipClass.ftlDrives.some((d) => d.kind === 'warp'))) return null
-  const origin = hyperlaneOriginStarId(ship, simDays)
-  const charted = origin !== null && useHyperlaneStore.getState().hasHyperlane(origin, starId)
-  return hyperdriveLossChance(hyperDrive, charted, coreHealthFraction(ship, shipClass), false, hyperdriveJumpRiskFactor(ship, starId, simDays))
+  const hyperDrive = hyperdriveMkOf(researched) >= 1 ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive') : undefined
+  if (!hyperDrive || driveOfShip(ship, shipClass) !== 'hyperdrive') return null
+  // Its own system's star is a flight, not a jump.
+  if (!isJumpDestination(ship, destination, simDays)) return null
+  const lane = jumpLane(ship, destination, simDays)
+  const charted = !!lane && useHyperlaneStore.getState().hasHyperlane(ship.ownerId, lane[0], lane[1])
+  return hyperdriveLossChance(hyperDrive, charted, coreHealthFraction(ship, shipClass), false, hyperdriveJumpRiskFactor(ship, destination, simDays))
 }
 
-function hyperlaneOriginStarId(ship: ShipInstance, simDays: number): string | null {
+// The ship's hyperdrive when a move of its would be a jump (its owner has a
+// Hyperdrive Mk and no usable warp drive to prefer), else undefined.
+function jumpingDrive(ship: ShipInstance): { drive: HyperDrive; coreFraction: number; mk: number } | undefined {
+  const shipClass = resolveShipClass(ship.classId)
+  if (!shipClass) return undefined
+  const researched = useTechStore.getState().stateFor(ship.ownerId).researched
+  const mk = hyperdriveMkOf(researched)
+  const drive = mk >= 1 ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive') : undefined
+  if (!drive || driveOfShip(ship, shipClass) !== 'hyperdrive') return undefined
+  return { drive, coreFraction: coreHealthFraction(ship, shipClass), mk }
+}
+
+// The chance this ship would be lost on a jump from one star of our neighbourhood
+// to another, wherever the ship is now: the same number hyperdriveJumpChance gives
+// with the ship at `fromStarId` (its owner's Mk, its owner's own lanes, the
+// destination star's mass). For planning a route of several jumps
+// (scene/jumpRoute.ts); null if it would not jump at all.
+export function starJumpChance(ship: ShipInstance, fromStarId: string, toStarId: string): number | null {
+  const jumping = jumpingDrive(ship)
+  const from = STARS.find((s) => s.id === fromStarId)
+  const to = STARS.find((s) => s.id === toStarId)
+  if (!jumping || !from || !to || from.id === to.id) return null
+  const ly = new Vector3(...starScenePosition(from)).distanceTo(new Vector3(...starScenePosition(to))) / UNITS_PER_LY
+  const charted = useHyperlaneStore.getState().hasHyperlane(ship.ownerId, from.id, to.id)
+  return hyperdriveLossChance(jumping.drive, charted, jumping.coreFraction, false, hyperdriveMkRiskFactor(jumping.mk, ly, to))
+}
+
+// The same between two clusters (thousands of light-years, no star to weigh, lanes
+// keyed by cluster ids). Nothing in the game plans a route between clusters yet.
+export function clusterJumpChance(ship: ShipInstance, fromClusterId: string, toClusterId: string): number | null {
+  const jumping = jumpingDrive(ship)
+  if (!jumping || fromClusterId === toClusterId) return null
+  if (!NEIGHBORHOODS.some((n) => n.id === fromClusterId) || !NEIGHBORHOODS.some((n) => n.id === toClusterId)) return null
+  const ly = (clusterScenePosition(fromClusterId).distanceTo(clusterScenePosition(toClusterId)) / UNITS_PER_KLY) * 1000
+  const charted = useHyperlaneStore.getState().hasHyperlane(ship.ownerId, fromClusterId, toClusterId)
+  return hyperdriveLossChance(jumping.drive, charted, jumping.coreFraction, false, hyperdriveRiskFactorOf(jumping.mk, ly, 1))
+}
+
+// The two ids a jump charts a lane between (star to star inside a neighbourhood,
+// cluster to cluster between them; a jump to a bare point has none), or undefined.
+export function jumpLane(ship: ShipInstance, destination: MoveDestination, simDays: number): [string, string] | undefined {
+  const origin = hyperlaneOriginId(ship, destination, simDays)
+  const target = destination.kind === 'cluster' ? destination.clusterId : isGalacticDestination(destination) ? null : destinationSystemId(destination)
+  return origin !== null && target !== null && origin !== target ? [origin, target] : undefined
+}
+
+// Where a jump to `destination` starts, for the hyperlane it uses and charts: the
+// star the ship is at (a system, or resting beside it) for a jump inside the
+// neighbourhood, the cluster it rests beside for one out between clusters (the
+// Solar Neighbourhood's own id from anywhere inside it). Null mid-order or at a
+// bare point: the jump still proceeds (the roll still happens), it just can't use
+// or chart a lane, a deliberate, documented gap rather than a bug.
+function hyperlaneOriginId(ship: ShipInstance, destination: MoveDestination, simDays: number): string | null {
   const current = getShipRenderPosition(ship, simDays)
+  if (isGalacticDestination(destination)) {
+    if (current.space !== 'galactic') return SOLAR_NEIGHBORHOOD_ID
+    return restingClusterId(ship)
+  }
   if (current.space === 'system') return current.systemId ?? null
   if (!ship.order && ship.location.kind === 'star') return ship.location.starId
   return null
 }
 
+// The roll a hyperdrive jump or a warp escape is lost on. A headless test replaces
+// it (setJumpRoll) so that a run with jumps in it is repeatable; null restores it.
+let jumpRoll: () => number = Math.random
+export function setJumpRoll(roll: (() => number) | null): void {
+  jumpRoll = roll ?? Math.random
+}
+
 export type MoveResult =
   | { kind: 'order'; order: MoveOrder; warpReadyOverride?: number }
+  // An order the ship cannot carry out from where it is, and why: out between
+  // clusters it can only go to another cluster or a point of galactic space.
+  | { kind: 'unreachable'; reason: string }
   | {
       kind: 'instant'
       location: ShipLocation
@@ -846,7 +1086,23 @@ export function planMove(
   riskContext?: { activelyEngaged: boolean },
 ): MoveResult {
   if (!isPlayerOwned(ship)) return { kind: 'not-owned' }
+  // Held at its shipyard while queued or running for an upgrade (the player's orders only:
+  // an escape in a fight and AI/automation moves go through planMoveUnchecked).
+  if (ship.upgrading) return { kind: 'unreachable', reason: 'It is being upgraded at the shipyard. Cancel the upgrade first.' }
   return planMoveUnchecked(ship, destination, simDays, riskContext)
+}
+
+// Why `ship` cannot be sent to `destination` from where it is, or null. Out between
+// clusters (the galactic scale) only another cluster or a point of galactic space
+// can be reached (getting home means ordering it to the Solar Neighbourhood); from
+// anywhere inside the Solar Neighbourhood its own cluster is not a destination
+// (the interstellar view is already there); and a ship cannot go where it rests.
+export function reachabilityBlock(ship: ShipInstance, destination: MoveDestination, simDays: number): string | null {
+  const here = getShipRenderPosition(ship, simDays).space === 'galactic'
+  if (here && !isGalacticDestination(destination)) return 'It is out between clusters: order it back to the Solar Neighbourhood first.'
+  if (!here && destination.kind === 'cluster' && destination.clusterId === SOLAR_NEIGHBORHOOD_ID) return 'It is already in the Solar Neighbourhood.'
+  if (destination.kind === 'cluster' && restingClusterId(ship) === destination.clusterId) return `It is already at ${destinationLabel(destination)}.`
+  return null
 }
 
 // Whether planMove would take this ship to `destination` by hyperdrive jump
@@ -854,14 +1110,11 @@ export function planMove(
 // itself applies, without rolling the jump. Lets a fleet move (see
 // fleetMove.ts) hold a hyperdrive hull's jump until the rest of the fleet
 // arrives, instead of rolling its risk the moment the order is given.
-export function wouldHyperjump(ship: ShipInstance, destination: MoveDestination): boolean {
-  if (destination.kind !== 'star') return false
+export function wouldHyperjump(ship: ShipInstance, destination: MoveDestination, simDays: number = useGameTimeStore.getState().simDays): boolean {
+  if (!isJumpDestination(ship, destination, simDays)) return false
   const shipClass = resolveShipClass(ship.classId)
   if (!shipClass) return false
-  const researched = useTechStore.getState().stateFor(ship.ownerId).researched
-  const warp = researched.has('warp-drives') && shipClass.ftlDrives.some((d) => d.kind === 'warp')
-  const hyper = researched.has('hyperspace-theory') && shipClass.ftlDrives.some((d) => d.kind === 'hyperdrive')
-  return hyper && !warp
+  return driveOfShip(ship, shipClass) === 'hyperdrive'
 }
 
 // planMove WITHOUT the player-ownership gate — for callers that act on a
@@ -895,6 +1148,12 @@ export function planMoveUnchecked(
     }
   }
 
+  // Out between clusters a ship can only go to another cluster or a point of galactic
+  // space (its destination must be one it can reach in the same scale), and not to
+  // where it already is.
+  const blocked = reachabilityBlock(ship, destination, simDays)
+  if (blocked) return { kind: 'unreachable', reason: blocked }
+
   // Warp/Hyperdrive are gated behind Relativity's Warp Theory and
   // Extradimensional's Hyperspace Theory respectively (see techData.ts) —
   // both are seeded already-researched for a fresh country (techStore.ts),
@@ -902,34 +1161,43 @@ export function planMoveUnchecked(
   // from the ship's OWN nation, so an AI empire's fleets move on its tech,
   // not the player's.
   const ownerResearched = useTechStore.getState().stateFor(ship.ownerId).researched
-  const warpDrive = ownerResearched.has('warp-drives') ? shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp') : undefined
-  const hyperDrive = ownerResearched.has('hyperspace-theory')
-    ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive')
-    : undefined
+  // A drive works at its OWNER's best Mk (data/warpData.ts), fleet-wide, no refit:
+  // no Warp Drive Mk I researched means a warp drive does nothing, and likewise
+  // Hyperdrive Mk I for a hyperdrive.
+  const warpMk = warpMkOf(ownerResearched)
+  const warpSpeedC = warpSpeedCOfMk(warpMk)
+  const warpDrive = warpMk >= 1 ? shipClass.ftlDrives.find((d): d is WarpDrive => d.kind === 'warp') : undefined
+  const hyperDrive = hyperdriveMkOf(ownerResearched) >= 1 ? shipClass.ftlDrives.find((d): d is HyperDrive => d.kind === 'hyperdrive') : undefined
 
-  // Hyperdrive only makes sense for jumping to a charted star (you jump TO
-  // somewhere, not into open space) — and only when there's no warp drive to
-  // prefer instead (warp is always at least as fast for any real distance).
-  if (destination.kind === 'star' && hyperDrive && !warpDrive) {
+  // A hyperdrive jumps anywhere outside the ship's own system (isJumpDestination):
+  // to a star, straight into a world's orbit or to a point in another system, or
+  // into open space. Only when there's no warp drive to prefer instead (warp is
+  // always at least as fast for any real distance). Inside its own system the
+  // ship flies on its reaction drive, below.
+  const drive = driveOfShip(ship, shipClass)
+  if (hyperDrive && drive === 'hyperdrive' && isJumpDestination(ship, destination, simDays)) {
     if (useGameTimeStore.getState().paused) return { kind: 'paused' }
     if (simDays < ship.hyperdriveReadySimDays) return { kind: 'on-cooldown', readySimDays: ship.hyperdriveReadySimDays }
 
-    const originStarId = hyperlaneOriginStarId(ship, simDays)
-    const laneEstablished = originStarId !== null && useHyperlaneStore.getState().hasHyperlane(originStarId, destination.starId)
+    // Hyperlanes run star to star inside a neighbourhood (a jump anywhere into a system
+    // uses, and charts, the lane to that system's STAR, wherever in it the ship lands)
+    // and cluster to cluster between them. A jump into open space has no lane.
+    const lane = jumpLane(ship, destination, simDays)
+    const laneEstablished = !!lane && useHyperlaneStore.getState().hasHyperlane(ship.ownerId, lane[0], lane[1])
     const lossChance = hyperdriveLossChance(
       hyperDrive,
       laneEstablished,
       coreHealthFraction(ship, shipClass),
       riskContext?.activelyEngaged ?? false,
-      hyperdriveJumpRiskFactor(ship, destination.starId, simDays),
+      hyperdriveJumpRiskFactor(ship, destination, simDays),
     )
-    if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
+    if (jumpRoll() < lossChance) return { kind: 'lost-in-hyperspace' }
 
     return {
       kind: 'instant',
       location: resolveArrivalLocation(destination, ship.fleetId),
       hyperdriveReadySimDays: simDays + hyperDrive.cooldownDays,
-      hyperlaneEstablished: originStarId !== null ? [originStarId, destination.starId] : undefined,
+      hyperlaneEstablished: lane,
     }
   }
 
@@ -945,12 +1213,15 @@ export function planMoveUnchecked(
   // the real distance between the *actual* departure and arrival stars
   // instead of assuming the ship starts right where it's going.
   const sameSpace = current.space === endInfo.space && current.systemId === endInfo.systemId
-  const startVec = sameSpace ? current.position.clone() : interstellarAnchor(current)
-  const endVec = sameSpace ? endInfo.position : interstellarAnchor(endInfo)
-  const orderSpace: 'system' | 'interstellar' = sameSpace ? endInfo.space : 'interstellar'
-  const orderSystemId = sameSpace ? endInfo.systemId : undefined
+  // Either end out between clusters: one galactic leg, anchored at the Solar
+  // Neighbourhood's point for any end inside it.
+  const galacticLeg = current.space === 'galactic' || endInfo.space === 'galactic'
+  const startVec = galacticLeg ? galacticPosition(current) : sameSpace ? current.position.clone() : interstellarAnchor(current)
+  const endVec = galacticLeg ? galacticPosition(endInfo) : sameSpace ? endInfo.position : interstellarAnchor(endInfo)
+  const orderSpace: 'system' | 'interstellar' | 'galactic' = galacticLeg ? 'galactic' : sameSpace ? endInfo.space : 'interstellar'
+  const orderSystemId = !galacticLeg && sameSpace ? endInfo.systemId : undefined
 
-  const kmPerUnit = orderSpace === 'system' ? KM_PER_SYSTEM_UNIT : KM_PER_INTERSTELLAR_UNIT
+  const kmPerUnit = orderSpace === 'system' ? KM_PER_SYSTEM_UNIT : orderSpace === 'galactic' ? KM_PER_GALACTIC_UNIT : KM_PER_INTERSTELLAR_UNIT
   const distanceKm = startVec.distanceTo(endVec) * kmPerUnit
   const reactionOnlyDays = distanceKm / (REACTION_DRIVE_SPEED_KM_S * SECONDS_PER_DAY)
   const reactionOnlyArrivalSimDays = simDays + reactionOnlyDays
@@ -1009,7 +1280,7 @@ export function planMoveUnchecked(
   // a working drive doesn't mean the player wants *this* trip to use it. The
   // well-clearing time is still recorded on the order (it changes nothing
   // here) so switching warp on mid-flight later still honours the escape.
-  if (!warpDrive || !ship.warpEnabled) {
+  if (!warpDrive || drive !== 'warp') {
     return {
       kind: 'order',
       order: { ...baseOrder, arrivalSimDays: reactionOnlyArrivalSimDays, usedWarp: false, gravityWellClearSimDays },
@@ -1044,13 +1315,13 @@ export function planMoveUnchecked(
   if (engageSimDays <= simDays) {
     // Clear of any gravity well and off cooldown right now — full trip at
     // warp speed, exactly as before this feature existed.
-    const travelDays = distanceKm / (warpSpeedKmS(warpDrive.speedC) * SECONDS_PER_DAY)
+    const travelDays = distanceKm / (warpSpeedKmS(warpSpeedC) * SECONDS_PER_DAY)
     // Only ever true when resolving a combat escape (see riskContext's own
     // comment) — an ordinary warp trip skips this block entirely, unchanged
     // from before this mechanic existed.
     if (riskContext) {
       const lossChance = warpEscapeLossChance(coreHealthFraction(ship, shipClass), riskContext.activelyEngaged)
-      if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
+      if (jumpRoll() < lossChance) return { kind: 'lost-in-hyperspace' }
     }
     return {
       kind: 'order',
@@ -1068,14 +1339,14 @@ export function planMoveUnchecked(
   const phase1DistanceKm = REACTION_DRIVE_SPEED_KM_S * SECONDS_PER_DAY * phase1Days
   const warpEngageFraction = phase1DistanceKm / distanceKm
   const remainingDistanceKm = distanceKm - phase1DistanceKm
-  const phase2Days = remainingDistanceKm / (warpSpeedKmS(warpDrive.speedC) * SECONDS_PER_DAY)
+  const phase2Days = remainingDistanceKm / (warpSpeedKmS(warpSpeedC) * SECONDS_PER_DAY)
 
   // Same escape-only gate as the single-phase branch above — this trip also
   // ends up using warp (usedWarp: true below), just after an initial
   // reaction-drive stretch.
   if (riskContext) {
     const lossChance = warpEscapeLossChance(coreHealthFraction(ship, shipClass), riskContext.activelyEngaged)
-    if (Math.random() < lossChance) return { kind: 'lost-in-hyperspace' }
+    if (jumpRoll() < lossChance) return { kind: 'lost-in-hyperspace' }
   }
 
   return {

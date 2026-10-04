@@ -4905,6 +4905,30 @@ div.fleet-row .combat-density-row {
   justify-content: flex-end;
 }
 
+/* The options under a ship's automation modes: checkboxes, the max-risk slider
+   and the reason its automation is stuck. Its own block, not the row's flex. */
+.ship-automation-options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  margin: 2px 0 4px;
+  font-size: 11px;
+}
+.ship-automation-return {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.ship-automation-risk input[type='range'] {
+  width: 90px;
+}
+.ship-automation-note {
+  align-self: stretch;
+  text-align: left;
+}
+
 .shipyard-tabs {
   flex-wrap: wrap;
   margin: 6px 0;
@@ -6558,8 +6582,44 @@ button.pl-tile.empty:hover {
   opacity: 0.7;
   font-size: 11px;
 }
+.nav-custom-btn {
+  position: relative;
+}
+/* The visible way to remove a pinned button (a right-click also does). */
+.nav-custom-remove {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  padding: 0 4px;
+  line-height: 1.2;
+  opacity: 0.55;
+  cursor: var(--cursor-pointer);
+}
+.nav-custom-remove:hover {
+  opacity: 1;
+  color: #ff6b6b;
+}
 
 .observer-empire .inspect-value {
   max-width: 62%;
   text-align: right;
+}
+
+/* Your ships inside the Solar Neighbourhood, as a badge on its marker in the galactic view. */
+.galactic-ship-badge {
+  position: relative;
+  transform: translate(10px, -22px);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  border: 1px solid rgba(110, 200, 140, 0.55);
+  border-radius: 8px;
+  background: rgba(2, 6, 12, 0.85);
+  cursor: var(--cursor-pointer);
+}
+.galactic-ship-badge-count {
+  font-size: 10px;
+  color: #bfe9cf;
 }

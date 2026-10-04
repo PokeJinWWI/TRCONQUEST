@@ -21,6 +21,8 @@ import {
 import { activeTacticIds, isEnemy, useCombatStore, type Engagement } from '../state/combatStore'
 import { useRelationFn } from '../state/shipRelations'
 import { useShipStore } from '../state/shipStore'
+import { usePlayerTech } from '../hooks/usePlayerTech'
+import { moveOrderBlock } from '../scene/freeFlight'
 import { isAdditiveClick } from '../scene/selectionInput'
 import { simDaysToSeconds, useGameTimeStore } from '../state/gameTimeStore'
 import { DraggableWindow } from './DraggableWindow'
@@ -85,6 +87,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const [scuttleArmed, setScuttleArmed] = useState(false)
   const setFleetTarget = useCombatStore((s) => s.setFleetTarget)
   const orderScuttle = useCombatStore((s) => s.orderScuttle)
+  const researched = usePlayerTech().researched
 
   const shipsById = new Map(ships.map((s) => [s.id, s]))
   // How the player relates to each participant's nation — own / hostile /
@@ -399,6 +402,10 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
             </span>
           </div>
 
+          {(() => {
+            const block = selectedShip ? moveOrderBlock(researched, selectedShip) : null
+            return block ? <div className="ship-panel-hint">{block}. Its tactics still work: Balanced, Flee, targeting, chase and boosts.</div> : null
+          })()}
           <div className="inspect-row">
             <span className="inspect-label">Movement</span>
             <span className="inspect-value">

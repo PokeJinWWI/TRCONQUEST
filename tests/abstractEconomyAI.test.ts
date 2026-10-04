@@ -41,9 +41,9 @@ function mk(over: Partial<AbstractEconomyState> = {}): AbstractEconomyState {
     ...over,
   }
 }
-const HOME = { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 4, electronicsPlant: 2, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, exoticRefinery: 1, entertainmentCenter: 1 }
+const HOME = { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 4, electronicsPlant: 2, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, entertainmentCenter: 1 }
 // A bigger world with room to grow (spare workers, its needs covered).
-const BIG = { ...{ civilianFactory: 8, alloyFoundry: 3, consumerFactory: 7, electronicsPlant: 2, farm: 11, mine: 6, powerPlant: 6, physicsLab: 2, exoticRefinery: 1, entertainmentCenter: 3 } }
+const BIG = { ...{ civilianFactory: 8, alloyFoundry: 3, consumerFactory: 7, electronicsPlant: 2, farm: 11, mine: 6, powerPlant: 6, physicsLab: 2, entertainmentCenter: 3 } }
 function world(over: Partial<WorldState> = {}): WorldState {
   return { bodyName: 'Home', population: 3000, slots: 80, buildings: { ...HOME }, ...over }
 }
@@ -246,11 +246,14 @@ console.log('\n=== 11. Realistic growth: an actively building nation grows ~1-3%
   const avg = Math.pow(h[h.length - 1].realGdp / h[0].realGdp, 12 / (h.length - 1)) - 1
   const max = Math.max(...yoy)
   check('average real growth over the decade is realistic (0.5-3%/yr)', avg > 0.005 && avg < 0.03, (avg * 100).toFixed(2) + '%/yr')
-  check('no single year booms past 5%', max < 0.05, 'max ' + (max * 100).toFixed(1) + '%')
+  // 5% before the Hyperium Refinery left the seeds: Mars now opens with two free industrial slots (and
+  // two refinery levels fewer of specialist jobs), which the AI fills in its first years.
+  check('no single year booms past 6%', max < 0.06, 'max ' + (max * 100).toFixed(1) + '%')
   useAbstractEconomyStore.getState().reset()
   const fresh = useAbstractEconomyStore.getState().reports
   const unemp = ids.map((n) => Math.max(0, fresh[n].workforce - fresh[n].jobs) / fresh[n].workforce)
-  check('every nation opens with 1-6% unemployment', unemp.every((u) => u >= 0.01 && u <= 0.06), unemp.map((u) => (u * 100).toFixed(1) + '%').join(' / '))
+  // 6% before the seeds lost their refineries (their specialist jobs): Venus opens at 6.7%.
+  check('every nation opens with 1-7% unemployment', unemp.every((u) => u >= 0.01 && u <= 0.07), unemp.map((u) => (u * 100).toFixed(1) + '%').join(' / '))
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

@@ -83,12 +83,25 @@ export const AI_COLONY_SHIPS = 1
 // many is enough).
 export const AI_MAX_STARBASES = 3
 // What it researches, in order, on the way to being able to build a Starbase.
-// Warp Theory and Warp Comms are starting techs (techStore.DEFAULT_RESEARCHED);
-// they stay listed first so an empire somehow without them fetches them before
-// anything else (orders beyond its own system are useless at light speed).
+// Warp Theory and Hyper Comms are starting techs (techStore.DEFAULT_RESEARCHED);
+// Warp Theory stays listed first so an empire somehow without it fetches it
+// before anything else. Warp Comms is not on the path: it costs exotic matter and
+// every nation already starts with the better Hyper Comms.
 // Research income only exists in Simple economy mode (nothing feeds it in
 // Complex), so in Complex an AI stays where it is.
-export const AI_RESEARCH_PATH = ['warp-theory', 'warp-drives', 'warp-comms', 'classical-mechanics', 'orbital-mechanics', 'orbital-construction'] as const
+// Frigate/Destroyer/Cruiser Hulls come after Orbital Construction (the warship
+// rotation below falls back to the Corvette until each is in); Battleship Hulls and
+// the scout line are not on its path. Hyperdrive Mk II comes last: with Mk I's 13% to the nearest star the AI's cap on a
+// jump (below) holds it to charted lanes, and Mk II makes every hop in the
+// neighbourhood under 2%. Hyperdrive Mk I is a starting tech, listed so Mk II's
+// prerequisite is in the path.
+export const AI_RESEARCH_PATH = ['warp-theory', 'classical-mechanics', 'orbital-mechanics', 'orbital-construction', 'frigate-hulls', 'destroyer-hulls', 'cruiser-hulls', 'free-flight-maneuvering', 'hyperdrive-mk1', 'hyperdrive-mk2'] as const
+
+// The riskiest hyperdrive jump (loss chance, 0..1) an AI ship attempts: the same line
+// the player is warned at (scene/jumpWarning.JUMP_WARN_LOSS), and for a Science Ship,
+// which charts the lanes the rest follow, a higher one (ai/jumpRules.ts).
+export const AI_JUMP_MAX_LOSS = 0.05
+export const AI_SCOUT_JUMP_MAX_LOSS = 0.4
 
 // --- Diplomacy (diplomat.ts): orgs, subjects, trade policy ---------------------
 // Opinion at or above which a nation is "friendly" enough to form or join an

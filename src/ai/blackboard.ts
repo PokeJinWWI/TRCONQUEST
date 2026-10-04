@@ -4,7 +4,7 @@
 // nobody recomputes fleet power five times.
 import type { ResourceId } from '../data/resourceData'
 import type { Incident, Relation, War } from '../data/diplomacyData'
-import type { ShipInstance } from '../state/shipStore'
+import type { MoveDestination, ShipInstance } from '../state/shipStore'
 import type { BodySurface } from '../scene/planetTerrain'
 import { atWarFrom, relationIn, type AtWarFn } from '../state/diplomacyStore'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -72,6 +72,10 @@ export interface AiSnapshot {
   // A body's ground map with every key node (the economy's spaceports,
   // installations). Optional: absent = the terrain's own.
   surfaceOf?: (bodyName: string) => BodySurface | null
+  // The chance a ship is lost jumping to a destination, or null when the move is no
+  // jump (scene/shipPhysics.hyperdriveJumpChance): what ai/jumpRules caps. Optional:
+  // absent = no jump is ever refused.
+  jumpChanceOf?: (ship: ShipInstance, destination: MoveDestination) => number | null
   // Diplomacy layers (optional, absent = none): the international organizations
   // and subject relationships the Diplomat reasons about.
   orgs?: InternationalOrg[]

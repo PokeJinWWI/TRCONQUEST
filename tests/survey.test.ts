@@ -23,6 +23,10 @@ import { systemBodies } from '../src/scene/territory'
 import { systemKnownToPlayer, unidentifiedStarbaseStars, visibleClaims } from '../src/scene/intel'
 import type { Starbase } from '../src/scene/starbaseLogic'
 import type { SystemClaim } from '../src/scene/territory'
+import { safeJumps } from './testWarp'
+
+// Not about jump risk: ships always arrive (the roll is tested in tests/warp.test.ts).
+safeJumps()
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -68,7 +72,7 @@ function reset(ship: ShipInstance | null, hyperComms = false) {
   useShipStore.setState({ ships: ship ? [ship] : [] })
   useTechStore.setState({
     byCountry: {
-      [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', ...(hyperComms ? [HYPER_COMMS_TECH_ID] : [])]) },
+      [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperdrive-mk1', 'hyperspace-theory', ...(hyperComms ? [HYPER_COMMS_TECH_ID] : [])]) },
     },
   })
 }

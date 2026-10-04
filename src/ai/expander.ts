@@ -5,7 +5,7 @@
 //   - The Science Ship works out from the capital: survey the system it is in
 //     (entering it explored it), then fly to the nearest star it hasn't fully
 //     surveyed.
-//   - Simple mode: found a colony on the cheapest surveyed, unowned world it
+//   - Simple mode: found a colony on the nearest surveyed, unowned world it
 //     can afford (a Colony Ship, paid in Influence), and hold each of its
 //     micro-colonies' orbits with a patrol warship until it becomes planetary.
 //   - Claim the nearest fully surveyed, unclaimed star with a Starbase: the
@@ -37,8 +37,9 @@ import { starbaseOwnersOf } from '../scene/starbaseLogic'
 import { isFullySurveyed, restingStarId, systemOfShip, unsurveyedBodies } from '../scene/surveyLogic'
 import { systemClaim } from '../scene/territory'
 import type { ResourceCost } from '../data/shipyardData'
+import { aiJumpAllowed } from './jumpRules'
 import { hasOrderInFlight, shipPower, type AiSnapshot, type Blackboard } from './blackboard'
-import { colonyInfluenceCost } from '../scene/colonyLogic'
+import { lightYearsBetween } from '../scene/colonyLogic'
 import { groundSurface } from '../scene/groundLogic'
 import { bodyStarId } from '../scene/territory'
 import { affordable } from './shipwright'
@@ -72,10 +73,12 @@ export function pickResearch(bb: Blackboard): string | null {
 }
 
 // Stars this empire could still learn something at, nearest to its capital first.
-function surveyTargets(bb: Blackboard, snap: AiSnapshot, here: string | null): StarData[] {
+function surveyTargets(bb: Blackboard, snap: AiSnapshot, here: string | null, scout?: ShipInstance): StarData[] {
   const home = STARS.find((s) => s.id === bb.capital.capitalStarId)
   if (!home) return []
   return STARS.filter((s) => s.id !== here && s.hasSystemData && !isFullySurveyed(bb.intel, bb.countryId, s.id, snap.owners))
+    // Only where its scout's jump is one it would take (ai/jumpRules).
+    .filter((s) => !scout || aiJumpAllowed(snap, scout, { kind: 'star', starId: s.id }))
     .sort((a, b) => distanceLy(home, a) - distanceLy(home, b) || a.id.localeCompare(b.id))
 }
 
@@ -89,29 +92,29 @@ function starbaseTargetOk(bb: Blackboard, snap: AiSnapshot, starId: string): boo
   return systemClaim(starId, snap.owners, starbaseOwnersOf(starId, snap.starbases, snap.simDays)).kind === 'unclaimed'
 }
 
-function pickStarbaseTarget(bb: Blackboard, snap: AiSnapshot, current: string | null | undefined): string | null {
-  if (current && starbaseTargetOk(bb, snap, current)) return current
+function pickStarbaseTarget(bb: Blackboard, snap: AiSnapshot, current: string | null | undefined, builder?: ShipInstance): string | null {
+  const reachable = (starId: string) => !builder || aiJumpAllowed(snap, builder, { kind: 'star', starId })
+  if (current && starbaseTargetOk(bb, snap, current) && reachable(current)) return current
   const home = STARS.find((s) => s.id === bb.capital.capitalStarId)
   if (!home) return null
-  const candidates = STARS.filter((s) => starbaseTargetOk(bb, snap, s.id)).sort((a, b) => distanceLy(home, a) - distanceLy(home, b) || a.id.localeCompare(b.id))
+  const candidates = STARS.filter((s) => starbaseTargetOk(bb, snap, s.id) && reachable(s.id)).sort((a, b) => distanceLy(home, a) - distanceLy(home, b) || a.id.localeCompare(b.id))
   return candidates[0]?.id ?? null
 }
 
 // The world it would colonize next: surveyed by it, nobody's, with land to
-// settle, in a system where it has a Starbase; the cheapest in Influence, then
-// the nearest.
-export function pickColonyTarget(bb: Blackboard, snap: AiSnapshot): { bodyName: string; starId: string; cost: number } | null {
+// settle, in a system where it has a Starbase; the nearest its capital (colonizing costs no Influence).
+export function pickColonyTarget(bb: Blackboard, snap: AiSnapshot): { bodyName: string; starId: string; ly: number } | null {
   const home = bb.capital.capitalStarId
-  const candidates: { bodyName: string; starId: string; cost: number }[] = []
+  const candidates: { bodyName: string; starId: string; ly: number }[] = []
   for (const bodyName of bb.intel?.surveyed ?? []) {
     if (snap.owners[bodyName]) continue
     const starId = bodyStarId(bodyName)
     if (!starId || !starbaseOwnersOf(starId, snap.starbases, snap.simDays).includes(bb.countryId)) continue
     const surface = groundSurface(bodyName, snap.owners)
     if (!surface || surface.mainland < 0) continue
-    candidates.push({ bodyName, starId, cost: colonyInfluenceCost(bodyName, starId, home) })
+    candidates.push({ bodyName, starId, ly: lightYearsBetween(home, starId) })
   }
-  candidates.sort((a, b) => a.cost - b.cost || a.bodyName.localeCompare(b.bodyName))
+  candidates.sort((a, b) => a.ly - b.ly || a.bodyName.localeCompare(b.bodyName))
   return candidates[0] ?? null
 }
 
@@ -158,7 +161,7 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
   const canBuildStarbases = bb.hasResearched('orbital-construction')
   const influence = bb.resources.influence ?? 0
   const colonyTarget = snap.simpleEconomy ? pickColonyTarget(bb, snap) : null
-  const canColonize = !!colonyTarget && influence >= colonyTarget.cost
+  const canColonize = !!colonyTarget
 
   // --- Research ----------------------------------------------------------
   const tech = pickResearch(bb)
@@ -172,7 +175,7 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
     if (canBuildStarbases) wants.push(['construction', 'construction-ship', AI_CONSTRUCTION_SHIPS], ['cargo', 'cargo-ship', AI_CARGO_SHIPS])
     for (const [role, classId, target] of wants) {
       if (mineOf(role).length + queued(role) >= target) continue
-      if (affordable(classId, bb.resources)) {
+      if (affordable(classId, bb.resources, { has: bb.hasResearched })) {
         intents.push({ kind: 'build-ship', classId })
         break
       }
@@ -197,7 +200,7 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
     if (here && remaining.length > 0) {
       intents.push({ kind: 'survey-system', shipId: science.id })
     } else {
-      const next = surveyTargets(bb, snap, here)[0]
+      const next = surveyTargets(bb, snap, here, science)[0]
       if (next) intents.push({ kind: 'move-ship', shipId: science.id, systemId: next.id, bodyName: null })
     }
   }
@@ -213,7 +216,7 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
 
   // --- Claiming a star ---------------------------------------------------
   let target: string | null = null
-  if (canBuildStarbases && bb.myStarbaseCount < AI_MAX_STARBASES) target = pickStarbaseTarget(bb, snap, memory.expansionTarget)
+  if (canBuildStarbases && bb.myStarbaseCount < AI_MAX_STARBASES) target = pickStarbaseTarget(bb, snap, memory.expansionTarget, mineOf('construction').find((s) => resting(s, snap)))
   const memoryUpdate = (memory.expansionTarget ?? null) !== target ? { expansionTarget: target } : undefined
 
   if (target) {

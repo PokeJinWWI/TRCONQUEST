@@ -34,9 +34,11 @@ import { useHoldingsResolver } from './hooks/useHoldingsResolver'
 import { useCommsResolver } from './hooks/useCommsResolver'
 import { useBattleTracker } from './hooks/useBattleTracker'
 import { useShipyardResolver } from './hooks/useShipyardResolver'
+import { useShipDeconstructionResolver } from './hooks/useShipDeconstructionResolver'
 import { useColonyResolver } from './hooks/useColonyResolver'
 import { useAutomationResolver } from './hooks/useAutomationResolver'
 import { useStrategicResources } from './hooks/useStrategicResources'
+import { useMaterialDiscovery } from './hooks/useMaterialDiscovery'
 import { useGameSetup } from './hooks/useGameSetup'
 import { useStrategicAI } from './hooks/useStrategicAI'
 import { useEconomyTick } from './hooks/useEconomyTick'
@@ -116,9 +118,11 @@ function App() {
   // The capital's shipyard, and the placeholder resource supply it builds from
   // — see data/shipyardData.ts.
   useShipyardResolver()
+  useShipDeconstructionResolver()
   useColonyResolver()
   useAutomationResolver()
   useStrategicResources()
+  useMaterialDiscovery()
   // Every nation's starting navy and armies, once a nation is picked.
   useGameSetup()
   // The AI empires' strategic planning — see src/ai/coordinator.ts.

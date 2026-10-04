@@ -27,7 +27,12 @@ import {
 } from '../src/scene/shipyardLogic'
 import { useShipyardStore, type ShipBuildOrder } from '../src/state/shipyardStore'
 import { useResourceStore } from '../src/state/resourceStore'
+import { useTechStore } from '../src/state/techStore'
 import { useShipStore } from '../src/state/shipStore'
+import { resolveShipClass } from '../src/state/shipClassResolver'
+import { startingExoticMatter } from '../src/data/exoticMatter'
+import { HYPERIUM_NEAR_SOL } from '../src/data/hyperium'
+import { driveHullId } from './testWarp'
 import { useEconomyStore, worldByName } from '../src/state/economyStore'
 import { getCountry } from '../src/data/countryData'
 import type { World } from '../src/economy/economyTypes'
@@ -57,12 +62,17 @@ function order(id: string, durationDays: number, extra: Partial<ShipBuildOrder> 
 
 console.log('\n=== 1. Costs come from what a hull IS ===')
 {
+  // No preset hull warps: warp and dual hulls are designer-built.
   const courier = shipBuildCost(cls('swift-courier'))
+  const warper = shipBuildCost(resolveShipClass(driveHullId('corvette-hull', 'drive-warp'))!)
+  const dual = shipBuildCost(resolveShipClass(driveHullId('corvette-hull', 'drive-dual'))!)
   const destroyer = shipBuildCost(cls('destroyer'))
   const turing = shipBuildCost(cls('turing-scout'))
   const jumper = shipBuildCost(cls('star-jumper'))
-  check('a warp hull needs exotic matter', courier.exoticMatter === EXOTIC_MATTER_PER_WARP_DRIVE)
-  check('...and no hyperium', courier.hyperium === undefined)
+  check('a warp hull needs exotic matter', warper.exoticMatter === EXOTIC_MATTER_PER_WARP_DRIVE)
+  check('...and no hyperium', warper.hyperium === undefined)
+  check('a dual-drive hull needs both', dual.exoticMatter === EXOTIC_MATTER_PER_WARP_DRIVE && dual.hyperium === 1)
+  check('every preset hull is a hyperdrive hull: one hyperium, no exotic matter', courier.hyperium === 1 && SHIP_CLASSES.every((c) => shipBuildCost(c).hyperium === 1 && shipBuildCost(c).exoticMatter === undefined))
   check('a hyperdrive hull needs exactly one indivisible hyperium', destroyer.hyperium === 1 && destroyer.exoticMatter === undefined)
   check('a hyperdrive hull with a crewed navigator needs no special material', jumper.special === undefined)
   check('the Turing Scout (AI navigator, jumps never fail) needs a special core', turing.special === 1)
@@ -82,6 +92,8 @@ console.log('\n=== 2. missingResources ===')
 
 console.log('\n=== 3. queueBuild pays up front; cancel refunds ===')
 {
+  // The Destroyer is a researched hull (tests/shipGates.test.ts covers the gate itself).
+  useTechStore.setState({ byCountry: { [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['destroyer-hulls']) } } })
   const destroyerCost = shipBuildCost(cls('destroyer'))
   resetResources({ alloys: 1000, energy: 1000, hyperium: 2 })
   const result = useShipyardStore.getState().queueBuild(MARS, 'destroyer', 5)
@@ -90,7 +102,7 @@ console.log('\n=== 3. queueBuild pays up front; cancel refunds ===')
   check('...deducts alloys', after.alloys === 1000 - (destroyerCost.alloys ?? 0))
   check('...deducts the indivisible hyperium', after.hyperium === 1)
   const queued = ordersOf()[0]
-  check('...adds one waiting order stamped with the queue time', ordersOf().length === 1 && queued.queuedSimDays === 5 && queued.startedSimDays === null)
+  check('...adds one order stamped with the queue time, started at once on the free slip', ordersOf().length === 1 && queued.queuedSimDays === 5 && queued.startedSimDays === 5)
 
   useShipyardStore.getState().cancelBuild(MARS, queued.id)
   const refunded = amountsOf()
@@ -103,7 +115,7 @@ console.log('\n=== 3. queueBuild pays up front; cancel refunds ===')
   check('...and nothing is deducted or queued', amountsOf().alloys === 1000 && ordersOf().length === 0)
   check('an unknown class is refused', !useShipyardStore.getState().queueBuild(MARS, 'no-such-hull', 0).ok)
 
-  resetResources({ alloys: 1e6, energy: 1e6, exoticMatter: 1e6 })
+  resetResources({ alloys: 1e6, energy: 1e6, hyperium: 1e6 })
   for (let i = 0; i < MAX_QUEUED_BUILDS; i++) useShipyardStore.getState().queueBuild(MARS, 'corvette', 0)
   const overflow = useShipyardStore.getState().queueBuild(MARS, 'corvette', 0)
   check('the queue is bounded', !overflow.ok && ordersOf().length === MAX_QUEUED_BUILDS)
@@ -169,7 +181,8 @@ console.log('\n=== 7. Placeholder resource supply ===')
   resetResources()
   seedStrategicResources(MARS)
   const a = amountsOf()
-  check('a fresh player gets the starting reserve', a.alloys === STARTING_STOCKPILE.alloys && a.hyperium === STARTING_STOCKPILE.hyperium)
+  check('a fresh player gets the starting reserve', a.alloys === STARTING_STOCKPILE.alloys && a.hyperium === HYPERIUM_NEAR_SOL && a.exoticMatter === startingExoticMatter(MARS))
+  check('...with no exotic matter income at all', (RESOURCE_INCOME_PER_MONTH.exoticMatter ?? 0) === 0 && useResourceStore.getState().stateFor(MARS).monthlyDelta.exoticMatter === 0)
   check('...and the HUD monthly figure reflects the income table', useResourceStore.getState().stateFor(MARS).monthlyDelta.hyperium === RESOURCE_INCOME_PER_MONTH.hyperium)
 
   useResourceStore.getState().addAmount(MARS, 'alloys', -100)
@@ -181,8 +194,8 @@ console.log('\n=== 7. Placeholder resource supply ===')
   check('income credits whole months of the table', amountsOf().alloys === before + (RESOURCE_INCOME_PER_MONTH.alloys ?? 0) * 3)
   applyStrategicIncome(MARS, 0)
   check('zero months credits nothing', amountsOf().alloys === before + (RESOURCE_INCOME_PER_MONTH.alloys ?? 0) * 3)
-  const fresh = STARTING_STOCKPILE
-  check('the starting reserve affords at least one preset hull', SHIP_CLASSES.some((c) => Object.entries(shipBuildCost(c)).every(([id, n]) => n <= (fresh[id as ResourceId] ?? 0))))
+  check('the starting reserve affords at least one preset hull', SHIP_CLASSES.some((c) => Object.entries(shipBuildCost(c)).every(([id, n]) => n <= (a[id as ResourceId] ?? 0))))
+  check('...and no warp hull: 5 exotic matter each, against the handful a Sol nation has', startingExoticMatter(MARS) < EXOTIC_MATTER_PER_WARP_DRIVE, `${startingExoticMatter(MARS)} vs ${EXOTIC_MATTER_PER_WARP_DRIVE}`)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

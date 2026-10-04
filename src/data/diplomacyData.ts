@@ -68,6 +68,10 @@ export type DiplomacyEventKind =
   | 'colony-abandoned'
   | 'tech-researched'
   | 'ship-attacked'
+  // An order the ship could not carry out, and why (a hyperdrive jump out of range).
+  | 'order-refused'
+  // A ship lost in a hyperspace jump (scene/jumpLoss.ts); a click goes to where it was headed.
+  | 'ship-lost'
 
 export interface DiplomacyEvent {
   id: string
@@ -102,6 +106,8 @@ export interface Incident {
 export interface EventPlace {
   bodyName?: string
   starId?: string
+  // A cluster (neighbourhood): the galactic view, with it selected.
+  neighborhoodId?: string
   // A nav panel to open (a researched tech opens its Technology tab).
   nav?: { category: string; subcategory: string }
 }

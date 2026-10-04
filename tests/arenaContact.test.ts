@@ -3,6 +3,7 @@
 //
 // Run:  npx tsx tests/arenaContact.test.ts
 
+import { warpCommsOnly } from './testComms'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { PIRATES_ID, FRIENDLY_ROGUE_ID, NEUTRAL_ROGUE_ID } from '../src/data/countryRoster'
@@ -35,6 +36,7 @@ console.log('\n=== 1. Direct contact inside the combat arena, comms delay outsid
   useDiplomacyStore.getState().reset()
   usePlayerStore.getState().selectCountry(MARS)
   useShipStore.setState({ ships: [] })
+  warpCommsOnly()
   useGameTimeStore.setState({ simDays: 0 })
   // A Mars ship at another star, fighting pirates there — far from the capital.
   const mine = spawnOwnedShip('cruiser', MARS, 'alpha-centauri', 'Arcadia')!

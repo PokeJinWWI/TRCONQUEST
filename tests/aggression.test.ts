@@ -4,6 +4,7 @@
 //
 // Run:  npx tsx tests/aggression.test.ts
 
+import { warpCommsOnly } from './testComms'
 import { COUNTRIES } from '../src/data/countryData'
 import { FRIENDLY_ROGUE_ID } from '../src/data/countryRoster'
 import { AI_WAR_GRACE_DAYS } from '../src/data/aiData'
@@ -65,7 +66,7 @@ function freshWorld(player: string) {
   useTreatyStore.setState({ treaties: [] })
   useShipyardStore.setState({ ordersByCountry: {} })
   useResourceStore.setState({ byCountry: {} })
-  useTechStore.setState({ byCountry: {} })
+  warpCommsOnly()
   useStarbaseStore.setState({ starbases: [] })
   useGameTimeStore.setState({ simDays: 0 })
   usePlayerStore.setState({ selectedCountryId: player })

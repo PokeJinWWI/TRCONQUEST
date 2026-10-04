@@ -8,6 +8,7 @@
 // resourceStore stockpile ships and armies are paid from).
 
 import type { ResourceId } from './resourceData'
+import { EXOTIC_PER_HYPERIUM, HYPERIUM_PER_REFINERY, HYPERIUM_SYNTHESIS_TECH_ID } from './synthesisData'
 
 export type SimpleGood = Extract<ResourceId, 'food' | 'minerals' | 'energy' | 'alloys' | 'electronics' | 'consumerGoods' | 'spaceships' | 'rockets' | 'exoticMatter' | 'hyperium'>
 export const SIMPLE_GOODS: SimpleGood[] = ['food', 'minerals', 'energy', 'alloys', 'electronics', 'consumerGoods', 'spaceships', 'rockets', 'exoticMatter', 'hyperium']
@@ -102,8 +103,7 @@ export interface SimpleBuildingDef {
   // Takes no district slot: a key site of its own on the ground map (the
   // spaceport), listed with the district but not counted against its slots.
   noSlot?: boolean
-  // A tech this building needs before it can be built (data/techData.ts).
-  // Absent = buildable from the start.
+  // A tech its nation must have researched before it can build one (queueBuilding).
   requiresTech?: string
   // How much this building raises the world's INFRASTRUCTURE capacity per level
   // (economy-abstract market access). Absent = 0.
@@ -136,10 +136,14 @@ export const SIMPLE_BUILDING_DEFS: Record<SimpleBuildingId, SimpleBuildingDef> =
     outputs: { electronics: 4 }, upkeep: { minerals: 6, energy: 6 },
   },
   exoticRefinery: {
-    name: 'Exotic Refinery',
-    description: 'Refines exotic matter (warp fuel) and a trickle of hyperium (hyperdrive fuel). Energy hungry.',
+    // The id is historical (it once made exotic matter). Nothing makes exotic matter
+    // now, so this refines it INTO hyperium, at the one conversion rate
+    // (data/synthesisData.ts), and needs Hyperium Synthesis to build.
+    name: 'Hyperium Refinery',
+    description: 'Refines hyperium (hyperdrive fuel) from exotic matter (warp fuel), at the one conversion rate. Needs Hyperium Synthesis. Energy hungry; it stops when the exotic matter runs out.',
     district: 'industrial', jobs: 20, stratum: 'specialists', cost: 1200,
-    outputs: { exoticMatter: 3, hyperium: 0.5 }, upkeep: { energy: 10 },
+    outputs: { hyperium: HYPERIUM_PER_REFINERY }, upkeep: { exoticMatter: HYPERIUM_PER_REFINERY * EXOTIC_PER_HYPERIUM, energy: 10 },
+    requiresTech: HYPERIUM_SYNTHESIS_TECH_ID,
   },
   spaceyard: {
     name: 'Spaceyard',
@@ -298,15 +302,15 @@ export interface SimpleWorldSeed {
 // The inhabited worlds; every other body a nation owns starts as an outpost.
 export const SIMPLE_WORLD_SEEDS: Record<string, SimpleWorldSeed> = {
   // Imperial State of Mars
-  Mars: { population: 3000, buildings: { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 5, electronicsPlant: 2, exoticRefinery: 2, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1, spaceport: 6 } },
+  Mars: { population: 3000, buildings: { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 5, electronicsPlant: 2, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1, spaceport: 6 } },
   Luna: { population: 600, buildings: { civilianFactory: 1, consumerFactory: 1, farm: 1, mine: 3, powerPlant: 2, commercialZone: 1, spaceport: 1, spaceyard: 1, rocketWorks: 2 } }, // Luna's low gravity makes it Mars's space industry
   // Republic of Venus
-  Venus: { population: 3000, buildings: { civilianFactory: 7, alloyFoundry: 2, consumerFactory: 5, electronicsPlant: 2, exoticRefinery: 2, farm: 7, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1, spaceport: 6, spaceyard: 1, rocketWorks: 2 } },
+  Venus: { population: 3000, buildings: { civilianFactory: 7, alloyFoundry: 2, consumerFactory: 5, electronicsPlant: 2, farm: 7, mine: 6, powerPlant: 6, physicsLab: 2, engineeringLab: 1, entertainmentCenter: 1, spaceport: 6, spaceyard: 1, rocketWorks: 2 } },
   // Orion Republic
-  Arcadia: { population: 1200, buildings: { civilianFactory: 2, alloyFoundry: 1, consumerFactory: 2, electronicsPlant: 1, exoticRefinery: 1, farm: 3, mine: 2, powerPlant: 2, physicsLab: 1, engineeringLab: 1, clinic: 1, spaceport: 2, spaceyard: 1, rocketWorks: 1 } },
+  Arcadia: { population: 1200, buildings: { civilianFactory: 2, alloyFoundry: 1, consumerFactory: 2, electronicsPlant: 1, farm: 3, mine: 2, powerPlant: 2, physicsLab: 1, engineeringLab: 1, clinic: 1, spaceport: 2, spaceyard: 1, rocketWorks: 1 } },
   'Proxima b': { population: 450, buildings: { civilianFactory: 1, consumerFactory: 1, farm: 2, mine: 1, powerPlant: 1, spaceport: 1 } },
   // Kingdom of Lalande
-  'Lalande 21185 d': { population: 2000, buildings: { civilianFactory: 3, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, exoticRefinery: 1, farm: 6, mine: 5, powerPlant: 4, physicsLab: 1, entertainmentCenter: 1, spaceport: 4, spaceyard: 1, rocketWorks: 1 } },
+  'Lalande 21185 d': { population: 2000, buildings: { civilianFactory: 3, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, farm: 6, mine: 5, powerPlant: 4, physicsLab: 1, entertainmentCenter: 1, spaceport: 4, spaceyard: 1, rocketWorks: 1 } },
   // Earth — the declining colossus: a huge, overcrowded population on limited,
   // ageing developed land (resource- and farm-heavy, thin on advanced plants).
   // Its land caps like Venus's, so a 9-billion populace is underdeveloped and

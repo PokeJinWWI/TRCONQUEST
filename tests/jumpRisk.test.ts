@@ -14,9 +14,10 @@ import {
 import { STARS } from '../src/data/starData'
 import { NEIGHBORHOODS } from '../src/data/neighborhoodData'
 import { SOLAR_NEIGHBORHOOD_ID } from '../src/data/galaxyGen'
-import { clusterJumpRiskFactor, clusterMassKg, jumpRiskFactor, starJumpRiskFactor } from '../src/scene/jumpRisk'
+import { clusterJumpRiskFactor, clusterMassKg, hyperdriveMkRiskFactor, jumpRiskFactor, starJumpRiskFactor } from '../src/scene/jumpRisk'
 import { hyperdriveJumpChance, hyperdriveJumpRiskFactor, hyperdriveLossChance } from '../src/scene/shipPhysics'
 import { useShipStore } from '../src/state/shipStore'
+import { grantWarp, warpHullId } from './testWarp'
 import { useHyperlaneStore } from '../src/state/hyperlaneStore'
 import { usePlayerStore } from '../src/state/playerStore'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
@@ -73,26 +74,30 @@ console.log('\n=== 4. A real ship ===')
 {
   usePlayerStore.setState({ selectedCountryId: 'imperial-state-of-mars' })
   useShipStore.setState({ ships: [] })
-  useHyperlaneStore.setState({ lanes: [] })
+  useHyperlaneStore.setState({ lanes: {} })
   // A hull that jumps (hyperdrive, no warp), with an ordinary drive.
   const jumper = SHIP_CLASSES.find((c) => c.ftlDrives.some((d) => d.kind === 'hyperdrive' && d.lossChanceOverride === undefined) && !c.ftlDrives.some((d) => d.kind === 'warp'))
-  const warper = SHIP_CLASSES.find((c) => c.ftlDrives.some((d) => d.kind === 'warp'))
+  // No preset hull warps: a designer-built warp hull, flown by a nation with Warp Drive Mk I.
+  const warper = { id: warpHullId() }
   check('there is a hyperdrive-only hull to test with', !!jumper, jumper?.id ?? 'none')
   if (jumper) {
     const id = spawnOwnedShip(jumper.id, 'imperial-state-of-mars', 'sol', 'Mars')!
     const ship = useShipStore.getState().ships.find((s) => s.id === id)!
     const toSirius = hyperdriveJumpRiskFactor(ship, 'sirius', 0)
     const toBarnard = hyperdriveJumpRiskFactor(ship, 'barnards-star', 0)
-    check('from Sol, its factor is the Sol-to-star one', near(toSirius, starJumpRiskFactor(dist(star('sirius').position, [0, 0, 0]), star('sirius')), 1e-6) && near(toBarnard, starJumpRiskFactor(dist(star('barnards-star').position, [0, 0, 0]), star('barnards-star')), 1e-6))
+    // Mars flies Hyperdrive Mk I: the Mk's loss at that distance, times the destination's mass.
+    check('from Sol, its factor is the Mk I Sol-to-star one', near(toSirius, hyperdriveMkRiskFactor(1, dist(star('sirius').position, [0, 0, 0]), star('sirius')), 1e-6) && near(toBarnard, hyperdriveMkRiskFactor(1, dist(star('barnards-star').position, [0, 0, 0]), star('barnards-star')), 1e-6))
     const chance = hyperdriveJumpChance(ship, 'sirius', 0)!
     check('the chance shown is base x factor', near(chance, Math.min(1, HYPERDRIVE_BASE_LOSS_CHANCE * toSirius), 1e-6), `${Math.round(chance * 100)}% to Sirius, ${Math.round(hyperdriveJumpChance(ship, 'barnards-star', 0)! * 100)}% to Barnard's Star`)
-    useHyperlaneStore.getState().addHyperlane('sol', 'sirius')
+    useHyperlaneStore.getState().addHyperlane(ship.ownerId, 'sol', 'sirius')
     check('a charted lane cuts it', near(hyperdriveJumpChance(ship, 'sirius', 0)!, HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE * toSirius, 1e-6))
     check('an unknown star: average', hyperdriveJumpRiskFactor(ship, 'nowhere', 0) === 1)
   }
   if (warper) {
     const id = spawnOwnedShip(warper.id, 'imperial-state-of-mars', 'sol', 'Mars')!
     const ship = useShipStore.getState().ships.find((s) => s.id === id)!
+    check('a warp hull whose owner has no Warp Drive Mk has no drive to jump with either', hyperdriveJumpChance(ship, 'sirius', 0) === null)
+    grantWarp('imperial-state-of-mars')
     check('a ship that warps has no jump risk to show', hyperdriveJumpChance(ship, 'sirius', 0) === null && !!resolveShipClass(ship.classId))
   }
 }

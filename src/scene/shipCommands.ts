@@ -11,6 +11,7 @@ import { useSurveyStore } from '../state/surveyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useResourceStore } from '../state/resourceStore'
+import { useShipyardStore } from '../state/shipyardStore'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { useTechStore } from '../state/techStore'
 import { getCountry } from '../data/countryData'
@@ -84,6 +85,9 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
     case 'colonize':
       startFounding(shipId, command.bodyName, simDays)
       return
+    case 'upgrade':
+      useShipyardStore.getState().queueUpgrade(ship.ownerId, shipId, simDays)
+      return
     case 'attack': {
       // Chase it and fight where they meet (scene/aggression.ts).
       const target = useShipStore.getState().ships.find((s) => s.id === command.targetShipId)
@@ -155,7 +159,11 @@ export function orderSelectedToDoAt(starId: string, command: ShipCommand): void 
     // order to this same star leaves the arrival command alone.
     else store.setArrivalCommand(s.id, { starId, command })
   }
-  if (selected.some((s) => restingStarId(s) !== starId)) orderSelectedFleets({ kind: 'star', starId })
+  // Declining a risky jump takes the arrival commands back.
+  const dropArrival = () => {
+    for (const s of actors) if (useShipStore.getState().ships.find((x) => x.id === s.id)?.arrivalCommand?.starId === starId) useShipStore.getState().setArrivalCommand(s.id, null)
+  }
+  if (selected.some((s) => restingStarId(s) !== starId)) orderSelectedFleets({ kind: 'star', starId }, undefined, dropArrival)
   // A jump that landed the ship at once never "arrives" — do it now.
   const after = useShipStore.getState()
   for (const s of actors) {

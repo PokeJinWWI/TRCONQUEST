@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import { useDiplomacyStore } from './diplomacyStore'
 import { usePlayerStore } from './playerStore'
 import { useGameTimeStore } from './gameTimeStore'
-import { canResearch, findTech, queuePlan, queuedResearchNow, type TechCategory } from '../data/techData'
+import { canResearch, findTech, queuePlan, queuedResearchNow, researchTerms, resourceShortfall, type TechCategory } from '../data/techData'
+import { useResourceStore } from './resourceStore'
+import type { ResourceId } from '../data/resourceData'
 
 export interface TechState {
   researchPoints: Record<TechCategory, number>
@@ -11,15 +13,38 @@ export interface TechState {
   queue?: string[]
 }
 
-// A fresh country starts with Warp Theory and Hyperspace Theory already
-// researched — NOT an empty set. Both are genuinely gated now (see
-// shipPhysics.ts's planMove), but every ship class in the game already has a
-// warp or hyperdrive unconditionally, so a brand-new country has to start
-// exactly as capable as one is today. Warp Comms too: at light speed the
+// A fresh country starts with Warp Theory, Hyperspace Theory, Hyperdrive Mk I and
+// the two Extraction techs (it can draw the deposits it owns), and everything they stand on, already researched — NOT an empty set: the Sol neighbourhood's humans fly
+// hyperdrives from the start. It has NO warp drive tech: Warp Drive Mk I consumes
+// more exotic matter than any of them starts with (data/exoticMatter.ts), so they
+// cannot research it without cheats. Its starting comms follow its starting drive:
+// a hyperdrive nation starts with Hyper Comms (entangled hyperspace relays, zero
+// delay), and Warp Comms (days, not years) would only be the default of one that
+// also starts with a warp drive (`startingCommsTech`). Without either, the
 // first scout's report from the nearest star took six years to come home,
 // which left exploring dead for the whole early game. Everything else starts
 // unresearched; there is no other retroactive seeding anywhere else in the tree.
-export const DEFAULT_RESEARCHED = ['warp-theory', 'warp-drives', 'hyperspace-theory', 'warp-comms']
+const STARTING_DRIVE_TECHS = ['hyperdrive-mk1']
+const STARTING_BASE_TECHS = ['warp-theory', 'hyperspace-theory', 'hyperium-extraction', 'exotic-matter-extraction']
+export function startingCommsTech(drives: readonly string[]): string[] {
+  const out: string[] = []
+  if (drives.includes('hyperdrive-mk1')) out.push('hyper-comms')
+  if (drives.includes('warp-drive-mk1')) out.push('warp-comms')
+  return out
+}
+// Every prerequisite of a starting tech starts researched too (a starter never
+// sits on a tree branch the nation does not have).
+function withPrerequisites(ids: string[]): string[] {
+  const out = new Set<string>()
+  const visit = (id: string) => {
+    if (out.has(id)) return
+    out.add(id)
+    for (const set of findTech(id)?.prerequisites ?? []) for (const p of set) visit(p)
+  }
+  ids.forEach(visit)
+  return [...out]
+}
+export const DEFAULT_RESEARCHED = withPrerequisites([...STARTING_BASE_TECHS.slice(0, 2), ...STARTING_DRIVE_TECHS, ...startingCommsTech(STARTING_DRIVE_TECHS), ...STARTING_BASE_TECHS.slice(2)])
 
 function freshTechState(): TechState {
   return {
@@ -51,7 +76,11 @@ interface TechStore {
   // points and adds the node on success. Returns whether it actually
   // unlocked anything, so a caller (the UI button) can tell a rejected click
   // from a successful one without re-deriving canResearch itself.
-  researchNode: (countryId: string, nodeId: string) => boolean
+  // `viaShortcut` takes the node's shortcut terms (TechNode.shortcut) where it has them.
+  researchNode: (countryId: string, nodeId: string, viaShortcut?: boolean) => boolean
+  // Why a tech cannot be researched for want of the resources it consumes (exotic
+  // matter, hyperium), or null. Free Research waives them.
+  researchBlock: (countryId: string, nodeId: string, viaShortcut?: boolean) => string | null
   // Dev console toggle — "decrease all tech costs to 0" (see DebugConsole's
   // Free Research checkbox). Global, not per-country, same "this is a dev
   // cheat, not game state" scope as the console itself. Read by
@@ -86,13 +115,16 @@ export const useTechStore = create<TechStore>((set, get) => ({
       }
     }),
 
-  researchNode: (countryId, nodeId) => {
+  researchNode: (countryId, nodeId, viaShortcut = false) => {
     const node = findTech(nodeId)
     if (!node) return false
     const current = get().byCountry[countryId] ?? freshTechState()
     const freeResearchMode = get().freeResearchMode
-    if (!canResearch(node, current.researched, current.researchPoints[node.category], freeResearchMode)) return false
-    const cost = freeResearchMode ? 0 : node.cost
+    if (!canResearch(node, current.researched, current.researchPoints[node.category], freeResearchMode, viaShortcut)) return false
+    if (get().researchBlock(countryId, nodeId, viaShortcut)) return false
+    const terms = researchTerms(node, viaShortcut)
+    const cost = freeResearchMode ? 0 : terms.cost
+    if (!freeResearchMode) for (const [id, n] of Object.entries(terms.resourceCost) as [ResourceId, number][]) useResourceStore.getState().addAmount(countryId, id, -n)
     set((state) => ({
       byCountry: {
         ...state.byCountry,
@@ -109,6 +141,12 @@ export const useTechStore = create<TechStore>((set, get) => ({
       useDiplomacyStore.getState().pushEvent('tech-researched', [countryId], `Researched ${node.name} (${label})`, useGameTimeStore.getState().simDays, { nav: { category: 'Technology', subcategory: label } })
     }
     return true
+  },
+
+  researchBlock: (countryId, nodeId, viaShortcut = false) => {
+    const node = findTech(nodeId)
+    if (!node || get().freeResearchMode) return null
+    return resourceShortfall({ resourceCost: researchTerms(node, viaShortcut).resourceCost, resourceHold: node.resourceHold }, useResourceStore.getState().stateFor(countryId).amounts)
   },
 
   queueTech: (countryId, nodeId) => {
@@ -135,7 +173,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
   processQueue: (countryId) => {
     const current = get().byCountry[countryId]
     if (!current?.queue || current.queue.length === 0) return
-    const now = queuedResearchNow(current.queue, current.researched, current.researchPoints, get().freeResearchMode)
+    const now = queuedResearchNow(current.queue, current.researched, current.researchPoints, get().freeResearchMode, useResourceStore.getState().stateFor(countryId).amounts)
     for (const id of now) get().researchNode(countryId, id)
     const after = get().byCountry[countryId]!
     const queue = (after.queue ?? []).filter((id) => !after.researched.has(id))

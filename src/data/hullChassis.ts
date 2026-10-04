@@ -7,10 +7,20 @@
 // what an existing preset hull does.
 
 import { hullMotion, type ComponentKind, type CombatProfile, type HullSizeClass, type WeaponMount } from './combatData'
-import { HYPERDRIVE_BASE_COOLDOWN_DAYS, WARP_BASE_COOLDOWN_DAYS, type FtlDrive, type ShipClass } from './shipData'
+import {
+  BATTLESHIP_TECH_ID,
+  CRUISER_TECH_ID,
+  DESTROYER_TECH_ID,
+  FRIGATE_TECH_ID,
+  HYPERDRIVE_BASE_COOLDOWN_DAYS,
+  WARP_BASE_COOLDOWN_DAYS,
+  type FtlDrive,
+  type ShipClass,
+} from './shipData'
 import {
   ARMOR_MODULES,
   DEFENSE_MODULES,
+  DRIVE_MODULES,
   POWER_TIER_BUDGET,
   SHIELD_MODULES,
   SLOT_CATEGORIES,
@@ -32,6 +42,9 @@ export interface HullChassis {
   baseComponents: Record<ComponentKind, number>
   baseMotion: { maneuverUnitsPerSecond: number; accelerationUnitsPerSecondSq: number }
   ftlDrives: FtlDrive[]
+  // The tech a nation needs before it can design (and so build) on this
+  // chassis: the same gate as the preset hull of the same name.
+  requiresTech?: string
   // The concrete slots this chassis offers, per category — e.g.
   // weapon: ['small','small','medium'] is three weapon slots, two small and
   // one medium. Length of each array is the slot COUNT for that category.
@@ -51,7 +64,7 @@ export const HULL_CHASSES: HullChassis[] = [
     role: 'civilian',
     baseComponents: { weapons: 20, utility: 60, core: 80 },
     baseMotion: hullMotion(5, 4),
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     // No weapon or defense (point-defense/flak) slots — matches
     // CIVILIAN_COMBAT_PROFILE's own "unarmed, fragile, exist to be chased,
     // not to fight" design (see combatData.ts). Armor/shield/upgrade stay
@@ -63,6 +76,7 @@ export const HULL_CHASSES: HullChassis[] = [
       shield: ['small'],
       defense: [],
       upgrade: ['small'],
+      drive: ['small'],
     },
   },
   {
@@ -72,33 +86,37 @@ export const HULL_CHASSES: HullChassis[] = [
     role: 'warship',
     baseComponents: { weapons: 40, utility: 60, core: 100 },
     baseMotion: hullMotion(4, 3),
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     slots: {
       weapon: ['small', 'small', 'small'],
       armor: ['small', 'small'],
       shield: ['small', 'small'],
       defense: ['small'],
       upgrade: ['small'],
+      drive: ['small'],
     },
   },
   {
     id: 'frigate-hull',
+    requiresTech: FRIGATE_TECH_ID,
     name: 'Frigate Hull',
     sizeClass: 'medium',
     role: 'warship',
     baseComponents: { weapons: 60, utility: 70, core: 140 },
     baseMotion: hullMotion(6, 4),
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     slots: {
       weapon: ['small', 'small', 'medium', 'medium'],
       armor: ['small', 'medium'],
       shield: ['small', 'medium'],
       defense: ['small', 'medium'],
       upgrade: ['small', 'medium'],
+      drive: ['small'],
     },
   },
   {
     id: 'destroyer-hull',
+    requiresTech: DESTROYER_TECH_ID,
     name: 'Destroyer Hull',
     sizeClass: 'medium',
     role: 'warship',
@@ -111,10 +129,12 @@ export const HULL_CHASSES: HullChassis[] = [
       shield: ['small', 'medium'],
       defense: ['medium', 'medium'],
       upgrade: ['small', 'medium'],
+      drive: ['small'],
     },
   },
   {
     id: 'cruiser-hull',
+    requiresTech: CRUISER_TECH_ID,
     name: 'Cruiser Hull',
     sizeClass: 'large',
     role: 'warship',
@@ -127,10 +147,12 @@ export const HULL_CHASSES: HullChassis[] = [
       shield: ['medium', 'large'],
       defense: ['medium', 'large'],
       upgrade: ['medium', 'large'],
+      drive: ['small'],
     },
   },
   {
     id: 'battleship-hull',
+    requiresTech: BATTLESHIP_TECH_ID,
     name: 'Battleship Hull',
     sizeClass: 'x',
     role: 'warship',
@@ -143,9 +165,15 @@ export const HULL_CHASSES: HullChassis[] = [
       shield: ['large', 'x'],
       defense: ['large', 'x'],
       upgrade: ['large', 'x'],
+      drive: ['small'],
     },
   },
 ]
+
+// The chassis a nation can design on: the ones with no tech gate, plus those whose tech it has.
+export function chassisAvailable(researched: { has: (techId: string) => boolean }): HullChassis[] {
+  return HULL_CHASSES.filter((c) => !c.requiresTech || researched.has(c.requiresTech))
+}
 
 // A saved, player-built loadout on top of a chassis. `equipped[category][i]`
 // lines up positionally with `chassis.slots[category][i]` — a module id, or
@@ -173,6 +201,7 @@ export function emptyLoadout(chassis: HullChassis): Record<SlotCategory, (string
     shield: chassis.slots.shield.map(() => null),
     defense: chassis.slots.defense.map(() => null),
     upgrade: chassis.slots.upgrade.map(() => null),
+    drive: chassis.slots.drive.map(() => null),
   }
 }
 
@@ -281,6 +310,13 @@ export function buildCombatProfile(chassis: HullChassis, design: ShipDesign): Co
   }
 }
 
+// The FTL drives a design carries: what its drive module is, else the chassis default.
+export function drivesOf(design: ShipDesign, chassis: HullChassis): FtlDrive[] {
+  const mod = DRIVE_MODULES.find((m) => m.id === design.equipped.drive?.[0])
+  if (!mod) return chassis.ftlDrives
+  return mod.drives.map((kind): FtlDrive => (kind === 'warp' ? { kind: 'warp', cooldownDays: WARP_BASE_COOLDOWN_DAYS } : { kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }))
+}
+
 // Wraps a design into the same ShipClass shape every preset already is, so
 // every `SHIP_CLASSES.find(...)`-shaped lookup in the game can treat a
 // custom design identically once it's resolved (see
@@ -291,8 +327,9 @@ export function designToShipClass(design: ShipDesign, chassis: HullChassis): Shi
     id: `design:${design.id}`,
     name: design.name,
     reactionDrive: true,
-    ftlDrives: chassis.ftlDrives,
+    ftlDrives: drivesOf(design, chassis),
     combat: buildCombatProfile(chassis, design),
     role: chassis.role,
+    requiresTech: chassis.requiresTech,
   }
 }

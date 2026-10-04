@@ -20,7 +20,7 @@
 //     planMove's 'engaged' result), exactly as before.
 import type { MoveDestination, MoveOrder, ShipInstance } from '../state/shipStore'
 import { resolveShipClass } from '../state/shipClassResolver'
-import { wouldHyperjump, type MoveResult } from './shipPhysics'
+import { jumpPlaceKey, wouldHyperjump, type MoveResult } from './shipPhysics'
 
 export type Planner = (ship: ShipInstance, destination: MoveDestination, simDays: number) => MoveResult
 
@@ -73,8 +73,8 @@ export function planFleetMove(
   const free = ships.filter((s) => !isEngaged(s))
   for (const ship of engaged) plan.individual.push({ ship, result: planner(ship, destination, simDays) })
 
-  const jumpers = free.filter((s) => wouldHyperjump(s, destination))
-  const travellers = free.filter((s) => !wouldHyperjump(s, destination))
+  const jumpers = free.filter((s) => wouldHyperjump(s, destination, simDays))
+  const travellers = free.filter((s) => !wouldHyperjump(s, destination, simDays))
 
   const timed: { ship: ShipInstance; order: MoveOrder; warpReadyOverride?: number }[] = []
   for (const ship of travellers) {
@@ -84,16 +84,18 @@ export function planFleetMove(
   }
   plan.orders = synchroniseOrders(timed)
 
-  if (jumpers.length > 0 && destination.kind === 'star') {
+  if (jumpers.length > 0) {
+    // The system the jump goes into (what a queued jump is listed under).
+    const starId = jumpPlaceKey(destination)
     if (plan.orders.length > 0) {
       // Mixed fleet: jump in as the rest arrives.
       const arrival = plan.orders[0].order.arrivalSimDays
-      for (const ship of jumpers) plan.deferredJumps.push({ shipId: ship.id, starId: destination.starId, atSimDays: arrival })
+      for (const ship of jumpers) plan.deferredJumps.push({ shipId: ship.id, starId, atSimDays: arrival })
     } else {
       const readyAt = Math.max(...jumpers.map((s) => s.hyperdriveReadySimDays))
       if (readyAt > simDays) {
         // Not every drive is ready: the whole fleet waits for the last one.
-        for (const ship of jumpers) plan.deferredJumps.push({ shipId: ship.id, starId: destination.starId, atSimDays: readyAt })
+        for (const ship of jumpers) plan.deferredJumps.push({ shipId: ship.id, starId, atSimDays: readyAt })
       } else {
         for (const ship of jumpers) plan.individual.push({ ship, result: planner(ship, destination, simDays) })
       }

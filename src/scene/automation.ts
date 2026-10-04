@@ -1,3 +1,5 @@
+import { getCountry } from '../data/countryData'
+import { lightYearsBetween } from './colonyLogic'
 // Ship automation, Stellaris-style: a toggle on a ship that lets it find its
 // own work.
 //  - Science 'survey': when idle, survey the nearest system that isn't fully
@@ -12,6 +14,7 @@
 // manual order to it turns automation off (shipStore). Pure planning
 // (pickSurveyTarget, pickStarbaseTarget) is separate from the store I/O
 // (resolveAutomation, run daily by hooks/useAutomationResolver).
+import { autoMove, autoReachable, nextAutoStep } from './autoTravel'
 import { STARS } from '../data/starData'
 import { STARBASE_COST } from '../data/starbaseData'
 import type { ResourceCost } from '../data/shipyardData'
@@ -20,21 +23,27 @@ import { useShipStore, type MoveDestination, type ShipInstance } from '../state/
 import { useSurveyStore } from '../state/surveyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useStarbaseStore, canBuildStarbase } from '../state/starbaseStore'
-import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { relationOfOwner } from '../state/shipRelations'
 import { cargoCovers, cargoSpace, clampToSpace, loadingBody, transferCheck } from './cargoLogic'
 import { applyShipCommand } from './shipCommands'
-import { planMoveUnchecked, restingDestinationOf } from './shipPhysics'
 import { nearestStation, refillWant } from './refill'
 import { restingStarId, systemOfShip, unsurveyedBodies, type NationIntel } from './surveyLogic'
 import { bodyStarId, systemBodies, type OwnerMap } from './territory'
 import { canColonize } from './colonies'
 import { orbitedBody } from './armyLogic'
+import { DRIVE_LABELS } from './driveChoice'
+import { driveOfShip, isShipInGalacticSpace, restingClusterId, restingDestinationOf } from './shipPhysics'
+import { DEFAULT_EXPLORE_SCOPE, EXPLORE_RECHECK_DAYS, claimedTargets, exploreStatusText, pickExploreTarget, type ExploreStatus } from './autoExplore'
+import { NEIGHBORHOODS } from '../data/neighborhoodData'
+import { useClusterVisitStore } from '../state/clusterVisitStore'
+import { isExplored } from './surveyLogic'
 
-export type Automation = 'survey' | 'build' | 'refill' | 'receive' | 'distribute' | 'settle'
+export type Automation = 'survey' | 'build' | 'refill' | 'receive' | 'distribute' | 'settle' | 'explore'
 
 // Which automations a ship's role offers.
-export function automationsFor(role: string | undefined): Automation[] {
+export function automationsFor(role: string | undefined, classId?: string): Automation[] {
+  // Only a class that opts in (the Turing Scout) explores on its own; scouts never survey.
+  if (classId && resolveShipClass(classId)?.autoExplore) return ['explore']
   if (role === 'science') return ['survey']
   if (role === 'construction') return ['build', 'refill', 'receive']
   if (role === 'cargo') return ['refill', 'distribute']
@@ -53,6 +62,7 @@ export const AUTOMATION_LABELS: Record<Automation, string> = {
   receive: 'Receiving',
   distribute: 'Distributing',
   settle: 'Auto-settle',
+  explore: 'Auto-explore',
 }
 
 function starPos(starId: string): [number, number, number] {
@@ -67,15 +77,16 @@ function lyBetween(a: string, b: string): number {
 
 // Nearest charted system (from `fromStarId`) with something left to survey,
 // skipping `claimed` (systems allied ships are already surveying).
-export function pickSurveyTarget(fromStarId: string, nationId: string, intel: NationIntel | undefined, owners: OwnerMap, claimed: ReadonlySet<string>): string | null {
-  const candidates = STARS.filter((s) => s.hasSystemData && systemBodies(s.id).length > 0 && !claimed.has(s.id) && unsurveyedBodies(intel, nationId, s.id, owners).length > 0)
+// `reachable` leaves out a system the ship's automation may not travel to.
+export function pickSurveyTarget(fromStarId: string, nationId: string, intel: NationIntel | undefined, owners: OwnerMap, claimed: ReadonlySet<string>, reachable: (starId: string) => boolean = () => true): string | null {
+  const candidates = STARS.filter((s) => s.hasSystemData && systemBodies(s.id).length > 0 && !claimed.has(s.id) && unsurveyedBodies(intel, nationId, s.id, owners).length > 0 && reachable(s.id))
   candidates.sort((a, b) => lyBetween(fromStarId, a.id) - lyBetween(fromStarId, b.id) || a.id.localeCompare(b.id))
   return candidates[0]?.id ?? null
 }
 
 // Nearest star where `canBuild` says a Starbase may go, skipping `claimed`.
-export function pickStarbaseTarget(fromStarId: string, canBuild: (starId: string) => boolean, claimed: ReadonlySet<string>): string | null {
-  const candidates = STARS.filter((s) => s.hasSystemData && !claimed.has(s.id) && canBuild(s.id))
+export function pickStarbaseTarget(fromStarId: string, canBuild: (starId: string) => boolean, claimed: ReadonlySet<string>, reachable: (starId: string) => boolean = () => true): string | null {
+  const candidates = STARS.filter((s) => s.hasSystemData && !claimed.has(s.id) && canBuild(s.id) && reachable(s.id))
   candidates.sort((a, b) => lyBetween(fromStarId, a.id) - lyBetween(fromStarId, b.id) || a.id.localeCompare(b.id))
   return candidates[0]?.id ?? null
 }
@@ -113,25 +124,34 @@ function hereStar(ship: ShipInstance): string | null {
 
 // Busy: flying, working, or waiting on an order in flight.
 function busy(ship: ShipInstance): boolean {
-  return !!ship.order || !!ship.surveyJob || !!ship.arrivalCommand || !!ship.pendingMoveOrder || (ship.pendingCommands?.length ?? 0) > 0 || !!ship.founding
+  return !!ship.order || !!ship.surveyJob || !!ship.autoRoute || !!ship.arrivalCommand || !!ship.pendingMoveOrder || (ship.pendingCommands?.length ?? 0) > 0 || !!ship.founding
 }
 
-// The ship's own move (not an order from the capital): no comms delay, and it
-// keeps what it is doing (keepFollowing).
+// The ship's own move (not an order from the capital): no comms delay, it keeps
+// what it is doing, and it goes by the safest route of jumps it is allowed
+// (scene/autoTravel.ts), the first jump now and the rest from resolveAutomation.
 function moveNow(ship: ShipInstance, destination: MoveDestination, simDays: number): boolean {
-  const { setShipOrder, setShipLocation, removeShip } = useShipStore.getState()
-  const result = planMoveUnchecked(ship, destination, simDays)
-  if (result.kind === 'order') {
-    setShipOrder(ship.id, result.order, result.warpReadyOverride, true)
-    return true
+  return autoMove(ship, destination, simDays) === 'moved'
+}
+
+// A trip of several jumps under way: the next jump once the drive is ready. A
+// trip that can no longer go on is dropped, with whatever it was going to do
+// there, and the ship looks for work again from where it stopped.
+function continueRoute(ship: ShipInstance, simDays: number): void {
+  if (ship.order || ship.pendingHyperdriveJump || !ship.autoRoute) return
+  const outcome = autoMove(ship, ship.autoRoute, simDays)
+  if (outcome === 'refused' || outcome === 'failed') {
+    useShipStore.getState().setAutoRoute(ship.id, null)
+    useShipStore.getState().setArrivalCommand(ship.id, null)
   }
-  if (result.kind === 'instant') {
-    setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
-    if (result.hyperlaneEstablished) useHyperlaneStore.getState().addHyperlane(...result.hyperlaneEstablished)
-    return true
-  }
-  if (result.kind === 'lost-in-hyperspace') removeShip(ship.id)
-  return false
+}
+
+// Says on the ship why its automation is not going to the nearest place it
+// would (no route it may take), when `picked` had to pass it over.
+function noteUnreachable(ship: ShipInstance, nearest: string | null, picked: string | null, simDays: number): void {
+  if (!nearest || nearest === picked) return
+  const step = nextAutoStep(ship, { kind: 'star', starId: nearest }, simDays)
+  if ('refused' in step) useShipStore.getState().setAutomationNote(ship.id, step.refused)
 }
 
 // Tops up the hold toward `want`: from a Cargo Ship resting with it, at an
@@ -208,7 +228,7 @@ function distribute(ship: ShipInstance, ships: ShipInstance[], owners: OwnerMap,
   return true
 }
 
-// Auto-settle: found a colony on the cheapest world it may (a surveyed, unowned
+// Auto-settle: found a colony on the nearest world it may (a surveyed, unowned
 // world with land, in a system of its nation's Starbase) that no other Colony
 // Ship is already headed for.
 function settle(ship: ShipInstance, ships: ShipInstance[], simDays: number): boolean {
@@ -219,11 +239,14 @@ function settle(ship: ShipInstance, ships: ShipInstance[], simDays: number): boo
     if (o.founding) claimed.add(o.founding.bodyName)
     if (o.arrivalCommand?.command.kind === 'colonize') claimed.add(o.arrivalCommand.command.bodyName)
   }
-  let best: { body: string; cost: number } | null = null
+  const capitalStar = getCountry(ship.ownerId)?.capitalStarId ?? 'sol'
+  // The nearest world to its capital (colonizing costs no Influence).
+  let best: { body: string; ly: number } | null = null
   for (const body of useSurveyStore.getState().discovered[ship.ownerId]?.surveyed ?? []) {
     if (claimed.has(body)) continue
     const check = canColonize(ship, body, { anywhere: true })
-    if (check.ok && (!best || check.cost < best.cost || (check.cost === best.cost && body < best.body))) best = { body, cost: check.cost }
+    const ly = lightYearsBetween(capitalStar, bodyStarId(body) ?? capitalStar)
+    if (check.ok && (!best || ly < best.ly || (ly === best.ly && body < best.body))) best = { body, ly }
   }
   const systemId = best ? bodyStarId(best.body) : undefined
   if (!best || !systemId) return false
@@ -239,24 +262,96 @@ function settle(ship: ShipInstance, ships: ShipInstance[], simDays: number): boo
   return true
 }
 
+// Auto-explore (Turing Scouts, scene/autoExplore.ts): when idle and the hyperdrive is ready, jump
+// to the nearest place not yet explored within the ship's scope. Never surveys. Travels only
+// through autoMove, so cooldown, a paused game and a queued jump act as for a manual order. The
+// target search runs once per jump (the cheap checks come first), never per frame. Says what it
+// is doing on the ship (automationNote); always "found something to do" so no other mode runs.
+function explore(ship: ShipInstance, ships: ShipInstance[], owners: OwnerMap, simDays: number): boolean {
+  const say = (status: ExploreStatus) => useShipStore.getState().setAutomationNote(ship.id, exploreStatusText(status))
+  const drive = driveOfShip(ship)
+  if (drive !== 'hyperdrive') {
+    say({ kind: 'drive', chosen: DRIVE_LABELS[ship.driveChoice ?? 'auto'] })
+    return true
+  }
+  if (simDays < ship.hyperdriveReadySimDays) {
+    say({ kind: 'cooldown', days: ship.hyperdriveReadySimDays - simDays })
+    return true
+  }
+  if ((ship.exploreRecheckSimDays ?? 0) > simDays) {
+    say({ kind: 'nothing', scope: ship.exploreScope ?? DEFAULT_EXPLORE_SCOPE })
+    return true
+  }
+  const galactic = isShipInGalacticSpace(ship)
+  const hereClusterId = galactic ? restingClusterId(ship) : null
+  const hereStarId = galactic ? null : hereStar(ship)
+  if (galactic ? hereClusterId === null : hereStarId === null) {
+    say(galactic ? { kind: 'between' } : { kind: 'refused', reason: 'the ship is in open space; order it to a star first' })
+    return true
+  }
+  const scope = ship.exploreScope ?? DEFAULT_EXPLORE_SCOPE
+  const intel = useSurveyStore.getState().discovered[ship.ownerId]
+  const clusterIds = new Set(NEIGHBORHOODS.map((n) => n.id))
+  const others = ships.filter((o) => o.id !== ship.id && alliedTo(ship, o) && has(o, 'explore'))
+  const claimed = claimedTargets(
+    others.map((o) => ({
+      restingStarId: hereStar(o),
+      restingClusterId: restingClusterId(o),
+      pendingStarId: o.pendingHyperdriveJump && !clusterIds.has(o.pendingHyperdriveJump) ? o.pendingHyperdriveJump : null,
+      pendingClusterId: o.pendingHyperdriveJump && clusterIds.has(o.pendingHyperdriveJump) ? o.pendingHyperdriveJump : null,
+    })),
+  )
+  const target = pickExploreTarget({
+    scope,
+    hereStarId,
+    hereClusterId,
+    stars: STARS.filter((s) => s.hasSystemData),
+    clusters: NEIGHBORHOODS,
+    isStarExplored: (starId) => isExplored(intel, ship.ownerId, starId, owners),
+    isClusterVisited: (clusterId) => useClusterVisitStore.getState().isVisited(ship.ownerId, clusterId),
+    claimed,
+  })
+  if (!target) {
+    useShipStore.getState().setExploreRecheck(ship.id, simDays + EXPLORE_RECHECK_DAYS)
+    say({ kind: 'nothing', scope })
+    return true
+  }
+  const destination: MoveDestination = target.kind === 'star' ? { kind: 'star', starId: target.id } : { kind: 'cluster', clusterId: target.id }
+  const outcome = autoMove(ship, destination, simDays, false)
+  const name = target.kind === 'star' ? STARS.find((s) => s.id === target.id)?.name ?? target.id : NEIGHBORHOODS.find((n) => n.id === target.id)?.name ?? target.id
+  if (outcome === 'moved') say({ kind: 'jumped', name })
+  else if (outcome === 'waiting') say({ kind: 'cooldown', days: Math.max(0, ship.hyperdriveReadySimDays - simDays) })
+  else if (outcome === 'refused') return true
+  else say({ kind: 'refused', reason: `could not go to ${name}; it will try again` })
+  return true
+}
+
 // One pass over every automated ship.
 export function resolveAutomation(simDays: number): void {
   const owners = useTerritoryStore.getState().bodyOwner
   for (const snapshot of useShipStore.getState().ships) {
     if (!(snapshot.automations?.length)) continue
     const ship = useShipStore.getState().ships.find((s) => s.id === snapshot.id)
-    if (!ship || busy(ship)) continue
+    if (!ship) continue
+    if (ship.autoRoute) {
+      continueRoute(ship, simDays)
+      continue
+    }
+    if (busy(ship)) continue
+    // Whatever was stopping it is looked at afresh.
+    useShipStore.getState().setAutomationNote(ship.id, null)
     const ships = useShipStore.getState().ships
     const from = hereStar(ship)
-    if (!from) continue
-    // Modes in priority order; the first one with something to do acts.
+    // Modes in priority order; the first one with something to do acts. A scout exploring may be
+    // beside a cluster, where it is at no star.
     for (const mode of MODE_PRIORITY) {
-      if (has(ship, mode) && runMode(mode, ship, ships, owners, from, simDays)) break
+      if (!has(ship, mode)) continue
+      if (mode === 'explore' ? explore(ship, ships, owners, simDays) : from && runMode(mode, ship, ships, owners, from, simDays)) break
     }
   }
 }
 
-const MODE_PRIORITY: Automation[] = ['survey', 'settle', 'distribute', 'build', 'refill']
+const MODE_PRIORITY: Automation[] = ['survey', 'explore', 'settle', 'distribute', 'build', 'refill']
 
 // Whether this mode found something to do (and did it).
 function runMode(mode: Automation, ship: ShipInstance, ships: ShipInstance[], owners: OwnerMap, from: string, simDays: number): boolean {
@@ -266,7 +361,10 @@ function runMode(mode: Automation, ship: ShipInstance, ships: ShipInstance[], ow
   const stay = has(ship, 'receive') && ships.some((o) => o.ownerId === ship.ownerId && has(o, 'distribute'))
   if (mode === 'survey') {
     const intel = useSurveyStore.getState().discovered[ship.ownerId]
-    const target = pickSurveyTarget(from, ship.ownerId, intel, owners, claimedSurveySystems(ship, ships))
+    const claimed = claimedSurveySystems(ship, ships)
+    const reachable = (starId: string) => starId === from || autoReachable(ship, { kind: 'star', starId }, simDays)
+    const target = pickSurveyTarget(from, ship.ownerId, intel, owners, claimed, reachable)
+    noteUnreachable(ship, pickSurveyTarget(from, ship.ownerId, intel, owners, claimed), target, simDays)
     if (!target) return false
     applyShipCommand(ship.id, { kind: 'survey', starId: target }, simDays)
     return true
@@ -293,7 +391,11 @@ function runMode(mode: Automation, ship: ShipInstance, ships: ShipInstance[], ow
       return true
     }
     const starbases = useStarbaseStore.getState().starbases
-    const target = pickStarbaseTarget(from, (starId) => canBuildStarbase(ship.ownerId, starId, starbases, ship.id, { anywhere: true }).ok, claimedStarbaseStars(ship, ships))
+    const canBuild = (starId: string) => canBuildStarbase(ship.ownerId, starId, starbases, ship.id, { anywhere: true }).ok
+    const claimed = claimedStarbaseStars(ship, ships)
+    const reachable = (starId: string) => starId === from || autoReachable(ship, { kind: 'star', starId }, simDays)
+    const target = pickStarbaseTarget(from, canBuild, claimed, reachable)
+    noteUnreachable(ship, pickStarbaseTarget(from, canBuild, claimed), target, simDays)
     if (!target) return false
     if (restingStarId(ship) === target) {
       applyShipCommand(ship.id, { kind: 'build-starbase' }, simDays)

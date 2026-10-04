@@ -1,7 +1,6 @@
 import { COLONY_FOUNDING_DAYS, COLONY_PATROL_DAYS } from '../data/colonyData'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useColonyStore } from '../state/colonyStore'
-import { useResourceStore } from '../state/resourceStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
@@ -19,7 +18,6 @@ import { queueShipCommand } from './shipCommands'
 // early return.
 export function ShipColonySection({ ship }: { ship: ShipInstance }) {
   // Re-render when what the checks read changes.
-  useResourceStore((s) => s.stateFor(ship.ownerId).amounts.influence)
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const simDays = useThrottledSimDays()
   const [choosing, setChoosing] = useState(false)
@@ -41,7 +39,7 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
             </button>
           </span>
         </div>
-        <div className="inspect-status">Leaving orbit, or enemy warships arriving, abandons it. Influence is paid when the colony is founded.</div>
+        <div className="inspect-status">Leaving orbit, or enemy warships arriving, abandons it.</div>
       </>
     )
   }
@@ -91,7 +89,7 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
           type="button"
           className={`detail-view-btn${auto ? ' active' : ''}`}
           onClick={() => useShipStore.getState().toggleAutomation(ship.id, 'settle')}
-          title="Let the ship pick the cheapest world it may settle, by itself"
+          title="Let the ship pick the nearest world it may settle, by itself"
         >
           {auto ? 'Auto-settle: on' : 'Let ship choose'}
         </button>
@@ -100,8 +98,8 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
         <div className="colony-chooser">
           {(() => {
             const list = colonizeCandidates(ship)
-            if (list.length === 0) return <div className="ship-panel-hint">No world to settle yet: survey a world, hold a Starbase in its system, and have the influence and settlers.</div>
-            return list.map(({ bodyName, cost }) => (
+            if (list.length === 0) return <div className="ship-panel-hint">No world to settle yet: survey a world, hold a Starbase in its system, and have settlers aboard.</div>
+            return list.map(({ bodyName }) => (
               <button
                 key={bodyName}
                 type="button"
@@ -114,7 +112,7 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
                   setChoosing(false)
                 }}
               >
-                {bodyName} · {cost} influence
+                {bodyName}
               </button>
             ))
           })()}
@@ -128,11 +126,10 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
               type="button"
               className="detail-view-btn"
               disabled={!check.ok}
-              title={check.ok ? `Spend ${COLONY_FOUNDING_DAYS} days founding a micro-colony on ${body}, for ${check.cost} influence. The ship is used up.` : check.reason}
+              title={check.ok ? `Spend ${COLONY_FOUNDING_DAYS} days founding a micro-colony on ${body}. The ship is used up.` : check.reason}
               onClick={() => queueShipCommand(ship.id, { kind: 'colonize', bodyName: body })}
             >
               Colonize {body}
-              {check.ok ? ` (${check.cost} influence)` : ''}
             </button>
           ))}
           {options.map(({ body, check }) => !check.ok && <div key={`${body}-why`} className="inspect-status">Can't colonize {body}: {check.reason}</div>)}

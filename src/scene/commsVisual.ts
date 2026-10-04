@@ -37,7 +37,11 @@ import { planFleetMove } from './fleetMove'
 import { useCombatStore, combatLocationKey } from '../state/combatStore'
 import { findEngagementFor } from './combatResolution'
 import { isPlayerOwned } from '../state/shipRelations'
-import { getShipRenderPosition } from './shipPhysics'
+import { useDiplomacyStore } from '../state/diplomacyStore'
+import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
+import { KM_PER_GALACTIC_UNIT, clusterScenePosition, destinationLabel, getShipRenderPosition, jumpPlaceKey } from './shipPhysics'
+import { loseShipToJump } from './jumpLoss'
+import { confirmRiskyJump } from './jumpConfirm'
 
 // Real distance, in km, from the capital to wherever `location` actually is
 // right now. Same "compress the intra-system offset against the interstellar
@@ -46,6 +50,14 @@ import { getShipRenderPosition } from './shipPhysics'
 // interstellar-scale (light-years dwarf AU-scale detail) — only computed
 // in-system when ship and capital genuinely share a star, where it's the
 // whole distance rather than a rounding error.
+// How far a position out between clusters is from the capital, in km: every nation's
+// capital is in the Solar Neighbourhood, whose own point stands for all of it at this
+// scale. A signal over kly takes years even at Warp Comms (data/commsData.ts); that
+// rule is deliberately the same as at every other scale.
+function galacticDistanceFromHomeKm(position: Vector3): number {
+  return clusterScenePosition(SOLAR_NEIGHBORHOOD_ID).distanceTo(position) * KM_PER_GALACTIC_UNIT
+}
+
 function distanceFromCapitalKm(
   location: ShipLocation,
   capitalStarId: string,
@@ -59,6 +71,9 @@ function distanceFromCapitalKm(
     const shipPosLy = new Vector3(...location.position).divideScalar(UNITS_PER_LY)
     return capitalStarPosLy.distanceTo(shipPosLy) * LY_IN_KM
   }
+  // Out between clusters: kly from the capital's cluster (the Solar Neighbourhood).
+  if (location.kind === 'cluster') return galacticDistanceFromHomeKm(clusterScenePosition(location.clusterId).add(new Vector3(...location.offset)))
+  if (location.kind === 'galactic-point') return galacticDistanceFromHomeKm(new Vector3(...location.position))
 
   const shipStarId = location.kind === 'star' ? location.starId : location.systemId
   const shipStar = STARS.find((s) => s.id === shipStarId)
@@ -111,6 +126,7 @@ function distanceFromRenderInfoKm(
     const shipPosLy = render.position.clone().divideScalar(UNITS_PER_LY)
     return capitalStarPosLy.distanceTo(shipPosLy) * LY_IN_KM
   }
+  if (render.space === 'galactic') return galacticDistanceFromHomeKm(render.position)
 
   const shipStarId = render.systemId ?? capitalStarId
   const shipStar = STARS.find((s) => s.id === shipStarId)
@@ -358,19 +374,27 @@ export function applyMoveDestination(
 
 // Applies one planner result to one ship — the handling every order shares.
 export function applyMoveResult(ship: ShipInstance, destination: MoveDestination, result: MoveResult): void {
-  const { setShipOrder, setShipLocation, setFtlCharge, setPendingHyperdriveJump, removeShip } = useShipStore.getState()
+  const { setShipOrder, setShipLocation, setFtlCharge, setPendingHyperdriveJump } = useShipStore.getState()
   const { addHyperlane } = useHyperlaneStore.getState()
   if (result.kind === 'order') {
     setShipOrder(ship.id, result.order, result.warpReadyOverride)
   } else if (result.kind === 'instant') {
     setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays })
-    if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
+    if (result.hyperlaneEstablished) addHyperlane(ship.ownerId, ...result.hyperlaneEstablished)
   } else if (result.kind === 'on-cooldown' || result.kind === 'paused') {
-    if (destination.kind === 'star') setPendingHyperdriveJump(ship.id, destination.starId)
+    // Only a jump comes back this way: queue it for when the drive (or the clock) is ready.
+    setPendingHyperdriveJump(ship.id, jumpPlaceKey(destination), undefined, destination)
   } else if (result.kind === 'lost-in-hyperspace') {
-    removeShip(ship.id)
+    loseShipToJump(ship, destination)
   } else if (result.kind === 'engaged' && result.charge) {
     setFtlCharge(ship.id, result.charge)
+  } else if (result.kind === 'unreachable' && isPlayerOwned(ship)) {
+    // Told to the player once per order (a fleet reports one), with the reason.
+    const text = `${ship.name} cannot go to ${destinationLabel(destination)}. ${result.reason}`
+    const diplomacy = useDiplomacyStore.getState()
+    const simDays = useGameTimeStore.getState().simDays
+    if (!diplomacy.events.some((e) => e.kind === 'order-refused' && e.simDays === simDays && e.text.endsWith(result.reason)))
+      diplomacy.pushEvent('order-refused', [ship.ownerId], text, simDays)
   }
   // 'unknown-class'/'not-owned': silently ignored — genuinely nothing to do,
   // same as every existing planMove caller already leaves them.
@@ -390,7 +414,7 @@ export function applyFleetMove(
   for (const { shipId, order, warpReadyOverride } of plan.orders) store.setShipOrder(shipId, order, warpReadyOverride)
   for (const { ship, result } of plan.individual) applyMoveResult(ship, destination, result)
   for (const { shipId, starId, atSimDays } of plan.deferredJumps) {
-    useShipStore.getState().setPendingHyperdriveJump(shipId, starId, atSimDays)
+    useShipStore.getState().setPendingHyperdriveJump(shipId, starId, atSimDays, destination)
   }
 }
 
@@ -402,17 +426,19 @@ export function fleetMembersOf(ship: ShipInstance, ships: ShipInstance[] = useSh
 // The player's map orders: every fleet that has a selected ship in it moves,
 // each at its own slowest ship's pace. Only the player's own fleets; others
 // are ignored (selecting an enemy is just looking at it).
-export function orderSelectedFleets(destination: MoveDestination, queue: boolean = isQueueModifierHeld()): void {
+export function orderSelectedFleets(destination: MoveDestination, queue: boolean = isQueueModifierHeld(), onCancel?: () => void): void {
   const { ships, selectedShipIds } = useShipStore.getState()
   const fleetIds = new Set(ships.filter((s) => selectedShipIds.includes(s.id) && isPlayerOwned(s)).map((s) => s.fleetId))
-  for (const fleetId of fleetIds) {
-    const members = ships.filter((s) => s.fleetId === fleetId)
-    if (members.length === 0) continue
-    // Shift queues behind whatever the fleet is already doing; an idle fleet
-    // has nothing to queue behind, so the order simply starts.
-    if (queue && fleetIsBusy(members)) queueFleetMoveAppend(members, destination)
-    else queueFleetMoveOrder(members, destination)
-  }
+  const fleets = [...fleetIds].map((fleetId) => ships.filter((s) => s.fleetId === fleetId)).filter((members) => members.length > 0)
+  // One question for every selected fleet if any of it would risk more than 5%.
+  confirmRiskyJump(fleets.flat(), destination, () => {
+    for (const members of fleets) {
+      // Shift queues behind whatever the fleet is already doing; an idle fleet
+      // has nothing to queue behind, so the order simply starts.
+      if (queue && fleetIsBusy(members)) queueFleetMoveAppend(members, destination)
+      else queueFleetMoveOrder(members, destination)
+    }
+  }, onCancel)
 }
 
 // The single entry point scenes call instead of setShipOrder/
@@ -477,6 +503,30 @@ export function queueBombard(ship: ShipInstance, stance: BombardStance): void {
     return
   }
   useShipStore.getState().setPendingBombard(ship.id, { stance, arrivesSimDays: simDays + delay, sentSimDays: simDays })
+}
+
+// Free Flight on or off (scene/freeFlight.ts), the same signal-delayed way: at
+// once for a ship in direct contact (the combat arena), else when the signal
+// arrives. Off, a ship in a fight drops what it was flying to and holds, which
+// for a ship without free flight is a circular orbit of the body it is at.
+export function applyFreeFlight(shipId: string, on: boolean): void {
+  useShipStore.getState().setFreeFlight(shipId, on)
+  if (on) return
+  const combat = useCombatStore.getState()
+  for (const e of combat.engagements) {
+    const p = e.participants.find((x) => x.shipId === shipId)
+    if (p) combat.setParticipant(e.id, { ...p, holdPosition: true, chasing: false, ramming: false, path: [], stops: [] })
+  }
+}
+
+export function queueFreeFlight(ship: ShipInstance, on: boolean): void {
+  const simDays = useGameTimeStore.getState().simDays
+  const delay = ownerCommsDelayToShip(ship, simDays)
+  if (commsInstantContact(delay)) {
+    applyFreeFlight(ship.id, on)
+    return
+  }
+  useShipStore.getState().setPendingFreeFlight(ship.id, { on, arrivesSimDays: simDays + delay, sentSimDays: simDays })
 }
 
 // Patrol duty on or off, the same signal-delayed way.

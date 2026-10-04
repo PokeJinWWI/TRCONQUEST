@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAbstractEconomyStore, stockOf } from '../../state/abstractEconomyStore'
+import { useAbstractEconomyStore, stockOf, buildingTechBlock } from '../../state/abstractEconomyStore'
 import { useTerritoryStore } from '../../state/territoryStore'
 import {
   abstractReport,
@@ -447,13 +447,17 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                     </button>
                   ))}
                 </div>
-                {def.buildings.map((b) => (
-                  <button key={b} type="button" className="pl-pick" title={SIMPLE_BUILDING_DEFS[b].description} onClick={() => build(b)}>
-                    <PlanetIcon id={b} size={18} />
-                    <span>{SIMPLE_BUILDING_DEFS[b].name}</span>
-                    <span className="abs-dim">{pickerSummary(b)} · {SIMPLE_BUILDING_DEFS[b].cost} CP · {SIMPLE_BUILDING_DEFS[b].jobs}M jobs</span>
-                  </button>
-                ))}
+                {def.buildings.map((b) => {
+                  // A building behind a tech greys out and says which.
+                  const gate = countryId ? buildingTechBlock(countryId, b) : null
+                  return (
+                    <button key={b} type="button" className="pl-pick" disabled={!!gate} title={gate ? `Can't build: ${gate}\n${SIMPLE_BUILDING_DEFS[b].description}` : SIMPLE_BUILDING_DEFS[b].description} onClick={() => build(b)}>
+                      <PlanetIcon id={b} size={18} />
+                      <span>{SIMPLE_BUILDING_DEFS[b].name}</span>
+                      <span className="abs-dim">{gate ? gate : `${pickerSummary(b)} · ${SIMPLE_BUILDING_DEFS[b].cost} CP · ${SIMPLE_BUILDING_DEFS[b].jobs}M jobs`}</span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>

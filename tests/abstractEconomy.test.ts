@@ -54,7 +54,7 @@ function mk(over: Partial<AbstractEconomyState> = {}): AbstractEconomyState {
     ...over,
   }
 }
-const HOME = { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, exoticRefinery: 1, entertainmentCenter: 1 }
+const HOME = { civilianFactory: 8, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, farm: 6, mine: 6, powerPlant: 6, physicsLab: 2, entertainmentCenter: 1 }
 const noneOf = (b: keyof typeof HOME) => ({ ...HOME, [b]: 0 })
 function world(over: Partial<WorldState> = {}): WorldState {
   return { bodyName: 'Home', population: 3000, slots: 80, buildings: { ...HOME }, ...over }
@@ -235,8 +235,10 @@ console.log('\n=== 10. Trade and the exchange rate ===')
   check('a strong currency makes imports cheaper', strong.importCost < r.importCost)
   const broke = abstractReport(mk({ trade: { food: 1000 }, treasury: 10 }), [world()], stock())
   check('imports are limited by the treasury', broke.importCost <= 10 + 1e-9 && broke.traded.food < 1000)
-  const thin = abstractReport(mk({ trade: { exoticMatter: -1000 } }), [world()], stock())
-  check('exports are limited by what is on hand', -thin.traded.exoticMatter <= 30 + thin.produced.exoticMatter + 1e-6 && -thin.traded.exoticMatter > 30)
+  // Hyperium (no refinery in this fixture: it needs Hyperium Synthesis): on hand = the stock.
+  const thin = abstractReport(mk({ trade: { hyperium: -1000 } }), [world()], stock())
+  check('exports are limited by what is on hand', -thin.traded.hyperium <= 6 + thin.produced.hyperium + 1e-6 && -thin.traded.hyperium > 0)
+  check('nothing makes exotic matter: an export of it is only the stock', thin.produced.exoticMatter === 0 && Math.abs(-abstractReport(mk({ trade: { exoticMatter: -1000 } }), [world()], stock()).traded.exoticMatter - 30) < 1e-6)
   const res = tickAbstractEconomy(s, [world()], stock())
   check('trade settles into the treasury', Math.abs(res.state.treasury - (s.treasury + r.balance / 12 + r.tradeBalance)) < 1e-6 || res.state.debt < s.debt)
   const inflated = mk({ inflation: 0.15 })

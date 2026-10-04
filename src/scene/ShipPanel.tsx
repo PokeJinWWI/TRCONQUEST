@@ -4,11 +4,17 @@ import { destinationLabel } from './shipPhysics'
 import { replanForWarpWhenReady } from './warpReplan'
 import { ShipSurveySection } from './ShipSurveySection'
 import { ShipAutomationToggle } from './ShipAutomationToggle'
+import { ShipFreeFlightToggle } from './ShipFreeFlightToggle'
+import { ShipDriveSelector } from './ShipDriveSelector'
+import { usePlayerTech } from '../hooks/usePlayerTech'
+import { strategyBlock } from './freeFlight'
 import { ShipCargoSection } from './ShipCargoSection'
 import { anyCivilian, mergeCheck } from './fleetRules'
 import { startFleetMerge } from './fleetMerge'
 import { viewShip } from './shipNav'
 import { useShipStore } from '../state/shipStore'
+import { warpMkOf, warpSpeedCOfMk } from '../data/warpData'
+import { useTechStore } from '../state/techStore'
 import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, JUMP_RISK_MAX_FACTOR, JUMP_RISK_MIN_FACTOR, type HyperDrive } from '../data/shipData'
 import { ownerDisplay } from '../data/countryRoster'
 import { isPlayerOwned, shipsHostile, useRelationFn, useRelationTo } from '../state/shipRelations'
@@ -38,6 +44,8 @@ import { simDaysToSeconds } from '../state/gameTimeStore'
 import { DraggableWindow } from '../components/DraggableWindow'
 import { TransportCargo } from '../components/ArmyViews'
 import { ShipColonySection, ShipPatrolToggle } from './ShipColonySection'
+import { ShipUpgradeSection } from './ShipUpgradeSection'
+import { ShipDeconstructSection } from './ShipDeconstructSection'
 
 function formatCooldown(label: string, remainingDays: number): string {
   return remainingDays > 0 ? `${label} ${remainingDays.toFixed(1)}d` : `${label} Ready`
@@ -141,6 +149,7 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
   const selectShip = useShipStore((s) => s.selectShip)
   const fleets = useFleetStore((s) => s.fleets)
   const relationOf = useRelationFn()
+  const researched = usePlayerTech().researched
   const selected = useMemo(() => {
     const ids = new Set(idsKey.split('|'))
     return ships.filter((s) => ids.has(s.id))
@@ -206,16 +215,21 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
       {mine.length > 0 && (
         <>
           <div className="inspect-divider" />
+          <ShipDriveSelector ships={mine} />
           <div className="inspect-row">
             <span className="inspect-label">Stance (all yours)</span>
           </div>
           <div className="dip-actions">
-            {COMBAT_STANCES.map((stance) => (
-              <button key={stance} type="button" className="detail-view-btn" onClick={() => mine.forEach((s) => queueStance(s, stance))}>
-                {STANCE_LABELS[stance]}
-              </button>
-            ))}
+            {COMBAT_STANCES.map((stance) => {
+              const block = mine.map((s) => strategyBlock(stance, researched, s)).find((r) => r) ?? null
+              return (
+                <button key={stance} type="button" className="detail-view-btn" disabled={!!block} onClick={() => mine.forEach((s) => queueStance(s, stance))} title={block ?? undefined}>
+                  {STANCE_LABELS[stance]}
+                </button>
+              )
+            })}
           </div>
+          {mine.some((s) => strategyBlock('kite', researched, s)) && <div className="ship-panel-hint">Swarm, Kite and Stall need Free Flight (Free-Flight Maneuvering researched, and on for the ship): without it a ship cannot hold chosen positions, and a ship that has them selected fights as Balanced.</div>}
           {byFleet.length > 1 && (
             <>
               <div className="dip-actions">
@@ -235,11 +249,15 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
 
 // A fleet travels at its slowest member's pace: its slowest FTL (a hull with
 // no warp holds warp ships to reaction speed in-system), shown as a label.
-function fleetPaceLabel(members: { classId: string }[]): string {
-  const warps = members.map((m) => resolveShipClass(m.classId)?.ftlDrives.find((d) => d.kind === 'warp'))
+function fleetPaceLabel(members: { classId: string; ownerId: string }[]): string {
+  // A warp drive works only at its owner's Warp Drive Mk (data/warpData.ts): none, no warp.
+  const warpSpeeds = members.map((m) => {
+    const hasDrive = resolveShipClass(m.classId)?.ftlDrives.some((d) => d.kind === 'warp') ?? false
+    return hasDrive ? warpSpeedCOfMk(warpMkOf(useTechStore.getState().stateFor(m.ownerId).researched)) : 0
+  })
   const hypers = members.map((m) => resolveShipClass(m.classId)?.ftlDrives.some((d) => d.kind === 'hyperdrive') ?? false)
-  const allWarp = warps.every((w) => !!w)
-  if (allWarp) return `Warp ${Math.min(...warps.map((w) => (w && w.kind === 'warp' ? w.speedC : 0)))}c`
+  const allWarp = warpSpeeds.every((w) => w > 0)
+  if (allWarp) return `Warp ${Math.min(...warpSpeeds)}c`
   if (hypers.every(Boolean)) return 'Hyperdrive jumps (in-system: reaction drive)'
   return 'Reaction drive (mixed drives; jump ships wait for the fleet)'
 }
@@ -249,7 +267,6 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
   const ship = useShipStore((s) => s.ships.find((sh) => sh.id === s.selectedShipId))
   const ships = useShipStore((s) => s.ships)
   const selectShip = useShipStore((s) => s.selectShip)
-  const setWarpEnabled = useShipStore((s) => s.setWarpEnabled)
   const setWarpWhenReady = useShipStore((s) => s.setWarpWhenReady)
   const setFollowing = useShipStore((s) => s.setFollowing)
   const mergeFleets = useShipStore((s) => s.mergeFleets)
@@ -507,25 +524,12 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           <span className="inspect-value ship-panel-combat">{formatPercent(warpRisk)} (elevated)</span>
         </div>
       )}
+      {owned && <ShipDriveSelector ships={[ship]} />}
       {hasWarp && owned && (
         <>
-          <label className="ship-panel-checkbox-row">
-            <input
-              type="checkbox"
-              checked={ship.warpEnabled}
-              onChange={(e) => {
-                setWarpEnabled(ship.id, e.target.checked)
-                if (e.target.checked) replanForWarpWhenReady(ship.id)
-              }}
-            />
-            Use Warp Drive
-          </label>
-          {/* Only meaningful while the warp drive is in use — planMove ignores
-              the flag otherwise — so it isn't offered (and shows unticked)
-              until "Use Warp Drive" is on. */}
           <label
             className="ship-panel-checkbox-row"
-            title={ship.warpEnabled ? 'Engage warp mid-flight as soon as the drive is ready, even on an order already underway' : 'Needs "Use Warp Drive" turned on'}
+            title={ship.warpEnabled ? 'Engage warp mid-flight as soon as the drive is ready, even on an order already underway' : 'Needs the Warp drive (or Auto) selected'}
           >
             <input
               type="checkbox"
@@ -540,6 +544,9 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           </label>
         </>
       )}
+      {owned && <ShipUpgradeSection ship={ship} />}
+      {owned && <ShipDeconstructSection ship={ship} />}
+      {owned && <ShipFreeFlightToggle ship={ship} />}
       {owned && <ShipPatrolToggle ship={ship} />}
       {owned && <ShipAutomationToggle ship={ship} />}
       {owned && <ShipSurveySection ship={ship} />}

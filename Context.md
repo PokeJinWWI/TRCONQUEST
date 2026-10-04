@@ -1134,3 +1134,205 @@ Built per the approved plan, with one change that the measurements forced (below
 
 ## Addendum (2026-10-01): Observer mode
 Debug Console cheat (view override, see CLAUDE.md note). Hyperlanes: user chose charted lanes only (no derived network). Verified live: borders/name label and panel appear on/off in a generated cluster, claim rings in the galaxy view. Not verified live: lanes drawn by the LineSegments layer (none charted in the check), empire economy figures in the panel (Complex mode), the production build's gating (sandbox).
+
+## Addendum (2026-10-01): empire tech tiers
+Each generated empire has a `techTier` (1..5; humans = baseline 2) from core distance + seeded noise, researched = `techsForTier` (data/techTiers.ts, extendable). Result: tiers 1-5, 15 of 20 above baseline, 5 at/below, r=0.79 with closeness to the core. Replacing the random tech walk changed the slot RNG, so influence/names of the generated empires changed; empire economies recalibrated (round 0 won): 10 of 20 stay inside the nations' stability bounds now (was 12), test floor 10 holds with no margin. Tech still does not feed the economy.
+
+# Project Context — handoff #6 (2026-10-01, after /newchat)
+
+(`Context.md` == `CONTEXT.md` on this case-insensitive FS: append only. `CLAUDE.md` is the authoritative rules/architecture reference and is current for everything BUT the in-progress warp/hyperdrive work below. The earlier "Addendum" sections above cover attack-any-ship, the wider galaxy, empire economies/worker, Observer mode, empire tech tiers.)
+
+## Objective
+Early game in Simple mode (mechanics, not balance). The user has since added big side tasks, all done except the last: attack-any-ship, generated galaxy + 20 empires, empire economies off-thread, Observer cheat, empire tech tiers, Shipyard default subtab (Warships). **In progress: the warp/hyperdrive lore rework** (below).
+
+## Current State
+Nothing is committed. `src/main.tsx` is clean. Last fully clean sweep was before the warp rework (69 test files). **The warp rework is mid-way, `npx tsc -b` is clean but tests are NOT updated:** a partial sweep showed `automation`, `cargo`, `colonies`, `combat` failing (more will, e.g. `tech`, `survey`, `comms`, `ai`, `aggression`, `gameSetup`, `jumpRisk`, `galaxyGen`, `economyEmpires` ones). The user said "pause, switching models"; a background sweep (log `scratchpad/sweep6.log`) was running.
+
+### Warp/hyperdrive rework: approved plan is `/Users/pikaj/.claude/plans/purrfect-giggling-stardust.md` (read it first)
+Lore: Sol humans start with hyperdrives and almost no exotic matter; warp needs exotic matter; no exotic production.
+DONE (code written, type-checks):
+- `data/warpData.ts` (new): `WARP_SPEED_TIERS_C=[10,20,50,75,150,271,314]` (moved here from shipData), warp Mk I-VII tech ids/RP `[90,140,210,300,420,580,780]`/exotic `[15,25,40,65,100,150,220]`, `WARP_MK1_RADIUS_KLY=18`, Dual-Drive Systems (id `dual-drive-systems`, RP 150), Hyperdrive Mk I-V: range ly `[20,100,500,3000,10000]`, loss at max `[.5,.45,.4,.35,.3]`, floor 0.05, RP `[60,150,375,940,2350]`, hyperium to research `[0,3,8,20,50]`; `warpMkOf/hyperdriveMkOf/warpSpeedCOfMk/hyperdriveRangeLy/hyperdriveMkLoss` (loss = atMax*sqrt(dist/range)).
+- `data/exoticMatter.ts` (new): `exoticMatterAtDistance` = 360*exp(-kly/6) (~4 at Sol 27 kly, ~18 at 18 kly), `startingExoticMatter(countryId)` (Venus +1). `data/hyperium.ts` (new): 10 within 3 kly of Sol, 0 elsewhere except 2 seeded anomaly clusters (from clusters hosting an empire) with 1.
+- `techData`: `warp-drives` removed; `warp-drive-mk1..7`, `hyperdrive-mk1..5`, `dual-drive-systems` added (DRIVE_TECHS); `TechNode.resourceCost`, `resourceShortfall()`, `queuedResearchNow(..., resources)`.
+- `techStore`: `DEFAULT_RESEARCHED=['warp-theory','hyperspace-theory','hyperdrive-mk1','warp-comms']`; `researchBlock`, `researchNode` consumes `resourceCost` via resourceStore (Free Research waives); `processQueue` passes resources.
+- `shipData`: `WarpDrive.speedC` removed; the 8 warp-only presets + hullChassis defaults are now hyperdrive; `describeFtlDrive` rewritten.
+- `shipPhysics`: warp/hyperdrive gated by owner's Mk (`warpMkOf`, `hyperdriveMkOf`), warp speed from Mk, `hyperdriveRangeBlock`, `jumpDistanceLy`, new `MoveResult` `out-of-range` (handled in `commsVisual.applyMoveResult` with an `order-refused` diplomacy event for the player), `hyperdriveJumpRiskFactor` now = Mk loss / 0.5 * `destinationMassFactor` (in `jumpRisk.ts`, `hyperdriveMkRiskFactor`); `hyperdriveLossChance` signature unchanged. `ShipPanel.fleetPaceLabel` uses owner Mk.
+- Designer: new `drive` slot category (`shipModules.DRIVE_MODULES`: drive-hyper/drive-warp/drive-dual with tech gates, powerCost 0), every chassis has `drive:['small']`, `hullChassis.drivesOf` + `designToShipClass`, `FleetManagement` label.
+- Resources: `STARTING_STOCKPILE` no longer has exotic/hyperium; `seedStrategicResources` sets `startingExoticMatter` and `HYPERIUM_NEAR_SOL`; exotic income 0 (hyperium income still +1/mo). Hull build cost unchanged in structure (1 hyperium per hyperdrive, 5 exotic per warp drive hull, kept).
+- Empires: `techTiers` tier 2 = `warp-theory, warp-comms, hyperspace-theory, hyperdrive-mk1`; empires within 18 kly get `warp-drive-mk1` and are raised to at least tier 2; `GalaxyEmpire.exoticMatter/hyperium`; `AI_RESEARCH_PATH` without warp-drives. `TechPanel`/`TechTreeGraph` show the resource shortfall; new event kind `order-refused`.
+
+NOT DONE:
+- Update every test that sets `'warp-drives'` or assumes warp hulls/flown jumps (cargo, automation, survey, comms, ai, combat ~2479-2495, tech 62-63, aggression, gameSetup, jumpRisk, colonies, galaxyGen's DEFAULT_RESEARCHED/tier checks, economyEmpires numbers). Tests needing real warp flight should use a designer-built warp design (`designToShipClass`, or register a design) not a preset, plus `warp-drive-mk1` researched.
+- Write `tests/warp.test.ts` (warp gate + Mk speed, exotic blocking incl. queue not stalling + Free Research, Mk II-V hyperium blocking, range refusal and risk per Mk, hyperium build block, start states, 18 kly cutoff, exotic gradient with Venus exception, hyperium geography, designer drive gating, empire tier map closed under prerequisites).
+- Dual-drive end-to-end check; AI headless check (ai.test.ts; report attrition: hyperdrive-only civil ships lose 25-80% per uncharted jump); docs (CLAUDE.md note, Context addendum); live-verify (Mk I blocked with reason in Technology panel, designer drive slot gating, shipyard hyperium reason); full standard sweep; report unverified items.
+
+## Decisions (user-confirmed this session)
+- Drives are swappable designer components; a dual-drive hull is a separate tech. Hyperdrive Mk = owner's best, like warp. Per-Mk range, risk grows toward range, Mk V 10,000 ly at 30%. Hyperium scarce: low only near Sol (~3 kly), tiny in 1-2 random clusters. Hull exotic cost kept (5 per warp drive).
+- Earlier: attack-any-ship consequences = skirmish with aggressor as attacker, -60 opinion, breaks treaties/truce, AI first strike only with local edge; hyperlanes shown by Observer = charted lanes only; empires' economies resident in the worker (exact independence proven); Shipyard opens on Warships subtab.
+
+## Constraints
+- Never commit unless asked. Standard sweep: `npx tsc -b`, all `tests/*.test.ts`, `npm run build` (script: `scratchpad/sweep.sh`, 5-10 min, run in background). Plan mode first for big features; AskUserQuestion for unspecified calls; balance numbers as named constants. Simple changes must not touch Complex mode. Store-probe from `main.tsx` must be reverted. Don't read Context.md whole.
+- macOS: `sed -i ''`, no `timeout`; python heredocs; use the scratchpad dir for temp files.
+
+## Important Details
+- Key files: see the DONE list; tests: `tests/aggression`, `galaxyGen`, `jumpRisk`, `economyEngine`, `economyEmpires`, `observer`. Economy ticks MONTHLY. Economy benchmark `scripts/economy/benchmark.ts`; empire calibration `scripts/economy/calibrate.ts --empires`.
+- Known: 10 of 20 empires inside the nations' stability bounds (test floor 10, no margin).
+
+## Open Questions
+- Whether to let the AI/human civilian ships' high hyperdrive loss stand (not changed on purpose); whether higher warp/hyperdrive Mks belong in the empire tier map (currently only Mk I via the 18 kly rule).
+
+## Next Steps
+1. Read the plan file; finish the NOT DONE list (fix tests first, then `warp.test.ts`), run the sweep, live-verify, update CLAUDE.md/Context.md, report unverified items.
+
+## User Preferences
+- Mechanics over balance; plan mode for big features; AskUserQuestion for unspecified calls; tests per mechanic; live-verify UI; report unverified honestly; short mid-task corrections are authoritative.
+
+## Addendum (2026-10-02): warp/hyperdrive rework finished
+- Tests updated: `tech`, `fleet`, `shipyard`, `shipDesigns`, `jumpRisk`, `galaxyGen`, `cargo`, `automation`, `colonies`, `combat`, `survey`, `comms`, `ai`, `warpReplan`; new `tests/warp.test.ts` (120 checks) and fixture `tests/testWarp.ts` (`warpHullId`/`driveHullId`, `grantWarp`, `safeJumps`). No preset hull has a warp drive, so warp tests build one through the designer.
+- **Found and fixed (not in handoff #6):** a hyperdrive only jumped to a STAR, so an order to a world in another system crawled on reaction drive (Mars to Proxima d = 437 years), which broke survey jobs, refill, automation, colonising, follow/merge and AI invasions once every hull became hyperdrive-only. User's call: a hyperdrive jumps anywhere outside the ship's own system, straight into orbit; hyperlanes are star to star, so any jump into a system uses and charts the lane to that system's star. In-system moves (own star included) stay reaction drive (my reading of "jump anywhere"; flagged to the user). New: `isJumpDestination`, `destinationSystemId`, `ShipInstance.pendingHyperdriveJumpTo`, `DEEP_SPACE_JUMP`, arrival commands fire after an instant jump (`settleShips`), range check before pause/cooldown.
+- Also: `usableDrives` gates `planFtlCharge` and the auto-retreat on the owner's Mk; `setJumpRoll` makes the loss roll injectable; hyperium anomaly clusters are ranked per cluster (a shuffle of the candidate list made every slot depend on every other, failing galaxyGen's "every other slot is unchanged").
+- AI headless (`ai.test.ts` section 8, seeded): the AI still surveys and builds Starbases, and loses science/construction ships to uncharted jumps (the user knows; left as is). 16 of 20 empires have Hyperdrive Mk I but no hyperium and no warp (data-only, by design).
+- Parked: cluster "breach points" connecting to inter-cluster hyperlanes (user's idea).
+- Live check found two more: (1) Simple mode's Exotic Refinery made +3 exotic matter a level (Mars +6.9/month, Mk I in two months), against "no exotic production": it is now the Hyperium Refinery (hyperium only; id unchanged), the economy AI targets hyperium, Mars's opening GDP is ~8.8k (was 9.3k), tests `abstractEconomy`/`simpleBuildings` updated. (2) The clock and economy ran on the main menu, so a player who waited a game month there started with 1-3 hyperium instead of 10 (seeds only fill empty stocks): `useGameClock` now waits for a nation/sandbox. Also the tech tooltip names the prerequisite actually missing (Dual-Drive Systems said "Needs Hyperspace Theory").
+- Live-verified (Simple, Mars): Technology shows Warp Drive Mk I "Needs 15 exotic matter (you have 4)"; designer drive slot offers Hyperdrive, then Warp Drive with Mk I, then Dual Drive with Dual-Drive Systems; Shipyard says "Can't build: Short of 1 Exotic Matter" / "Short of 1 Hyperium". Not live-verified: an actual jump into orbit on the map, the out-of-range notification, a dual hull in flight (all covered headlessly in `tests/warp.test.ts`).
+- Open: exotic matter can be bought from the other nations in Simple mode (4+5+4+4 = 17 >= Mk I's 15); AI attrition to jumps (2-14 ships per ~8 years over six seeds); whether in-system moves should also be jumps.
+
+## Addendum (2026-10-02, later): deposits, Extraction, Synthesis refineries, material discovery
+Plan `/Users/pikaj/.claude/plans/zany-tinkering-pretzel.md`, approved, built. See CLAUDE.md "Deposits".
+- User decisions: hyperium AND exotic matter have natural deposits on planets within 3 kly of Sol (Solar Neighbourhood + `arm3-227`); similar amounts whatever the class, ~half of planets; Mars richest, every nation's capital guaranteed, ~half of far ones richer; exotic deposits very scarce, Venus's largest, mineable; flat hyperium income 0; the Hyperium Refinery stays but needs Hyperium Synthesis and converts exotic matter to hyperium monthly IN ALL MODES; Warp research made very expensive (humans no warp for decades); discovery latched.
+- My calls (flagged in the plan): two Extraction techs both researched at start; Complex gets a nation-level refinery step (no building there); no seeded refineries (the pure Simple economy has no tech hook), so Mars/Venus lost specialist jobs and gained free industrial slots, which moved two Simple guards in `abstractEconomyAI.test` (single-year growth cap 5% -> 6%, opening unemployment 1-6% -> 1-7%, Venus opens at 6.7%); the 8.8k GDP pin still holds; planetDistricts fills a district by queueing instead of expecting a full one.
+- Found building it: `seededStream`'s first draws of similarly named keys correlate (65% of planets hit a 50% roll), so `bodyStream` discards two.
+- Live-verified (Simple, Mars): +1 hyperium/month and the deposit counting down from 100, HUD shows +1/mo, Hyperium window "Deposits held 1 · 100 left · 1.0/mo", Exotic window "none on your worlds" and "Refining: Needs Hyperium Synthesis researched", Synthesis "Needs to hold 5 hyperium (you have 3)", "??? Synthesis" / "Needs 15 ???" in the panel and tree view with discovery cleared, the refinery greyed in the picker with its reason. Not live-verified: a deposit row hidden on an unsurveyed body, Complex mode's refining row, a refinery actually converting in a game.
+- Open: Complex refining is abstract; the AI nations never research Synthesis or build refineries, so they only ever get hyperium from deposits; exotic matter is tradable in Simple so one nation can still pool 17 against Mk I's 15 (research is now the real wall).
+
+## Addendum (2026-10-02, evening): intercluster travel
+Plan `/Users/pikaj/.claude/plans/zany-tinkering-pretzel.md`, approved, built. See CLAUDE.md "Intercluster travel".
+- User decisions: arrival = rest beside the cluster (no flying among its stars yet); Hyperdrive Mk scales d0 and there is NO range cap; AI strict 5% but Science Ships may risk more; comms over kly unchanged.
+- My calls (flagged in the plan): scout cap 40% (25% would strand them at Alpha Centauri and Barnard's); `hyperdrive-mk2` last on the AI's research path; player automation neither prompts nor is capped; a foreign-cluster ship can only go to clusters/points (home = order it to the Solar Neighbourhood); a loss is told at once, not delayed by comms.
+- **Correction to what I told the user:** I said Mk II makes every hop in the neighbourhood under 2%. Typical hops are (9.7 ly -> 1.8%), the furthest pair (17.2 ly) is 5.6%, so the AI's 5% line still blocks that one pair at Mk II. The nearest cluster (2.5 kly): certain loss at Mk I-III, 57% Mk IV, ~2% Mk V.
+- Mk I values at single hops moved from the old sqrt rule (Alpha Centauri 13% before the mass factor, 16% after; Sirius 43%); the geometric-mean hop is exactly 50%.
+- Removed: `HYPERDRIVE_MK_RANGE_LY`, `HYPERDRIVE_MK_LOSS_AT_MAX`, `HYPERDRIVE_MIN_LOSS`, `hyperdriveRangeLy`, `hyperdriveRangeBlock`, `MoveResult` `out-of-range` (replaced by `unreachable` for the galactic case only).
+- AI headless (`ai.test.ts`, seeded): the AI is now much more careful: 2 ships lost in 3,000 days in Simple (it was 11-14) and 3 scouts in 1,200 days in Complex, still surveying and building Starbases. The Expander's unit checks needed Hyperdrive Mk II in their setup.
+- Live-verified (Simple, Mars, galactic view): the Sol badge with a count; right-click a cluster with a frigate selected shows "Risky jump ... up to a 100% chance" (now worded "almost certain"); Cancel does nothing; "Jump anyway" lands the whole fleet beside the cluster and charts the lane; a forced bad roll removes the ship and shows "Troop Transport 6 was lost in a hyperspace jump to Auriga Drift", whose click opens the galactic view on the cluster (checked with a pushed event while paused, toasts tick only unpaused); a warp ship (Mk VII) right-clicked at a point flies a galactic order (usedWarp, 3.3 years for ~0.9 kly) and its marker and nav line draw; Outliner rows say "Mars" / "to deep space between clusters". Not verified live: a cluster order for a warp ship by right-click on a cluster, and the Jump row in the cluster panel.
+
+
+# Project Context — handoff #7 (2026-10-02, after /newchat)
+
+(`Context.md` == `CONTEXT.md` on this case-insensitive FS: append only. `CLAUDE.md` is the authoritative rules/architecture reference and is CURRENT for everything below. The addenda above (warp rework finished, deposits, intercluster travel) hold the detail and the live-verification notes.)
+
+## Objective
+Terra Relicta: Conquest, early game in Simple mode (mechanics, not balance). Three big side tasks landed this session, all built, tested and live-verified, NOTHING COMMITTED: (1) warp/hyperdrive lore rework, (2) finite hyperium/exotic-matter deposits + Extraction + Synthesis refineries + material discovery ("???" in the research UI), (3) intercluster travel in the galactic view.
+
+## Current State
+- Last full sweep clean: `npx tsc -b`, all 72 `tests/*.test.ts`, `npm run build`. `src/main.tsx` clean. Nothing committed (the user has not asked).
+- New this session: `data/{warpData,exoticMatter,hyperium,techTiers,deposits,materials,synthesisData}.ts`, `scene/{extraction,jumpWarning,jumpConfirm,jumpLoss,GalacticShips}.ts(x)`, `ai/jumpRules.ts`, `state/{depositStore,materialStore}.ts`, `hooks/{useMaterialDiscovery,usePlayerExtraction,usePlayerMaterialMask}.ts`, tests `warp`, `deposits`, `intercluster`, fixture `tests/testWarp.ts` (`warpHullId`, `driveHullId`, `grantWarp`, `safeJumps`).
+- Hyperdrive risk = `1 - exp(-(d/d0)^2)`, no range cap, d0 11.6 ly at Mk I (typical 9.7 ly hop = 50%), Mk V 30% at 10,000 ly; charted lane x0.2; Turing 0. Warning/confirmation above 5% (`JUMP_WARN_LOSS`); `loseShipToJump` notifies; AI never jumps over 5% (Science Ship 40%), Hyperdrive Mk II last on `AI_RESEARCH_PATH`.
+
+## Decisions (user-confirmed)
+- Drives are designer components; dual-drive needs its own tech; owner's best Mk applies fleet-wide; hyperdrive jumps anywhere outside the ship's own system, straight into orbit, lanes star to star.
+- Deposits: hyperium on ~half of planets within 3 kly of Sol (Solar Neighbourhood + `arm3-227`), every capital guaranteed, Mars richest (100); exotic matter 4 small deposits, Venus's largest, mineable; flat hyperium income 0; Hyperium Refinery (Simple) / nation step (Complex) converts exotic->hyperium, gated by Hyperium Synthesis (needs 5 hyperium HELD); warp research x12 cost; discovery latched.
+- Intercluster: arrival = rest beside the cluster (no flying among its stars yet); Mk scales d0; AI strict 5% but scouts more; comms over kly unchanged (Warp Comms = 5 years one way to the nearest cluster).
+
+## Constraints
+- Never commit unless asked. Sweep after any change: `npx tsc -b`, every `tests/*.test.ts`, `npm run build` (script in scratchpad `tests.sh`/`sweep.sh`, ~6 min, run in background). Plan mode first for big features; AskUserQuestion for unspecified calls; balance numbers as named constants; Simple changes must not touch Complex mode; store-probe from `main.tsx` must be reverted; live-verify UI; don't read Context.md whole; macOS `sed -i ''`.
+
+## Important Details
+- Browser pane throttles rAF: zoom/pan barely move; toasts only tick while unpaused; screenshot coordinates are an 800x600 frame over a 1024-wide page (x1.28).
+- Known consequences to remember: seeded Simple refineries were removed (Mars/Venus lost specialist jobs; `abstractEconomyAI.test` growth cap 5%->6%, unemployment bound 1-7%); the Mk II "under 2%" claim only holds for typical hops (furthest pair 5.6%); scouts' 40% cap is a tunable.
+- Parked ideas (memory): cluster "breach points" onto inter-cluster hyperlanes; orbit-locked combat.
+
+## Open Questions
+- Scout cap 40% right (25% strands them at Alpha Centauri/Barnard's)? Should player automation obey the same cap as the AI (currently exempt, no prompt)? Should a foreign-cluster ship accept a star order directly (currently refused: send it home first)? Exotic matter is still tradable in Simple (one nation can pool 17 vs Mk I's 15; research cost is the wall).
+
+## Next Steps
+1. Ask the user whether to commit (three large uncommitted features), or what to build next.
+2. Candidate follow-ups: flying among a foreign cluster's stars / entering its systems (the ~54 Sol-only star-list sites), breach points, Complex-mode refinery as a real building, a live check of the Jump row in the cluster panel and a warp order to a cluster by right-click.
+
+## User Preferences
+- Mechanics over balance; plan mode for big features; AskUserQuestion for unspecified calls; tests per mechanic; live-verify UI; report unverified items honestly; short mid-task corrections are authoritative; state side effects and corrections plainly.
+
+## Addendum (2026-10-02): research-gated ships, dev-only hulls, one scout line
+(Plan was approved in plan mode; details in CLAUDE.md "Research-gated ships".) Built: warship ladder techs (`frigate/destroyer/cruiser/battleship-hulls`, strict chain, 80/130/200/300) through `ShipClass.requiresTech` + `HullChassis.requiresTech`; `STARTING_NAVY` = 5 corvettes + transport; `ShipClass.devOnly` for Swift Courier/Star Jumper (`PLAYER_SHIP_CLASSES` in every UI list, Debug Console only, labelled); scouts as one line (`upgradesTo`, `autonomous-navigation` tech, `buildCostFactor` 0.6, manual refit `scene/shipRefit.ts` for the special-core difference); shipyard list `shipyardRows` (unlocked first, locked last "Can't build: needs <tech>"); AI: `affordable(..., researched)` + hull techs on `AI_RESEARCH_PATH`; Hyperspace Theory 200,000 RP with shortcut (120 RP + 5 hyperium, `TechNode.shortcut`). Test: `tests/shipGates.test.ts`. Live-verified in Simple mode as Mars: shipyard order (and reorder after a tech), support tab, designer lists, New Design picker, Debug Console labels, refit button (id/name kept), Shortcut button. NOT done / open: Complex mode (no research income, so gated hulls stay locked there); "nations near Sol get hyperium income with an extractor" was already how Extraction works, nothing built; the preset catalog in the Ship Designer still lists both scout levels as stat rows.
+
+## Addendum (2026-10-02, later): ship deconstruction; shipyard order re-verified; DraggableWindow not reproduced
+- Shipyard order (buildable first, gated last with "Can't build: needs <tech>") was already built in the gating round (`shipyardRows`); re-verified live, nothing changed.
+- NEW: ship deconstruction (CLAUDE.md "Ship deconstruction"): no such feature existed (only cancelling a queued build = full refund, and building teardown = no refund). Own job store, no slip, draining bar, no refund. Live-verified (paused, advanced simDays: bar 100/75/50/25, ship removed at empty, build slip count unchanged).
+- DraggableWindow: the reported "resize anchor shift read as a drag" was NOT reproduced live (all 8 gestures across a floating, a docked and an anchor-left window, with the clock running and not, no post-release drift, title-bar drag after a resize exact). No code changed. Noted but untouched: `dockedLayout` asks for the full bar height while CSS max-height is 8px less (rendered 646 vs requested 654), and the resize handles do not check `e.button`.
+
+## Addendum (2026-10-02, later still): quick buttons
+- Removal root cause: the only way to remove a pinned button was an undiscoverable right-click (tooltip only); it worked when the button was uncovered (verified live), but the open panel window also covers the sidebar so buttons are often unreachable. Fix: a visible × on every added button (right-click kept); built-in Shipyard stays.
+- Inner subtab root cause: `pin` saved only category/subcategory, and the Shipyard's subtab (Warships / Science & support / Slips) was local state in `ShipyardPanel`, never saved. Now pins save the Navy tab and the Shipyard subtab; clicking restores them (one-shot request through `fleetTabStore.shipyardRequest`); old buttons open the default. Pins are now saved in localStorage so they survive a reload (before they were session-only: the "after a page reload" acceptance needed it). Live-verified with a real click on the ×; Warships/Science & support buttons reopen their own subtab, also after a reload.
+
+## Addendum (2026-10-02, later): slip-based ship upgrades
+Replaced last round's instant refit (`shipRefit.ts`, `ShipRefitSection.tsx`, deleted) with a slip order: `scene/shipUpgrade.ts` (pure: `nextLevel`, `upgradeTarget`, `upgradeCost` = build-cost difference, `upgradeDays` = 0.5 x new build days via `UPGRADE_DURATION_FACTOR`, `upgradeBlock`), `shipyardStore.queueUpgrade`, `ShipBuildOrder.upgradeShipId`, completion + orphan refund in `advanceShipyard`, hold via `ShipInstance.upgrading` in `planMove`, `ShipUpgradeSection`, AI `pickUpgrade`/intent `upgrade-ship`. Live-verified (paused, Mars): button text/cost/days and its reasons (no tech, away from Mars), the order waits behind a full yard, takes the slip FIFO when one frees, ship becomes a Turing Scout with the same id/name. Not verified live: the Cancel button click (tests cover refund), Complex mode, an AI upgrade in a real game (no AI owns a scout; pure test + a headless run only).
+
+## Addendum (2026-10-03): Navy tab on open; slips and Starbase re-verified
+- Bug reproduced live: Fleet Management > Navy from the menu opened on Shipyard > Warships after a quick-button use, because `fleetTabStore.tab` persists the last tab. Fix: `navyTabOnOpen` resets it to Fleet Manager on a plain pick (NavBar category/subtab click); quick buttons/icons still name their own. Slips never opened first on any path (Shipyard subtabs: hull groups first, Slips last).
+- Slip FIFO already in (verified live while paused: 3 builds -> 2 slips + 1 waiting; cancelling one started the waiting one). Starbase = `STARBASE_INFLUENCE_COST` 30, AI waits on the same constant (test added in ai.test.ts). Colonization already charges NO influence (removed earlier on the user's decision; nothing left in colonyLogic/colonies/UI).
+- NOTE: someone else's uncommitted edit to `techStore.ts` (nations now start with Hyper Comms, `startingCommsTech`) makes one `ai.test.ts` check fail ("ends up with a Starbase of its own building", headless expansion); not caused by this work.
+
+## Addendum (2026-10-03): galactic order arrows
+Galactic view drew only the committed `NavigationLine`; the interstellar view also draws dashed pending (comms-delayed) and queued-leg lines. Added both to `GalacticShips` by reusing `PendingOrderLine`/`QueuedRouteLine` (new optional `resolveStart` on PendingOrderLine, default unchanged so interstellar is unchanged), selection in `scene/galacticOrders.ts`. Live (paused, warp ships via a store probe): committed solid lines, a dashed pending line and a queued leg shown; all gone when orders were cleared. Not verified: a real comms-delayed order (nations start with Hyper Comms now, so pending was injected by store), a hyperdrive jump (instant, no arrow in either view), and interstellar side-by-side (code path untouched). Another Claude chat is making small fixes in the same tree.
+
+# Project Context — handoff #8 (2026-10-03, after /newchat)
+
+(`Context.md` == `CONTEXT.md` on this case-insensitive FS: append only. `CLAUDE.md` is the authoritative rules/architecture reference and is CURRENT for everything below; the addenda above hold per-feature detail and live-verification notes.)
+
+## Objective
+Terra Relicta: Conquest, early game in Simple mode (mechanics, not balance). This session built, on top of the uncommitted warp/deposits/intercluster work of handoff #7: research-gated ships + scout line, ship deconstruction, slip auto-start, quick-button fixes, slip-based ship upgrades, Starbase 30 influence / free colonization, Navy tab default, galactic order arrows. NOTHING IS COMMITTED (the user has not asked; `git status` ~125 paths).
+
+## Current State
+- All of the above built, tested and live-verified (see addenda above and CLAUDE.md). Sweep runner: scratchpad `sweep.sh` (`tsc`, every `tests/*.test.ts` with -P4, `npm run build`; ~6 min). Last result under Node 24: tsc OK, build OK, all test files pass except `tests/ground.test.ts`, a wall-clock "runs quickly" check that fails only under parallel load (passes alone).
+- ENVIRONMENT: the shell's default `node` became v16.17 mid-session (breaks `npm run build`: `styleText`; economy tests: `structuredClone`). Use `export PATH="/Users/pikaj/.nvm/versions/node/v24.9.0/bin:$PATH"` before sweeps.
+- ANOTHER CLAUDE CHAT is making minor fixes in the same tree (the user said: it does minor fixes, this chat the major ones). It edited `techStore.ts` (nations now start with Hyper Comms via `startingCommsTech`), `tests/testComms.ts` and several tests, and left a debug line using `process.env` in `ai/expander.ts` at one point (broke `tsc`; later gone). `ai.test.ts` check "ends up with a Starbase of its own building" failed during that window; it passed in the last sweep. Don't revert their edits; re-run the sweep after they settle.
+- `src/main.tsx` clean (store probes reverted each time).
+- The galaxy-generation request (clusters/empires/tier scheme/lore override, intercluster scale) was planned but the user rejected the AskUserQuestion and no plan was approved. Findings: it ALREADY exists (`data/galaxyGen.ts`, `generatedEmpires.ts`, `loreEmpires.ts`, `techTiers.ts`, `tests/galaxyGen.test.ts`); the one real gap is empire PLACEMENT is uniform over clusters (14 of 20 empires beyond 30 kly, 3 within 10 kly; tiers vary and 14/20 are above the human baseline = tier 2). Proposed: core-weighted placement (named constants) + a few reserved rim slots, keep 20 empires (more costs Complex-mode economy sim, and `economyEmpires.test.ts` floor 10 must be re-checked), keep tier scheme (linear 6.0 core -> 2.2 rim at 55 kly, +-1.2 noise) and the TS-array lore file. Awaiting the user's call.
+
+## Decisions (user-confirmed this session)
+- Corvette-only start (`STARTING_NAVY` = corvettes + transport); hull techs frigate/destroyer/cruiser/battleship-hulls (80/130/200/300) strict chain; Courier/Jumper dev-only; scouts one line (Hyperspace -> Turing, `upgradesTo`), best researched level on every new build; Hyperspace Theory 200,000 RP with shortcut 120 RP + 5 hyperium; empire tiers untouched.
+- Ship deconstruction: own job, no slip, no refund, same days as build; held while in a fight; blocked with armies aboard.
+- Upgrade: slip order in the same FIFO queue, cost = build-cost difference (scout: 1 special core), duration 0.5 x new build days (`UPGRADE_DURATION_FACTOR`), full refund on cancel, ship must be at its capital's orbit and is held (`ShipInstance.upgrading`; `planMove` refuses player orders), AI upgrades by the same `upgradeBlock` when its yard queue is empty; the instant refit was replaced.
+- Starbase `STARBASE_INFLUENCE_COST` = 30; colonizing costs NO influence (auto-settle/chooser/AI now pick nearest to capital).
+- Quick buttons: visible x to remove (right-click kept), pins save the Navy tab + Shipyard subtab, persisted in localStorage.
+- Navy opens on Fleet Manager on a plain nav pick (`navyTabOnOpen`); quick buttons/icons name their own tab.
+- Leaders subtab under Government already existed (all five categories placeholders "Not yet available"; no real leader data; Complex central-bank governors deliberately not listed as "Governors (planet)" — user not yet asked to change).
+- Galactic view draws committed + dashed pending + dashed queued order arrows by reusing the interstellar line components (`scene/galacticOrders.ts`); hyperdrive jumps are instant so no arrow in either view.
+
+## Constraints
+- Never commit unless asked. Sweep after any change: `npx tsc -b`, every `tests/*.test.ts`, `npm run build` (Node 24). Plan mode first for big features; AskUserQuestion for unspecified calls; balance numbers as named constants; Simple changes must not touch Complex mode; store probes reverted from `main.tsx`; live-verify UI; never read/overwrite Context.md whole; macOS `sed -i ''`; zsh breaks `grep --include=*.ts` (use plain `grep -rn`).
+- Browser pane: rAF throttled (screenshots can lag a few seconds), 1024-wide page vs 800x600 screenshot frame (x1.28), `zoom` region unsupported.
+
+## Open Questions
+- Galaxy generation: placement scheme / empire count / tier scheme / lore file format (see Current State) — user must answer before any plan is approved.
+- Show Complex-mode central-bank governors under a separate Leaders category?
+- Complex mode has no research income, so gated hulls/scout techs can't be unlocked there (not handled).
+- Parked ideas (memory): cluster breach points; orbit-locked combat. Candidate follow-ups: flying among a foreign cluster's stars, a Complex-mode refinery building.
+
+## Next Steps
+1. Ask the user whether to commit the large uncommitted tree (possibly split by feature) or continue.
+2. Re-run the sweep (Node 24) once the other chat's edits settle; confirm `ai.test.ts` Starbase check and `ground.test.ts` (load-sensitive) status.
+3. Resume the galaxy-generation planning with the user's answers (placement weighting, count, tier scheme, lore file).
+
+## User Preferences
+- Mechanics over balance; plan mode for big features; AskUserQuestion for unspecified calls; a pure-function test per rule; live-verify UI; report unverified items honestly; short mid-task corrections are authoritative; "reproduce first, root cause, don't patch the symptom"; list files touched in every report; don't do what wasn't asked (e.g. don't change colonization/shipyard order when told not to).
+
+## Addendum (2026-10-03): per-nation hyperlanes + risk-aware automation routes
+
+User request, plan approved (`~/.claude/plans/hashed-juggling-gosling.md`). Findings before the change: lanes were ONE global `string[]`; there was no route planner (every move one direct jump); automation picked targets by straight-line nearness and jumped with no prompt and no cap. User's calls: any star may be a stopover; cap 4 jumps; the checkbox replaces the old exemption, plus a max-risk slider in 5% steps; intercluster = planner + tests only (automation never picks a cluster).
+
+Built (rules in CLAUDE.md, **Per-nation lanes & automated routes**):
+- `scene/hyperlanes.ts` (pure: `laneKey`, `laneEndpoints`, `hasLane`, `withLane`, `mergeLanes` = the uncalled future hook), `state/hyperlaneStore.ts` now `Record<nationId, string[]>` (`hasHyperlane/addHyperlane(nationId, a, b)`, `lanesOf`, `allLanes`, `allLanesOf`). Read sites (shipPhysics x2, useEscapeBehavior) and write sites (useShipOrderSettler x2, useSurveyResolver, useCombatResolver, useEscapeBehavior, commsVisual.applyMoveResult, autoTravel) pass `ship.ownerId`. `InterstellarScene` draws the player's lanes; Observer gets every nation's.
+- `scene/jumpRoute.ts` `planJumpRoute` (pure, hop-bounded shortest path on -ln(1-p), safe-only pass first). `shipPhysics.starJumpChance` / `clusterJumpChance`.
+- `scene/autoTravel.ts` (`autoJumpLimit`, `nextAutoStep`, `autoReachable`, `autoMove`, `routeRefusal`); `ShipInstance.automationUnsafe / automationMaxRisk / autoRoute / automationNote` + setters; `automation.ts` (`moveNow` -> `autoMove`, `continueRoute`, `reachable` filter on the two pickers, `noteUnreachable`); `useSurveyResolver` fly step for auto-survey ships; `ShipAutomationToggle` (checkbox, slider, reason; new `.ship-automation-options` block in App.css); constants `AUTO_ROUTE_MAX_JUMPS`, `AUTO_MAX_RISK_DEFAULT/MIN/STEP` in `data/shipData.ts`.
+- Assumptions the user approved with the plan: the slider caps EACH jump (not the route total) and starts at 100%; the box is a per-ship setting like "Return afterwards", not a seventh automation mode.
+- Tests: new `tests/jumpRoute.test.ts`, `tests/hyperlanes.test.ts`; `tests/automation.test.ts` sections 12-14 (its older sections tick the box through a local `automate()` helper: they are not about jump risk); store-shape updates in ai/escape/intercluster/jumpRisk/observer/warp/shipUpgrade/shipGates tests.
+- Live-verified (Mars, Simple): box off = "No route to Alpha Centauri within the 5.0% limit..." in the ship panel; box on at 10% still refused, at 20% it jumped and charted Mars's lane; a Venus lane Sol-Sirius did not change Mars's 53% to Sirius, was not drawn, and was drawn with Observer on.
+- Consequence to remember: at Mk I every jump out of Sol is over 5%, so a default (box off) automated ship stays home until its nation charts lanes.
+
+## Addendum (2026-10-03): orbital combat without Free Flight
+
+User request (un-parks the "orbit-locked combat" memory), plan approved. Findings before the change: `free-flight-maneuvering` exists (Engineering, 130); nobody starts with it and the AI never researched it; the gate was ALREADY per nation (AI included), not player-only; it only made an idle ship orbit `obstacles[0]`; a moving ship ignored gravity; no toggle. User's calls: gravity pulls while moving too; significant = real surface gravity >= 0.5 m/s2; toggle per ship, any time (signal-delayed outside the arena); AI keeps it always on and gets the tech on its research path; and, after I measured that the uncapped pull kills every ship at a star (0.82 units/s2 against 0.013-0.28 accel) and most at Jupiter, the pull on a powered ship is CAPPED at 50% of its own acceleration.
+
+Built (rules in CLAUDE.md, **Orbital combat & Free Flight**): `combatArena.ts` (`SIGNIFICANT_GRAVITY_MS2`, `hasSignificantGravity`, `orbitPrimary`, `gravitationalAcceleration` significant-only), `combatData.POWERED_GRAVITY_ACCEL_SHARE`, `combatResolution.integrateMotion` (orbit around `orbitPrimary` when idle, capped pull when under way), `scene/freeFlight.ts`, `ShipInstance.freeFlight / pendingFreeFlight` + setters, `commsVisual.applyFreeFlight / queueFreeFlight`, `useCommsResolver`, `useCombatResolver` (`freeFlightActive`), `aiData.AI_RESEARCH_PATH`, `scene/ShipFreeFlightToggle.tsx` (ship panel + Fleet Manager), `tests/freeFlight.test.ts`.
+Live-verified (Mars vs Venus at Mars): an idle Venus (AI, no tech) ship flew at exactly the circular-orbit speed; with the tech granted Mars's ship held still (default on); ship-panel Off dropped its waypoint and it orbited at the orbital speed with its radius kept; On brought it to rest; the Fleet Manager button set all 5 ships, read Mixed, and one click from Mixed turned all on.
+Notes: at planets the pull is mild (a cruiser passing Earth bends ~0.01 units); Titan has no mass in the moon data so it has no gravity; the comms-delayed branch of the toggle is not exercised (nations now start with Hyper Comms = zero delay).

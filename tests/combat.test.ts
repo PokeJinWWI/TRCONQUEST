@@ -14,6 +14,8 @@ import { SHIP_CLASSES, TURING_HYPERDRIVE_COOLDOWN_DAYS, type HyperDrive } from '
 import { DAMAGE_PROFILES, WEAPON_TYPES, CORE_DAMAGE_MAX_RISK_BONUS, ACTIVE_ENGAGEMENT_RISK_BONUS, coreDamageRiskBonus, CHAFF_CHARGES, CHAFF_DURATION_SECONDS, CHAFF_MISS_CHANCE, weaponsEffectiveness, SCUTTLE_MAX_DAMAGE, SCUTTLE_BLAST_RADIUS_UNITS, scuttleDamageAt, CHASE_STANDOFF_UNITS, RAM_MAX_TARGET_DAMAGE, RAM_SELF_DAMAGE_FRACTION, ramDamageAt, rangeEffectiveness, missileDamageMultiplier, torpedoAccuracy, MISSILE_FALLOFF_FLOOR, MISSILE_SPEED_UNITS_PER_SECOND, TORPEDO_SPEED_UNITS_PER_SECOND, THRUSTER_BOOST_SPEED_BONUS_FRACTION, THRUSTER_BOOST_EVASION_BONUS, THRUSTER_BOOST_LASER_DAMAGE_MULTIPLIER, THRUSTER_BOOST_CANNON_DAMAGE_MULTIPLIER, SHIELD_BOOST_REGEN_MULTIPLIER, SHIELD_BOOST_ENERGY_DAMAGE_MULTIPLIER, SHIELD_BOOST_KINETIC_DAMAGE_MULTIPLIER, SHIELD_BOOST_EVASION_PENALTY, SHIELD_BOOST_SPEED_PENALTY_FRACTION, WEAPONS_BOOST_DAMAGE_MULTIPLIER, WEAPONS_BOOST_SHIELD_REGEN_MULTIPLIER, WEAPONS_BOOST_SPEED_PENALTY_FRACTION, WEAPONS_BOOST_AI_HEALTH_ENGAGE_THRESHOLD, WEAPONS_BOOST_AI_HEALTH_DISENGAGE_THRESHOLD, BOOST_TACTIC_IDS, SPIN_THRUST_EVASION_BONUS, TACTIC_IDS, tacticBadge, type WeaponMount } from '../src/data/combatData'
 import { pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { ownerFor, setUpTestNations, TEST_PLAYER } from './testNations'
+import { grantWarp, warpHullId } from './testWarp'
+import { resolveShipClass } from '../src/state/shipClassResolver'
 import { activeTacticIds, engagementIsContested, useCombatStore } from '../src/state/combatStore'
 import {
   applyShot,
@@ -115,7 +117,7 @@ function makeShip(
   bodyName = 'Earth',
   fleetId = `solo-${id}`,
 ): ShipInstance {
-  const cls = SHIP_CLASSES.find((c) => c.id === classId)!
+  const cls = resolveShipClass(classId)!
   return {
     id,
     classId,
@@ -422,13 +424,16 @@ console.log('\n=== 13. Ordinary warp orders are UNCHANGED — no new risk withou
   // a badly damaged ship, since that would be a silent behavior change to
   // something that was always 100% safe.
   const simDays = 100
-  const ship = makeShip('corvette', 'p1', 'player', 'Mars')
+  // A designer-built warp hull whose owner has Warp Drive Mk I (no preset warps).
+  grantWarp(ownerFor('player'))
+  const ship = makeShip(warpHullId('corvette-hull'), 'p1', 'player', 'Mars')
   // Wreck its core almost completely.
   const wrecked: ShipInstance = { ...ship, combat: { ...ship.combat, componentHp: { ...ship.combat.componentHp, core: 1 } } }
   let anyLost = false
   for (let i = 0; i < 200; i++) {
-    const result = planMove(wrecked, { kind: 'star', starId: 'sol' }, simDays) // no riskContext passed
+    const result = planMove(wrecked, { kind: 'star', starId: 'alpha-centauri' }, simDays) // no riskContext passed
     if (result.kind === 'lost-in-hyperspace') anyLost = true
+    if (result.kind !== 'order' || !result.order.usedWarp) anyLost = true // it must really be a warp order
   }
   check('a badly-damaged ship never loses an ordinary warp order to the new risk', !anyLost)
 }
@@ -2451,69 +2456,59 @@ console.log('\n=== 58. Missile damage falloff and torpedo accuracy (range + targ
   )
 }
 
-console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, but the default seed means nothing regresses ===')
+console.log('\n=== 59. Warp/Hyperdrive are genuinely tech-gated, by the owner\'s Mk ===')
 {
   useGameTimeStore.setState({ paused: false })
   const countryId = 'tech-gate-test-country'
   usePlayerStore.setState({ selectedCountryId: countryId })
   const simDays = 100
 
-  // Corvette: warp only, no hyperdrive.
-  // Owned by the country whose tech this section strips — tech gates a
+  // A designer-built warp corvette: warp only, no hyperdrive (no preset hull warps).
+  // Owned by the country whose tech this section changes — tech gates a
   // ship by its OWN nation's research.
-  const corvette = makeShip('corvette', 'p1', countryId, 'Mars')
+  const corvette = makeShip(warpHullId('corvette-hull'), 'p1', countryId, 'Mars')
   const farStar = { kind: 'star' as const, starId: 'alpha-centauri' }
 
-  // Default-seeded (warp-theory pre-researched) — warp is genuinely usable:
-  // for a destination this far, it must arrive strictly faster than a
-  // reaction-only trip would.
-  const withWarp = planMove(corvette, farStar, simDays)
-  check("warp-theory is pre-seeded, so a fresh country's ship can still warp today", withWarp.kind === 'order')
-  const reactionOnlyDaysNoWarp = withWarp.kind === 'order' ? withWarp.order.arrivalSimDays - simDays : Infinity
-
-  // Strip warp-theory out (simulating a country that genuinely hasn't
-  // researched it) and try the identical trip.
-  useTechStore.setState((s) => {
-    const current = s.stateFor(countryId)
-    const stripped = new Set(current.researched)
-    stripped.delete('warp-drives')
-    return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: stripped } } }
-  })
+  // A fresh country has NO Warp Drive Mk (it flies hyperdrives): the warp
+  // drive does nothing and the trip is a plain reaction-drive order.
   const withoutWarp = planMove(corvette, farStar, simDays)
-  check('without Warp Theory, the ship falls back to a plain reaction-drive order', withoutWarp.kind === 'order' && withoutWarp.order.usedWarp === false)
+  check('a fresh country has no Warp Drive Mk, so a warp hull falls back to a plain reaction-drive order', withoutWarp.kind === 'order' && withoutWarp.order.usedWarp === false)
   const reactionOnlyDaysGated = withoutWarp.kind === 'order' ? withoutWarp.order.arrivalSimDays - simDays : -Infinity
+
+  // With Warp Drive Mk I the identical trip is a warp trip, strictly faster.
+  grantWarp(countryId)
+  const withWarp = planMove(corvette, farStar, simDays)
+  check('with Warp Drive Mk I researched, the same ship warps', withWarp.kind === 'order' && withWarp.order.usedWarp === true)
+  const warpDays = withWarp.kind === 'order' ? withWarp.order.arrivalSimDays - simDays : Infinity
   check(
     'the gated trip takes the full reaction-only time, genuinely slower than the warp-capable one',
-    reactionOnlyDaysGated > reactionOnlyDaysNoWarp,
-    `${reactionOnlyDaysGated.toFixed(1)}d gated vs ${reactionOnlyDaysNoWarp.toFixed(1)}d with warp`,
+    reactionOnlyDaysGated > warpDays,
+    `${reactionOnlyDaysGated.toFixed(1)}d gated vs ${warpDays.toFixed(1)}d with warp`,
   )
 
-  // Restore warp-theory for the destroyer (hyperdrive-only) half of this
-  // check.
-  useTechStore.setState((s) => {
-    const current = s.stateFor(countryId)
-    return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: new Set(current.researched).add('warp-drives') } } }
-  })
+  // The destroyer (hyperdrive-only) half: Hyperdrive Mk I is pre-seeded.
   const destroyer = makeShip('destroyer', 'p2', countryId, 'Mars')
-  const starDest = { kind: 'star' as const, starId: 'sol' }
-  const hyperdriveAttempt = planMove(destroyer, starDest, simDays)
+  const hyperdriveAttempt = planMove(destroyer, farStar, simDays)
   check(
-    'hyperspace-theory is pre-seeded, so a fresh country can still attempt a hyperdrive jump today',
+    'Hyperdrive Mk I is pre-seeded, so a fresh country can attempt a hyperdrive jump today',
     hyperdriveAttempt.kind !== 'order',
     hyperdriveAttempt.kind,
   )
+  const ownStar = planMove(destroyer, { kind: 'star', starId: 'sol' }, simDays)
+  check('...but inside its own system it flies: no jump to the star it is already at', ownStar.kind === 'order' && ownStar.order.usedWarp === false, ownStar.kind)
 
   useTechStore.setState((s) => {
     const current = s.stateFor(countryId)
     const stripped = new Set(current.researched)
-    stripped.delete('hyperspace-theory')
+    stripped.delete('hyperdrive-mk1')
     return { byCountry: { ...s.byCountry, [countryId]: { ...current, researched: stripped } } }
   })
-  const withoutHyperdrive = planMove(destroyer, starDest, simDays)
+  const withoutHyperdrive = planMove(destroyer, farStar, simDays)
   check(
-    'without Hyperspace Theory, a hyperdrive-only hull falls all the way back to a plain reaction-drive order — no jump attempted at all',
+    'without Hyperdrive Mk I, a hyperdrive-only hull falls all the way back to a plain reaction-drive order — no jump attempted at all',
     withoutHyperdrive.kind === 'order' && withoutHyperdrive.order.usedWarp === false,
   )
+  check('...and it has no drive to charge out of a fight with', planFtlCharge(destroyer, farStar, simDays) === null)
 
   // Back to the shared test nations for every later section.
   usePlayerStore.setState({ selectedCountryId: TEST_PLAYER })

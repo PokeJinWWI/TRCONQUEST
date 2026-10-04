@@ -1,7 +1,7 @@
 // How risky a hyperdrive jump is for where it goes: further is riskier, and a
 // heavier destination is riskier. One rule for a jump to a star system and for
-// a jump to a whole neighbourhood (nothing can make the second yet; the rule is
-// ready for when it can). The result multiplies the drive's base rate
+// a jump to a whole neighbourhood (`clusterJumpRiskFactor`; the hyperdrive's own
+// risk is now the curve in data/warpData.ts, this file only adds the star's mass). The result multiplies the drive's base rate
 // (shipPhysics.hyperdriveLossChance): 1 = an average jump between our own
 // neighbourhood's stars, which keeps the base rates meaning what they did.
 import {
@@ -12,6 +12,8 @@ import {
   JUMP_RISK_MIN_FACTOR,
 } from '../data/shipData'
 import { STARS, getStarsForNeighborhood, type StarData } from '../data/starData'
+import { HYPERDRIVE_BASE_LOSS_CHANCE } from '../data/shipData'
+import { hyperdriveMkLoss } from '../data/warpData'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
 
 export function jumpRiskFactor(distance: number, destinationMass: number, refDistance: number, refMass: number): number {
@@ -64,4 +66,25 @@ export function clusterJumpRiskFactor(fromClusterId: string, toClusterId: string
   if (!from || !to) return 1
   clusterRefMass ??= geometricMean(NEIGHBORHOODS.map((n) => clusterMassKg(n.id)))
   return jumpRiskFactor(distance3(from.position, to.position), clusterMassKg(to.id), JUMP_RISK_CLUSTER_REF_KLY, clusterRefMass)
+}
+
+// The factor a hyperdrive Mk jump of `distanceLy` to `destination` multiplies the base
+// loss chance (HYPERDRIVE_BASE_LOSS_CHANCE) by: the Mk's own loss at that distance
+// (data/warpData.hyperdriveMkLoss: a higher Mk is far safer) against the base, times
+// the destination's mass (heavier = riskier, kept to JUMP_MASS_MIN..MAX).
+export const JUMP_MASS_MIN_FACTOR = 0.8
+export const JUMP_MASS_MAX_FACTOR = 1.25
+export function destinationMassFactor(destination: Pick<StarData, 'massKg'>): number {
+  starRef ??= starReference()
+  const raw = Math.pow(destination.massKg / starRef.massKg, JUMP_RISK_MASS_EXPONENT)
+  return Math.max(JUMP_MASS_MIN_FACTOR, Math.min(JUMP_MASS_MAX_FACTOR, raw))
+}
+export function hyperdriveMkRiskFactor(mk: number, distanceLy: number, destination: Pick<StarData, 'massKg'>): number {
+  return hyperdriveRiskFactorOf(mk, distanceLy, destinationMassFactor(destination))
+}
+// The same with the mass factor given: 1 for a jump to a whole cluster or a bare point
+// (kly distances dwarf the mass of one cluster's stars, and the curve must still
+// tend to certain loss), the star's own for a jump to a system.
+export function hyperdriveRiskFactorOf(mk: number, distanceLy: number, massFactor: number): number {
+  return (hyperdriveMkLoss(mk, distanceLy) / HYPERDRIVE_BASE_LOSS_CHANCE) * massFactor
 }

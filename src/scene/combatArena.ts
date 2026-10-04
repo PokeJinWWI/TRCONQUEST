@@ -246,7 +246,39 @@ export function arenaSurfaceGravity(massKg: number, radiusKm: number): number {
   return ARENA_SURFACE_GRAVITY_AT_EARTH_UNITS_PER_S2 * (realSurfaceGravityMs2(massKg, radiusKm) / EARTH_SURFACE_GRAVITY_MS2)
 }
 
-// Net gravitational pull on a point from every body sharing the arena, each
+// A body has "significant gravity" when its REAL surface gravity is at least
+// this (m/s^2): stars, planets, Luna and Pluto do, Phobos and Deimos do not. A
+// body below the line neither pulls a ship nor is orbited, so a fight there is
+// flat space. (A moon with no mass in the data has no gravity at all.)
+export const SIGNIFICANT_GRAVITY_MS2 = 0.5
+// The same line in the arena's own units (see arenaSurfaceGravity's scaling).
+export const SIGNIFICANT_GRAVITY_UNITS_PER_S2 = ARENA_SURFACE_GRAVITY_AT_EARTH_UNITS_PER_S2 * (SIGNIFICANT_GRAVITY_MS2 / EARTH_SURFACE_GRAVITY_MS2)
+
+export function hasSignificantGravity(obstacle: Pick<CombatObstacle, 'surfaceGravityUnitsPerSecondSq'>): boolean {
+  return obstacle.surfaceGravityUnitsPerSecondSq >= SIGNIFICANT_GRAVITY_UNITS_PER_S2
+}
+
+// The body a ship at `point` orbits: of the bodies with significant gravity,
+// the one pulling hardest there (near Luna in an Earth fight that is Luna, else
+// Earth). Null where there is none: deep space, or a fight at a small moon.
+export function orbitPrimary(point: ArenaPoint, obstacles: CombatObstacle[]): CombatObstacle | null {
+  let best: CombatObstacle | null = null
+  let bestPull = 0
+  for (const obstacle of obstacles) {
+    if (!hasSignificantGravity(obstacle)) continue
+    const distance = pointDistance(point, obstacle.position)
+    if (distance < 1e-6) continue
+    const pull = obstacle.surfaceGravityUnitsPerSecondSq * (obstacle.radiusUnits / distance) ** 2
+    if (pull > bestPull) {
+      bestPull = pull
+      best = obstacle
+    }
+  }
+  return best
+}
+
+// Net gravitational pull on a point from every body with significant gravity
+// (hasSignificantGravity) sharing the arena, each
 // contribution following the real inverse-square law (g(r) = g_surface *
 // (R/r)^2) at its own already-compressed arena-scale surface gravity.
 // Summed rather than nearest-body-only: an Earth fight now shares the arena
@@ -256,6 +288,7 @@ export function arenaSurfaceGravity(massKg: number, radiusKm: number): number {
 export function gravitationalAcceleration(point: ArenaPoint, obstacles: CombatObstacle[]): Vector3 {
   const total = new Vector3()
   for (const obstacle of obstacles) {
+    if (!hasSignificantGravity(obstacle)) continue
     const toBody = toVector3(obstacle.position).sub(toVector3(point))
     const distance = toBody.length()
     if (distance < 1e-6) continue

@@ -19,13 +19,15 @@ import { ComplexDistrictsTab, ComplexWorldSummary } from './planet/ComplexPlanet
 import { DefenseTab } from './planet/DefenseTab'
 import { useColonyStore } from '../state/colonyStore'
 import { COLONY_FOUNDING_DAYS, COLONY_PATROL_DAYS } from '../data/colonyData'
-import { canColonize, colonizeFromPlanet, colonyCostFor } from '../scene/colonies'
+import { canColonize, colonizeFromPlanet } from '../scene/colonies'
 import { useShipStore } from '../state/shipStore'
-import { useResourceStore } from '../state/resourceStore'
 import { useSurveyStore } from '../state/surveyStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { usePlayerBodySurveyed } from '../scene/intel'
+import { useDepositStore } from '../state/depositStore'
+import { MATERIALS } from '../data/materials'
+import { bodyHasDeposit, EXTRACTION_PER_MONTH } from '../data/deposits'
 
 export interface InspectPanelAction {
   label: string
@@ -94,7 +96,7 @@ function ColonyRow({ bodyName }: { bodyName: string }) {
 
 // Colonize from the planet menu (Simple mode): on a surveyed world nobody
 // holds, with land. "Colonize" sends one of your Colony Ships; "Let ships
-// choose" puts every idle Colony Ship on auto-settle, which picks the cheapest
+// choose" puts every idle Colony Ship on auto-settle, which picks the nearest
 // world it may itself. Says why when it can't.
 function ColonizeRows({ bodyName }: { bodyName: string }) {
   const [message, setMessage] = useState<string | null>(null)
@@ -103,7 +105,6 @@ function ColonizeRows({ bodyName }: { bodyName: string }) {
   const playerId = usePlayerStore((s) => s.selectedCountryId)
   const ships = useShipStore((s) => s.ships)
   // Re-check when what the rules read changes.
-  useResourceStore((s) => (playerId ? s.stateFor(playerId).amounts.influence : 0))
   useSurveyStore((s) => (playerId ? s.discovered[playerId] : undefined))
   if (!simple || !playerId || owner || bodyName === 'Sol') return null
   const owners = useTerritoryStore.getState().bodyOwner
@@ -112,7 +113,6 @@ function ColonizeRows({ bodyName }: { bodyName: string }) {
   const checks = mine.map((s) => canColonize(s, bodyName, { anywhere: true }))
   const okCheck = checks.find((c) => c.ok)
   const why = mine.length === 0 ? 'You have no Colony Ship: build one in the Shipyard (Science & support)' : okCheck ? null : (checks.find((c) => !c.ok) as { reason: string } | undefined)?.reason ?? null
-  const cost = colonyCostFor(playerId, bodyName)
   return (
     <>
       <div className="inspect-divider" />
@@ -121,19 +121,19 @@ function ColonizeRows({ bodyName }: { bodyName: string }) {
           type="button"
           className="detail-view-btn"
           disabled={!!why}
-          title={why ?? `Send a Colony Ship to found a micro-colony here (${cost} influence, ${COLONY_FOUNDING_DAYS} days in orbit)`}
+          title={why ?? `Send a Colony Ship to found a micro-colony here (${COLONY_FOUNDING_DAYS} days in orbit)`}
           onClick={() => {
             const r = colonizeFromPlanet(bodyName)
             setMessage(r.ok ? `${r.shipName} is on its way` : r.reason)
           }}
         >
-          Colonize ({cost} influence)
+          Colonize
         </button>
         <button
           type="button"
           className="detail-view-btn"
           disabled={mine.length === 0}
-          title="Put every Colony Ship of yours on auto-settle: each picks the cheapest world it may settle, itself"
+          title="Put every Colony Ship of yours on auto-settle: each picks the nearest world it may settle, itself"
           onClick={() => {
             for (const s of mine) if (!s.founding && !s.arrivalCommand) useShipStore.getState().setAutomation(s.id, 'settle')
             setMessage('Your Colony Ships will choose where to settle')
@@ -159,6 +159,8 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
   const owner = ownerId ? getCountry(ownerId) : undefined
   const occupier = controllerId && controllerId !== ownerId ? ownerDisplay(controllerId) : undefined
   const surveyed = usePlayerBodySurveyed(body.name)
+  // Natural deposits are revealed by survey: what is left, per material.
+  const deposits = useDepositStore((s) => s.remaining)
 
   return (
     <>
@@ -183,6 +185,15 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
           </span>
         </div>
       )}
+      {surveyed && MATERIALS.filter((m) => bodyHasDeposit(m.id, body.name)).map((m) => {
+        const left = deposits[m.id][body.name] ?? 0
+        return (
+          <div className="inspect-row" key={m.id} title={`A finite natural deposit of ${m.name.toLowerCase()}. A nation that owns this body and has researched its Extraction tech draws ${EXTRACTION_PER_MONTH} a month until it runs dry.`}>
+            <span className="inspect-label">{m.name} deposit</span>
+            <span className="inspect-value">{left > 0 ? `${Math.floor(left)} left` : 'depleted'}</span>
+          </div>
+        )
+      })}
       <div className="inspect-row">
         <span className="inspect-label">Radius</span>
         <span className="inspect-value">{Math.round(body.radiusKm).toLocaleString()} km</span>

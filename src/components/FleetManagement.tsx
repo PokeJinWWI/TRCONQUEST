@@ -14,22 +14,25 @@ import {
   type CombatProfile,
   type DamageType,
 } from '../data/combatData'
-import { SHIP_CLASSES, SHIP_ROLE_LABELS, describeFtlDrive, type ShipClass } from '../data/shipData'
+import { PLAYER_SHIP_CLASSES, SHIP_ROLE_LABELS, describeFtlDrive, type ShipClass } from '../data/shipData'
 import { usePlayerStore } from '../state/playerStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { overallHealthFraction, shipCombatProfile, totalHitPoints } from '../scene/combatResolution'
 import { getShipStatusText } from '../scene/shipPhysics'
 import { queueStance, queueBombard } from '../scene/commsVisual'
+import { FleetFreeFlightToggle } from '../scene/ShipFreeFlightToggle'
+import { FleetExploreToggle } from '../scene/ShipAutomationToggle'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS } from '../data/defenseData'
 import { isArmed } from '../scene/armyLogic'
 import { fleetLocationKey } from '../scene/fleetRules'
 import { useCombatStore } from '../state/combatStore'
 import { useFleetStore, type Fleet } from '../state/fleetStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
-import { HULL_CHASSES, designPowerBudget, designPowerUsed, designToShipClass, type HullChassis, type ShipDesign } from '../data/hullChassis'
+import { HULL_CHASSES, chassisAvailable, designPowerBudget, designPowerUsed, designToShipClass, type HullChassis, type ShipDesign } from '../data/hullChassis'
 import { POWER_TIER_BUDGET, POWER_TIER_LABELS, SLOT_SIZE_LABELS, modulesForSlot, powerTiersAvailable, type SlotCategory } from '../data/shipModules'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerTech } from '../hooks/usePlayerTech'
+import { strategyBlock } from '../scene/freeFlight'
 import { ShipyardPanel } from './ShipyardPanel'
 import { useFleetTabStore } from '../state/fleetTabStore'
 
@@ -162,6 +165,8 @@ function FleetManager() {
               <span className="fleet-group-header">
                 {fleets.find((f) => f.id === fleetId)?.name ?? 'Fleet'} · {members.length} ship{members.length === 1 ? '' : 's'}
               </span>
+              <FleetFreeFlightToggle ships={members} />
+              <FleetExploreToggle ships={members} />
             </div>
             {expanded &&
               members.map((ship) => {
@@ -315,11 +320,11 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
 // hand-tuned constants forever — see combatData.ts's own header — so this
 // view is deliberately unaffected by the builder below existing at all.
 function PresetCatalog() {
-  const [selectedId, setSelectedId] = useState(SHIP_CLASSES.find((c) => c.role === 'warship')?.id ?? SHIP_CLASSES[0].id)
-  const selected = SHIP_CLASSES.find((c) => c.id === selectedId) ?? SHIP_CLASSES[0]
+  const [selectedId, setSelectedId] = useState(PLAYER_SHIP_CLASSES.find((c) => c.role === 'warship')?.id ?? PLAYER_SHIP_CLASSES[0].id)
+  const selected = PLAYER_SHIP_CLASSES.find((c) => c.id === selectedId) ?? PLAYER_SHIP_CLASSES[0]
 
-  const warships = SHIP_CLASSES.filter((c) => c.role === 'warship')
-  const civilians = SHIP_CLASSES.filter((c) => c.role !== 'warship')
+  const warships = PLAYER_SHIP_CLASSES.filter((c) => c.role === 'warship')
+  const civilians = PLAYER_SHIP_CLASSES.filter((c) => c.role !== 'warship')
 
   const renderGroup = (label: string, group: ShipClass[]) => (
     <div className="combat-side">
@@ -361,6 +366,7 @@ const SLOT_CATEGORY_LABELS: Record<SlotCategory, string> = {
   shield: 'Shields',
   defense: 'Point Defense / Flak',
   upgrade: 'Upgrades',
+  drive: 'FTL drive',
 }
 
 // One row per physical slot on the chassis — a size-filtered <select> is the
@@ -452,8 +458,11 @@ function ShipBuilder() {
   const deleteDesign = useShipDesignStore((s) => s.deleteDesign)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [newChassisId, setNewChassisId] = useState(HULL_CHASSES[0].id)
+  const [pickedChassisId, setNewChassisId] = useState(HULL_CHASSES[0].id)
   const [newName, setNewName] = useState('')
+  // Only the chassis the player has researched (the same gate as the shipyard's hulls).
+  const availableChassis = chassisAvailable(usePlayerTech().researched)
+  const newChassisId = availableChassis.some((c) => c.id === pickedChassisId) ? pickedChassisId : availableChassis[0].id
 
   const selected = designs.find((d) => d.id === selectedId) ?? null
   const selectedChassis = selected ? HULL_CHASSES.find((c) => c.id === selected.chassisId) ?? null : null
@@ -509,7 +518,7 @@ function ShipBuilder() {
         <div className="combat-side">
           <div className="combat-side-label">New Design</div>
           <select className="slot-select" value={newChassisId} onChange={(e) => setNewChassisId(e.target.value)}>
-            {HULL_CHASSES.map((c) => (
+            {availableChassis.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -608,6 +617,7 @@ function ShipStrategyRow({
   const shipClass = resolveShipClass(ship.classId)
   const simDays = useThrottledSimDays()
   const stanceOptions = fleet?.strategy != null ? [...COMBAT_STANCES, 'fleet' as const] : COMBAT_STANCES
+  const researched = usePlayerTech().researched
   return (
     <div className={`fleet-row${ship.id === selectedShipId ? ' selected' : ''}`}>
       <div className="fleet-row-head">
@@ -617,17 +627,21 @@ function ShipStrategyRow({
         <span className="fleet-row-class">{shipClass?.name ?? 'Unknown'}</span>
       </div>
       <div className="combat-density-row">
-        {stanceOptions.map((stance) => (
-          <button
-            key={stance}
-            type="button"
-            className={`combat-density-btn${ship.stance === stance ? ' active' : ''}`}
-            onClick={() => queueStance(ship, stance)}
-            title={STANCE_DESCRIPTIONS[stance]}
-          >
-            {STANCE_LABELS[stance]}
-          </button>
-        ))}
+        {stanceOptions.map((stance) => {
+          const block = strategyBlock(stance, researched, ship)
+          return (
+            <button
+              key={stance}
+              type="button"
+              className={`combat-density-btn${ship.stance === stance ? ' active' : ''}`}
+              disabled={!!block}
+              onClick={() => queueStance(ship, stance)}
+              title={block ?? STANCE_DESCRIPTIONS[stance]}
+            >
+              {STANCE_LABELS[stance]}
+            </button>
+          )
+        })}
       </div>
       {isArmed(ship) && (
         <div className="combat-density-row" title="Orbital bombardment: works while this ship orbits a world held by a nation you're at war with, and no enemy warships contest that orbit.">
@@ -661,6 +675,7 @@ function ShipStrategyRow({
 }
 
 function Strategizer() {
+  const researched = usePlayerTech().researched
   const ships = useShipStore((s) => s.ships)
   const setFleetStrategy = useShipStore((s) => s.setFleetStrategy)
   const selectShip = useShipStore((s) => s.selectShip)
@@ -702,17 +717,21 @@ function Strategizer() {
                 </div>
                 <div className="strategizer-fleet-strategy">
                   <div className="combat-density-row">
-                    {FLEET_STRATEGIES.map((strategy) => (
-                      <button
-                        key={strategy}
-                        type="button"
-                        className={`combat-density-btn${fleet?.strategy === strategy ? ' active' : ''}`}
-                        onClick={() => setFleetStrategy(fleetId, fleet?.strategy === strategy ? null : strategy)}
-                        title={FLEET_STRATEGY_DESCRIPTIONS[strategy]}
-                      >
-                        {FLEET_STRATEGY_LABELS[strategy]}
-                      </button>
-                    ))}
+                    {FLEET_STRATEGIES.map((strategy) => {
+                      const block = members.map((m) => strategyBlock(strategy, researched, m)).find((r) => r) ?? null
+                      return (
+                        <button
+                          key={strategy}
+                          type="button"
+                          className={`combat-density-btn${fleet?.strategy === strategy ? ' active' : ''}`}
+                          disabled={!!block}
+                          onClick={() => setFleetStrategy(fleetId, fleet?.strategy === strategy ? null : strategy)}
+                          title={block ?? FLEET_STRATEGY_DESCRIPTIONS[strategy]}
+                        >
+                          {FLEET_STRATEGY_LABELS[strategy]}
+                        </button>
+                      )
+                    })}
                   </div>
                   <div className="fleet-row-status">
                     {fleet?.strategy
