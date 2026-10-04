@@ -41,9 +41,12 @@ function hitPointsOf(shipClass: ShipClass): number {
 }
 
 export function shipBuildCost(shipClass: ShipClass): ResourceCost {
+  // A hull cheaper or dearer than its hit points imply (the scouts) scales alloys
+  // and energy only: the drive's hyperium and special core are never discounted.
+  const factor = shipClass.buildCostFactor ?? 1
   const cost: ResourceCost = {
-    alloys: Math.max(MIN_ALLOYS, Math.round(hitPointsOf(shipClass) * ALLOYS_PER_HIT_POINT)),
-    energy: BASE_ENERGY + ENERGY_PER_WEAPON * shipClass.combat.weapons.length,
+    alloys: Math.max(MIN_ALLOYS, Math.round(hitPointsOf(shipClass) * ALLOYS_PER_HIT_POINT * factor)),
+    energy: Math.round((BASE_ENERGY + ENERGY_PER_WEAPON * shipClass.combat.weapons.length) * factor),
   }
   const warpDrives = shipClass.ftlDrives.filter((d) => d.kind === 'warp').length
   const hyperDrives = shipClass.ftlDrives.filter((d) => d.kind === 'hyperdrive')
@@ -62,6 +65,10 @@ export function shipBuildDays(shipClass: ShipClass): number {
   const alloys = shipBuildCost(shipClass).alloys ?? MIN_ALLOYS
   return Math.round(BASE_BUILD_DAYS + alloys * BUILD_DAYS_PER_ALLOY)
 }
+
+// An upgrade (scene/shipUpgrade.ts) holds a slip for this share of the NEW level's build
+// time. Its cost is the build-cost difference between the two levels (no number of its own).
+export const UPGRADE_DURATION_FACTOR = 0.5
 
 // --- The shipyard itself --------------------------------------------------
 //
@@ -89,8 +96,9 @@ export const STARTING_STOCKPILE: Partial<Record<ResourceId, number>> = {
   energy: 600,
   minerals: 300,
   alloys: 400,
-  exoticMatter: 30,
-  hyperium: 6,
+  // Exotic matter is per nation and falls with distance from the galactic core
+  // (data/exoticMatter.startingExoticMatter), and hyperium is scarce and only near
+  // Sol (data/hyperium.ts): both are set in seedStrategicResources, not here.
   special: 2,
 }
 
@@ -98,8 +106,11 @@ export const RESOURCE_INCOME_PER_MONTH: Partial<Record<ResourceId, number>> = {
   energy: 200,
   minerals: 150,
   alloys: 60,
-  exoticMatter: 6,
-  hyperium: 1,
+  // No flat income of either: hyperium and exotic matter come only from the natural
+  // deposits a nation owns and draws (scene/extraction.ts) and, for hyperium, from
+  // refining exotic matter (Hyperium Synthesis).
+  exoticMatter: 0,
+  hyperium: 0,
 }
 
 // One income tick per in-game month — the same cadence the economy itself

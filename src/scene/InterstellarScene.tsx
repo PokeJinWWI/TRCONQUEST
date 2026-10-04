@@ -15,7 +15,7 @@ import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
 import { useViewStore } from '../state/viewStore'
 import type { ShipInstance, MoveDestination } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
-import { useHyperlaneStore, laneEndpoints } from '../state/hyperlaneStore'
+import { useHyperlaneStore, laneEndpoints, allLanesOf } from '../state/hyperlaneStore'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
@@ -231,7 +231,7 @@ function StarNode({ star, selected, onSelect, onOrderTo, fleetPresence, onSelect
 // belong here — see shipPhysics.ts and Context.md for why this membership
 // check doesn't need to poll every frame (it only changes at order-issue/
 // order-complete, both discrete store writes).
-function isShipInInterstellarSpace(order: { space: 'system' | 'interstellar' } | null, locationKind: string): boolean {
+function isShipInInterstellarSpace(order: { space: 'system' | 'interstellar' | 'galactic' } | null, locationKind: string): boolean {
   if (order) return order.space === 'interstellar'
   return locationKind === 'star' || locationKind === 'interstellar-point'
 }
@@ -335,8 +335,12 @@ export function InterstellarScene() {
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const selectShip = useShipStore((s) => s.selectShip)
   const shipMenu = useShipOrderMenu()
-  const allLanes = useHyperlaneStore((s) => s.lanes)
-  const lanes = home ? allLanes : NO_LANES
+  // Lanes are each nation's own: the map shows the player's, and Observer mode
+  // (below) every nation's.
+  const lanesByNation = useHyperlaneStore((s) => s.lanes)
+  const lanePlayerId = usePlayerStore((s) => s.selectedCountryId)
+  const lanes = home && lanePlayerId ? lanesByNation[lanePlayerId] ?? NO_LANES : NO_LANES
+  const allLanes = useMemo(() => allLanesOf(lanesByNation), [lanesByNation])
   const interstellarShips = useMemo(
     () => (home ? ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)) : []),
     [ships, home],

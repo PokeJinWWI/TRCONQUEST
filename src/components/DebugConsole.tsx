@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { pristineCombatState, useShipStore } from '../state/shipStore'
 import type { ShipClass } from '../data/shipData'
-import { SHIP_CLASSES, describeFtlDrive } from '../data/shipData'
+import { PLAYER_SHIP_CLASSES, SHIP_CLASSES, describeFtlDrive } from '../data/shipData'
 import { COUNTRIES } from '../data/countryData'
 import { ROGUE_FACTIONS, SANDBOX_OWNER_BY_RELATION, SANDBOX_RELATIONS, SANDBOX_RELATION_LABELS } from '../data/countryRoster'
 import { ARMY_KINDS, type ArmyKind } from '../data/armyData'
@@ -76,7 +76,7 @@ export function DebugConsole() {
   const open = useDebugConsoleStore((s) => s.open)
   const setOpen = useDebugConsoleStore((s) => s.setOpen)
   const sandbox = usePlayerStore((s) => s.sandbox)
-  const [classId, setClassId] = useState(SHIP_CLASSES[0].id)
+  const [classId, setClassId] = useState(PLAYER_SHIP_CLASSES[0].id)
   const [starId, setStarId] = useState(SOL_SYSTEM_ID)
   const [nearBody, setNearBody] = useState(SOL_BODY_NAME)
   // Which nation owns a spawned ship — blank means "the player's own".
@@ -109,7 +109,8 @@ export function DebugConsole() {
   // plus its planets — all valid bodies to spawn a ship orbiting.
   const spawnNearOptions = [...getSystemStars(starId).map((c) => c.name), ...getPlanetsForStar(starId).map((p) => p.name)]
 
-  // Presets plus every custom design built in the Ship Designer's builder
+  // Every preset (the dev-only tools too: this console is the only place they can be
+  // spawned, labelled in the list) plus every custom design built in the Ship Designer's builder
   // (see FleetManagement.tsx) — resolveShipClass is what makes a design
   // resolvable at all once spawned, but the spawn picker itself still needs
   // its own merged list to OFFER them in the first place.
@@ -230,7 +231,7 @@ export function DebugConsole() {
           <select id="debug-ship-class" value={classId} onChange={(e) => setClassId(e.target.value)}>
             {spawnableClasses.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} — {c.ftlDrives.map(describeFtlDrive).join(', ')}
+                {c.name}{c.devOnly ? ' (dev-only)' : ''} — {c.ftlDrives.map(describeFtlDrive).join(', ')}
               </option>
             ))}
           </select>

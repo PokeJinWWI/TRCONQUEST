@@ -4,9 +4,9 @@ import { glossaryLookup, type GlossaryEntry } from '../data/glossary'
 // The game's hover tooltips, in both economy modes. Mounted once at the root.
 // Hover anything for a moment and a styled tooltip explains it:
 //   • any element with a `title` (every hint already written into the UI) —
-//     the title is lifted into `data-tip` while hovered so the browser's own
-//     plain tooltip never shows, and put back on leave so React stays in charge
-//     of the attribute;
+//     the title is moved into `data-tip` for good as soon as it appears (a
+//     MutationObserver watches the whole page), so the browser's own plain white
+//     tooltip can never show, hovered or not;
 //   • any short label whose text is a glossary term ("Tax rate", "GDP",
 //     "Stability", a nav button…) — the concept's plain-language explanation
 //     (data/glossary.ts), shown under the title when both apply.
@@ -99,31 +99,26 @@ export function TooltipLayer() {
   useEffect(() => {
     let anchor: Element | null = null
     let stashed: Element | null = null // the element whose title we show
-    let lifted: Element[] = [] // every element whose native title we took over
     let hovered: Element | null = null // what the pointer is over
     let timer: ReturnType<typeof setTimeout> | null = null
     let mouse = { x: 0, y: 0 }
 
-    const restoreTitle = (el: Element | null) => {
-      if (!el) return
-      const stashed = el.getAttribute('data-tip')
-      if (stashed !== null) {
-        if (!el.hasAttribute('title')) el.setAttribute('title', stashed)
-        el.removeAttribute('data-tip')
-      }
-    }
+    // A native `title` is moved into `data-tip` for good, the moment it appears
+    // anywhere in the page (never put back): the browser's own white tooltip must
+    // never get a chance to show, whether the pointer is over the element or not.
     const lift = (el: Element) => {
       const own = el.getAttribute('title')
-      if (!own) return
-      el.setAttribute('data-tip', own)
+      if (own === null) return
+      if (own) el.setAttribute('data-tip', own)
       el.removeAttribute('title')
-      if (!lifted.includes(el)) lifted.push(el)
+    }
+    const liftAll = (root: Element) => {
+      lift(root)
+      root.querySelectorAll('[title]').forEach(lift)
     }
     const hide = () => {
       if (timer) clearTimeout(timer)
       timer = null
-      for (const el of lifted) restoreTitle(el)
-      lifted = []
       stashed = null
       anchor = null
       hovered = null
@@ -162,22 +157,25 @@ export function TooltipLayer() {
       hide()
     }
 
-    // React re-renders can put a `title` back (or change it) while the pointer
-    // is still over the element — lift it again at once so the native tooltip
-    // never gets its second, and keep our own text current.
+    // React re-renders (and newly mounted elements) can bring a `title` in at any
+    // time: take it over at once and keep a shown tooltip's text current.
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
+        if (m.type === 'childList') {
+          m.addedNodes.forEach((n) => { if (n.nodeType === 1) liftAll(n as Element) })
+          continue
+        }
         const el = m.target as Element
-        if (!hovered || !el.contains(hovered) || !el.getAttribute('title')) continue
-        const wasShown = el === stashed
+        if (!el.getAttribute('title')) continue
         lift(el)
-        if (wasShown) {
+        if (el === stashed) {
           const text = el.getAttribute('data-tip')
           setTip((t) => (t ? { ...t, title: text } : t))
         }
       }
     })
-    observer.observe(document.body, { attributes: true, attributeFilter: ['title'], subtree: true })
+    liftAll(document.body)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['title'], childList: true, subtree: true })
 
     document.addEventListener('pointerover', onOver, true)
     document.addEventListener('pointermove', onMove, true)

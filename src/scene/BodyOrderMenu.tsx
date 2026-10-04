@@ -1,7 +1,7 @@
 import { useCallback, useState, type ReactElement } from 'react'
 import { ContextMenu, type ContextMenuItem } from './StarContextMenu'
 import { lastPointerDown } from './dragGuard'
-import { canColonize, colonyCostFor, orderSelectedToColonize } from './colonies'
+import { canColonize, orderSelectedToColonize } from './colonies'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { isPlayerOwned } from '../state/shipRelations'
 import { useShipStore } from '../state/shipStore'
@@ -46,7 +46,7 @@ export function colonizeMenuItem(systemId: string, bodyName: string): ContextMen
   const ok = checks.find((c) => c.ok)
   const refused = checks.find((c) => !c.ok)
   return {
-    label: `Colonize ${bodyName} (${ok?.ok ? ok.cost : colonyCostFor(colonists[0].ownerId, bodyName)} influence)`,
+    label: `Colonize ${bodyName}`,
     disabled: !ok,
     title: ok ? 'Fly there and found a micro-colony with the settlers aboard' : refused && !refused.ok ? refused.reason : undefined,
     onClick: () => orderSelectedToColonize(systemId, bodyName),

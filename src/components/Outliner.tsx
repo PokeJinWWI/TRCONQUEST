@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { shipPlaceLabel } from '../scene/shipPhysics'
 import { isCivilianClass } from '../scene/fleetRules'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
@@ -135,7 +136,7 @@ function useFleetEntries(): OutlinerEntry[] {
       const name = members.length > 1 ? `${fleet?.name ?? 'Fleet'} (${members.length})` : members[0].name
       // Civilians never share a fleet with warships (fleetRules), so the lead
       // ship says which tab the whole row belongs on.
-      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id, civilian: isCivilianClass(members[0].classId) }
+      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id, civilian: isCivilianClass(members[0].classId), detail: shipPlaceLabel(members[0]) }
     })
   }, [ships, fleets, playerCountryId])
 }

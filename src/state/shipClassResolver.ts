@@ -9,7 +9,7 @@ import { SHIP_CLASSES, type ShipClass } from '../data/shipData'
 import { HULL_CHASSES, designToShipClass } from '../data/hullChassis'
 import { useShipDesignStore } from './shipDesignStore'
 
-const DESIGN_ID_PREFIX = 'design:'
+export const DESIGN_ID_PREFIX = 'design:'
 
 export function resolveShipClass(classId: string): ShipClass | null {
   const preset = SHIP_CLASSES.find((c) => c.id === classId)

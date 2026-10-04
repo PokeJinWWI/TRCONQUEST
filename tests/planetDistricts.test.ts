@@ -110,7 +110,12 @@ console.log('\n=== 4. Simple: seeds, land from planet size, store and AI ===')
   }
   check('every seeded world houses its buildings within its land', everyFits)
   check('inhabited worlds start with an urban district, outposts without', districtsOf(st.worlds['Mars']).urban === 1 && districtsOf(st.worlds['Phobos']).urban === 0)
-  const q = st.queueBuilding('imperial-state-of-mars', 'Mars', 'civilianFactory')
+  // No district of Mars starts full any more (its industrial one did, until the Hyperium
+  // Refinery, which needs Hyperium Synthesis, left the seeds), so fill one by queueing.
+  const fullB = 'civilianFactory' as const
+  const fill = () => { for (let i = 0; i < 40 && st.queueBuilding('imperial-state-of-mars', 'Mars', fullB).ok; i++); }
+  fill()
+  const q = st.queueBuilding('imperial-state-of-mars', 'Mars', fullB)
   check('building into a full district is refused with a reason', !q.ok && /Develop the district/.test((q as { reason: string }).reason))
   const qd = st.queueDistrict('imperial-state-of-mars', 'Mars', 'industrial')
   check('developing a district is queued', qd.ok && useAbstractEconomyStore.getState().byCountry['imperial-state-of-mars'].queue.some((o) => o.district === 'industrial'))
@@ -182,6 +187,7 @@ console.log('\n=== 4b. Simple: deconstruction is its own reverse bar; queueing i
 
   // A building can be queued into a slot a queued district level will add.
   useAbstractEconomyStore.getState().reset()
+  for (let i = 0; i < 40 && st().queueBuilding(id, 'Mars', 'civilianFactory').ok; i++);
   const fullQ = st().queueBuilding(id, 'Mars', 'civilianFactory')
   st().queueDistrict(id, 'Mars', 'industrial')
   const after = st().queueBuilding(id, 'Mars', 'civilianFactory')

@@ -4,6 +4,7 @@ import { galaxyEmpires } from '../data/generatedEmpires'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
 import { findStar } from '../data/starData'
 import { ALL_TECHS } from '../data/techData'
+import { HUMAN_BASELINE_TIER } from '../data/techTiers'
 import { useEconomyStore } from '../state/economyStore'
 import { useObserverStore } from '../state/observerStore'
 import { useViewStore } from '../state/viewStore'
@@ -45,7 +46,7 @@ export function ObserverPanel() {
             <div className="inspect-row"><span className="inspect-label">Influence</span><span className="inspect-value">{num(e.influence)}</span></div>
             <div className="inspect-row" title={[...e.researched].map((t) => TECH_NAME.get(t) ?? t).join(', ')}>
               <span className="inspect-label">Tech</span>
-              <span className="inspect-value">{e.researched.size} researched</span>
+              <span className="inspect-value">tier {e.techTier} ({e.techTier > HUMAN_BASELINE_TIER ? 'above' : e.techTier === HUMAN_BASELINE_TIER ? 'at' : 'below'} humans) · {e.researched.size} researched</span>
             </div>
             {s && (
               <div className="inspect-row">

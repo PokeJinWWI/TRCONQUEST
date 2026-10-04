@@ -15,6 +15,8 @@ export type Intent =
   // empire is not at war with (scene/aggression.ts). The news starts the war.
   | { kind: 'attack-ship'; shipIds: string[]; targetShipId: string }
   | { kind: 'build-ship'; classId: string }
+  // Upgrade one of its ships at its shipyard (scene/shipUpgrade.ts): a slip, the same rules as the player's.
+  | { kind: 'upgrade-ship'; shipId: string }
   // A Construction Ship builds a Starbase at the star it rests at, paid from
   // its hold; `starId` is only what the planner meant (for traces).
   | { kind: 'build-starbase'; shipId: string; starId: string }

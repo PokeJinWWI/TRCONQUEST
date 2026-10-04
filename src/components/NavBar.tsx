@@ -1,6 +1,9 @@
 import { isNewTabClick, isNewTabContextMenu } from '../scene/selectionInput'
 import { LeadersPanel } from './LeadersPanel'
-import { useCustomButtonStore } from '../state/customButtonStore'
+import { navyTabOnOpen } from '../state/fleetTabStore'
+import { innerTabsToSave, landingTabs, useCustomButtonStore } from '../state/customButtonStore'
+import { FLEET_TABS } from './FleetManagement'
+import { shipyardTabLabel } from './ShipyardPanel'
 import { useFleetTabStore } from '../state/fleetTabStore'
 import { useWorkspaceStore } from '../state/workspaceStore'
 import { useState } from 'react'
@@ -161,6 +164,7 @@ export function NavBar() {
   const pinButton = useCustomButtonStore((s) => s.pin)
   const removeButton = useCustomButtonStore((s) => s.remove)
   const fleetTab = useFleetTabStore((s) => s.tab)
+  const shipyardNow = useFleetTabStore((s) => s.shipyardNow)
   const handleCategoryClick = (category: CategoryDef, e: { ctrlKey: boolean; metaKey: boolean }) => {
     // Ctrl/Cmd-click: open this panel in a new tab instead.
     if (isNewTabClick(e)) {
@@ -171,7 +175,15 @@ export function NavBar() {
       setNavCategory(null, null)
       return
     }
+    openNavyAtDefault(category.name, category.subcategories?.[0] ?? null)
     setNavCategory(category.name, category.subcategories?.[0] ?? null)
+  }
+  // A plain pick of Navy opens its first tab (Fleet Manager), not the one used last.
+  const openNavyAtDefault = (category: string | null, subcategory: string | null) => {
+    const fleet = useFleetTabStore.getState()
+    const next = navyTabOnOpen({ category: activeCategoryName, subcategory: activeSubcategory }, { category, subcategory }, fleet.tab)
+    if (next !== fleet.tab) fleet.setTab(next)
+    if (next === 'manager') fleet.requestShipyardTab(null)
   }
 
   const handleClose = () => {
@@ -204,16 +216,21 @@ export function NavBar() {
           <div className="nav-custom">
             <div className="nav-custom-title">Quick buttons</div>
             {customButtons.map((b) => {
-              const active = activeCategoryName === b.category && activeSubcategory === b.subcategory && (!b.fleetTab || fleetTab === b.fleetTab)
+              const active = activeCategoryName === b.category && activeSubcategory === b.subcategory && (!b.fleetTab || fleetTab === b.fleetTab) && (!b.shipyardTab || shipyardNow === b.shipyardTab)
               return (
                 <button
                   key={b.id}
                   type="button"
                   className={`nav-category-btn nav-custom-btn${active ? ' active' : ''}`}
-                  title={b.builtin ? `Open ${b.label}` : `Open ${b.label}. Right-click to remove.`}
+                  title={b.builtin ? `Open ${b.label}` : `Open ${b.label}. × (or right-click) removes it.`}
                   onClick={(e) => {
                     if (isNewTabClick(e)) return useWorkspaceStore.getState().openInNewTab({ activeNavCategory: b.category, activeNavSubcategory: b.subcategory })
-                    if (b.fleetTab) useFleetTabStore.getState().setTab(b.fleetTab)
+                    // Land on the inner tabs the button saved (or the panel's defaults).
+                    const land = landingTabs(b)
+                    if (land) {
+                      useFleetTabStore.getState().requestShipyardTab(land.shipyardTab)
+                      useFleetTabStore.getState().setTab(land.fleetTab)
+                    }
                     setNavCategory(b.category, b.subcategory)
                   }}
                   onContextMenu={(e) => {
@@ -222,6 +239,20 @@ export function NavBar() {
                   }}
                 >
                   {b.label}
+                  {!b.builtin && (
+                    <span
+                      className="nav-custom-remove"
+                      role="button"
+                      aria-label={`Remove ${b.label}`}
+                      title="Remove this button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeButton(b.id)
+                      }}
+                    >
+                      ×
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -230,7 +261,14 @@ export function NavBar() {
                 type="button"
                 className="nav-category-btn nav-custom-pin"
                 title="Add the open panel to these buttons"
-                onClick={() => pinButton(activeCategoryName, activeSubcategory)}
+                onClick={() => {
+                  const fleet = useFleetTabStore.getState()
+                  const inner = innerTabsToSave(activeCategoryName, activeSubcategory, { fleetTab: fleet.tab, shipyardTab: fleet.shipyardNow })
+                  pinButton(activeCategoryName, activeSubcategory, inner, {
+                    fleetTab: FLEET_TABS.find((t) => t.id === inner.fleetTab)?.label,
+                    shipyardTab: inner.shipyardTab ? shipyardTabLabel(inner.shipyardTab) : undefined,
+                  })
+                }}
               >
                 + Pin this panel
               </button>
@@ -288,7 +326,7 @@ export function NavBar() {
                     onClick={(e) =>
                       isNewTabClick(e)
                         ? useWorkspaceStore.getState().openInNewTab({ activeNavCategory: activeCategoryName, activeNavSubcategory: sub })
-                        : setNavCategory(activeCategoryName, sub)
+                        : (openNavyAtDefault(activeCategoryName, sub), setNavCategory(activeCategoryName, sub))
                     }
                   >
                     {sub}

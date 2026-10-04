@@ -6,9 +6,12 @@
 // Each slot is generated from its own stream of the one seed, so slots do not
 // depend on each other except to stay out of each other's systems. An entry in
 // data/loreEmpires.ts replaces the generated empire in its slot.
-import { ALL_TECHS, canResearch } from './techData'
 import { INFLUENCE_CAP } from './colonyData'
-import { DEFAULT_RESEARCHED } from '../state/techStore'
+import { NEIGHBORHOODS } from './neighborhoodData'
+import { HUMAN_BASELINE_TIER, MAX_TECH_TIER, techsForTier, tierOfTechs } from './techTiers'
+import { WARP_DRIVE_TECH_IDS, WARP_MK1_RADIUS_KLY } from './warpData'
+import { exoticMatterAtDistance } from './exoticMatter'
+import { hyperiumAnomalyClusters, hyperiumInCluster } from './hyperium'
 import { GALAXY_SEED, clusterOfGeneratedStar, findGeneratedStar, generatedClusterIds, generatedStarsFor, seededStream } from './galaxyGen'
 import { LORE_EMPIRES, type LoreEmpire } from './loreEmpires'
 
@@ -17,8 +20,29 @@ export const EMPIRE_COUNT = 20
 export const MAX_EMPIRES_PER_CLUSTER = 2
 // Systems an empire holds besides its home.
 export const MAX_EXTRA_SYSTEMS = 3
-// Techs researched beyond what every nation starts with.
-export const MAX_EXTRA_TECHS = 12
+
+// Tech tier (data/techTiers.ts; the human nations are HUMAN_BASELINE_TIER) follows
+// closeness to the galactic core: a score falling linearly from TIER_AT_CORE at the
+// core to TIER_AT_RIM at GALAXY_RADIUS_KLY, plus a seeded noise of up to +-TIER_NOISE
+// so it is not a pure gradient, rounded and kept to 1..MAX_TECH_TIER. Most empires
+// land above the baseline, the rim's at or below it.
+export const TIER_AT_CORE = 6.0
+export const TIER_AT_RIM = 2.2
+export const TIER_NOISE = 1.2
+export const GALAXY_RADIUS_KLY = 55
+export const MIN_EMPIRE_TIER = 1
+
+// How far a neighbourhood is from the galactic core, in thousands of light-years.
+export function coreDistanceKly(clusterId: string): number {
+  const n = NEIGHBORHOODS.find((x) => x.id === clusterId)
+  return n ? Math.hypot(n.position[0], n.position[1]) : GALAXY_RADIUS_KLY
+}
+
+export function tierFor(coreDistance: number, noise: number): number {
+  const closeness = 1 - Math.min(1, coreDistance / GALAXY_RADIUS_KLY)
+  const score = TIER_AT_RIM + (TIER_AT_CORE - TIER_AT_RIM) * closeness + (noise * 2 - 1) * TIER_NOISE
+  return Math.max(MIN_EMPIRE_TIER, Math.min(MAX_TECH_TIER, Math.round(score)))
+}
 
 export interface GalaxyEmpire {
   slot: number
@@ -30,8 +54,17 @@ export interface GalaxyEmpire {
   homeStarId: string
   // Every system it owns, home first. No system has two owners.
   ownedStarIds: string[]
-  // Same shape as a nation's researched set (state/techStore.ts TechState).
+  // Same shape as a nation's researched set (state/techStore.ts TechState): what
+  // its tier gives (data/techTiers.ts), or a lore entry's own.
   researched: Set<string>
+  // Tech tier against the human baseline (HUMAN_BASELINE_TIER); see tierFor.
+  techTier: number
+  // Its neighbourhood's distance from the galactic core, kly.
+  coreDistanceKly: number
+  // Starting exotic matter (falls with core distance) and hyperium (scarce, near Sol
+  // only): what it could spend on Warp Drive Mks / hyperdrive ships. data/exoticMatter.ts, data/hyperium.ts.
+  exoticMatter: number
+  hyperium: number
   // Political power, on the nations' own Influence scale (0..INFLUENCE_CAP).
   influence: number
   // True for an entry from data/loreEmpires.ts.
@@ -129,15 +162,16 @@ export function generateEmpires(seed: number, lore: LoreEmpire[] = []): GalaxyEm
     }
     if (!land) continue
 
-    // Tech: what every nation starts with, then a random walk up the tree by
-    // the game's own rule for what can be researched next.
-    const researched = new Set<string>(DEFAULT_RESEARCHED)
-    const steps = Math.floor(rng() * (MAX_EXTRA_TECHS + 1))
-    for (let i = 0; i < steps; i++) {
-      const open = ALL_TECHS.filter((t) => canResearch(t, researched, 0, true))
-      if (open.length === 0) break
-      researched.add(open[Math.floor(rng() * open.length)].id)
-    }
+    // Tech: a tier from closeness to the core plus seeded noise (its own stream, so
+    // the tier does not move anything else the slot rolls), and what that tier
+    // has researched.
+    const coreDistance = coreDistanceKly(land.clusterId)
+    // Near the core, where exotic matter is, it also has Warp Drive Mk I (and is at
+    // least at the human baseline, so its prerequisites are there).
+    const nearCore = coreDistance <= WARP_MK1_RADIUS_KLY
+    const generatedTier = Math.max(nearCore ? HUMAN_BASELINE_TIER : 0, tierFor(coreDistance, seededStream(seed, `tier:${slot}`)()))
+    const researched = techsForTier(generatedTier)
+    if (nearCore) researched.add(WARP_DRIVE_TECH_IDS[0])
     const influence = Math.round(rng() * INFLUENCE_CAP)
 
     const name = `${roots[slot % roots.length]} ${NAME_FORMS[Math.floor(rng() * NAME_FORMS.length)]}`
@@ -150,14 +184,26 @@ export function generateEmpires(seed: number, lore: LoreEmpire[] = []): GalaxyEm
         name: entry.name,
         color: entry.color,
         ...land,
-        researched: entry.researched ? new Set(entry.researched) : researched,
+        // A lore empire states a tier, or its own techs (its tier is then the highest
+        // the techs cover), or keeps what the slot generated.
+        ...(() => {
+          const own = entry.researched ? new Set(entry.researched) : entry.techTier !== undefined ? techsForTier(entry.techTier) : null
+          return own ? { researched: own, techTier: entry.techTier ?? tierOfTechs(own) } : { researched, techTier: generatedTier }
+        })(),
+        coreDistanceKly: coreDistance,
+        exoticMatter: Math.round(exoticMatterAtDistance(coreDistance)),
+        hyperium: 0,
         influence: entry.influence !== undefined ? Math.max(0, Math.min(INFLUENCE_CAP, entry.influence)) : influence,
         lore: true,
       })
     } else {
-      empires.push({ slot, id: `empire-${slot}`, name, color, ...land, researched, influence })
+      empires.push({ slot, id: `empire-${slot}`, name, color, ...land, researched, techTier: generatedTier, coreDistanceKly: coreDistance, exoticMatter: Math.round(exoticMatterAtDistance(coreDistance)), hyperium: 0, influence })
     }
   }
+  // Hyperium: the modest stock near Sol, the tiny deposit in a few seeded clusters that
+  // host an empire, nothing anywhere else (data/hyperium.ts).
+  const anomalies = hyperiumAnomalyClusters(empires.map((e) => e.clusterId), seed)
+  for (const e of empires) e.hyperium = hyperiumInCluster(e.clusterId, anomalies)
   return empires
 }
 

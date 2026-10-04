@@ -1,9 +1,12 @@
+import { usePlayerMaterialMask } from '../hooks/usePlayerMaterialMask'
 import { useMemo, useState } from 'react'
+import type { ResourceId } from '../data/resourceData'
 import { createPortal } from 'react-dom'
 import {
   ALL_TECHS,
   TECHS_BY_CATEGORY,
   canResearch,
+  resourceShortfall,
   prerequisitesMet,
   anomalousUnlocked,
   visibleNodeIds,
@@ -197,6 +200,7 @@ export function TechTreeGraph({
   researchPoints,
   monthly,
   freeResearchMode = false,
+  resources,
   onResearch,
   onClose,
   queue,
@@ -213,11 +217,15 @@ export function TechTreeGraph({
   // Dev console's "zero all tech costs" toggle — see techStore.ts's
   // freeResearchMode.
   freeResearchMode?: boolean
+  // What the nation holds, for the techs that consume exotic matter or hyperium.
+  resources?: Partial<Record<ResourceId, number>>
   onResearch: (nodeId: string) => void
   onClose: () => void
 }) {
   const [tree, setTree] = useState<TreeChoice>(initialTree)
   const techs = tree === 'all' ? ALL_TECHS : TECHS_BY_CATEGORY[tree]
+  // Names an undiscovered material "???" here, in the research UI only.
+  const mask = usePlayerMaterialMask()
   const visible = useMemo(() => new Set([...visibleNodeIds(techs, researched), ...localRoots(techs).map((n) => n.id)]), [techs, researched])
   const layout = useMemo(() => computeLayout(techs, visible), [techs, visible])
   const positionById = useMemo(() => new Map(layout.nodes.map((n) => [n.node.id, n])), [layout])
@@ -272,24 +280,27 @@ export function TechTreeGraph({
             })}
             {layout.lanes.map((lane, i) => (
               <text key={i} className="tech-tree-lane-label" x={PADDING} y={Math.max(10, lane.y - 5)}>
-                {lane.name}
+                {mask(lane.name)}
               </text>
             ))}
             {layout.nodes.map(({ node, x, y }) => {
               const isResearched = researched.has(node.id)
-              const eligible = canResearch(node, researched, researchPoints[node.category], freeResearchMode)
+              const shortfall = !isResearched && !freeResearchMode && resources ? resourceShortfall(node, resources) : null
+              const eligible = canResearch(node, researched, researchPoints[node.category], freeResearchMode) && !shortfall
               const previewOnly = !isResearched && (!prerequisitesMet(node, researched) || (node.locked === true && !anomalousUnlocked(researched)))
               const stateClass = isResearched ? 'researched' : previewOnly ? 'preview' : eligible ? 'eligible' : 'unaffordable'
               const external = externalPrerequisites(node, techs)
-              const needs = external.length > 0 ? `Needs ${external.map((t) => `${t.name} (${CATEGORY_LABELS[t.category]})`).join(', ')}. ` : ''
+              const needs = external.length > 0 ? `Needs ${external.map((t) => `${mask(t.name)} (${CATEGORY_LABELS[t.category]})`).join(', ')}. ` : ''
               const queuePos = queue.indexOf(node.id)
               const status = isResearched
                 ? 'Researched'
                 : queuePos >= 0
                   ? `Queued #${queuePos + 1}`
                   : previewOnly
-                    ? (external.length > 0 ? `needs ${external[0].name}` : '—')
-                    : `${freeResearchMode ? 0 : node.cost} ${tree === 'all' ? CATEGORY_LABELS[node.category] : 'pts'}`
+                    ? (external.length > 0 ? `needs ${mask(external[0].name)}` : '—')
+                    : shortfall
+                      ? mask(shortfall.replace(/ \(you have .*\)/, ''))
+                      : `${freeResearchMode ? 0 : node.cost} ${tree === 'all' ? CATEGORY_LABELS[node.category] : 'pts'}`
               return (
                 <g
                   key={node.id}
@@ -300,12 +311,12 @@ export function TechTreeGraph({
                     if (eligible) onResearch(node.id)
                     else onQueue(node.id)
                   }}
-                  data-tooltip={`${CATEGORY_LABELS[node.category]}. ${needs}${node.description}${isResearched ? '' : eligible ? ' Click to research.' : queuePos >= 0 ? ' Queued: click to take it out of the queue.' : ' Click to queue it (and what it still needs).'}`}
+                  data-tooltip={mask(`${CATEGORY_LABELS[node.category]}. ${needs}${node.description}${isResearched ? '' : shortfall ? ` ${shortfall}.` : ''}${isResearched ? '' : eligible ? ' Click to research.' : queuePos >= 0 ? ' Queued: click to take it out of the queue.' : ' Click to queue it (and what it still needs).'}`)}
                 >
                   <rect width={NODE_WIDTH} height={NODE_HEIGHT} rx={4} />
                   <line x1={2} y1={3} x2={2} y2={NODE_HEIGHT - 3} className="tech-cat-bar" />
                   <text x={8} y={17} className="tech-tree-node-name">
-                    {node.name.length > 22 ? `${node.name.slice(0, 21)}…` : node.name}
+                    {mask(node.name).length > 22 ? `${mask(node.name).slice(0, 21)}…` : mask(node.name)}
                     {node.locked && !isResearched ? ' 🔒' : ''}
                   </text>
                   <text x={8} y={33} className="tech-tree-node-status">

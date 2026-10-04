@@ -4,7 +4,9 @@
 //
 // Run:  npx tsx tests/ai.test.ts
 
+import { warpCommsOnly } from './testComms'
 import { applyInfluenceIncome, seedInfluence } from '../src/scene/colonies'
+import { STARBASE_INFLUENCE_COST } from '../src/data/starbaseData'
 import { COUNTRIES } from '../src/data/countryData'
 import { AI_MAX_STARBASES, AI_WAR_GRACE_DAYS, AI_WAR_RATIO, AI_WAR_RATIO_AT_HATRED } from '../src/data/aiData'
 import { usePlayerStore } from '../src/state/playerStore'
@@ -18,7 +20,9 @@ import { useResourceStore } from '../src/state/resourceStore'
 import { useShipyardStore } from '../src/state/shipyardStore'
 import { resolveShipClass } from '../src/state/shipClassResolver'
 import { totalHitPoints } from '../src/scene/combatResolution'
-import { resolveArrivalLocation } from '../src/scene/shipPhysics'
+import { resolveArrivalLocation, setJumpRoll } from '../src/scene/shipPhysics'
+import { seededStream } from '../src/data/galaxyGen'
+import { useHyperlaneStore } from '../src/state/hyperlaneStore'
 import { applyStrategicIncome, seedStrategicResources, spawnOwnedShip } from '../src/scene/shipyardLogic'
 import { setUpNewGame } from '../src/scene/gameSetup'
 import { declareWarOn } from '../src/scene/peace'
@@ -64,7 +68,12 @@ const LALANDE = 'kingdom-of-lalande'
 
 // A fresh world: every nation's starting forces and stockpile, all at peace.
 // The player is Lalande, so Mars, Venus and Orion are all AI empires.
+// Jump losses are rolled from a seeded stream, so every run of this file is the same.
+const JUMP_SEED = Number(process.env.AI_JUMP_SEED ?? 1)
+setJumpRoll(seededStream(JUMP_SEED, 'ai-test'))
+
 function freshWorld() {
+  useHyperlaneStore.setState({ lanes: {} })
   useShipStore.setState({ ships: [] })
   useArmyStore.getState().reset()
   useTerritoryStore.getState().reset()
@@ -74,7 +83,7 @@ function freshWorld() {
   useResourceStore.setState({ byCountry: {} })
   useDefenseStore.setState({ installations: [] })
   useBombardmentStore.setState({ devastation: {}, strikes: [] })
-  useTechStore.setState({ byCountry: {} })
+  warpCommsOnly()
   useSurveyStore.setState({ discovered: {}, known: {}, reports: [] })
   useStarbaseStore.setState({ starbases: [] })
   usePlayerStore.setState({ selectedCountryId: LALANDE })
@@ -214,7 +223,7 @@ console.log('\n=== 4. The Shipwright ===')
   check('with an empty stockpile it builds nothing', broke.intents.length === 0)
 
   freshWorld()
-  useTechStore.setState({ byCountry: { [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', 'orbital-construction']) } } })
+  useTechStore.setState({ byCountry: { [MARS]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperdrive-mk1', 'hyperspace-theory', 'orbital-construction']) } } })
   check('the Shipwright no longer plans Starbases (the Expander does)', !has(shipwright(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), INITIAL_AI_MEMORY).intents, 'build-starbase'))
 }
 
@@ -222,7 +231,9 @@ console.log('\n=== 4b. The Expander ===')
 {
   const plan = (id: string, memory = INITIAL_AI_MEMORY) => expander(buildBlackboard(id, captureSnapshot(0)), captureSnapshot(0), memory)
   const setTech = (id: string, extra: string[], points = 0) =>
-    useTechStore.setState({ byCountry: { [id]: { researchPoints: { physics: points, society: 0, engineering: points }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', ...extra]) } } })
+    useTechStore.setState({ byCountry: { [id]: { researchPoints: { physics: points, society: 0, engineering: points }, researched: new Set(['warp-theory', 'hyperdrive-mk1', 'hyperspace-theory', 'hyperdrive-mk2', ...extra]) } } })
+  // (Hyperdrive Mk II is what the AI researches last: with it every hop in the neighbourhood is under the 5% line
+  // it will jump at, so these checks about WHERE it goes see the whole neighbourhood.)
 
   freshWorld()
   setTech(MARS, [])
@@ -230,10 +241,10 @@ console.log('\n=== 4b. The Expander ===')
   check('...but not a Construction Ship before Orbital Construction', !plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'construction-ship'))
   check('with no research points it researches nothing', !has(plan(MARS).intents, 'research-tech'))
   setTech(MARS, [], 90)
-  check('with the points it researches Warp Comms first (its orders and reports cross the same signal delay the player\'s do)', plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'warp-comms'))
-  setTech(MARS, ['warp-comms'], 40)
+  check('with the points it goes straight to the road to Orbital Construction (Warp Comms costs exotic matter and is not on its path)', !plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'warp-comms'))
+  setTech(MARS, [], 40)
   check('...then the first step on the road to Orbital Construction', plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'classical-mechanics'))
-  setTech(MARS, ['warp-comms', 'classical-mechanics'], 40)
+  setTech(MARS, ['classical-mechanics'], 40)
   check('...and will not skip ahead to a step it cannot afford', !plan(MARS).intents.some((i) => i.kind === 'research-tech' && i.techId === 'orbital-construction'))
 
   spawnExtra(MARS, 'science-ship', 1)
@@ -274,6 +285,11 @@ console.log('\n=== 4b. The Expander ===')
   useShipStore.setState({ ships: useShipStore.getState().ships.map((s) => (s.id === conShip.id ? { ...s, location: { kind: 'star' as const, starId: 'barnards-star', offset: [0, 0, 0] as [number, number, number] } } : s)) })
   const build = expander(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: 'barnards-star' })
   check('...and builds the Starbase when it arrives', build.intents.some((i) => i.kind === 'build-starbase' && i.shipId === conShip.id))
+  // The wait for Influence is the named constant (30), the same one the player's rule charges.
+  const planAt = (influence: number) => { useResourceStore.getState().setAmount(MARS, 'influence', influence); return expander(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), { ...INITIAL_AI_MEMORY, expansionTarget: 'barnards-star' }).intents.some((i) => i.kind === 'build-starbase') }
+  check(`a Starbase waits for ${STARBASE_INFLUENCE_COST} influence (30): one short, it waits`, STARBASE_INFLUENCE_COST === 30 && !planAt(STARBASE_INFLUENCE_COST - 1))
+  check('...and goes ahead at exactly the cost', planAt(STARBASE_INFLUENCE_COST))
+  useResourceStore.getState().setAmount(MARS, 'influence', 100)
   // Resupply: the Construction Ship is away and empty, the Cargo Ship hauls the kit.
   {
     const ships = useShipStore.getState().ships
@@ -499,6 +515,15 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
 {
   const runExpansion = (label: string, grantResearch: boolean, days: number) => {
     freshWorld()
+    // Every hull jumps by hyperdrive, and an uncharted jump can lose the ship. The
+    // roll is seeded so the run is repeatable (AI_JUMP_SEED tries another), and
+    // nothing fights here, so every ship that disappears was lost in hyperspace.
+    setJumpRoll(seededStream(JUMP_SEED, `ai-expansion:${label}`))
+    const lost: Record<string, number> = {}
+    const jumped = { lanes: 0 }
+    const stopCounting = useShipStore.subscribe((now, before) => {
+      for (const sh of before.ships) if (!now.ships.some((x) => x.id === sh.id)) lost[sh.classId] = (lost[sh.classId] ?? 0) + 1
+    })
     const settle = (simDays: number) => {
       for (const s of useShipStore.getState().ships) {
         if (s.order && simDays >= s.order.arrivalSimDays) {
@@ -536,7 +561,12 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
     const sv = useSurveyStore.getState().discovered
     for (const id of aiIds) surveyedBodies += sv[id]?.surveyed.size ?? 0
     const commandsInFlight = useShipStore.getState().ships.reduce((n, sh) => n + (sh.pendingCommands?.length ?? 0), 0)
-    return { firstStarbaseDay, surveyedBodies, starbases: useStarbaseStore.getState().starbases, commandsInFlight }
+    stopCounting()
+    setJumpRoll(seededStream(JUMP_SEED, 'ai-test'))
+    jumped.lanes = useHyperlaneStore.getState().allLanes().length
+    const lostTotal = Object.values(lost).reduce((n, x) => n + x, 0)
+    console.log(`    ${label}: ${lostTotal} ship(s) lost in hyperspace over ${days} days${lostTotal ? ` (${Object.entries(lost).map(([c, n]) => `${n} ${c}`).join(', ')})` : ''}; ${jumped.lanes} lane(s) charted`)
+    return { firstStarbaseDay, surveyedBodies, starbases: useStarbaseStore.getState().starbases, commandsInFlight, lostTotal }
   }
 
   const simple = runExpansion('simple', true, 3000)

@@ -58,14 +58,12 @@ const IMPORT_COVER_MONTHS = 6 // import a need once the stockpile covers fewer m
 const IMPORT_MARGIN = 1.2
 const EXPORT_ABOVE = 3000 // export part of a bulk good's surplus once stockpiled past this
 const EXPORT_SHARE = 0.25
-const EXOTIC_TARGET = 2 // keep at least this much exotic matter coming in per month
 const FACTORIES_PER_LAB = 6
 const JOB_HEADROOM = 0.02
 const TIGHTEN_ABOVE = 0.04 // inflation above this → tight money…
 const UNTIGHTEN_BELOW = 0.025 // …held until it's back under this
 const LOOSEN_BELOW = 0.01 // below this → loose money…
 const UNLOOSEN_ABOVE = 0.0175 // …held until it's back over this // build until jobs exceed the workforce by this much
-const FACTORIES_PER_REFINERY = 8
 
 function clamp(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x
@@ -125,7 +123,7 @@ export function nextBuilding(s: AbstractEconomyState, ctx: AbstractAIContext): S
   const foundriesWanted = civilian * (ctx.atWar ? FOUNDRIES_PER_CIVILIAN_WAR : FOUNDRIES_PER_CIVILIAN_PEACE)
   if (lv('alloyFoundry') < foundriesWanted && !queued('alloyFoundry')) return 'alloyFoundry'
   const factories = civilian + lv('alloyFoundry') + lv('consumerFactory') + lv('electronicsPlant')
-  if (r.net.exoticMatter < EXOTIC_TARGET && lv('exoticRefinery') * FACTORIES_PER_REFINERY < factories && !queued('exoticRefinery')) return 'exoticRefinery'
+  // (It never builds a Hyperium Refinery: that needs Hyperium Synthesis, which the AI does not research.)
   const labs = lv('physicsLab') + lv('societyLab') + lv('engineeringLab')
   if (labs * FACTORIES_PER_LAB < factories) {
     // Spread over the trees, physics favoured: the tree furthest below its share.

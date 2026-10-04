@@ -17,6 +17,8 @@ import { ARENA_SPAN_UNITS, type ArenaPoint } from './combatArena'
 import { appendParticipantStop, arenaWindowSpan, orderParticipantTo } from './combatResolution'
 import { useCombatStore, isEnemy, combatPlaceOf } from '../state/combatStore'
 import { useShipStore } from '../state/shipStore'
+import { useTechStore } from '../state/techStore'
+import { moveOrderBlock } from './freeFlight'
 import { useViewStore } from '../state/viewStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { RELATION_COLORS } from '../data/shipData'
@@ -123,6 +125,8 @@ export function CombatViewScene({ engagementId }: CombatViewSceneProps) {
       const ship = ships.find((s) => s.id === p.shipId)
       // A ship spooling a drive has committed to leaving and can't maneuver.
       if (!ship || ship.combat.ftlCharge) continue
+      // Without free flight it cannot be sent to a point of the arena (scene/freeFlight.ts).
+      if (moveOrderBlock(useTechStore.getState().stateFor(ship.ownerId).researched, ship)) continue
       const dest = { x: point.x + p.position.x - anchor.x, y: point.y + p.position.y - anchor.y, z: point.z + p.position.z - anchor.z }
       // Shift + right-click queues the point after the ship's current route
       // (a ship with nothing to follow just starts, like a plain order).

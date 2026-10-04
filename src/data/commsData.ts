@@ -18,6 +18,9 @@ export type CommsTier = 'light' | 'warp' | 'hyper'
 export const WARP_COMMS_TECH_ID = 'warp-comms'
 export const HYPER_COMMS_TECH_ID = 'hyper-comms'
 
+// Exotic matter consumed researching Warp Comms (a nation starts with 4, Venus 5).
+export const WARP_COMMS_EXOTIC_COST = 2
+
 // How much faster than light a Warp Comms signal travels — a balance
 // judgment call, not a derived value (there's no in-fiction basis to derive
 // it from). Picked so it turns a real multi-year light-speed wait into

@@ -13,7 +13,8 @@ import {
 import { ARMY_KINDS } from '../data/armyData'
 import { shipBuildCost } from '../data/shipyardData'
 import { resolveShipClass } from '../state/shipClassResolver'
-import { missingResources } from '../scene/shipyardLogic'
+import { missingResources, techBlock } from '../scene/shipyardLogic'
+import { atShipyard, upgradeBlock, upgradeCost, upgradeTarget } from '../scene/shipUpgrade'
 import type { ResourceId } from '../data/resourceData'
 import type { AiSnapshot, Blackboard } from './blackboard'
 import { armiesNeededToTake } from './marshal'
@@ -21,9 +22,28 @@ import type { AgentOutput, AiMemory, Intent } from './types'
 
 const TRANSPORT_CLASS_ID = 'troop-transport'
 
-export function affordable(classId: string, amounts: Record<ResourceId, number>): boolean {
+// Whether it can build `classId` now: unlocked by its research (the same gate as
+// the player's shipyard: queueBuild would refuse a locked hull) and paid for.
+export function affordable(classId: string, amounts: Record<ResourceId, number>, researched: { has: (techId: string) => boolean }): boolean {
   const shipClass = resolveShipClass(classId)
-  return !!shipClass && missingResources(shipBuildCost(shipClass), amounts).length === 0
+  return !!shipClass && !shipClass.devOnly && techBlock(shipClass, researched) === null && missingResources(shipBuildCost(shipClass), amounts).length === 0
+}
+
+// An own ship it would upgrade now, by the same rules as the player's button
+// (scene/shipUpgrade.upgradeBlock): it has the tech for the next level, the ship rests at
+// its shipyard, and a slip is FREE (nothing at all in its yard queue). Null if none.
+export function pickUpgrade(bb: Blackboard, snap: AiSnapshot, amounts: Record<ResourceId, number>): { shipId: string; cost: Partial<Record<ResourceId, number>> } | null {
+  if (bb.buildQueueLength > 0) return null
+  const researched = { has: bb.hasResearched }
+  for (const ship of bb.mine) {
+    if (ship.order || ship.upgrading || snap.engagedShipIds.has(ship.id)) continue
+    const to = upgradeTarget(ship.classId, researched, resolveShipClass)
+    const from = resolveShipClass(ship.classId)
+    if (!to || !from) continue
+    const block = upgradeBlock({ classId: ship.classId, researched, amounts, classOf: resolveShipClass, atYard: atShipyard(ship), engaged: false, alreadyQueued: false, queueFull: false })
+    if (!block) return { shipId: ship.id, cost: upgradeCost(from, to) }
+  }
+  return null
 }
 
 export function shipwright(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): AgentOutput {
@@ -36,20 +56,28 @@ export function shipwright(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): 
   const transportTarget = Math.ceil(armyTarget / 2)
   // A running tally, so one pass doesn't plan to spend the same stockpile twice.
   const amounts = { ...bb.resources }
+  const researched = { has: bb.hasResearched }
   const spend = (cost: Partial<Record<ResourceId, number>>) => {
     for (const [id, n] of Object.entries(cost) as [ResourceId, number][]) amounts[id] = (amounts[id] ?? 0) - n
   }
 
-  if (bb.buildQueueLength < AI_MAX_QUEUED_BUILDS) {
+  // An upgrade takes the free slip before any new hull does (the same single queue place).
+  const up = pickUpgrade(bb, snap, amounts)
+  if (up) {
+    intents.push({ kind: 'upgrade-ship', shipId: up.shipId })
+    spend(up.cost)
+  }
+
+  if (!up && bb.buildQueueLength < AI_MAX_QUEUED_BUILDS) {
     let classId: string | null = null
-    if (bb.myTransports.length < transportTarget && affordable(TRANSPORT_CLASS_ID, amounts)) classId = TRANSPORT_CLASS_ID
+    if (bb.myTransports.length < transportTarget && affordable(TRANSPORT_CLASS_ID, amounts, researched)) classId = TRANSPORT_CLASS_ID
     else if (bb.myWarships.length < AI_WARSHIP_TARGET[posture]) {
       // Next in the rotation after however many warships it has, falling back
       // through the rest if that one isn't affordable.
       const start = bb.myWarships.length % AI_WARSHIP_ROTATION.length
       for (let i = 0; i < AI_WARSHIP_ROTATION.length && !classId; i++) {
         const candidate = AI_WARSHIP_ROTATION[(start + i) % AI_WARSHIP_ROTATION.length]
-        if (affordable(candidate, amounts)) classId = candidate
+        if (affordable(candidate, amounts, researched)) classId = candidate
       }
     }
     if (classId) {

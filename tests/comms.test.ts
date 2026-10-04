@@ -5,6 +5,7 @@
 //
 // Run:  npx tsx tests/comms.test.ts
 
+import { warpCommsOnly } from './testComms'
 import { commsDelayDaysForDistanceKm, commsTierFor, WARP_COMMS_SPEED_C, HYPER_COMMS_TECH_ID, WARP_COMMS_TECH_ID } from '../src/data/commsData'
 import {
   commsDelayToLocation,
@@ -33,11 +34,15 @@ import { useShipStore, pristineCombatState, type ShipInstance, type ShipHistoryE
 import { useGameTimeStore } from '../src/state/gameTimeStore'
 import { usePlayerStore } from '../src/state/playerStore'
 import { useTechStore } from '../src/state/techStore'
+import { safeJumps } from './testWarp'
+
+// Not about jump risk: ships always arrive (the roll is tested in tests/warp.test.ts).
+safeJumps()
 
 let failures = 0
 // Nations start with Warp Comms; these checks are about the light-speed tier.
 function lightSpeedOnly(countryId: string) {
-  useTechStore.setState({ byCountry: { [countryId]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory']) } } })
+  useTechStore.setState({ byCountry: { [countryId]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperdrive-mk1', 'hyperspace-theory']) } } })
 }
 function check(label: string, cond: boolean, detail = '') {
   if (cond) console.log(`  PASS  ${label}${detail ? ` — ${detail}` : ''}`)
@@ -234,7 +239,7 @@ console.log('\n=== 7. queueMoveOrder / applyMoveDestination: comms-gated command
   // the capital — must have that stale queue cleared. Found live: without
   // this, useCommsResolver would later re-fire the old destination on top
   // of the ship's new, legitimate order.
-  useTechStore.setState({ byCountry: {} }) // back to light speed
+  warpCommsOnly() // back to a delay
   const stale = makeShip('stale1', 'player', { location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] } })
   useShipStore.setState({ ships: [stale] })
   useGameTimeStore.setState({ simDays: 0 })
@@ -311,7 +316,7 @@ console.log('\n=== 9. shipCommsDelayDays: a ship mid-order uses its LIVE positio
 console.log('\n=== 10. Live view, and news of a fight arriving late ===')
 {
   usePlayerStore.setState({ selectedCountryId: 'imperial-state-of-mars' })
-  useTechStore.setState({ byCountry: {} })
+  warpCommsOnly()
   useGameTimeStore.setState({ simDays: 0, paused: false })
   const far = makeShip('far', 'player', { location: { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] } })
 

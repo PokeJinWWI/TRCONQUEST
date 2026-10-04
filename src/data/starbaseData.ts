@@ -13,8 +13,8 @@ import type { ResourceCost } from './shipyardData'
 
 export const STARBASE_COST: ResourceCost = { alloys: 220 }
 // Influence a nation pays to claim a system with a Starbase (paid when it starts
-// building, like a colony's).
-export const STARBASE_INFLUENCE_COST = 50
+// building). Colonizing costs no influence. The player and the AI both read this.
+export const STARBASE_INFLUENCE_COST = 30
 export const STARBASE_BUILD_DAYS = 90
 export const STARBASE_INTEGRITY = 50
 export const STARBASE_ARMOR = 1.5

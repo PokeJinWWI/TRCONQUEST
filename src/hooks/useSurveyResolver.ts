@@ -1,13 +1,16 @@
 import { useEffect } from 'react'
+import { loseShipToJump } from '../scene/jumpLoss'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useSurveyStore } from '../state/surveyStore'
+import { useClusterVisitStore } from '../state/clusterVisitStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { reportDelayDays } from '../scene/shipCommands'
 import { isBodySurveyed, isExplored, stepSurveyJob, systemOfShip } from '../scene/surveyLogic'
 import { planMoveUnchecked } from '../scene/shipPhysics'
+import { autoMove } from '../scene/autoTravel'
 import { bodyStarId } from '../scene/territory'
 
 // Any ship entering a system explores it, and science ships work through their
@@ -31,6 +34,11 @@ export function resolveSurvey(simDays: number): void {
     if (!already) survey.discover(ship.ownerId, { kind: 'explored', starId }, simDays + reportDelayDays(ship.ownerId, ship, simDays), simDays)
   }
 
+  // A ship resting beside a cluster has visited it (what Turing Scouts' Auto-explore reads).
+  for (const ship of useShipStore.getState().ships) {
+    if (!ship.order && ship.location.kind === 'cluster') useClusterVisitStore.getState().markVisited(ship.ownerId, ship.location.clusterId)
+  }
+
   for (const ship of useShipStore.getState().ships) {
     if (ship.surveyJob && resolveShipClass(ship.classId)?.role === 'science') advanceSurveyJob(ship, simDays)
   }
@@ -41,7 +49,7 @@ export function resolveSurvey(simDays: number): void {
 export function advanceSurveyJob(ship: ShipInstance, simDays: number): void {
   const job = ship.surveyJob
   if (!job) return
-  const { setSurveyJob, setShipOrder, setShipLocation, removeShip } = useShipStore.getState()
+  const { setSurveyJob, setShipOrder, setShipLocation } = useShipStore.getState()
   const owners = useTerritoryStore.getState().bodyOwner
   const intel = useSurveyStore.getState().discovered[ship.ownerId]
   const remaining = job.bodies.filter((b) => !isBodySurveyed(intel, ship.ownerId, b, owners))
@@ -77,12 +85,19 @@ export function advanceSurveyJob(ship: ShipInstance, simDays: number): void {
       }
       // The ship's own flight under its standing job, not a fresh order: it
       // keeps the job (keepFollowing).
+      // An auto-surveying ship goes by the safest route of jumps it is allowed
+      // (scene/autoTravel.ts), a jump each time round; a refused route ends the job.
+      if (ship.automations?.includes('survey')) {
+        const outcome = autoMove(ship, { kind: 'body', systemId, bodyName: step.bodyName }, simDays, false)
+        if (outcome === 'refused' || outcome === 'failed') setSurveyJob(ship.id, null)
+        return
+      }
       const result = planMoveUnchecked(ship, { kind: 'body', systemId, bodyName: step.bodyName }, simDays)
       if (result.kind === 'order') setShipOrder(ship.id, result.order, result.warpReadyOverride, true)
       else if (result.kind === 'instant') {
         setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
-        if (result.hyperlaneEstablished) useHyperlaneStore.getState().addHyperlane(...result.hyperlaneEstablished)
-      } else if (result.kind === 'lost-in-hyperspace') removeShip(ship.id)
+        if (result.hyperlaneEstablished) useHyperlaneStore.getState().addHyperlane(ship.ownerId, ...result.hyperlaneEstablished)
+      } else if (result.kind === 'lost-in-hyperspace') loseShipToJump(ship, { kind: 'body', systemId, bodyName: step.bodyName })
       // Waiting on a drive cooldown, the pause, or a fight: try again later.
       else if (result.kind !== 'on-cooldown' && result.kind !== 'paused' && result.kind !== 'engaged') setSurveyJob(ship.id, null)
       return

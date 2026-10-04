@@ -29,8 +29,10 @@ import { useResourceStore } from '../state/resourceStore'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { useShipStore } from '../state/shipStore'
 import { useSurveyStore } from '../state/surveyStore'
+import { useClusterVisitStore } from '../state/clusterVisitStore'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { useShipyardStore } from '../state/shipyardStore'
+import { useShipDeconstructionStore } from '../state/shipDeconstructionStore'
 import { useTechStore } from '../state/techStore'
 import { useTerrainStore } from '../state/terrainStore'
 import { useTerritoryStore } from '../state/territoryStore'
@@ -43,6 +45,8 @@ import { useHoldingsStore } from '../state/holdingsStore'
 import { useWindowLayoutStore } from '../state/windowLayoutStore'
 import { usePlanetViewStore } from '../state/planetViewStore'
 import { useColonyStore } from '../state/colonyStore'
+import { useDepositStore } from '../state/depositStore'
+import { useMaterialStore } from '../state/materialStore'
 
 // Every store that holds game (or session) state. Not settingsStore.
 interface Resettable {
@@ -53,6 +57,8 @@ const GAME_STORES: Resettable[] = [
   useObserverStore,
   useAbstractEconomyStore,
   useColonyStore,
+  useDepositStore,
+  useMaterialStore,
   useDefenseStore,
   useBombardmentStore,
   useHoldingsStore,
@@ -60,6 +66,7 @@ const GAME_STORES: Resettable[] = [
   usePlanetViewStore,
   useAiStore,
   useSurveyStore,
+  useClusterVisitStore,
   useStarbaseStore,
   useArmyStore,
   useBattleStore,
@@ -81,6 +88,7 @@ const GAME_STORES: Resettable[] = [
   useShipDesignStore,
   useShipStore,
   useShipyardStore,
+  useShipDeconstructionStore,
   useTechStore,
   useTerrainStore,
   useTerritoryStore,

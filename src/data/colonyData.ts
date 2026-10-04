@@ -2,17 +2,12 @@
 // a colony claims its whole planet for its nation; shared planets come later
 // (docs/colonies-design.md). Every number here is a tuning pick.
 
-// Influence: a national stockpile spent to found colonies.
+// Influence: a national stockpile, spent on claiming systems with Starbases (founding a
+// colony costs none).
 export const INFLUENCE_CAP = 1000
 export const INFLUENCE_PER_MONTH = 2
 // Enough for a first colony close to home early on.
 export const STARTING_INFLUENCE = 100
-
-// What founding a colony costs: a base, plus the planet's size (its district
-// count), plus distance from the capital's star.
-export const COLONY_COST_BASE = 20
-export const COLONY_COST_PER_SIZE = 10
-export const COLONY_COST_PER_LY = 5
 
 // Settlers (millions) a Colony Ship takes from its capital's population when
 // it is built, and the new colony's starting population.

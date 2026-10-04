@@ -32,7 +32,7 @@ import {
   SLOTS_PER_DISTRICT,
 } from '../data/simplisticEconomyData'
 import { STARTING_STOCKPILE } from '../data/shipyardData'
-import type { TechCategory } from '../data/techData'
+import { findTech, type TechCategory } from '../data/techData'
 import { controllerOf, seedBodyOwners, type OwnerMap } from '../scene/territory'
 import { landForBody } from '../scene/bodyLand'
 import { COUNTRIES } from '../data/countryData'
@@ -89,6 +89,13 @@ export type Steer = (s: AbstractEconomyState, env: NationEnv) => AbstractEconomy
 // The worlds a nation's economy runs on: bodies it owns and actually holds.
 export function worldsOf(countryId: string, worlds: Record<string, WorldState>, owners: OwnerMap, controllers: OwnerMap): WorldState[] {
   return Object.values(worlds).filter((w) => owners[w.bodyName] === countryId && controllerOf(w.bodyName, owners, controllers) === countryId)
+}
+
+// Why a nation cannot build `building` for want of a tech (SimpleBuildingDef.requiresTech), or null.
+export function buildingTechBlock(countryId: string, building: SimpleBuildingId): string | null {
+  const need = SIMPLE_BUILDING_DEFS[building].requiresTech
+  if (!need || useTechStore.getState().stateFor(countryId).researched.has(need)) return null
+  return `Needs ${findTech(need)?.name ?? need} researched.`
 }
 
 export function stockOf(countryId: string): Stockpile {
@@ -357,6 +364,8 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     if (bodyOwner[bodyName] !== countryId) return { ok: false, reason: `You don't own ${bodyName}.` }
     if (controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `${bodyName} is occupied.` }
     if (!SIMPLE_BUILDING_DEFS[building]) return { ok: false, reason: 'Unknown building.' }
+    const gate = buildingTechBlock(countryId, building)
+    if (gate) return { ok: false, reason: gate }
     const d = DISTRICT_OF_BUILDING[building]
     if (takesSlot(building) && freeSlots(w, c.queue, d) <= 0) return { ok: false, reason: `No free slot in ${bodyName}'s ${SIMPLE_DISTRICT_DEFS[d].name}, now or once its queued levels are built. Develop the district (queue a level) first.` }
     set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, building, progress: 0 }], nextOrderId: cur.nextOrderId + 1 })))

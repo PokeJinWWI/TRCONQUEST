@@ -45,7 +45,7 @@ console.log('\n=== 2. Starting techs ===')
 {
   useTechStore.setState({ byCountry: {} })
   const fresh = useTechStore.getState().stateFor(COUNTRIES[0].id).researched
-  check('a nation starts with Warp Comms (a scout\'s report from the nearest star takes days, not years)', commsTierFor(fresh) === 'warp')
+  check('a nation starts with Hyper Comms and no Warp Comms (it has a hyperdrive, not a warp drive)', commsTierFor(fresh) === 'hyper' && !fresh.has('warp-comms'))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

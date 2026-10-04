@@ -15,7 +15,8 @@ import { COLONY_SHIP_SETTLERS } from './colonyData'
 // all, that's what the reaction drive is for.
 export interface WarpDrive {
   kind: 'warp'
-  speedC: number
+  // No speed here: a ship warps at its OWNER's best Warp Drive Mk (data/warpData.ts),
+  // fleet-wide, with no refit.
   // Days a warp drive needs to recharge after completing a jump before it
   // can be used again — mirrors HyperDrive's cooldownDays. During that
   // window an order still works, just at reaction-drive speed (see
@@ -50,6 +51,15 @@ export const HYPERDRIVE_BASE_LOSS_CHANCE = 0.5
 // established by any hyperdrive ship successfully completing that exact
 // jump before), the risk drops sharply — a charted route, not a blind jump.
 export const HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE = 0.1
+// Automated ships plan a route of several jumps (scene/jumpRoute.ts, scene/autoTravel.ts):
+// the most jumps one trip may take (each costs the drive's cooldown)...
+export const AUTO_ROUTE_MAX_JUMPS = 4
+// ...and, with "Make unsafe jumps" ticked, the riskiest single jump a ship takes:
+// what the slider starts at (1 = any jump, what automation did before the box
+// existed), its lowest setting and its step.
+export const AUTO_MAX_RISK_DEFAULT = 1
+export const AUTO_MAX_RISK_MIN = 0.1
+export const AUTO_MAX_RISK_STEP = 0.05
 // Both rates are for an AVERAGE jump and scale with where the jump goes
 // (scene/jumpRisk.ts): risk grows with the square root of the distance and the
 // fourth root of the destination's mass, between these two multipliers. So an
@@ -101,6 +111,20 @@ export interface ShipClass {
   // A tech the owning nation must have researched before it can BUILD this
   // hull at a shipyard (existing ships are unaffected).
   requiresTech?: string
+  // A dev tool, not part of the game: never in the shipyard, the Ship Designer,
+  // the sandbox's spawn list, a start fleet, a scenario or an AI build list.
+  // Only the Debug Console spawns it (for testing hyperdrive/warp mechanics).
+  devOnly?: boolean
+  // The drive a ship of this class starts on (scene/driveChoice.ts); absent = 'auto'.
+  defaultDrive?: 'reaction' | 'hyperdrive' | 'warp'
+  // Offers the Auto-explore automation (scene/autoExplore.ts): only the Turing Scout.
+  autoExplore?: boolean
+  // The next level of this hull's upgrade line (a scout becomes this one by a
+  // paid refit; the SAME ship, only its class changes: scene/shipRefit.ts).
+  upgradesTo?: string
+  // Scales the alloys and energy of the build cost (never the drive's hyperium
+  // or special core): a cheaper (or dearer) hull than its hit points imply.
+  buildCostFactor?: number
   // Settlers (millions) it takes from its capital when built (colony ships).
   settlerCapacity?: number
 }
@@ -130,14 +154,7 @@ export const RELATION_LABELS: Record<ShipRelation, string> = {
   enemy: 'Hostile',
 }
 
-// Warp speed tiers a warp drive can be researched up to — order-of-magnitude
-// jumps, capped at a deliberately non-round final tier (314c, a nod to π)
-// rather than a clean 1000c. Not wired to an actual tech tree yet since this
-// project doesn't have gameplay/research systems (see bodyStats.ts for the
-// same "real data, no simulation behind it yet" caveat) — each step is
-// meant to represent "a lot of technological progress," per the design
-// brief, once research exists to gate it.
-export const WARP_SPEED_TIERS_C = [0.5, 1, 10, 100, 314] as const
+// Warp speed tiers (Mk I-VII) live in data/warpData.ts: WARP_SPEED_TIERS_C.
 
 // Hyperdrive baseline cooldown (days) between jumps — reducible by future
 // tech, not modeled yet.
@@ -158,46 +175,70 @@ export const WARP_BASE_COOLDOWN_DAYS = 5
 export const CONSTRUCTION_SHIP_CARGO = 400
 export const CARGO_SHIP_CARGO = 1500
 
+// The scouts' alloys and energy cost, against a Science Ship's: a Hyperspace
+// Scout is a cheap hull whose only job is charting lanes.
+export const SCOUT_COST_FACTOR = 0.6
+
+// The techs that unlock the scout line (data/techData.ts).
+export const HYPERSPACE_SCOUT_TECH_ID = 'hyperspace-theory'
+export const TURING_SCOUT_TECH_ID = 'autonomous-navigation'
+
+// The techs that unlock the warship ladder, in order (data/techData.ts); the
+// Corvette needs none.
+export const FRIGATE_TECH_ID = 'frigate-hulls'
+export const DESTROYER_TECH_ID = 'destroyer-hulls'
+export const CRUISER_TECH_ID = 'cruiser-hulls'
+export const BATTLESHIP_TECH_ID = 'battleship-hulls'
+
 export const SHIP_CLASSES: ShipClass[] = [
   {
+    // Dev tool (see ShipClass.devOnly): spawned from the Debug Console only.
     id: 'swift-courier',
     name: 'Swift Courier',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'civilian',
+    devOnly: true,
   },
   {
+    // Dev tool (see ShipClass.devOnly).
     id: 'star-jumper',
     name: 'Star Jumper',
     reactionDrive: true,
     ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'civilian',
+    devOnly: true,
   },
   {
-    // Mechanically identical to Star Jumper for now — the distinct class
-    // exists so it's already in place for its intended future role (a cheap,
-    // resource-light hull whose only job is mapping hyperlanes, with no
-    // other capabilities) once resource costs exist to make that mean
-    // anything.
+    // The first level of the scout line: a cheap hull whose only job is
+    // mapping hyperlanes. Refitted into a Turing Scout (same ship) once
+    // Autonomous Navigation is researched.
     id: 'hyperspace-scout',
     name: 'Hyperspace Scout',
     reactionDrive: true,
     ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'civilian',
+    requiresTech: HYPERSPACE_SCOUT_TECH_ID,
+    upgradesTo: 'turing-scout',
+    buildCostFactor: SCOUT_COST_FACTOR,
   },
   {
-    // Otherwise identical to Hyperspace Scout — its navigational AI makes
-    // every jump safe (see HyperDrive.lossChanceOverride), charted lane or
-    // not.
+    // The last level of the scout line — otherwise identical to Hyperspace
+    // Scout, but its navigational AI makes every jump safe (see
+    // HyperDrive.lossChanceOverride), charted lane or not.
     id: 'turing-scout',
     name: 'Turing Scout',
     reactionDrive: true,
     ftlDrives: [{ kind: 'hyperdrive', cooldownDays: TURING_HYPERDRIVE_COOLDOWN_DAYS, lossChanceOverride: 0 }],
+    defaultDrive: 'hyperdrive',
+    autoExplore: true,
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'civilian',
+    requiresTech: TURING_SCOUT_TECH_ID,
+    buildCostFactor: SCOUT_COST_FACTOR,
   },
   {
     // Carries ground armies to invade enemy worlds (see scene/armyLogic.ts).
@@ -206,7 +247,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     id: 'troop-transport',
     name: 'Troop Transport',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: TRANSPORT_COMBAT_PROFILE,
     role: 'transport',
     armyCapacity: 2,
@@ -217,7 +258,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     id: 'science-ship',
     name: 'Science Ship',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'science',
   },
@@ -227,7 +268,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     id: 'construction-ship',
     name: 'Construction Ship',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'construction',
     cargoCapacity: CONSTRUCTION_SHIP_CARGO,
@@ -239,7 +280,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     id: 'cargo-ship',
     name: 'Cargo Ship',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'cargo',
     cargoCapacity: CARGO_SHIP_CARGO,
@@ -250,7 +291,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     id: 'colony-ship',
     name: 'Colony Ship',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CIVILIAN_COMBAT_PROFILE,
     role: 'colony',
     settlerCapacity: COLONY_SHIP_SETTLERS,
@@ -269,7 +310,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     id: 'corvette',
     name: 'Corvette',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CORVETTE_PROFILE,
     role: 'warship',
   },
@@ -279,9 +320,10 @@ export const SHIP_CLASSES: ShipClass[] = [
     id: 'frigate',
     name: 'Frigate',
     reactionDrive: true,
-    ftlDrives: [{ kind: 'warp', speedC: 10, cooldownDays: WARP_BASE_COOLDOWN_DAYS }],
+    ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: FRIGATE_PROFILE,
     role: 'warship',
+    requiresTech: FRIGATE_TECH_ID,
   },
   {
     // The dedicated escort answer to missiles/torpedoes — the highest point
@@ -292,6 +334,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: DESTROYER_PROFILE,
     role: 'warship',
+    requiresTech: DESTROYER_TECH_ID,
   },
   {
     // Generalist line ship — carries all three direct-fire types so it has no
@@ -302,6 +345,7 @@ export const SHIP_CLASSES: ShipClass[] = [
     ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: CRUISER_PROFILE,
     role: 'warship',
+    requiresTech: CRUISER_TECH_ID,
   },
   {
     // Torpedo-armed capital hull — enormous burst against anything without
@@ -312,13 +356,18 @@ export const SHIP_CLASSES: ShipClass[] = [
     ftlDrives: [{ kind: 'hyperdrive', cooldownDays: HYPERDRIVE_BASE_COOLDOWN_DAYS }],
     combat: BATTLESHIP_PROFILE,
     role: 'warship',
+    requiresTech: BATTLESHIP_TECH_ID,
   },
 ]
 
+// The hulls that belong to the game (everything but the dev tools).
+export const PLAYER_SHIP_CLASSES: ShipClass[] = SHIP_CLASSES.filter((c) => !c.devOnly)
+export const DEV_SHIP_CLASSES: ShipClass[] = SHIP_CLASSES.filter((c) => c.devOnly)
+
 export function describeFtlDrive(drive: FtlDrive): string {
   return drive.kind === 'warp'
-    ? `Warp Drive (${drive.speedC}c, ${drive.cooldownDays}-day cooldown)`
-    : `Hyperdrive (${drive.cooldownDays}-day cooldown)`
+    ? `Warp Drive (speed set by your Warp Drive Mk, ${drive.cooldownDays}-day cooldown)`
+    : `Hyperdrive (range and safety set by your Hyperdrive Mk, ${drive.cooldownDays}-day cooldown)`
 }
 
 export const SHIP_ROLE_LABELS: Record<ShipClass['role'], string> = {

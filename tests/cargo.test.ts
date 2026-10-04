@@ -3,8 +3,9 @@
 //
 // Run:  npx tsx tests/cargo.test.ts
 
+import { warpCommsOnly } from './testComms'
 import { SHIP_CLASSES, SHIP_ROLE_LABELS, CONSTRUCTION_SHIP_CARGO, CARGO_SHIP_CARGO } from '../src/data/shipData'
-import { STARBASE_COST } from '../src/data/starbaseData'
+import { STARBASE_COST, STARBASE_INFLUENCE_COST } from '../src/data/starbaseData'
 import { cargoCovers, cargoMinus, cargoPlus, cargoSpace, cargoTotal, clampToSpace, loadingBody, transferCheck } from '../src/scene/cargoLogic'
 import { useShipyardStore } from '../src/state/shipyardStore'
 import { useResourceStore } from '../src/state/resourceStore'
@@ -19,6 +20,10 @@ import { usePlayerStore } from '../src/state/playerStore'
 import { nearestStation, orderRefill, refillWant } from '../src/scene/refill'
 import { settleShips } from '../src/hooks/useShipOrderSettler'
 import { systemBodies } from '../src/scene/territory'
+import { safeJumps } from './testWarp'
+
+// Not about jump risk: ships always arrive (the roll is tested in tests/warp.test.ts).
+safeJumps()
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -82,12 +87,12 @@ console.log('\n=== Shipyard tech gate ===')
   useGameTimeStore.setState({ simDays: 0 })
   useTechStore.setState({ byCountry: {} })
   const rs = useResourceStore.getState()
-  for (const id of ['alloys', 'energy', 'exoticMatter'] as const) rs.setAmount(NATION, id, 10_000)
+  for (const id of ['alloys', 'energy', 'hyperium'] as const) rs.setAmount(NATION, id, 10_000)
   const queue = useShipyardStore.getState().queueBuild
   const refused = queue(NATION, 'construction-ship', 0)
   check('Construction Ship refused without Orbital Construction', !refused.ok && /Orbital Construction/.test(refused.ok ? '' : refused.reason), refused.ok ? '' : refused.reason)
   check('Science and Cargo ships buildable from the start', queue(NATION, 'science-ship', 0).ok && queue(NATION, 'cargo-ship', 0).ok)
-  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', 'orbital-construction']) } } })
+  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperdrive-mk1', 'hyperspace-theory', 'orbital-construction']) } } })
   check('Construction Ship buildable once researched', queue(NATION, 'construction-ship', 0).ok)
 }
 
@@ -139,7 +144,7 @@ console.log('\n=== Ship commands: load, transfer, build ===')
 
   // Build from the hold.
   useTerritoryStore.getState().reset()
-  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'orbital-construction']) } } })
+  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperdrive-mk1', 'orbital-construction']) } } })
   useShipStore.setState({ ships: [ship('b', 'construction-ship', { kind: 'star', starId: 'barnards-star', offset: [0, 0, 0] }, { alloys: 220 })] })
   applyShipCommand('b', { kind: 'build-starbase' }, 0)
   check('build refused while the system is not surveyed', useStarbaseStore.getState().starbases.length === 0)
@@ -148,12 +153,12 @@ console.log('\n=== Ship commands: load, transfer, build ===')
   for (const body of systemBodies('barnards-star')) sv.discover(NATION, { kind: 'surveyed', bodyName: body }, 0, 0)
   applyShipCommand('b', { kind: 'build-starbase' }, 0)
   check('build-starbase command builds it from the hold', useStarbaseStore.getState().starbases.length === 1 && !held('b').alloys)
-  check('...and costs influence', useResourceStore.getState().stateFor(NATION).amounts.influence === 200 - 50)
+  check('...and costs the Starbase influence (30)', useResourceStore.getState().stateFor(NATION).amounts.influence === 200 - STARBASE_INFLUENCE_COST && STARBASE_INFLUENCE_COST === 30)
 }
 
 console.log('\n=== Commands take signal time out of contact ===')
 {
-  useTechStore.setState({ byCountry: {} })
+  warpCommsOnly()
   useGameTimeStore.setState({ simDays: 0, paused: false })
   useShipStore.setState({ ships: [ship('sci', 'science-ship', { kind: 'star', starId: 'alpha-centauri', offset: [0, 0, 0] })] })
   useSurveyStore.getState().discover(NATION, { kind: 'explored', starId: 'alpha-centauri' }, 0, 0)
@@ -180,7 +185,7 @@ console.log('\n=== Refill at nearest station ===')
   useGameTimeStore.setState({ simDays: 0, paused: false })
   useResourceStore.setState({ byCountry: {} })
   for (const id of ['alloys', 'energy', 'exoticMatter'] as const) useResourceStore.getState().setAmount(NATION, id, 5000)
-  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'warp-drives', 'hyperspace-theory', 'hyper-comms']) } } })
+  useTechStore.setState({ byCountry: { [NATION]: { researchPoints: { physics: 0, society: 0, engineering: 0 }, researched: new Set(['warp-theory', 'hyperdrive-mk1', 'hyperspace-theory', 'hyper-comms']) } } })
   const owners = useTerritoryStore.getState().bodyOwner
   const farOut = ship('haul', 'cargo-ship', { kind: 'orbiting', systemId: 'sol', bodyName: 'Neptune', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 })
   const st = nearestStation(farOut, owners, 0)

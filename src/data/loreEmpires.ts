@@ -18,8 +18,10 @@ export interface LoreEmpire {
   // Every system it owns, home included. Defaults to just the home system
   // when `homeStarId` is given.
   ownedStarIds?: string[]
-  // Tech ids (data/techData.ts).
+  // Tech ids (data/techData.ts); wins over techTier.
   researched?: string[]
+  // A tech tier (data/techTiers.ts) instead of listing techs.
+  techTier?: number
   influence?: number
 }
 

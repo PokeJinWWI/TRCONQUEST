@@ -1,6 +1,7 @@
 // Colonies and Influence, store side: founding a colony from a Colony Ship,
 // the seeded colonies, settlers and the monthly Influence. The rules are pure in
 // scene/colonyLogic.ts; hooks/useColonyResolver.ts promotes micro-colonies.
+import { confirmRiskyJump } from './jumpConfirm'
 import {
   COLONY_FOUNDING_DAYS,
   INFLUENCE_CAP,
@@ -24,7 +25,7 @@ import { useSurveyStore } from '../state/surveyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { hostileWarshipsAt, orbitedBody } from './armyLogic'
 import { landForBody } from './bodyLand'
-import { colonyInfluenceCost, placeOutpostNode } from './colonyLogic'
+import { lightYearsBetween, placeOutpostNode } from './colonyLogic'
 import { queueMoveOrder } from './commsVisual'
 import { groundSurface } from './groundLogic'
 import { queueShipCommand } from './shipCommands'
@@ -58,12 +59,6 @@ export function applyInfluenceIncome(countryId: string, months: number): void {
 
 // --- Colonies --------------------------------------------------------------
 
-// What founding a colony on `bodyName` costs `countryId` in Influence.
-export function colonyCostFor(countryId: string, bodyName: string): number {
-  const capitalStar = getCountry(countryId)?.capitalStarId ?? 'sol'
-  return colonyInfluenceCost(bodyName, bodyStarId(bodyName) ?? capitalStar, capitalStar)
-}
-
 // Every body owned at the start is a planetary colony with its outpost.
 export function seedColonies(simDays: number): void {
   const owners = useTerritoryStore.getState().bodyOwner
@@ -80,7 +75,8 @@ export function seedColonies(simDays: number): void {
   if (changed) useColonyStore.getState().setColonies(colonies)
 }
 
-export type ColonizeResult = { ok: true; cost: number } | { ok: false; reason: string }
+// Founding a colony costs no Influence (only a Starbase in the system, settlers and time).
+export type ColonizeResult = { ok: true } | { ok: false; reason: string }
 
 // Whether this Colony Ship could found a colony on `bodyName` now.
 // `anywhere` skips "must be in orbit there" (for a menu that flies it there).
@@ -99,15 +95,12 @@ export function canColonize(ship: ShipInstance, bodyName: string, opts: { anywhe
   if (!surface || surface.mainland < 0) return { ok: false, reason: `${bodyName} has no land to settle` }
   if (hostileWarshipsAt(ship.ownerId, bodyName, useShipStore.getState().ships, atWar).length > 0) return { ok: false, reason: 'Enemy warships hold the orbit' }
   if ((ship.settlers ?? 0) <= 0) return { ok: false, reason: 'The ship carries no settlers' }
-  const cost = colonyCostFor(ship.ownerId, bodyName)
-  const influence = useResourceStore.getState().stateFor(ship.ownerId).amounts.influence ?? 0
-  if (influence < cost) return { ok: false, reason: `Needs ${cost} influence (have ${Math.floor(influence)})` }
-  return { ok: true, cost }
+  return { ok: true }
 }
 
 // The `colonize` command landing: the ship starts founding a colony on the body
 // it orbits (if it could found one now). The colony exists COLONY_FOUNDING_DAYS
-// later (resolveFoundings); Influence is paid then.
+// later (resolveFoundings).
 export function startFounding(shipId: string, bodyName: string, simDays: number): boolean {
   const ship = useShipStore.getState().ships.find((s) => s.id === shipId)
   if (!ship || ship.founding?.bodyName === bodyName) return false
@@ -141,7 +134,6 @@ export function foundColony(shipId: string, bodyName: string, simDays: number): 
   const check = canColonize(ship, bodyName)
   if (!check.ok) return false
   const owner = ship.ownerId
-  useResourceStore.getState().addAmount(owner, 'influence', -check.cost)
   useTerritoryStore.getState().claimBody(bodyName, owner)
   useAbstractEconomyStore.getState().addColonyWorld(bodyName, ship.settlers ?? 0, Math.min(landForBody(bodyName), MICRO_COLONY_LAND))
   const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
@@ -197,22 +189,23 @@ export function colonizeFromPlanet(bodyName: string): { ok: true; shipName: stri
   return { ok: true, shipName: pick.s.name }
 }
 
-// Worlds this Colony Ship could found a colony on now, cheapest first (the
+// Worlds this Colony Ship could found a colony on now, nearest its capital first (the
 // chooser's list). Worlds another Colony Ship is already headed for are left out.
-export function colonizeCandidates(ship: ShipInstance): { bodyName: string; cost: number }[] {
+export function colonizeCandidates(ship: ShipInstance): { bodyName: string }[] {
   const taken = new Set<string>()
   for (const o of useShipStore.getState().ships) {
     if (o.id === ship.id) continue
     if (o.founding) taken.add(o.founding.bodyName)
     if (o.arrivalCommand?.command.kind === 'colonize') taken.add(o.arrivalCommand.command.bodyName)
   }
-  const out: { bodyName: string; cost: number }[] = []
+  const out: { bodyName: string; ly: number }[] = []
+  const capitalStar = getCountry(ship.ownerId)?.capitalStarId ?? 'sol'
   for (const bodyName of useSurveyStore.getState().discovered[ship.ownerId]?.surveyed ?? []) {
     if (taken.has(bodyName)) continue
     const c = canColonize(ship, bodyName, { anywhere: true })
-    if (c.ok) out.push({ bodyName, cost: c.cost })
+    if (c.ok) out.push({ bodyName, ly: lightYearsBetween(capitalStar, bodyStarId(bodyName) ?? capitalStar) })
   }
-  return out.sort((a, b) => a.cost - b.cost || a.bodyName.localeCompare(b.bodyName))
+  return out.sort((a, b) => a.ly - b.ly || a.bodyName.localeCompare(b.bodyName)).map(({ bodyName }) => ({ bodyName }))
 }
 
 export function sendToColonize(ship: ShipInstance, systemId: string, bodyName: string): void {
@@ -220,6 +213,10 @@ export function sendToColonize(ship: ShipInstance, systemId: string, bodyName: s
     queueShipCommand(ship.id, { kind: 'colonize', bodyName })
     return
   }
-  useShipStore.getState().setArrivalCommand(ship.id, { starId: systemId, bodyName, command: { kind: 'colonize', bodyName } })
-  queueMoveOrder(ship, { kind: 'body', systemId, bodyName })
+  const destination = { kind: 'body' as const, systemId, bodyName }
+  // The arrival command is set only once the order is given (a risky jump asks first).
+  confirmRiskyJump([ship], destination, () => {
+    useShipStore.getState().setArrivalCommand(ship.id, { starId: systemId, bodyName, command: { kind: 'colonize', bodyName } })
+    queueMoveOrder(ship, destination)
+  })
 }

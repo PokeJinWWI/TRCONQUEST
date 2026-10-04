@@ -12,6 +12,8 @@ import { COUNTRIES } from '../src/data/countryData'
 import { ALL_TECHS, prerequisitesMet } from '../src/data/techData'
 import { INFLUENCE_CAP } from '../src/data/colonyData'
 import { DEFAULT_RESEARCHED } from '../src/state/techStore'
+import { WARP_DRIVE_TECH_IDS, WARP_MK1_RADIUS_KLY } from '../src/data/warpData'
+import { HUMAN_BASELINE_TIER, MAX_TECH_TIER, TECH_TIERS, techsForTier, tierOfTechs } from '../src/data/techTiers'
 import {
   GALAXY_SEED,
   MAX_PLANETS_PER_STAR,
@@ -118,12 +120,35 @@ console.log('\n=== 4. Twenty empires, thinly spread ===')
   check('with no lore entries, all are generated', LORE_EMPIRES.length > 0 || empires.every((e) => !e.lore))
   check(`each holds its home and up to ${MAX_EXTRA_SYSTEMS} more`, empires.every((e) => e.ownedStarIds.length >= 1 && e.ownedStarIds.length <= 1 + MAX_EXTRA_SYSTEMS))
   check('sizes vary', new Set(empires.map((e) => e.ownedStarIds.length)).size > 1)
-  check('tech is a researched set like a nation\'s', empires.every((e) => e.researched instanceof Set && DEFAULT_RESEARCHED.every((t) => e.researched.has(t))))
+  // ...plus Warp Drive Mk I for the ones near the galactic core (section 4c).
+  const tierTechs = (e: GalaxyEmpire) => new Set([...techsForTier(e.techTier), ...(e.coreDistanceKly <= WARP_MK1_RADIUS_KLY ? [WARP_DRIVE_TECH_IDS[0]] : [])])
+  check('tech is a researched set like a nation\'s, exactly what its tier gives', empires.every((e) => e.researched instanceof Set && e.researched.size === tierTechs(e).size && [...tierTechs(e)].every((t) => e.researched.has(t))))
   const known = new Set(ALL_TECHS.map((t) => t.id))
   check('...of real techs', empires.every((e) => [...e.researched].every((t) => known.has(t))))
   // Every tech beyond the starting ones has its prerequisites in the set.
-  check('...each with its prerequisites', empires.every((e) => ALL_TECHS.filter((t) => e.researched.has(t.id) && !DEFAULT_RESEARCHED.includes(t.id)).every((t) => prerequisitesMet(t, e.researched))))
+  check('...each with its prerequisites', empires.every((e) => ALL_TECHS.filter((t) => e.researched.has(t.id)).every((t) => prerequisitesMet(t, e.researched))))
   check('tech progress varies', new Set(empires.map((e) => e.researched.size)).size > 3)
+
+  console.log('\n=== 4b. Tech tiers ===')
+  const tiers = empires.map((e) => e.techTier)
+  check('tiers are whole numbers within 1..the top tier', tiers.every((t) => Number.isInteger(t) && t >= 1 && t <= MAX_TECH_TIER))
+  check('tiers vary across the 20 (at least 4 distinct)', new Set(tiers).size >= 4, [...new Set(tiers)].sort().join(','))
+  const above = tiers.filter((t) => t > HUMAN_BASELINE_TIER).length
+  check('most empires are above the human baseline', above > 10, `${above} above`)
+  check('a few are at or below it', tiers.length - above >= 2 && tiers.length - above <= 7, `${tiers.length - above} at or below`)
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+  const xs = empires.map((e) => -e.coreDistanceKly)
+  const [mx, my] = [mean(xs), mean(tiers)]
+  const r = xs.reduce((n, x, i) => n + (x - mx) * (tiers[i] - my), 0) / Math.sqrt(xs.reduce((n, x) => n + (x - mx) ** 2, 0) * tiers.reduce((n, t) => n + (t - my) ** 2, 0))
+  check('tier rises toward the galactic core (correlation with closeness)', r > 0.5, `r = ${r.toFixed(2)}`)
+  check('...but is not a pure gradient (some far empire out-tiers a nearer one)', empires.some((a) => empires.some((b) => a.coreDistanceKly > b.coreDistanceKly + 1 && a.techTier > b.techTier)))
+  check('core distance is the neighbourhood\'s real distance', empires.every((e) => { const n = NEIGHBORHOODS.find((x) => x.id === e.clusterId)!; return Math.abs(e.coreDistanceKly - Math.hypot(n.position[0], n.position[1])) < 1e-9 }))
+  const baseline = techsForTier(HUMAN_BASELINE_TIER)
+  check('the human baseline tier covers what the nations start with (bar Hyper Comms, a nation-only starting tech)', DEFAULT_RESEARCHED.every((t) => baseline.has(t) || t === 'hyper-comms' || t === 'quantum-mechanics'))
+  check('every tier is closed under prerequisites (nothing out of order)', TECH_TIERS.every((_, t) => { const set = techsForTier(t); return ALL_TECHS.filter((x) => set.has(x.id)).every((x) => prerequisitesMet(x, set)) }))
+  const all = TECH_TIERS.flat()
+  check('every tier tech exists, none twice, none locked', new Set(all).size === all.length && all.every((id) => ALL_TECHS.some((x) => x.id === id && !x.locked)))
+  check('a tier maps back from its techs', TECH_TIERS.every((_, t) => tierOfTechs(techsForTier(t)) === t))
   check('influence is on the nations\' scale', empires.every((e) => e.influence >= 0 && e.influence <= INFLUENCE_CAP) && new Set(empires.map((e) => e.influence)).size > 10)
   check('not one of the four nations', empires.every((e) => !COUNTRIES.some((c) => c.id === e.id || c.name === e.name)))
 }
@@ -152,6 +177,12 @@ console.log('\n=== 5. A lore empire takes its slot ===')
   // Slot 9 lost its home to the lore empire, so it moved; nobody else did.
   check('the empire whose home it took lives elsewhere', withLanded[9].homeStarId !== stolen)
   check('every other slot is unchanged', plain(withLanded.filter((e) => e.slot !== 2 && e.slot !== 9)) === plain(base.filter((e) => e.slot !== 2 && e.slot !== 9)))
+
+  const byTier = generateEmpires(GALAXY_SEED, [{ slot: 6, id: 'lore-tier', name: 'The Tiered', color: '#222222', techTier: 1 }])
+  check('a lore empire can state a tier instead of techs', byTier[6].techTier === 1 && byTier[6].researched.size === techsForTier(1).size)
+  check('...and its techs win over a tier', withLanded[2].techTier === tierOfTechs(new Set(['warp-theory'])) && withLanded[2].techTier === 0)
+  check('a lore entry that says nothing about tech keeps the slot\'s tier', withNamed[4].techTier === base[4].techTier)
+  check('tiers of the other slots are untouched by a lore entry', byTier.filter((e) => e.slot !== 6).every((e) => e.techTier === base[e.slot].techTier))
 
   const bad = generateEmpires(GALAXY_SEED, [{ slot: 99, id: 'x', name: 'Nowhere', color: '#000000' }, { slot: 1, id: 'lost', name: 'The Lost', color: '#111111', homeStarId: 'no-such-star' }])
   checkEmpires('lore (bad entries)', bad)

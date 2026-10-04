@@ -1,15 +1,14 @@
 // Colonies, the pure rules: what founding costs, where a planetary outpost
 // stands, and when a micro-colony becomes a planetary colony. Store I/O is in
 // scene/colonies.ts; data in data/colonyData.ts.
-import { COLONY_COST_BASE, COLONY_COST_PER_LY, COLONY_COST_PER_SIZE, COLONY_PATROL_DAYS, INFLUENCE_CAP } from '../data/colonyData'
+import { COLONY_PATROL_DAYS } from '../data/colonyData'
 import { STARS } from '../data/starData'
 import { TERRAIN } from '../data/groundData'
 import type { AtWarFn } from '../state/diplomacyStore'
 import type { Colony } from '../state/colonyStore'
 import { armiesOnBody, hostileWarshipsAt, isArmed, orbitedBody, type Army, type ShipLike } from './armyLogic'
-import { estimateSize } from './bodyStats'
 import { cellsToRad } from './groundLogic'
-import { bodyGroundInfo, terrainAt, type BodySurface } from './planetTerrain'
+import { terrainAt, type BodySurface } from './planetTerrain'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
 
 export type PatrolShipLike = ShipLike & { patrol?: boolean }
@@ -19,15 +18,6 @@ export function lightYearsBetween(starA: string, starB: string): number {
   const b = STARS.find((s) => s.id === starB)
   if (!a || !b) return 0
   return Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2])
-}
-
-// Influence to found a colony on `bodyName` (in `bodyStarId`), for a nation
-// whose capital is at `capitalStarId`: bigger and farther costs more.
-export function colonyInfluenceCost(bodyName: string, bodyStarId: string, capitalStarId: string): number {
-  const radiusKm = bodyGroundInfo(bodyName)?.radiusKm
-  const size = radiusKm ? estimateSize(radiusKm).districts : 3
-  const cost = COLONY_COST_BASE + COLONY_COST_PER_SIZE * size + COLONY_COST_PER_LY * lightYearsBetween(capitalStarId, bodyStarId)
-  return Math.min(INFLUENCE_CAP, Math.round(cost))
 }
 
 // Keeps a planetary outpost clear of the other key nodes.

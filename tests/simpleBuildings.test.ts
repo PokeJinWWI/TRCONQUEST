@@ -127,12 +127,14 @@ console.log('\n=== 7. Clinics grow the population ===')
   check('a world with clinics grows faster', grow(withClinic) > grow(base), `${grow(base).toFixed(3)} vs ${grow(withClinic).toFixed(3)}`)
 }
 
-console.log('\n=== 8. Opening numbers: Mars still opens around 9.3k GDP; research spread by lab ===')
+console.log('\n=== 8. Opening numbers: Mars opens around 8.8k GDP; research spread by lab ===')
 {
   useAbstractEconomyStore.getState().reset()
   const st = useAbstractEconomyStore.getState()
   const mars = st.byCountry['imperial-state-of-mars']
-  check('Mars opens within 5% of 9.3k GDP (the pre-roster figure)', Math.abs(mars.gdp / 9300 - 1) < 0.05, mars.gdp.toFixed(0))
+  // 9.3k before the warp rework; its refineries no longer make exotic matter (no
+  // exotic production at all), which took their output out of GDP.
+  check('Mars opens within 5% of 8.8k GDP', Math.abs(mars.gdp / 8800 - 1) < 0.05, mars.gdp.toFixed(0))
   for (const [id, r] of Object.entries(st.reports)) {
     check(`${id} opens with amenities covered and no input shortage`, r.amenities.ratio >= 1 && r.inputShortages.length === 0, `amenities ${r.amenities.ratio.toFixed(2)}`)
   }

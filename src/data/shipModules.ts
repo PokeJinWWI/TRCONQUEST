@@ -11,10 +11,11 @@
 // nothing here can regress existing balance.
 
 import { WEAPON_TYPES, type HullSizeClass, type WeaponMount } from './combatData'
+import { DUAL_DRIVE_TECH_ID, HYPERDRIVE_TECH_IDS, WARP_DRIVE_TECH_IDS } from './warpData'
 
-export type SlotCategory = 'weapon' | 'armor' | 'shield' | 'defense' | 'upgrade'
+export type SlotCategory = 'weapon' | 'armor' | 'shield' | 'defense' | 'upgrade' | 'drive'
 
-export const SLOT_CATEGORIES: SlotCategory[] = ['weapon', 'armor', 'shield', 'defense', 'upgrade']
+export const SLOT_CATEGORIES: SlotCategory[] = ['weapon', 'armor', 'shield', 'defense', 'upgrade', 'drive']
 
 // Reuses HullSizeClass's own small/medium/large/x vocabulary rather than a
 // parallel scale — a slot's size and a hull's size class are the same idea.
@@ -227,6 +228,26 @@ export const UPGRADE_MODULES: UpgradeModule[] = [
   { id: 'afterburner-x', name: 'Afterburner X', slotSize: 'x', speedBonusFraction: 0.45, evasionBonus: 0.26, powerCost: SLOT_POWER_COST.x },
 ]
 
+// The FTL drive a hull carries, a swappable component like any other. A drive does
+// not carry its own speed or range: those come from the OWNER's Warp Drive Mk /
+// Hyperdrive Mk techs (data/warpData.ts), fleet-wide, so a design never needs a refit.
+export interface DriveModule {
+  id: string
+  name: string
+  slotSize: SlotSize
+  // Which drives the module is.
+  drives: ('hyperdrive' | 'warp')[]
+  requiresTechId?: string
+  // Drives are not part of the weapons-and-systems power budget.
+  powerCost: number
+}
+
+export const DRIVE_MODULES: DriveModule[] = [
+  { id: 'drive-hyper', name: 'Hyperdrive', slotSize: 'small', drives: ['hyperdrive'], requiresTechId: HYPERDRIVE_TECH_IDS[0], powerCost: 0 },
+  { id: 'drive-warp', name: 'Warp Drive', slotSize: 'small', drives: ['warp'], requiresTechId: WARP_DRIVE_TECH_IDS[0], powerCost: 0 },
+  { id: 'drive-dual', name: 'Dual Drive', slotSize: 'small', drives: ['hyperdrive', 'warp'], requiresTechId: DUAL_DRIVE_TECH_ID, powerCost: 0 },
+]
+
 // One place to look a module up by category — the design store's editing
 // actions and the builder UI's slot picker both need "given a category and
 // an id, what module is that" without a five-way switch at every call site.
@@ -236,6 +257,7 @@ export const MODULE_CATALOG = {
   shield: SHIELD_MODULES,
   defense: DEFENSE_MODULES,
   upgrade: UPGRADE_MODULES,
+  drive: DRIVE_MODULES,
 } as const satisfies Record<SlotCategory, { id: string; slotSize: SlotSize }[]>
 
 export function findModule<C extends SlotCategory>(category: C, moduleId: string): (typeof MODULE_CATALOG)[C][number] | undefined {

@@ -258,7 +258,9 @@ console.log('\n=== 7. A spawned custom design actually fights, through the real 
 console.log('\n=== 8. Module catalog sanity ===')
 {
   for (const [category, modules] of Object.entries(MODULE_CATALOG)) {
-    check(`${category} catalog has at least one module per slot size`, ['small', 'medium', 'large', 'x'].every((size) => modules.some((m) => m.slotSize === size)))
+    // Drives come in one size: every chassis has a single small drive slot.
+    const sizes = category === 'drive' ? ['small'] : ['small', 'medium', 'large', 'x']
+    check(`${category} catalog has at least one module per slot size`, sizes.every((size) => modules.some((m) => m.slotSize === size)))
   }
 }
 

@@ -5,12 +5,15 @@ import type { DiplomacyEvent } from '../data/diplomacyData'
 import { useViewStore } from '../state/viewStore'
 import { bodyIndex } from './territory'
 import { STARS } from '../data/starData'
+import { NEIGHBORHOODS } from '../data/neighborhoodData'
 
 export type EventDestination =
   // A body: its planet panel in the system view (a moon's in its planet's satellite view).
   | { kind: 'body'; starId: string; bodyName: string; parentPlanet?: string }
   // A star system.
   | { kind: 'system'; starId: string }
+  // A cluster, in the galactic view.
+  | { kind: 'galaxy'; neighborhoodId: string }
   // A Diplomacy panel tab.
   | { kind: 'panel'; category: string; subcategory: string }
 
@@ -18,6 +21,7 @@ export function eventDestination(event: Pick<DiplomacyEvent, 'kind' | 'place'>):
   if (event.place?.nav) return { kind: 'panel', category: event.place.nav.category, subcategory: event.place.nav.subcategory }
   const body = event.place?.bodyName ? bodyIndex().get(event.place.bodyName) : undefined
   if (body) return { kind: 'body', starId: body.starId, bodyName: body.name, ...(body.kind === 'moon' && body.parentPlanet ? { parentPlanet: body.parentPlanet } : {}) }
+  if (event.place?.neighborhoodId && NEIGHBORHOODS.some((n) => n.id === event.place!.neighborhoodId)) return { kind: 'galaxy', neighborhoodId: event.place.neighborhoodId }
   if (event.place?.starId && STARS.some((s) => s.id === event.place!.starId)) return { kind: 'system', starId: event.place.starId }
   switch (event.kind) {
     case 'war-declared':
@@ -49,6 +53,11 @@ export function goToEvent(event: Pick<DiplomacyEvent, 'kind' | 'place'>): void {
   }
   if (to.kind === 'system') {
     view.enterSystem(to.starId)
+    return
+  }
+  if (to.kind === 'galaxy') {
+    view.enterGalactic()
+    view.selectInView(to.neighborhoodId)
     return
   }
   if (to.parentPlanet) {

@@ -4,6 +4,8 @@
 // shipyardSlotsForWorld) with thin store I/O at the edges (spend/refund/
 // spawn/seed/income) — same split as combatResolution vs. useCombatResolver.
 // Data and every tuning constant live in data/shipyardData.ts.
+import { startingExoticMatter } from '../data/exoticMatter'
+import { HYPERIUM_NEAR_SOL } from '../data/hyperium'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
 import { SIMPLE_STARTING_STOCK } from '../data/simplisticEconomyData'
 import {
@@ -14,12 +16,16 @@ import {
   STARTING_STOCKPILE,
   type ResourceCost,
 } from '../data/shipyardData'
+import type { ShipClass } from '../data/shipData'
+import { findTech } from '../data/techData'
 import type { Country } from '../data/countryData'
 import type { World } from '../economy/economyTypes'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useResourceStore } from '../state/resourceStore'
+import { useTechStore } from '../state/techStore'
 import { useShipStore, pristineCombatState } from '../state/shipStore'
-import type { ShipBuildOrder } from '../state/shipyardStore'
+import { useShipyardStore, type ShipBuildOrder } from '../state/shipyardStore'
+import { useEconomyStore, worldByName } from '../state/economyStore'
 import { DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from './shipPhysics'
 import { embarkSettlers } from './colonies'
 
@@ -43,6 +49,49 @@ export function refundCost(countryId: string, cost: ResourceCost): void {
   for (const [id, amount] of Object.entries(cost) as [ResourceId, number][]) addAmount(countryId, id, amount)
 }
 
+// What the gate reads: a Set of researched ids, or anything that can say yes/no (the AI's blackboard).
+export type ResearchedSet = { has: (techId: string) => boolean }
+
+// The tech a nation still needs before it can build `shipClass` (its name), or null
+// when it can. The one gate the shipyard panel, `queueBuild` and the AI all read.
+export function techBlock(shipClass: ShipClass, researched: ResearchedSet): string | null {
+  const need = shipClass.requiresTech
+  if (!need || researched.has(need)) return null
+  return findTech(need)?.name ?? need
+}
+
+// A level of an upgrade line the nation has already moved past: its successor is
+// unlocked, so the shipyard offers only that one (scouts are one line).
+export function lineSuperseded(shipClass: ShipClass, researched: ResearchedSet, classOf: (id: string) => ShipClass | null): boolean {
+  const next = shipClass.upgradesTo ? classOf(shipClass.upgradesTo) : null
+  return !!next && techBlock(next, researched) === null
+}
+
+// The level of a hull's upgrade line a NEW build comes out at: follows `upgradesTo` while
+// the next level is researched, so asking for a Hyperspace Scout once Turing is unlocked
+// builds the Turing Scout. A hull with no line is its own best level.
+export function bestLevelClass(classId: string, researched: ResearchedSet, classOf: (id: string) => ShipClass | null): string {
+  let current = classOf(classId)
+  let id = classId
+  for (let guard = 0; guard < 10 && current?.upgradesTo; guard++) {
+    const next = classOf(current.upgradesTo)
+    if (!next || techBlock(next, researched) !== null) break
+    id = next.id
+    current = next
+  }
+  return id
+}
+
+// The hulls a shipyard tab lists, in order: what the nation can build now first, then
+// what it still needs a tech for (stable inside each group, so the list does not
+// shuffle). Dev tools never appear, and a superseded level of a line is hidden.
+// Grouping is by tech only: a resource shortfall is a note on the row, not a move,
+// so the order does not change every month.
+export function shipyardRows(classes: readonly ShipClass[], researched: ResearchedSet, classOf: (id: string) => ShipClass | null): ShipClass[] {
+  const shown = classes.filter((c) => !c.devOnly && !lineSuperseded(c, researched, classOf))
+  return [...shown.filter((c) => techBlock(c, researched) === null), ...shown.filter((c) => techBlock(c, researched) !== null)]
+}
+
 // How many hulls the capital can build at once: the free baseline plus
 // SLOTS_PER_SPACEYARD_LEVEL per level of Spaceyard building on the world.
 export function shipyardSlotsForWorld(world: World | undefined): number {
@@ -50,6 +99,17 @@ export function shipyardSlotsForWorld(world: World | undefined): number {
     .filter((b) => b.recipeId === SPACEYARD_RECIPE_ID)
     .reduce((sum, b) => sum + b.level, 0)
   return SHIPYARD_FREE_SLOTS + spaceyardLevels * SLOTS_PER_SPACEYARD_LEVEL
+}
+
+// Which waiting orders start now: the first ones in QUEUE ORDER (FIFO), as many as
+// there are free slips (`slots` minus the orders already building). Empty when every
+// slip is busy or nothing waits. The one selection rule for the player's yard and
+// every AI's.
+export function ordersToStart(orders: readonly ShipBuildOrder[], slots: number): string[] {
+  const building = orders.filter((o) => o.startedSimDays !== null).length
+  const free = Math.max(0, Math.floor(slots)) - building
+  if (free <= 0) return []
+  return orders.filter((o) => o.startedSimDays === null).slice(0, free).map((o) => o.id)
 }
 
 // Advances the queue to `simDays`, as a pure function. Orders are FIFO; the
@@ -84,19 +144,62 @@ export function stepShipyardQueue(
 
     // Start waiting orders into free slots. A slot freed by a completion
     // starts its successor at that completion time; otherwise at `simDays`.
-    const building = queue.filter((o) => o.startedSimDays !== null).length
-    if (building < capacity) {
-      const next = queue.find((o) => o.startedSimDays === null)
-      if (next) {
-        const start = dueIndex !== -1 ? freedAt : simDays
-        next.startedSimDays = start
-        next.finishSimDays = start + next.durationDays
-        continue
-      }
+    const nextId = ordersToStart(queue, capacity)[0]
+    const next = nextId === undefined ? undefined : queue.find((o) => o.id === nextId)
+    if (next) {
+      const start = dueIndex !== -1 ? freedAt : simDays
+      next.startedSimDays = start
+      next.finishSimDays = start + next.durationDays
+      continue
     }
     if (dueIndex === -1) break
   }
   return { orders: queue, completed }
+}
+
+// One step of one nation's capital yard up to `simDays`: starts the waiting orders the
+// free slips take, completes what is due and puts finished hulls into orbit. The
+// per-tick resolver runs it for every nation, and the shipyard store runs it for one
+// the moment its queue changes (an order queued into a free slip, a build cancelled),
+// so a slip never sits free for want of a clock tick (a paused game included).
+export function advanceShipyard(country: Pick<Country, 'id' | 'capitalStarId' | 'capitalBodyName'>, simDays: number): void {
+  const { ordersFor, setOrders } = useShipyardStore.getState()
+  let orders = ordersFor(country.id)
+  // An upgrade whose ship is gone (destroyed, scrapped, lost to a jump) is dropped, refunded in full.
+  const live = new Set(useShipStore.getState().ships.map((s) => s.id))
+  const orphans = orders.filter((o) => o.upgradeShipId && !live.has(o.upgradeShipId))
+  if (orphans.length > 0) {
+    for (const o of orphans) refundCost(country.id, o.cost)
+    orders = orders.filter((o) => !orphans.includes(o))
+    setOrders(country.id, orders)
+  }
+  if (orders.length === 0) return
+  const world = worldByName(useEconomyStore.getState().worlds, country.capitalBodyName)
+  const step = stepShipyardQueue(orders, shipyardSlotsForWorld(world), simDays)
+  const changed = step.completed.length > 0 || step.orders.some((o, i) => o.startedSimDays !== orders[i]?.startedSimDays)
+  if (!changed) return
+  setOrders(country.id, step.orders)
+  for (const done of step.completed) {
+    if (done.upgradeShipId) finishUpgrade(done)
+    else spawnBuiltShip(done, country)
+  }
+}
+
+// A ship keeps its number but takes its new class's name when upgraded ("Hyperspace Scout 3"
+// -> "Turing Scout 3"); a name the player chose (not "<old class> <number>") is left alone.
+export function upgradedName(name: string, fromClassName: string, toClassName: string): string {
+  const prefix = `${fromClassName} `
+  return name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)) ? `${toClassName} ${name.slice(prefix.length)}` : name
+}
+
+// An upgrade finished: the same ship becomes the best level its owner has researched NOW
+// (a tech that landed while it waited counts). Only its class changes.
+function finishUpgrade(order: ShipBuildOrder): void {
+  const ship = useShipStore.getState().ships.find((s) => s.id === order.upgradeShipId)
+  if (!ship) return
+  const classId = bestLevelClass(order.classId, useTechStore.getState().stateFor(ship.ownerId).researched, resolveShipClass)
+  const name = upgradedName(ship.name, resolveShipClass(ship.classId)?.name ?? '', resolveShipClass(classId)?.name ?? '')
+  useShipStore.setState((s) => ({ ships: s.ships.map((sh) => (sh.id === ship.id ? { ...sh, classId, name, upgrading: undefined } : sh)) }))
 }
 
 let spawnCounter = 0
@@ -156,6 +259,9 @@ export function seedStrategicResources(countryId: string): void {
   for (const [id, start] of Object.entries(STARTING_STOCKPILE) as [ResourceId, number][]) {
     if ((amounts[id] ?? 0) === 0) setAmount(countryId, id, start)
   }
+  // The scarce ones depend on where the nation lives (data/exoticMatter.ts, data/hyperium.ts).
+  if ((amounts.exoticMatter ?? 0) === 0) setAmount(countryId, 'exoticMatter', startingExoticMatter(countryId))
+  if ((amounts.hyperium ?? 0) === 0) setAmount(countryId, 'hyperium', HYPERIUM_NEAR_SOL)
   for (const r of RESOURCE_TYPES) setMonthlyDelta(countryId, r.id, RESOURCE_INCOME_PER_MONTH[r.id] ?? 0)
 }
 

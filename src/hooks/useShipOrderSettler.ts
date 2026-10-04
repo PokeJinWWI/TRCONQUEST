@@ -2,11 +2,12 @@ import { resolveFleetMerges } from '../scene/fleetMerge'
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore } from '../state/shipStore'
+import { loseShipToJump } from '../scene/jumpLoss'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { dispatchQueuedLegs } from '../scene/orderQueue'
 import { applyShipCommand } from '../scene/shipCommands'
 import { restingStarId } from '../scene/surveyLogic'
-import { planMoveUnchecked, resolveArrivalLocation, restingDestinationOf, destinationsEqual, warpCooldownAfterArrival } from '../scene/shipPhysics'
+import { jumpPlaceKey, planMoveUnchecked, resolveArrivalLocation, restingDestinationOf, destinationsEqual, warpCooldownAfterArrival } from '../scene/shipPhysics'
 
 // Settles any ship whose order has completed (simDays past arrivalSimDays)
 // into its resting location, fires any queued "jump when ready" hyperdrive
@@ -32,7 +33,7 @@ import { planMoveUnchecked, resolveArrivalLocation, restingDestinationOf, destin
 // right-click order does.
 // One settling pass at `simDays` (exported so tests can run it headless).
 export function settleShips(simDays: number): void {
-  const { ships, setShipOrder, setShipLocation, setPendingHyperdriveJump, setFollowing, removeShip } =
+  const { ships, setShipOrder, setShipLocation, setPendingHyperdriveJump, setFollowing } =
     useShipStore.getState()
   const { addHyperlane } = useHyperlaneStore.getState()
   // A queued jump can only actually fire once the drive's cooldown has
@@ -61,6 +62,15 @@ export function settleShips(simDays: number): void {
         const there = arrival.bodyName ? landed?.location.kind === 'orbiting' && landed.location.bodyName === arrival.bodyName : !!landed && restingStarId(landed) === arrival.starId
         if (landed && there) applyShipCommand(ship.id, arrival.command, simDays)
       }
+    } else if (!ship.order && ship.arrivalCommand && !ship.pendingMoveOrder && !ship.pendingHyperdriveJump) {
+      // A hyperdrive jump lands the ship at once, so it never "arrives" above:
+      // a ship already resting where its command is for does it now.
+      const arrival = ship.arrivalCommand
+      const there = arrival.bodyName ? ship.location.kind === 'orbiting' && ship.location.bodyName === arrival.bodyName : restingStarId(ship) === arrival.starId
+      if (there) {
+        useShipStore.getState().setArrivalCommand(ship.id, null)
+        applyShipCommand(ship.id, arrival.command, simDays)
+      }
     }
 
     // "Jump when ready" — a hyperdrive jump ordered while still on
@@ -80,12 +90,12 @@ export function settleShips(simDays: number): void {
     ) {
       // The ship's own queued jump firing — acting for its owner nation, not
       // a fresh player click, so the ownership gate doesn't apply.
-      const result = planMoveUnchecked(ship, { kind: 'star', starId: ship.pendingHyperdriveJump }, simDays)
+      const result = planMoveUnchecked(ship, ship.pendingHyperdriveJumpTo ?? { kind: 'star', starId: ship.pendingHyperdriveJump }, simDays)
       if (result.kind === 'instant') {
         setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
-        if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
+        if (result.hyperlaneEstablished) addHyperlane(ship.ownerId, ...result.hyperlaneEstablished)
       } else if (result.kind === 'lost-in-hyperspace') {
-        removeShip(ship.id)
+        loseShipToJump(ship, ship.pendingHyperdriveJumpTo ?? { kind: 'star', starId: ship.pendingHyperdriveJump })
       } else {
         // Something changed between queuing and firing (ownership,
         // class) that makes the jump no longer plannable — drop the
@@ -116,11 +126,11 @@ export function settleShips(simDays: number): void {
             setShipOrder(ship.id, result.order, result.warpReadyOverride, true)
           } else if (result.kind === 'instant') {
             setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
-            if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
-          } else if ((result.kind === 'on-cooldown' || result.kind === 'paused') && targetDestination.kind === 'star') {
-            setPendingHyperdriveJump(ship.id, targetDestination.starId)
+            if (result.hyperlaneEstablished) addHyperlane(ship.ownerId, ...result.hyperlaneEstablished)
+          } else if (result.kind === 'on-cooldown' || result.kind === 'paused') {
+            setPendingHyperdriveJump(ship.id, jumpPlaceKey(targetDestination), undefined, targetDestination)
           } else if (result.kind === 'lost-in-hyperspace') {
-            removeShip(ship.id)
+            loseShipToJump(ship, targetDestination)
           }
           // 'not-owned'/'unknown-class': shouldn't realistically happen
           // for a player-owned follower — silently ignored, same as

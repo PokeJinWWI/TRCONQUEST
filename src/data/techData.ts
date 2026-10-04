@@ -11,7 +11,34 @@
 // them in later is adding array entries, not touching any of this file's
 // logic.
 
+import type { ResourceId } from './resourceData'
+import {
+  DUAL_DRIVE_RP_COST,
+  DUAL_DRIVE_TECH_ID,
+  HYPERDRIVE_MK_HYPERIUM_COST,
+  HYPERDRIVE_MK_RP_COST,
+  HYPERDRIVE_TECH_IDS,
+  WARP_DRIVE_TECH_IDS,
+  WARP_MK_EXOTIC_COST,
+  WARP_MK_RP_COST,
+} from './warpData'
+import { HYPERIUM_SYNTHESIS_HOLD } from './synthesisData'
+import { WARP_COMMS_EXOTIC_COST } from './commsData'
+
 export type TechCategory = 'physics' | 'society' | 'engineering'
+
+// Hyperspace Theory (the start of every hyperdrive and of the Hyperspace Scout) is
+// a wall for a nation that does not begin with it: a vast pile of Physics points,
+// or the shortcut — the old cost plus some hyperium burned (TechNode.shortcut).
+// The four nations all start with it (techStore.DEFAULT_RESEARCHED).
+export const HYPERSPACE_THEORY_RP_COST = 200_000
+export const HYPERSPACE_SHORTCUT_RP_COST = 120
+export const HYPERSPACE_SHORTCUT_HYPERIUM = 5
+
+// The warship ladder (each hull needs the one before) and the Turing Scout's
+// tech; pure unlocks, no other effects. Ids match shipData's *_TECH_ID.
+export const HULL_TECH_RP_COST = { frigate: 80, destroyer: 130, cruiser: 200, battleship: 300 } as const
+export const AUTONOMOUS_NAVIGATION_RP_COST = 200
 
 export interface TechNode {
   id: string
@@ -34,6 +61,19 @@ export interface TechNode {
   // until anomalousUnlocked() says so, which is a separate aggregate check
   // rather than an ordinary prerequisite (see that function's own comment).
   locked?: boolean
+  // Resources CONSUMED on researching it, besides the research points (a Warp
+  // Drive Mk takes exotic matter, a hyperdrive Mk hyperium). Blocked, with the
+  // reason shown, while the nation has less (techStore.researchBlock). Free
+  // Research (the cheat) waives them.
+  resourceCost?: Partial<Record<ResourceId, number>>
+  // Resources the nation must HOLD to research it, and does not spend (Hyperium
+  // Synthesis needs a stock of hyperium to work from). Blocked, with the reason
+  // shown, while it holds less. Free Research waives them too.
+  resourceHold?: Partial<Record<ResourceId, number>>
+  // A second way to research it: pay `cost` points (instead of the full cost) and
+  // `resourceCost` (consumed) instead of grinding the full cost out. Chosen by the
+  // player with the Shortcut button; the queue and the AI always use the full cost.
+  shortcut?: { cost: number; resourceCost: Partial<Record<ResourceId, number>> }
 }
 
 // --- The tree ------------------------------------------------------------
@@ -88,6 +128,50 @@ const BRANCH_TECHS: TechNode[] = [
     // Starbases are what a colony needs in its system
     // (scene/colonies.canColonize), so it stays cheap.
     prerequisites: [['orbital-mechanics']],
+  },
+
+  // The warship ladder: Corvette is free; each larger hull needs the tech for the
+  // one before it. No other effects (shipData.requiresTech / hullChassis.requiresTech).
+  {
+    id: 'frigate-hulls',
+    name: 'Frigate Hulls',
+    category: 'engineering',
+    description: 'Medium hulls with the structure and power for long-range missile racks. Unlocks building the Frigate.',
+    cost: HULL_TECH_RP_COST.frigate,
+    prerequisites: [['orbital-mechanics']],
+  },
+  {
+    id: 'destroyer-hulls',
+    name: 'Destroyer Hulls',
+    category: 'engineering',
+    description: 'Fast escort hulls with room for a dense point-defense fit. Unlocks building the Destroyer.',
+    cost: HULL_TECH_RP_COST.destroyer,
+    prerequisites: [['frigate-hulls']],
+  },
+  {
+    id: 'cruiser-hulls',
+    name: 'Cruiser Hulls',
+    category: 'engineering',
+    description: 'Large general-purpose line hulls carrying every direct-fire type. Unlocks building the Cruiser.',
+    cost: HULL_TECH_RP_COST.cruiser,
+    prerequisites: [['destroyer-hulls']],
+  },
+  {
+    id: 'battleship-hulls',
+    name: 'Battleship Hulls',
+    category: 'engineering',
+    description: 'Capital-scale hulls with torpedo bays and the armour to survive a fleet action. Unlocks building the Battleship.',
+    cost: HULL_TECH_RP_COST.battleship,
+    prerequisites: [['cruiser-hulls']],
+  },
+  // The last level of the scout line (shipData: Hyperspace Scout -> Turing Scout).
+  {
+    id: 'autonomous-navigation',
+    name: 'Autonomous Navigation',
+    category: 'engineering',
+    description: 'A navigator that plots every hyperspace jump itself, without a crew to get it wrong. Hyperspace Scouts can be refitted into Turing Scouts: jumps that never fail and a drive that recycles in a week.',
+    cost: AUTONOMOUS_NAVIGATION_RP_COST,
+    prerequisites: [['hyperdrive-mk1']],
   },
 
   // --- Thermodynamics ------------------------------------------------------
@@ -235,16 +319,8 @@ const BRANCH_TECHS: TechNode[] = [
     cost: 110,
     prerequisites: [['relativity']],
   },
-  // The engineering that turns Warp Theory into a drive a hull can carry:
-  // what actually lets a ship's warp drive fire (shipPhysics.planMove).
-  {
-    id: 'warp-drives',
-    name: 'Warp Drives',
-    category: 'engineering',
-    description: 'Building the theory into hardware: field generators and exotic-matter handling small and robust enough to fit a ship.',
-    cost: 90,
-    prerequisites: [['warp-theory']],
-  },
+  // The drives themselves (Warp Drive Mk I-VII, Hyperdrive Mk I-V, Dual-Drive
+  // Systems) are DRIVE_TECHS below.
   // Signal relays riding the same exotic-matter warp field a warp drive
   // does — see commsData.ts's WARP_COMMS_SPEED_C for the actual speed this
   // buys (a balance pick, not derived). The first of two comms tiers gating
@@ -257,7 +333,8 @@ const BRANCH_TECHS: TechNode[] = [
     category: 'engineering',
     description: 'FTL signal relays, riding the same exotic-matter warp field a warp drive does — order and report transit times measured in days rather than years.',
     cost: 90,
-    prerequisites: [['warp-theory']],
+    prerequisites: [['warp-theory', 'quantum-mechanics']],
+    resourceCost: { exoticMatter: WARP_COMMS_EXOTIC_COST },
   },
   // --- Quantum ------------------------------------------------------
   {
@@ -273,14 +350,6 @@ const BRANCH_TECHS: TechNode[] = [
     name: 'Quantum Computing',
     category: 'engineering',
     description: 'Computation exploiting superposition and entanglement — a real leap in processing efficiency.',
-    cost: 90,
-    prerequisites: [['quantum-mechanics']],
-  },
-  {
-    id: 'quantum-communications',
-    name: 'Quantum Communications',
-    category: 'engineering',
-    description: 'Entanglement-based signaling — communication with none of the usual electromagnetic-spectrum limitations.',
     cost: 90,
     prerequisites: [['quantum-mechanics']],
   },
@@ -338,9 +407,10 @@ const BRANCH_TECHS: TechNode[] = [
     id: 'hyperspace-theory',
     name: 'Hyperspace Theory',
     category: 'physics',
-    description: 'The physics of hyperspace — a dimension outside the normal universe where time passes faster, reachable only by burning hyperium.',
-    cost: 120,
+    description: 'The physics of hyperspace — a dimension outside the normal universe where time passes faster, reachable only by burning hyperium. Derived from first principles it is the work of centuries; a nation holding hyperium can instead study the real thing and skip most of it.',
+    cost: HYPERSPACE_THEORY_RP_COST,
     prerequisites: [['extradimensional-physics']],
+    shortcut: { cost: HYPERSPACE_SHORTCUT_RP_COST, resourceCost: { hyperium: HYPERSPACE_SHORTCUT_HYPERIUM } },
   },
   // Needs BOTH Extradimensional's own path AND Exotic Matter Theory (from
   // Quantum/Atomic) — "hyperium manufacturing from exotic matter" per the
@@ -350,23 +420,23 @@ const BRANCH_TECHS: TechNode[] = [
     id: 'hyperium-synthesis',
     name: 'Hyperium Synthesis',
     category: 'engineering',
-    description: 'Manufacturing hyperium directly from exotic matter, rather than relying on rare natural deposits.',
+    description: 'Manufacturing hyperium from exotic matter, rather than relying on rare natural deposits: Hyperium Refineries burn exotic matter to make it. Needs a stock of hyperium to work from, which it does not use up.',
     cost: 300,
     prerequisites: [['hyperspace-theory', 'exotic-matter-theory']],
+    resourceHold: { hyperium: HYPERIUM_SYNTHESIS_HOLD },
   },
-  // The second, capstone comms tier — needs BOTH Hyperspace Theory AND
-  // Quantum Communications (whose own description already reads as a proto
-  // instant-comms tech) actually landed, the same "converges from two
-  // branches" shape hyperium-synthesis above uses. Removes the light-speed
-  // command lag entirely, at any distance, for whichever country researches
-  // it — see commsData.ts.
+  // The second, capstone comms tier — needs BOTH Hyperspace Theory AND Quantum
+  // Mechanics, the same "converges from two branches" shape hyperium-synthesis
+  // above uses. Removes the
+  // light-speed command lag entirely, at any distance, for whichever country
+  // researches it (nations with a hyperdrive start with it) — see commsData.ts.
   {
     id: 'hyper-comms',
     name: 'Hyper Comms',
     category: 'engineering',
     description: 'Entangled hyperspace relays — a message departs and arrives in the same instant, anywhere. The end of the light-speed leash on command.',
     cost: 260,
-    prerequisites: [['hyperspace-theory', 'quantum-communications']],
+    prerequisites: [['hyperspace-theory', 'quantum-mechanics']],
   },
 
   // --- Anomalous (locked) ------------------------------------------------------
@@ -419,7 +489,66 @@ const POWER_TECHS: TechNode[] = [
 ]
 
 // Every tech, all three trees together (the "All" tree view).
-export const ALL_TECHS: TechNode[] = [...BRANCH_TECHS, ...POWER_TECHS]
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+
+// Warp Drive Mk I-VII (chained; Mk I builds on Warp Theory) and Hyperdrive Mk I-V
+// (chained; Mk I builds on Hyperspace Theory and is known at the start), the
+// tiers a ship's drive takes from its owner (data/warpData.ts, shipPhysics.planMove).
+// A warp Mk consumes exotic matter, a hyperdrive Mk hyperium: both scarce.
+const DRIVE_TECHS: TechNode[] = [
+  ...WARP_DRIVE_TECH_IDS.map((id, i): TechNode => ({
+    id,
+    name: `Warp Drive Mk ${ROMAN[i]}`,
+    category: 'engineering',
+    description:
+      i === 0
+        ? 'Building the theory into hardware: field generators and exotic-matter handling small and robust enough to fit a ship. Every warp ship of the nation warps at this tier.'
+        : `A faster warp field: every warp ship of the nation upgrades at once, no refit. Consumes exotic matter.`,
+    cost: WARP_MK_RP_COST[i],
+    prerequisites: [[i === 0 ? 'warp-theory' : WARP_DRIVE_TECH_IDS[i - 1]]],
+    resourceCost: { exoticMatter: WARP_MK_EXOTIC_COST[i] },
+  })),
+  ...HYPERDRIVE_TECH_IDS.map((id, i): TechNode => ({
+    id,
+    name: `Hyperdrive Mk ${ROMAN[i]}`,
+    category: 'engineering',
+    description:
+      i === 0
+        ? 'The hyperdrive every human hull is built around: short jumps through hyperspace, burning hyperium, with a real chance of being lost.'
+        : 'Longer, far safer jumps for every hyperdrive ship of the nation, no refit. Consumes hyperium.',
+    cost: HYPERDRIVE_MK_RP_COST[i],
+    prerequisites: [[i === 0 ? 'hyperspace-theory' : HYPERDRIVE_TECH_IDS[i - 1]]],
+    ...(HYPERDRIVE_MK_HYPERIUM_COST[i] > 0 ? { resourceCost: { hyperium: HYPERDRIVE_MK_HYPERIUM_COST[i] } } : {}),
+  })),
+  // Drawing the finite natural deposits (data/deposits.ts) of bodies a nation owns.
+  // The human nations start with both.
+  {
+    id: 'hyperium-extraction',
+    name: 'Hyperium Extraction',
+    category: 'engineering',
+    description: 'Mining rigs and refineries for the rare hyperium deposits some worlds near Sol hold: draws hyperium from the deposits on bodies the nation owns, until they run dry.',
+    cost: 60,
+    prerequisites: [['hyperspace-theory']],
+  },
+  {
+    id: 'exotic-matter-extraction',
+    name: 'Exotic Matter Extraction',
+    category: 'engineering',
+    description: 'Drawing exotic matter from the few, small deposits some worlds near Sol hold: draws exotic matter from the deposits on bodies the nation owns, until they run dry.',
+    cost: 60,
+    prerequisites: [['hyperspace-theory']],
+  },
+  {
+    id: DUAL_DRIVE_TECH_ID,
+    name: 'Dual-Drive Systems',
+    category: 'engineering',
+    description: 'A single drive module carrying both a hyperdrive and a warp drive: a hull that warps while it can and jumps when it must.',
+    cost: DUAL_DRIVE_RP_COST,
+    prerequisites: [['warp-drive-mk1', 'hyperspace-theory']],
+  },
+]
+
+export const ALL_TECHS: TechNode[] = [...BRANCH_TECHS, ...POWER_TECHS, ...DRIVE_TECHS]
 export const PHYSICS_TECHS: TechNode[] = ALL_TECHS.filter((n) => n.category === 'physics')
 export const SOCIETY_TECHS: TechNode[] = ALL_TECHS.filter((n) => n.category === 'society')
 export const ENGINEERING_TECHS: TechNode[] = ALL_TECHS.filter((n) => n.category === 'engineering')
@@ -438,7 +567,9 @@ export function findTech(id: string): TechNode | undefined {
 // global root, or the first node of a tree that builds on another tree).
 export function localRoots(techs: TechNode[]): TechNode[] {
   const ids = new Set(techs.map((n) => n.id))
-  return techs.filter((n) => n.prerequisites.every((set) => set.every((id) => !ids.has(id))))
+  const roots = techs.filter((n) => n.prerequisites.every((set) => set.every((id) => !ids.has(id))))
+  // Locked roots (Anomalous Phenomena) always sit at the bottom of the tree.
+  return [...roots.filter((n) => !n.locked), ...roots.filter((n) => n.locked)]
 }
 
 // Prerequisites of `node` that live outside `techs` (in another tree).
@@ -503,11 +634,18 @@ export function visibleNodeIds(techs: TechNode[], researchedIds: ReadonlySet<str
 // than pretending `availablePoints` is huge, so a country that has never
 // earned a single point can still research through the whole tree with it
 // on. Defaults false so every pre-existing caller is unaffected.
-export function canResearch(node: TechNode, researchedIds: ReadonlySet<string>, availablePoints: number, freeCost = false): boolean {
+export function canResearch(node: TechNode, researchedIds: ReadonlySet<string>, availablePoints: number, freeCost = false, viaShortcut = false): boolean {
   if (researchedIds.has(node.id)) return false
   if (node.locked && !anomalousUnlocked(researchedIds)) return false
   if (!prerequisitesMet(node, researchedIds)) return false
-  return freeCost || availablePoints >= node.cost
+  return freeCost || availablePoints >= researchTerms(node, viaShortcut).cost
+}
+
+// What researching `node` costs the nation: the points and the resources it consumes.
+// `viaShortcut` takes the node's shortcut where it has one (else the plain cost).
+export function researchTerms(node: TechNode, viaShortcut = false): { cost: number; resourceCost: Partial<Record<ResourceId, number>> } {
+  if (viaShortcut && node.shortcut) return node.shortcut
+  return { cost: node.cost, resourceCost: node.resourceCost ?? {} }
 }
 
 // --- Research queue --------------------------------------------------------
@@ -542,9 +680,18 @@ export function queuePlan(id: string, researched: ReadonlySet<string>, queue: re
 // Which queued techs get researched now, in order, given the points in each
 // tree (spent as it goes). Within one tree the queue order holds: once a tree's
 // next tech can't be afforded, nothing later in that tree jumps ahead of it.
-export function queuedResearchNow(queue: readonly string[], researched: ReadonlySet<string>, points: Record<TechCategory, number>, freeCost = false): string[] {
+export function queuedResearchNow(
+  queue: readonly string[],
+  researched: ReadonlySet<string>,
+  points: Record<TechCategory, number>,
+  freeCost = false,
+  // The resources the nation holds, for the techs that consume some: a tech it cannot
+  // pay for is skipped, and does not hold up the ones behind it.
+  resources?: Partial<Record<ResourceId, number>>,
+): string[] {
   const have = new Set(researched)
   const left = { ...points }
+  const stock = resources ? { ...resources } : null
   const blocked = new Set<TechCategory>()
   const done: string[] = []
   for (const id of queue) {
@@ -556,11 +703,28 @@ export function queuedResearchNow(queue: readonly string[], researched: Readonly
       blocked.add(node.category)
       continue
     }
+    if (!freeCost && stock && resourceShortfall(node, stock)) continue
+    if (!freeCost && stock) for (const [r, n] of Object.entries(node.resourceCost ?? {})) stock[r as ResourceId] = (stock[r as ResourceId] ?? 0) - (n ?? 0)
     if (!freeCost) left[node.category] -= node.cost
     have.add(id)
     done.push(id)
   }
   return done
+}
+
+const RESOURCE_LABEL: Partial<Record<ResourceId, string>> = { exoticMatter: 'exotic matter', hyperium: 'hyperium', alloys: 'alloys', energy: 'energy' }
+
+// Why a nation holding `amounts` cannot pay the resources a tech consumes, or null.
+export function resourceShortfall(node: Pick<TechNode, 'resourceCost' | 'resourceHold'>, amounts: Partial<Record<ResourceId, number>>): string | null {
+  for (const [id, need] of Object.entries(node.resourceCost ?? {}) as [ResourceId, number][]) {
+    const have = amounts[id] ?? 0
+    if (have < need) return `Needs ${need} ${RESOURCE_LABEL[id] ?? id} (you have ${Math.floor(have)})`
+  }
+  for (const [id, need] of Object.entries(node.resourceHold ?? {}) as [ResourceId, number][]) {
+    const have = amounts[id] ?? 0
+    if (have < need) return `Needs to hold ${need} ${RESOURCE_LABEL[id] ?? id} (you have ${Math.floor(have)})`
+  }
+  return null
 }
 
 // How many months until each queued tech is researched, given the points in

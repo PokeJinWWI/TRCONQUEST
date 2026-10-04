@@ -7,6 +7,8 @@ import type { BombardStance } from '../data/defenseData'
 import { CHAFF_CHARGES, type CombatProfile, type CombatStance, type ComponentKind, type FleetStrategy } from '../data/combatData'
 import { deployChaff as deployChaffState } from '../scene/combatResolution'
 import { anyCivilian } from '../scene/fleetRules'
+import type { DriveChoice } from '../scene/driveChoice'
+import type { ExploreScope } from '../scene/autoExplore'
 import { useFleetStore, nextFleetName } from './fleetStore'
 import { useGameTimeStore } from './gameTimeStore'
 
@@ -32,6 +34,12 @@ export type ShipLocation =
   | { kind: 'system-point'; systemId: string; position: [number, number, number] }
   | { kind: 'star'; starId: string; offset: [number, number, number] }
   | { kind: 'interstellar-point'; position: [number, number, number] }
+  // Between clusters (the galactic view): resting beside a cluster other than the
+  // Solar Neighbourhood (arriving at ours lands in interstellar space, at Sol),
+  // or at a bare point of galactic space. Galactic scene units
+  // (data/neighborhoodData.neighborhoodScenePosition).
+  | { kind: 'cluster'; clusterId: string; offset: [number, number, number] }
+  | { kind: 'galactic-point'; position: [number, number, number] }
 
 // What a move order targets — resolved to a live position by shipPhysics.ts
 // at order-issue time (and, for a 'body', re-resolved to wherever that body
@@ -51,6 +59,11 @@ export type MoveDestination =
   | { kind: 'point'; systemId: string; position: [number, number, number] }
   | { kind: 'star'; starId: string }
   | { kind: 'interstellar-point'; position: [number, number, number] }
+  | { kind: 'cluster'; clusterId: string }
+  | { kind: 'galactic-point'; position: [number, number, number] }
+
+// What ShipInstance.pendingHyperdriveJump holds for a queued jump into open space.
+export const DEEP_SPACE_JUMP = 'deep-space'
 
 // A non-move command to a ship (survey, load, transfer, build…) — issued by
 // the player from ShipPanel, and carried out by scene/shipCommands.ts either
@@ -75,6 +88,8 @@ export type ShipCommand =
   // (scene/aggression.ts): firing on a nation you are not at war with is an
   // incident, with consequences once the news reaches it.
   | { kind: 'attack'; targetShipId: string }
+  // Queue this ship for its next level at the shipyard (scene/upgradeOrders.ts flies it there first).
+  | { kind: 'upgrade' }
 
 export interface PendingShipCommand {
   command: ShipCommand
@@ -90,7 +105,7 @@ export interface MoveOrder {
   // `interstellarAnchor` — crossing between a system and interstellar space
   // is modeled as instantaneous at the relevant system's star, so start/end
   // are always in the same units).
-  space: 'system' | 'interstellar'
+  space: 'system' | 'interstellar' | 'galactic'
   systemId?: string
   startPosition: [number, number, number]
   endPosition: [number, number, number]
@@ -225,6 +240,10 @@ export interface ShipInstance {
   // wants *this* particular trip to use it (default true, preserving the
   // original "always warp when possible" behavior unless turned off).
   warpEnabled: boolean
+  // The drive the player picked for this ship (scene/driveChoice.ts); absent = its
+  // class's default (`ShipClass.defaultDrive`, else 'auto' = the planner's own rule).
+  // Persists across orders until changed.
+  driveChoice?: DriveChoice
   // Player-toggleable (see ShipPanel): whether an order that can't warp
   // immediately (still on cooldown) should keep waiting and auto-engage
   // warp mid-flight once able, rather than riding reaction drive for the
@@ -267,6 +286,10 @@ export interface ShipInstance {
   // every ship/order that predates this field. When present, the jump can't
   // actually fire until BOTH this AND the drive's own cooldown have passed.
   pendingHyperdriveJumpArrivesSimDays?: number
+  // Where exactly the queued jump goes when that is not simply the star: a
+  // world's orbit or a point in the system `pendingHyperdriveJump` names, or a
+  // spot in open space (then that field holds DEEP_SPACE_JUMP). Absent = the star.
+  pendingHyperdriveJumpTo?: MoveDestination
   // A move order queued behind FTL comms delay (see commsVisual.ts's
   // queueCommand) — the destination is kept raw rather than pre-computed
   // into a MoveOrder, the same reasoning pendingHyperdriveJump already
@@ -296,6 +319,12 @@ export interface ShipInstance {
   // absent = off.
   bombardStance?: BombardStance
   pendingBombard?: { stance: BombardStance; arrivesSimDays: number; sentSimDays?: number } | null
+  // Free Flight (scene/freeFlight.ts): absent = on. Only matters once the owner
+  // has researched Free-Flight Maneuvering; off, the ship is in the gravity of
+  // the bodies it fights near and circles them when idle. Changed through
+  // comms delay like a stance.
+  freeFlight?: boolean
+  pendingFreeFlight?: { on: boolean; arrivesSimDays: number; sentSimDays?: number } | null
   // Patrol duty (armed ships): orbiting a colony, it holds the orbit toward
   // making a micro-colony a planetary colony (scene/colonyLogic.ts). Absent =
   // off; changed through comms delay like the bombard stance.
@@ -309,11 +338,26 @@ export interface ShipInstance {
   founding?: { bodyName: string; sinceSimDays: number } | null
   // Stellaris-style automation (scene/automation.ts): the ship finds its own
   // work. Absent = off; any manual order turns it off.
+  // Queued or running in a shipyard slip to be upgraded to its class's next level
+  // (state/shipyardStore.queueUpgrade): the player cannot order it away meanwhile.
+  upgrading?: boolean
   automations?: Automation[]
   // Auto-refill option: after refilling away from where it was, fly back there.
   automationReturn?: boolean
   // Where to return to (set when it leaves to refill, cleared once back).
   autoHome?: MoveDestination | null
+  // "Make unsafe jumps" (scene/autoTravel.ts): off, its automation never takes a
+  // jump over the warning line; on, up to automationMaxRisk a jump (0..1).
+  automationUnsafe?: boolean
+  automationMaxRisk?: number
+  // Where an automated trip of several jumps is going, while it is under way.
+  autoRoute?: MoveDestination | null
+  // Why its automation is stuck (no route it may take), for the ship panel.
+  automationNote?: string | null
+  // Auto-explore (Turing Scouts): how far it goes (scene/autoExplore.ts; absent = Interstellar),
+  // and the sim-day before which a scout with nothing left to explore does not look again.
+  exploreScope?: ExploreScope
+  exploreRecheckSimDays?: number
   // A short trailing log of this ship's own order/location/combat state,
   // appended once each time any of those actually changes (see
   // setShipOrder/setShipLocation/applyCombatDamage below) — never read by
@@ -443,6 +487,7 @@ interface ShipState {
   setArrivalCommand: (id: string, arrival: { starId: string; bodyName?: string; command: ShipCommand } | null) => void
   setShipCargo: (id: string, cargo: Partial<Record<ResourceId, number>>) => void
   setWarpEnabled: (id: string, enabled: boolean) => void
+  setDriveChoice: (id: string, choice: DriveChoice) => void
   setWarpWhenReady: (id: string, whenReady: boolean) => void
   setChaffAutoDeploy: (id: string, auto: boolean) => void
   setThrusterBoostAuto: (id: string, auto: boolean) => void
@@ -462,11 +507,15 @@ interface ShipState {
   // gates firing on FTL comms delay having elapsed too — omitted (or
   // explicitly cleared alongside a null starId) for a plain cooldown-only
   // queue, exactly as before this parameter existed.
-  setPendingHyperdriveJump: (id: string, starId: string | null, arrivesSimDays?: number) => void
+  // `destination` is the exact place when it is not the star itself
+  // (ShipInstance.pendingHyperdriveJumpTo).
+  setPendingHyperdriveJump: (id: string, starId: string | null, arrivesSimDays?: number, destination?: MoveDestination) => void
   // See ShipInstance.pendingMoveOrder / pendingStance.
   setPendingMoveOrder: (id: string, pending: { destination: MoveDestination; arrivesSimDays: number; sentSimDays?: number } | null) => void
   setBombardStance: (id: string, stance: BombardStance) => void
   setPendingBombard: (id: string, pending: ShipInstance['pendingBombard']) => void
+  setFreeFlight: (id: string, on: boolean) => void
+  setPendingFreeFlight: (id: string, pending: ShipInstance['pendingFreeFlight']) => void
   setPatrol: (id: string, on: boolean) => void
   setPendingPatrol: (id: string, pending: ShipInstance['pendingPatrol']) => void
   setSettlers: (id: string, settlers: number) => void
@@ -477,6 +526,12 @@ interface ShipState {
   toggleAutomation: (id: string, automation: Automation) => void
   setAutomationReturn: (id: string, on: boolean) => void
   setAutoHome: (id: string, home: MoveDestination | null) => void
+  setAutomationUnsafe: (id: string, on: boolean) => void
+  setAutomationMaxRisk: (id: string, risk: number) => void
+  setAutoRoute: (id: string, destination: MoveDestination | null) => void
+  setAutomationNote: (id: string, note: string | null) => void
+  setExploreScope: (id: string, scope: ExploreScope) => void
+  setExploreRecheck: (id: string, simDays: number | undefined) => void
   setPendingStance: (id: string, pending: { stance: CombatStance; arrivesSimDays: number; sentSimDays?: number } | null) => void
   // See ShipInstance.orderQueue / pendingQueueAdds.
   setOrderQueue: (id: string, queue: MoveDestination[]) => void
@@ -633,6 +688,7 @@ export const useShipStore = create<ShipState>((set) => ({
                       ? ship.arrivalCommand
                       : null,
                   pendingHyperdriveJump: null,
+                  pendingHyperdriveJumpTo: undefined,
                   // A real order actually taking effect supersedes any
                   // still-queued comms-delayed command — same "the newest
                   // thing wins" reasoning pendingHyperdriveJump already
@@ -653,6 +709,8 @@ export const useShipStore = create<ShipState>((set) => ({
                   surveyJob: keepFollowing ? ship.surveyJob : null,
                   founding: keepFollowing ? ship.founding : null,
                   automations: keepFollowing ? ship.automations : [],
+                  autoRoute: keepFollowing ? ship.autoRoute : null,
+                  automationNote: keepFollowing ? ship.automationNote : null,
                 },
                 simDays,
               )
@@ -679,6 +737,11 @@ export const useShipStore = create<ShipState>((set) => ({
   setWarpEnabled: (id, enabled) =>
     set((s) => ({
       ships: s.ships.map((ship) => (ship.id === id ? { ...ship, warpEnabled: enabled } : ship)),
+    })),
+  setDriveChoice: (id, choice) =>
+    set((s) => ({
+      // Warp counts as "enabled" for the legacy flag the replan and 'auto' still read: picking Warp or Auto turns it on, Reaction/Hyperdrive off.
+      ships: s.ships.map((ship) => (ship.id === id ? { ...ship, driveChoice: choice, warpEnabled: choice === 'warp' || choice === 'auto' } : ship)),
     })),
   setWarpWhenReady: (id, whenReady) =>
     set((s) => ({
@@ -724,6 +787,7 @@ export const useShipStore = create<ShipState>((set) => ({
                 hyperdriveReadySimDays: cooldowns?.hyperdriveReadySimDays ?? sh.hyperdriveReadySimDays,
                 warpReadySimDays: cooldowns?.warpReadySimDays ?? sh.warpReadySimDays,
                 pendingHyperdriveJump: null,
+                pendingHyperdriveJumpTo: undefined,
                 // Same reasoning as setShipOrder's own pendingMoveOrder
                 // clear — a ship actually coming to rest supersedes
                 // whatever comms-delayed command might still be queued.
@@ -732,6 +796,8 @@ export const useShipStore = create<ShipState>((set) => ({
                 surveyJob: keepFollowing ? sh.surveyJob : null,
                 founding: keepFollowing ? sh.founding : null,
                 automations: keepFollowing ? sh.automations : [],
+                autoRoute: keepFollowing ? sh.autoRoute : null,
+                automationNote: keepFollowing ? sh.automationNote : null,
               },
               simDays,
             )
@@ -739,10 +805,12 @@ export const useShipStore = create<ShipState>((set) => ({
       )
       return { ships }
     }),
-  setPendingHyperdriveJump: (id, starId, arrivesSimDays) =>
+  setPendingHyperdriveJump: (id, starId, arrivesSimDays, destination) =>
     set((s) => ({
       ships: s.ships.map((ship) =>
-        ship.id === id ? { ...ship, pendingHyperdriveJump: starId, pendingHyperdriveJumpArrivesSimDays: arrivesSimDays } : ship,
+        ship.id === id
+          ? { ...ship, pendingHyperdriveJump: starId, pendingHyperdriveJumpArrivesSimDays: arrivesSimDays, pendingHyperdriveJumpTo: starId !== null && destination && destination.kind !== 'star' ? destination : undefined }
+          : ship,
       ),
     })),
   setPendingMoveOrder: (id, pending) =>
@@ -753,19 +821,31 @@ export const useShipStore = create<ShipState>((set) => ({
   setPendingPatrol: (id, pending) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingPatrol: pending } : ship)) })),
   setSettlers: (id, settlers) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, settlers } : ship)) })),
   setFounding: (id, founding) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, founding } : ship)) })),
-  setAutomation: (id, automation) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automations: automation ? [automation] : [], autoHome: null } : ship)) })),
+  setAutomation: (id, automation) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automations: automation ? [automation] : [], autoHome: null, autoRoute: null, automationNote: null } : ship)) })),
   toggleAutomation: (id, automation) =>
     set((s) => ({
       ships: s.ships.map((ship) => {
         if (ship.id !== id) return ship
         const cur = ship.automations ?? []
-        return { ...ship, automations: cur.includes(automation) ? cur.filter((m) => m !== automation) : [...cur, automation], autoHome: null }
+        return { ...ship, automations: cur.includes(automation) ? cur.filter((m) => m !== automation) : [...cur, automation], autoHome: null, autoRoute: null, automationNote: null }
       }),
     })),
   setAutomationReturn: (id, on) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automationReturn: on } : ship)) })),
+  setAutomationUnsafe: (id, on) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automationUnsafe: on, automationNote: null } : ship)) })),
+  setAutomationMaxRisk: (id, risk) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automationMaxRisk: risk, automationNote: null } : ship)) })),
+  setAutoRoute: (id, destination) =>
+    set((s) => (s.ships.some((ship) => ship.id === id && (ship.autoRoute ?? null) !== destination) ? { ships: s.ships.map((ship) => (ship.id === id ? { ...ship, autoRoute: destination } : ship)) } : s)),
+  setAutomationNote: (id, note) =>
+    set((s) => (s.ships.some((ship) => ship.id === id && (ship.automationNote ?? null) !== note) ? { ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automationNote: note } : ship)) } : s)),
+  // A new scope looks afresh: any "nothing left" wait is dropped.
+  setExploreScope: (id, scope) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, exploreScope: scope, exploreRecheckSimDays: undefined, automationNote: null } : ship)) })),
+  setExploreRecheck: (id, simDays) =>
+    set((s) => (s.ships.some((ship) => ship.id === id && ship.exploreRecheckSimDays !== simDays) ? { ships: s.ships.map((ship) => (ship.id === id ? { ...ship, exploreRecheckSimDays: simDays } : ship)) } : s)),
   setAutoHome: (id, home) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, autoHome: home } : ship)) })),
   setBombardStance: (id, stance) =>
     set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, bombardStance: stance, pendingBombard: null } : ship)) })),
+  setFreeFlight: (id, on) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, freeFlight: on, pendingFreeFlight: null } : ship)) })),
+  setPendingFreeFlight: (id, pending) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingFreeFlight: pending } : ship)) })),
   setPendingBombard: (id, pending) =>
     set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingBombard: pending } : ship)) })),
   setPendingStance: (id, pending) =>

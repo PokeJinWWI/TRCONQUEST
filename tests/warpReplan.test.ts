@@ -5,7 +5,8 @@
 //
 // Run:  npx tsx tests/warpReplan.test.ts
 
-import { SHIP_CLASSES } from '../src/data/shipData'
+import { resolveShipClass } from '../src/state/shipClassResolver'
+import { grantWarp, warpHullId } from './testWarp'
 import { useShipStore, pristineCombatState, type ShipInstance } from '../src/state/shipStore'
 import { useGameTimeStore } from '../src/state/gameTimeStore'
 import { usePlayerStore } from '../src/state/playerStore'
@@ -22,11 +23,14 @@ function check(label: string, cond: boolean, detail = '') {
 }
 
 const PLAYER = 'imperial-state-of-mars'
+// No preset hull warps: a designer-built warp courier, its owner at Warp Drive Mk I.
+grantWarp(PLAYER)
+const WARP_COURIER = warpHullId('civilian-hull')
 function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
-  const cls = SHIP_CLASSES.find((c) => c.id === 'swift-courier')!
+  const cls = resolveShipClass(WARP_COURIER)!
   return {
     id: 'w1',
-    classId: 'swift-courier',
+    classId: WARP_COURIER,
     name: 'Courier w1',
     ownerId: PLAYER,
     location: { kind: 'orbiting', systemId: 'sol', bodyName: 'Earth', periodDays: 20, phaseDeg: 0, inclinationDeg: 0 },

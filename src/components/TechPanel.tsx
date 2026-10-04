@@ -1,6 +1,8 @@
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { usePlayerTech } from '../hooks/usePlayerTech'
+import { usePlayerResources } from '../hooks/usePlayerResources'
 import { useTechStore } from '../state/techStore'
+import { usePlayerMaterialMask } from '../hooks/usePlayerMaterialMask'
 import { useViewStore } from '../state/viewStore'
 import { CATEGORY_LABELS, TechTreeGraph, formatResearch } from './TechTreeGraph'
 import { usePlayerStore } from '../state/playerStore'
@@ -8,6 +10,8 @@ import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import {
   TECHS_BY_CATEGORY,
   canResearch,
+  resourceShortfall,
+  researchTerms,
   visibleNodeIds,
   prerequisitesMet,
   anomalousUnlocked,
@@ -54,6 +58,7 @@ function branchNodes(root: TechNode, techs: TechNode[]): TechNode[] {
 // come first; one that needs a tech from another tree waits behind them until
 // that tech is done. Each shows roughly how long it will take.
 function ResearchQueue({ queue, researched, points, monthly, onRemove }: { queue: string[]; researched: ReadonlySet<string>; points: Record<TechCategory, number>; monthly: Record<TechCategory, number> | null; onRemove: (id: string) => void }) {
+  const mask = usePlayerMaterialMask()
   if (queue.length === 0) return null
   const rate = monthly ?? { physics: 0, society: 0, engineering: 0 }
   const etas = researchEtas(queue, researched, points, rate)
@@ -79,10 +84,10 @@ function ResearchQueue({ queue, researched, points, monthly, onRemove }: { queue
               const node = findTech(id)!
               const waitingOn = externalPrerequisites(node, TECHS_BY_CATEGORY[cat]).filter((p) => !have.has(p.id))[0] ?? (prerequisitesMet(node, have) ? null : node.prerequisites[0]?.map((p) => findTech(p)).find((p) => p && !have.has(p.id)))
               return (
-                <div key={id} className="inspect-row" title={node.description}>
+                <div key={id} className="inspect-row" title={mask(node.description)}>
                   <span className="inspect-label">
-                    {i + 1}. {node.name} <span className="abs-dim">({node.cost} pts, {formatEta(etas.get(id))})</span>
-                    {waitingOn ? <span className="abs-dim"> · waits for {waitingOn.name}</span> : null}
+                    {i + 1}. {mask(node.name)} <span className="abs-dim">({node.cost} pts, {formatEta(etas.get(id))})</span>
+                    {waitingOn ? <span className="abs-dim"> · waits for {mask(waitingOn.name)}</span> : null}
                   </span>
                   <button type="button" className="abs-x" title="Take it out of the queue" onClick={() => onRemove(id)}>
                     ×
@@ -109,6 +114,9 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
   const queueTech = useTechStore((s) => s.queueTech)
   const unqueueTech = useTechStore((s) => s.unqueueTech)
   const freeResearchMode = useTechStore((s) => s.freeResearchMode)
+  const resources = usePlayerResources().amounts
+  // Names an undiscovered material "???" here, in the research UI only.
+  const mask = usePlayerMaterialMask()
   // Tab-scoped store state, not local useState — see viewStore.ts's own
   // comment on techTreeOpen for why: a workspace-tab switch unmounts and
   // remounts this whole panel, which would otherwise silently drop the tree
@@ -159,6 +167,7 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
           researchPoints={tech.researchPoints}
           monthly={monthly}
           freeResearchMode={freeResearchMode}
+          resources={resources}
           onResearch={(nodeId) => researchNode(country.id, nodeId)}
           onClose={() => setShowTree(false)}
         />
@@ -168,12 +177,13 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
       <div className="tech-branch-grid">
         {roots.map((root) => (
           <div className="tech-branch" key={root.id}>
-            <div className="combat-orders-title">{root.name}</div>
+            <div className="combat-orders-title">{mask(root.name)}</div>
             {branchNodes(root, techs)
               .filter((node) => visible.has(node.id))
               .map((node) => {
                 const isResearched = tech.researched.has(node.id)
-                const eligible = canResearch(node, tech.researched, tech.researchPoints[category], freeResearchMode)
+                const shortfall = !tech.researched.has(node.id) && !freeResearchMode ? resourceShortfall(node, resources) : null
+                const eligible = canResearch(node, tech.researched, tech.researchPoints[category], freeResearchMode) && !shortfall
                 // A visible-but-not-yet-reachable node (the "grandchild"
                 // preview one hop past its own unmet prerequisite, or
                 // Anomalous before its aggregate threshold) shows only its
@@ -186,12 +196,17 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
                 const previewOnly =
                   !isResearched && (!prerequisitesMet(node, tech.researched) || (node.locked === true && !anomalousUnlocked(tech.researched)))
                 const external = externalPrerequisites(node, techs)
+                // What it is actually waiting for: the first tech still missing from the
+                // prerequisite set closest to done (not one it already has).
+                const missing = prerequisitesMet(node, tech.researched)
+                  ? undefined
+                  : findTech([...node.prerequisites.map((set) => set.filter((id) => !tech.researched.has(id)))].sort((x, y) => x.length - y.length)[0]?.[0] ?? '')
                 const queuePos = (tech.queue ?? []).indexOf(node.id)
-                const needs = external.length > 0 ? `Needs ${external.map((t) => `${t.name} (${CATEGORY_LABELS[t.category]})`).join(', ')}. ` : ''
+                const needs = external.length > 0 ? `Needs ${external.map((t) => `${mask(t.name)} (${CATEGORY_LABELS[t.category]})`).join(', ')}. ` : ''
                 return (
-                  <div className={`inspect-row tech-node${isResearched ? ' tech-node-done' : ''}`} key={node.id} title={`${needs}${node.description}`}>
+                  <div className={`inspect-row tech-node${isResearched ? ' tech-node-done' : ''}`} key={node.id} title={`${needs}${mask(node.description)}`}>
                     <span className="inspect-label">
-                      {node.name}
+                      {mask(node.name)}
                       {node.locked && !isResearched ? ' 🔒' : ''}
                     </span>
                     {isResearched ? (
@@ -209,11 +224,24 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
                         type="button"
                         className="tech-research-btn"
                         onClick={() => queueTech(country.id, node.id)}
-                        title={`${previewOnly ? (external.length > 0 && !prerequisitesMet(node, tech.researched) ? `Needs ${external[0].name} first. ` : 'Needs its prerequisites first. ') : `Needs ${node.cost} pts (have ${formatResearch(tech.researchPoints[category])}). `}Queue it (and what it still needs) to be researched as soon as it can be: ${formatEta(etaIfQueued(node.id))}.`}
+                        title={mask(`${previewOnly ? (missing ? `Needs ${missing.name} first. ` : 'Needs its prerequisites first. ') : `${shortfall ? `${shortfall}. ` : ''}Needs ${node.cost} pts (have ${formatResearch(tech.researchPoints[category])}). `}Queue it (and what it still needs) to be researched as soon as it can be: ${formatEta(etaIfQueued(node.id))}.`)}
                       >
                         Queue · {freeResearchMode ? 0 : node.cost}
                       </button>
                     )}
+                    {node.shortcut && !previewOnly && !isResearched && (() => {
+                      // The second way in (TechNode.shortcut): fewer points, plus resources burned.
+                      const terms = researchTerms(node, true)
+                      const short = freeResearchMode ? null : resourceShortfall({ resourceCost: terms.resourceCost }, resources)
+                      const can = canResearch(node, tech.researched, tech.researchPoints[category], freeResearchMode, true) && !short
+                      const price = Object.entries(terms.resourceCost).map(([id, n]) => `${n} ${id === 'hyperium' ? 'hyperium' : id}`).join(', ')
+                      return (
+                        <button type="button" className="tech-research-btn" disabled={!can} onClick={() => researchNode(country.id, node.id, true)} title={`The shortcut: ${terms.cost} pts and ${price} (consumed) instead of ${node.cost.toLocaleString()} pts.${short ? ` ${short}.` : ''}`}>
+                          Shortcut · {freeResearchMode ? 0 : terms.cost} pts + {price}
+                        </button>
+                      )
+                    })()}
+                    {shortfall && !previewOnly && !isResearched && <span className="abs-dim tech-shortfall"> {mask(shortfall)}</span>}
                   </div>
                 )
               })}

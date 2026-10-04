@@ -21,8 +21,9 @@ import { canRecruitAt } from '../src/state/armyStore'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
 import { applyShipCommand } from '../src/scene/shipCommands'
 import { bodyStarId } from '../src/scene/territory'
-import { applyInfluenceIncome, canColonize, colonyCostFor, embarkSettlers, foundColony, seedInfluence } from '../src/scene/colonies'
-import { colonyInfluenceCost } from '../src/scene/colonyLogic'
+import { applyInfluenceIncome, canColonize, embarkSettlers, foundColony, seedInfluence } from '../src/scene/colonies'
+import { STARBASE_INFLUENCE_COST } from '../src/data/starbaseData'
+import { readFileSync } from 'node:fs'
 import { payReparations } from '../src/scene/peace'
 import { landForBody } from '../src/scene/bodyLand'
 import { setUpNewGame } from '../src/scene/gameSetup'
@@ -34,6 +35,10 @@ import { resolveCommsSignals } from '../src/hooks/useCommsResolver'
 import { resolveShipyards } from '../src/hooks/useShipyardResolver'
 import { settleShips } from '../src/hooks/useShipOrderSettler'
 import { resolveSurvey } from '../src/hooks/useSurveyResolver'
+import { safeJumps } from './testWarp'
+
+// Not about jump risk: ships always arrive (the roll is tested in tests/warp.test.ts).
+safeJumps()
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -82,12 +87,16 @@ console.log('\n=== 1. Influence ===')
   check('Influence is never handed over in reparations', influenceOf(VENUS) === venusBefore && influenceOf(MARS) === INFLUENCE_CAP)
 }
 
-console.log('\n=== 2. What a colony costs ===')
+console.log('\n=== 2. Influence costs: a Starbase 30, a colony nothing ===')
 {
   fresh()
-  check('a big world costs more than a small moon', colonyCostFor(MARS, 'Earth') > colonyCostFor(MARS, 'Phobos'), `Earth ${colonyCostFor(MARS, 'Earth')}, Phobos ${colonyCostFor(MARS, 'Phobos')}`)
-  check('the same world costs more from farther away', colonyInfluenceCost('Titan', 'sol', 'alpha-centauri') > colonyInfluenceCost('Titan', 'sol', 'sol'))
-  check('never more than the Influence cap', colonyInfluenceCost('Jupiter', 'sol', 'lalande-21185') <= INFLUENCE_CAP)
+  check('a Starbase costs 30 Influence, a named constant', STARBASE_INFLUENCE_COST === 30)
+  const strip = (f: string) => readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '')
+  const colonies = strip('src/scene/colonies.ts')
+  const rules = colonies.slice(colonies.indexOf('export type ColonizeResult'), colonies.indexOf('export function sendToColonize'))
+  const ui = strip('src/scene/ShipColonySection.tsx') + strip('src/scene/BodyOrderMenu.tsx') + strip('src/components/InspectPanel.tsx')
+  check('colonizing never reads or charges Influence (rules, menus, panels carry no cost or text)', rules.length > 500 && !/influence/i.test(rules) && !/influence/i.test(ui) && !/colonyCostFor|colonyInfluenceCost|COLONY_COST/.test(colonies + ui))
+  check('the AI Expander and the player Starbase rule read the same constant', /STARBASE_INFLUENCE_COST/.test(strip('src/ai/expander.ts')) && /STARBASE_INFLUENCE_COST/.test(strip('src/state/starbaseStore.ts')) && !/influence >= \w*[Cc]olon/.test(strip('src/ai/expander.ts')))
 }
 
 console.log('\n=== 3. When a Colony Ship can found a colony ===')
@@ -112,7 +121,7 @@ console.log('\n=== 3. When a Colony Ship can found a colony ===')
   check('not with no settlers aboard', /no settlers/.test(reason()), reason())
   useShipStore.getState().setSettlers(id, COLONY_SHIP_SETTLERS)
   useResourceStore.getState().setAmount(MARS, 'influence', 0)
-  check('not without the Influence, saying how much', new RegExp(`Needs ${colonyCostFor(MARS, 'Titan')} influence`).test(reason()), reason())
+  check('with no Influence at all it can still colonize (it costs none)', reason() === 'ok', reason())
   useResourceStore.getState().setAmount(MARS, 'influence', STARTING_INFLUENCE)
   survey(MARS, 'Earth')
   check('not from another orbit', /must be in orbit of Earth/.test(reason('Earth')), reason('Earth'))
@@ -141,7 +150,6 @@ console.log('\n=== 4. Founding a micro-colony ===')
   const id = spawnOwnedShip('colony-ship', MARS, 'sol', 'Titan')!
   useShipStore.getState().setSettlers(id, COLONY_SHIP_SETTLERS)
   survey(MARS, 'Titan')
-  const cost = colonyCostFor(MARS, 'Titan')
   applyShipCommand(id, { kind: 'colonize', bodyName: 'Titan' }, 10)
   check('the order starts the founding; no colony yet', ship(id).founding?.bodyName === 'Titan' && !useColonyStore.getState().colonies['Titan'] && !useTerritoryStore.getState().bodyOwner['Titan'])
   resolveColonies(10 + COLONY_FOUNDING_DAYS - 1)
@@ -152,7 +160,7 @@ console.log('\n=== 4. Founding a micro-colony ===')
   check('Titan is now Mars\'s', useTerritoryStore.getState().bodyOwner['Titan'] === MARS)
   check('...a micro-colony', colony?.stage === 'micro')
   check('...with an economy world of its settlers and a small land limit', world?.population === COLONY_SHIP_SETTLERS && world.land === Math.min(landForBody('Titan'), MICRO_COLONY_LAND), JSON.stringify(world))
-  check('...paid for in Influence', influenceOf(MARS) === STARTING_INFLUENCE - cost)
+  check('...and no Influence is charged', influenceOf(MARS) === STARTING_INFLUENCE)
   check('...the ship is used up', !useShipStore.getState().ships.some((s) => s.id === id))
   const keys = groundKeySurface('Titan')?.keySlots ?? []
   check('...its planetary outpost is a key node on the ground map', keys.some((k) => k.kind === 'outpost' && k.node === colony?.outpostNode))

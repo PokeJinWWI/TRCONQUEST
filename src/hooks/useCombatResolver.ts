@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { loseShipToJump } from '../scene/jumpLoss'
 import { fightPace, paceAfterSpaceFight } from './fightPace'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipCombatState, type ShipInstance } from '../state/shipStore'
@@ -20,6 +21,7 @@ import { recordLoss } from '../scene/peace'
 import { utilityEffectiveness } from '../data/combatData'
 import { combatLocationLabel, engagementIsContested } from '../state/combatStore'
 import { engagementKnownToPlayer } from '../scene/commsVisual'
+import { freeFlightActive } from '../scene/freeFlight'
 import { aggressionContext, recordIncidents } from '../scene/aggressionOrders'
 
 // How far out into system space a disengaging ship is placed, in system
@@ -71,7 +73,8 @@ export function resolveSpaceCombat(simDays: number): void {
   // outside, resolved here per owner so it stays a pure function (see
   // its own canFreeFloat param comment).
   const techStore = useTechStore.getState()
-  const canFreeFloat = (ship: ShipInstance) => techStore.stateFor(ship.ownerId).researched.has('free-flight-maneuvering')
+  // ...and has not switched its own Free Flight off (scene/freeFlight.ts).
+  const canFreeFloat = (ship: ShipInstance) => freeFlightActive(techStore.stateFor(ship.ownerId).researched, ship)
 
   // An unprovoked attack is a fight where it happens, between nations not at
   // war (scene/aggression.ts).
@@ -304,11 +307,11 @@ export function resolveSpaceCombat(simDays: number): void {
         shipStore.setShipOrder(id, result.order, result.warpReadyOverride, true)
       } else if (result.kind === 'instant') {
         shipStore.setShipLocation(id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays }, true)
-        if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
+        if (result.hyperlaneEstablished) addHyperlane(ship.ownerId, ...result.hyperlaneEstablished)
       } else if (result.kind === 'lost-in-hyperspace') {
         // Escaped the battle and lost the jump — a real outcome of
         // fleeing through an uncharted lane under fire, not a bug.
-        shipStore.removeShip(id)
+        loseShipToJump(ship, destination)
       }
       // Anything else ('on-cooldown', 'paused'): the charge completed but
       // the drive won't fire. The ship stays put and rejoins the fight on

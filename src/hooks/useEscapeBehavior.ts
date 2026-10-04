@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { loseShipToJump } from '../scene/jumpLoss'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useCombatStore } from '../state/combatStore'
@@ -8,6 +9,8 @@ import { planMove } from '../scene/shipPhysics'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { shipCombatProfile, overallHealthFraction } from '../scene/combatResolution'
 import { STARS, type StarData } from '../data/starData'
+import { useTechStore } from '../state/techStore'
+import { usableDrives } from '../data/warpData'
 
 // Below this overall-health fraction a ship counts as "weak" for the escape
 // check — a threshold of its own rather than reusing anything from
@@ -59,7 +62,7 @@ export function pickSafeStar(
   let bestDistance = Infinity
   for (const star of STARS) {
     if (star.id === currentStarId) continue
-    if (requireChartedFrom && !hasHyperlane(requireChartedFrom, star.id)) continue
+    if (requireChartedFrom && !hasHyperlane(ship.ownerId, requireChartedFrom, star.id)) continue
     const hostilePresent = allShips.some(
       (other) => other.id !== ship.id && shipCurrentStarId(other) === star.id && shipsHostile(ship, other),
     )
@@ -84,7 +87,7 @@ export function pickSafeStar(
 export function useEscapeBehavior() {
   useEffect(() => {
     const evaluate = (simDays: number) => {
-      const { ships, setSafeSince, setShipOrder, setShipLocation, setPendingHyperdriveJump, removeShip } = useShipStore.getState()
+      const { ships, setSafeSince, setShipOrder, setShipLocation, setPendingHyperdriveJump } = useShipStore.getState()
       const { engagements } = useCombatStore.getState()
       const { addHyperlane } = useHyperlaneStore.getState()
       const engagedShipIds = new Set(engagements.flatMap((e) => e.participants.map((p) => p.shipId)))
@@ -128,7 +131,7 @@ export function useEscapeBehavior() {
         // just stays put and keeps checking — declining a risky "escape"
         // is itself the safe choice.
         const shipClass = resolveShipClass(ship.classId)
-        const hasWarp = shipClass?.ftlDrives.some((d) => d.kind === 'warp') ?? false
+        const hasWarp = !!shipClass && usableDrives(shipClass.ftlDrives, useTechStore.getState().stateFor(ship.ownerId).researched).warp
         const currentStarId = shipCurrentStarId(ship)
         const destinationStar = pickSafeStar(ship, currentStarId, ships, hasWarp ? null : currentStarId)
         if (!destinationStar) continue // nowhere safe to reach right now (or nowhere safe to reach SAFELY) — stay put and keep waiting
@@ -138,11 +141,11 @@ export function useEscapeBehavior() {
           setShipOrder(ship.id, result.order, result.warpReadyOverride)
         } else if (result.kind === 'instant') {
           setShipLocation(ship.id, result.location, { hyperdriveReadySimDays: result.hyperdriveReadySimDays })
-          if (result.hyperlaneEstablished) addHyperlane(...result.hyperlaneEstablished)
+          if (result.hyperlaneEstablished) addHyperlane(ship.ownerId, ...result.hyperlaneEstablished)
         } else if (result.kind === 'on-cooldown' || result.kind === 'paused') {
           setPendingHyperdriveJump(ship.id, destinationStar.id)
         } else if (result.kind === 'lost-in-hyperspace') {
-          removeShip(ship.id)
+          loseShipToJump(ship, { kind: 'star', starId: destinationStar.id })
         }
         // Whatever happened, this attempt is resolved — clear the timer so
         // a ship that's still around (order queued, jump pending) doesn't

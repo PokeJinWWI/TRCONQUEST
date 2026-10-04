@@ -1,6 +1,7 @@
 // "Refill at nearest station": a hauler that isn't orbiting one of its nation's
 // worlds flies to the nearest one and loads there on arrival, instead of being
 // told it can't load. A "station" is any world the nation owns.
+import { confirmRiskyJump } from './jumpConfirm'
 import { STARBASE_COST } from '../data/starbaseData'
 import { STARS } from '../data/starData'
 import type { ResourceCost } from '../data/shipyardData'
@@ -70,6 +71,10 @@ export function orderRefill(shipId: string): void {
   }
   const station = nearestStation(ship, owners, useGameTimeStore.getState().simDays)
   if (!station) return
-  store.setArrivalCommand(shipId, { starId: station.systemId, bodyName: station.bodyName, command: { kind: 'load', want } })
-  queueMoveOrder(ship, { kind: 'body', systemId: station.systemId, bodyName: station.bodyName })
+  const destination = { kind: 'body' as const, systemId: station.systemId, bodyName: station.bodyName }
+  // The arrival command is set only once the order is given (a risky jump asks first).
+  confirmRiskyJump([ship], destination, () => {
+    store.setArrivalCommand(shipId, { starId: station.systemId, bodyName: station.bodyName, command: { kind: 'load', want } })
+    queueMoveOrder(ship, destination)
+  })
 }

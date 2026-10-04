@@ -32,6 +32,10 @@ interface PendingOrderLineProps {
    * meaningless. Each scene supplies its own — see SolarSystemScene/
    * InterstellarScene for what they resolve. */
   resolveTarget: (destination: MoveDestination, simDays: number) => Vector3 | null
+  /** Where the dashed line starts, when the scene's frame is not the one the ship is
+   * drawn in (the galactic view draws a ship inside the Solar Neighbourhood at that
+   * neighbourhood's point). Defaults to the ship's own marker position. */
+  resolveStart?: (ship: ShipInstance, simDays: number) => Vector3
 }
 
 // A strategic order still queued behind FTL comms delay (see
@@ -48,7 +52,7 @@ interface PendingOrderLineProps {
 // ship.order while a command is merely pending (see its own comment), so
 // the ship visibly keeps going until the new order actually arrives and
 // supersedes it.
-export function PendingOrderLine({ ship, color, arrowLength, dashSize, gapSize, resolveTarget }: PendingOrderLineProps) {
+export function PendingOrderLine({ ship, color, arrowLength, dashSize, gapSize, resolveTarget, resolveStart }: PendingOrderLineProps) {
   const lineRef = useRef<Line2>(null)
   const seedPoints = useMemo(
     () => Array.from({ length: SEGMENT_COUNT * 2 }, () => [0, 0, 0] as [number, number, number]),
@@ -76,7 +80,7 @@ export function PendingOrderLine({ ship, color, arrowLength, dashSize, gapSize, 
     // should still match wherever the ship's own marker is currently drawn
     // (which IS delay-lensed), or the dashed line would visibly detach from
     // the marker it's supposed to originate at.
-    const start = playerShipRenderPosition(ship, simDays).position
+    const start = resolveStart ? resolveStart(ship, simDays) : playerShipRenderPosition(ship, simDays).position
 
     const attribute = line.geometry.getAttribute('instanceStart') as InterleavedBufferAttribute
     const buffer = attribute.data

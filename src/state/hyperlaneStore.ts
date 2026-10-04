@@ -1,38 +1,42 @@
 import { create } from 'zustand'
+import { hasLane, mergeLanes, withLane } from '../scene/hyperlanes'
 
-// A hyperlane has no direction — sorting the pair before joining makes the
-// key independent of which star was the origin vs. destination for any
-// particular jump.
-function laneKey(a: string, b: string): string {
-  return [a, b].sort().join('::')
-}
+export { laneEndpoints } from '../scene/hyperlanes'
 
-// Splits a lane key back into its two star ids, for rendering a line between
-// them (see InterstellarScene) — order is whatever laneKey's sort produced,
-// which is fine since a hyperlane itself has no direction.
-export function laneEndpoints(key: string): [string, string] {
-  const [a, b] = key.split('::')
-  return [a, b]
-}
+const NO_LANES: string[] = []
 
 interface HyperlaneState {
-  // Canonical "a::b" keys rather than a Set, so the store stays a plain
-  // array InterstellarScene can map over directly to render lines.
-  lanes: string[]
-  hasHyperlane: (a: string, b: string) => boolean
-  // Called only once a hyperdrive jump between these two stars has actually
+  // Each nation's own charted lanes, as canonical "a::b" keys (scene/hyperlanes.ts).
+  // A lane belongs to the nation whose ship charted it: nobody else's jumps are
+  // safer for it and nobody else sees it on the map (lanes are never shared).
+  lanes: Record<string, string[]>
+  hasHyperlane: (nationId: string, a: string, b: string) => boolean
+  // Called only once a hyperdrive jump between these two has actually
   // succeeded (see shipPhysics.planMove/hyperdriveLossChance) — a lane
   // represents a charted, safer route, not just an attempted one. A no-op if
-  // the lane already exists.
-  addHyperlane: (a: string, b: string) => void
+  // the nation already has the lane.
+  addHyperlane: (nationId: string, a: string, b: string) => void
+  // The same array until the nation charts another lane (safe as a selector).
+  lanesOf: (nationId: string | null | undefined) => string[]
+  // Every nation's lanes as one list: Observer mode only.
+  allLanes: () => string[]
 }
 
 export const useHyperlaneStore = create<HyperlaneState>((set, get) => ({
-  lanes: [],
-  hasHyperlane: (a, b) => get().lanes.includes(laneKey(a, b)),
-  addHyperlane: (a, b) => {
-    const key = laneKey(a, b)
-    if (get().lanes.includes(key)) return
-    set((s) => ({ lanes: [...s.lanes, key] }))
+  lanes: {},
+  hasHyperlane: (nationId, a, b) => hasLane(get().lanes[nationId] ?? NO_LANES, a, b),
+  addHyperlane: (nationId, a, b) => {
+    const mine = get().lanes[nationId] ?? NO_LANES
+    const next = withLane(mine, a, b)
+    if (next === mine) return
+    set((s) => ({ lanes: { ...s.lanes, [nationId]: next as string[] } }))
   },
+  lanesOf: (nationId) => (nationId ? get().lanes[nationId] ?? NO_LANES : NO_LANES),
+  allLanes: () => allLanesOf(get().lanes),
 }))
+
+export function allLanesOf(lanes: Record<string, string[]>): string[] {
+  return Object.keys(lanes)
+    .sort()
+    .reduce<string[]>((all, id) => mergeLanes(all, lanes[id]), [])
+}

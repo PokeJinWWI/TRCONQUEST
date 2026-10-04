@@ -63,6 +63,7 @@ import {
   type FleetStrategy,
   type HullSizeClass,
   type WeaponMount,
+  POWERED_GRAVITY_ACCEL_SHARE,
 } from '../data/combatData'
 import { resolveShipClass } from '../state/shipClassResolver'
 import type { MoveDestination, ShipCombatState, ShipInstance, ShipLocation, FtlCharge } from '../state/shipStore'
@@ -77,6 +78,9 @@ import {
 } from '../state/combatStore'
 import { atWar as storeAtWar, type AtWarFn } from '../state/diplomacyStore'
 import { usePlayerStore } from '../state/playerStore'
+import { useTechStore } from '../state/techStore'
+import { usableDrives } from '../data/warpData'
+import { usableStrategy } from './freeFlight'
 import {
   ARENA_ORIGIN,
   ARENA_SPAN_UNITS,
@@ -86,6 +90,7 @@ import {
   arenaSurfaceGravity,
   gravitationalAcceleration,
   orbitalHoldVelocity,
+  orbitPrimary,
   hasLineOfFire,
   isPointBlocked,
   latticePath,
@@ -329,6 +334,11 @@ export function integrateMotion(
   const velocity = toVector3(p.velocity)
   let path = p.path
 
+  // What a ship without Free Flight orbits when it has nowhere to go: the body
+  // with significant gravity pulling hardest where it is (combatArena.orbitPrimary).
+  const primary = canFreeFloat ? null : orbitPrimary(p.position, obstacles)
+  const flying = path.length > 0 && maxSpeed > 0
+
   // The velocity we'd hold if we could change it instantly.
   const desired = new Vector3(0, 0, 0)
   if (path.length > 0 && maxSpeed > 0) {
@@ -342,7 +352,7 @@ export function integrateMotion(
       }
       desired.copy(toTarget.divideScalar(distance).multiplyScalar(speed))
     }
-  } else if (!canFreeFloat && maxSpeed > 0 && obstacles.length > 0) {
+  } else if (!canFreeFloat && maxSpeed > 0 && primary) {
     // Nothing queued, and this ship hasn't researched Free-Flight
     // Maneuvering — "holding position" defaults to actually orbiting the
     // primary body being fought near (obstaclesForLocation always puts the
@@ -354,7 +364,7 @@ export function integrateMotion(
     // speed this close in simply can't fully counter gravity and drifts
     // inward, the same honest failure mode an underpowered real engine
     // would have.
-    desired.copy(orbitalHoldVelocity(p.position, obstacles[0]))
+    desired.copy(orbitalHoldVelocity(p.position, primary))
     if (desired.length() > maxSpeed) desired.setLength(maxSpeed)
   }
 
@@ -371,6 +381,18 @@ export function integrateMotion(
     // safety net) — see the budget<=0 branch below for why it must NOT run
     // when there's no thrust at all.
     if (velocity.length() > maxSpeed) velocity.setLength(maxSpeed)
+    // Without Free Flight a ship under way is in the gravity of every significant
+    // body: the real pull where it is, but never more than
+    // POWERED_GRAVITY_ACCEL_SHARE of its own acceleration, so a working drive
+    // bends its path and climbs slowly yet is never dragged into a star. An idle
+    // ship is not pulled on top of this: circling the body (above) IS its answer
+    // to gravity.
+    if (!canFreeFloat && flying) {
+      const pull = gravitationalAcceleration(p.position, obstacles)
+      const cap = accel * POWERED_GRAVITY_ACCEL_SHARE
+      if (pull.length() > cap) pull.setLength(cap)
+      velocity.add(pull.multiplyScalar(dt))
+    }
   } else {
     // budget <= 0 (utility destroyed — see the caller's utility*accel/
     // maxSpeed scaling): velocity is left untouched by STEERING — a ship
@@ -705,14 +727,11 @@ export function planFtlCharge(ship: ShipInstance, destination: MoveDestination, 
   const shipClass = resolveShipClass(ship.classId)
   const profile = shipClass?.combat
   if (!shipClass || !profile) return null
-  // Prefer whichever drive spools fastest — hyperdrive at 5s beats warp at
-  // 10s, so a hull carrying both runs on hyperdrive.
-  const kinds = shipClass.ftlDrives.map((d) => d.kind)
-  const kind: 'warp' | 'hyperdrive' | null = kinds.includes('hyperdrive')
-    ? 'hyperdrive'
-    : kinds.includes('warp')
-      ? 'warp'
-      : null
+  // Only a drive its owner can use (data/warpData.usableDrives: Mk I researched).
+  // Prefer whichever spools fastest — hyperdrive at 5s beats warp at 10s, so a
+  // hull carrying both runs on hyperdrive.
+  const usable = usableDrives(shipClass.ftlDrives, useTechStore.getState().stateFor(ship.ownerId).researched)
+  const kind: 'warp' | 'hyperdrive' | null = usable.hyperdrive ? 'hyperdrive' : usable.warp ? 'warp' : null
   if (!kind) return null
   const utility = utilityEffectiveness(ship.combat.componentHp.utility, profile.components.utility)
   const seconds = ftlChargeSeconds(kind, utility)
@@ -1509,7 +1528,10 @@ export function stepEngagements(
       // (see each function's own comment). Ramming, then chase, still win
       // over all of it, same precedence chase already had over a plain
       // stance — both are explicit per-ship orders, not fleet coordination.
-      const strategy = effectiveStrategy(ship, fleets)
+      // Without free flight the ship cannot hold chosen positions: Swarm / Kite / Stall and the
+      // coordinated strategies fall back to Balanced (scene/freeFlight.ts).
+      const shipFreeFlight = typeof canFreeFloat === 'function' ? canFreeFloat(ship) : canFreeFloat
+      const strategy = usableStrategy(effectiveStrategy(ship, fleets), shipFreeFlight)
       let point: ArenaPoint | null
       let newTargetShipId: string | undefined
       if (p.ramming) {

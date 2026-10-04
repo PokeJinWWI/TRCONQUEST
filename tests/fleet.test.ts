@@ -7,7 +7,8 @@
 
 import { viewShip } from '../src/scene/shipNav'
 import { useViewStore } from '../src/state/viewStore'
-import { SHIP_CLASSES } from '../src/data/shipData'
+import { resolveShipClass } from '../src/state/shipClassResolver'
+import { grantWarp, warpHullId } from './testWarp'
 import { pristineCombatState, useShipStore, type MoveOrder, type ShipInstance } from '../src/state/shipStore'
 import { usePlayerStore } from '../src/state/playerStore'
 import { useGameTimeStore } from '../src/state/gameTimeStore'
@@ -27,9 +28,12 @@ function check(label: string, cond: boolean, detail = '') {
 const MARS = 'imperial-state-of-mars'
 usePlayerStore.setState({ selectedCountryId: MARS })
 useGameTimeStore.setState({ paused: false, simDays: 100 })
+// No preset hull warps: a designer-built warp corvette, and Mars with Warp Drive Mk I.
+grantWarp(MARS)
+const WARP_CORVETTE = warpHullId('corvette-hull')
 
 function makeShip(classId: string, id: string, bodyName = 'Mars', fleetId = 'f1'): ShipInstance {
-  const cls = SHIP_CLASSES.find((c) => c.id === classId)!
+  const cls = resolveShipClass(classId)!
   return {
     id,
     classId,
@@ -65,7 +69,7 @@ console.log('\n=== 1. Synchronising orders to the slowest ===')
     usedWarp: true,
   })
   const synced = synchroniseOrders([
-    { ship: makeShip('corvette', 'fast'), order: base(105, 0) },
+    { ship: makeShip(WARP_CORVETTE, 'fast'), order: base(105, 0) },
     { ship: makeShip('cruiser', 'slow'), order: base(140, 5) },
   ])
   check('everyone gets the slowest arrival', synced.every((o) => o.order.arrivalSimDays === 140))
@@ -75,7 +79,7 @@ console.log('\n=== 1. Synchronising orders to the slowest ===')
 
 console.log('\n=== 2. A mixed fleet crossing the system arrives together ===')
 {
-  const corvette = makeShip('corvette', 'c1') // warp
+  const corvette = makeShip(WARP_CORVETTE, 'c1') // warp
   const cruiser = makeShip('cruiser', 'k1') // hyperdrive only: reaction drive in-system
   const solo = (ship: ShipInstance) => planMoveUnchecked(ship, toVenus, 100)
   const cSolo = solo(corvette)
@@ -104,7 +108,7 @@ console.log('\n=== 3. Jump ships wait for the fleet ===')
 {
   const toCentauri = { kind: 'star' as const, starId: 'alpha-centauri' }
   const destroyer = makeShip('destroyer', 'd1') // hyperdrive
-  const corvette = makeShip('corvette', 'c2') // warp
+  const corvette = makeShip(WARP_CORVETTE, 'c2') // warp
   const plan = planFleetMove([destroyer, corvette], toCentauri, 100, planMoveUnchecked)
   check('the warp ship gets a timed order', plan.orders.length === 1 && plan.orders[0].shipId === 'c2')
   check("the hyperdrive ship holds its jump until the fleet's arrival (no early roll)", plan.deferredJumps.length === 1 && plan.deferredJumps[0].shipId === 'd1' && plan.deferredJumps[0].atSimDays === plan.orders[0].order.arrivalSimDays)
