@@ -3,8 +3,7 @@ import { useDiplomacyStore } from './diplomacyStore'
 import { usePlayerStore } from './playerStore'
 import { useGameTimeStore } from './gameTimeStore'
 import { canResearch, findTech, queuePlan, queuedResearchNow, researchTerms, resourceShortfall, type TechCategory } from '../data/techData'
-import { useResourceStore } from './resourceStore'
-import type { ResourceId } from '../data/resourceData'
+import { researchResourceAmounts, spendResearchResources } from '../scene/techResources'
 
 export interface TechState {
   researchPoints: Record<TechCategory, number>
@@ -124,7 +123,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
     if (get().researchBlock(countryId, nodeId, viaShortcut)) return false
     const terms = researchTerms(node, viaShortcut)
     const cost = freeResearchMode ? 0 : terms.cost
-    if (!freeResearchMode) for (const [id, n] of Object.entries(terms.resourceCost) as [ResourceId, number][]) useResourceStore.getState().addAmount(countryId, id, -n)
+    if (!freeResearchMode) spendResearchResources(countryId, terms.resourceCost)
     set((state) => ({
       byCountry: {
         ...state.byCountry,
@@ -146,7 +145,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
   researchBlock: (countryId, nodeId, viaShortcut = false) => {
     const node = findTech(nodeId)
     if (!node || get().freeResearchMode) return null
-    return resourceShortfall({ resourceCost: researchTerms(node, viaShortcut).resourceCost, resourceHold: node.resourceHold }, useResourceStore.getState().stateFor(countryId).amounts)
+    return resourceShortfall({ resourceCost: researchTerms(node, viaShortcut).resourceCost, resourceHold: node.resourceHold }, researchResourceAmounts(countryId))
   },
 
   queueTech: (countryId, nodeId) => {
@@ -173,7 +172,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
   processQueue: (countryId) => {
     const current = get().byCountry[countryId]
     if (!current?.queue || current.queue.length === 0) return
-    const now = queuedResearchNow(current.queue, current.researched, current.researchPoints, get().freeResearchMode, useResourceStore.getState().stateFor(countryId).amounts)
+    const now = queuedResearchNow(current.queue, current.researched, current.researchPoints, get().freeResearchMode, researchResourceAmounts(countryId))
     for (const id of now) get().researchNode(countryId, id)
     const after = get().byCountry[countryId]!
     const queue = (after.queue ?? []).filter((id) => !after.researched.has(id))

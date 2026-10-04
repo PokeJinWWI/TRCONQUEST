@@ -6,7 +6,7 @@
 // `upgradesTo`; nothing else here is specific to scouts. The player's button and the AI
 // share every rule. Pure checks here; the order itself is state/shipyardStore.queueUpgrade
 // and the swap on completion is shipyardLogic.advanceShipyard.
-import { UPGRADE_DURATION_FACTOR, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
+import { UPGRADE_DURATION_FACTOR, shipBuildCost, shipBuildDays, complexShipBuildCost, type ResourceCost, type GoodCost } from '../data/shipyardData'
 import type { ResourceId } from '../data/resourceData'
 import type { ShipClass } from '../data/shipData'
 import { getCountry } from '../data/countryData'
@@ -41,6 +41,18 @@ export function upgradeCost(from: ShipClass, to: ShipClass): ResourceCost {
   return cost
 }
 
+// The Complex-mode upgrade cost: the positive per-good difference between the
+// two levels' economy-good build costs (drawn from the capital stockpile).
+export function complexUpgradeCost(from: ShipClass, to: ShipClass): GoodCost {
+  const before = complexShipBuildCost(from)
+  const cost: GoodCost = {}
+  for (const [id, n] of Object.entries(complexShipBuildCost(to)) as [keyof GoodCost, number][]) {
+    const extra = n - (before[id] ?? 0)
+    if (extra > 0) cost[id] = extra
+  }
+  return cost
+}
+
 // How long it holds a slip.
 export function upgradeDays(to: ShipClass): number {
   return Math.max(1, Math.round(shipBuildDays(to) * UPGRADE_DURATION_FACTOR))
@@ -65,6 +77,10 @@ export interface UpgradeContext {
   engaged: boolean
   alreadyQueued: boolean
   queueFull: boolean
+  // Complex mode spends economy goods from the capital stockpile, not the
+  // strategic pool, so its own goods check (in queueUpgrade) replaces the
+  // strategic-resource check here.
+  skipResourceCheck?: boolean
 }
 
 // Why the ship cannot be queued for an upgrade now (the first reason), or null.
@@ -77,6 +93,7 @@ export function upgradeBlock(c: UpgradeContext): string | null {
   if (!c.atYard) return 'It must be in orbit of the shipyard world'
   if (c.engaged) return 'It is in a fight'
   if (c.queueFull) return 'The build queue is full'
+  if (c.skipResourceCheck) return null
   const from = c.classOf(c.classId)
   const short = from ? missingResources(upgradeCost(from, to), c.amounts) : []
   return short.length > 0 ? `Short of ${short.join(', ')}` : null

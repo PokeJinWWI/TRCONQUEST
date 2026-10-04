@@ -5,10 +5,10 @@ import { useTechStore } from './techStore'
 import { isAbstractEconomy } from './playerStore'
 import { useGameTimeStore } from './gameTimeStore'
 import { useShipStore } from './shipStore'
-import { atShipyard, isEngaged, upgradeBlock, upgradeCost, upgradeDays, upgradeTarget } from '../scene/shipUpgrade'
+import { atShipyard, isEngaged, upgradeBlock, upgradeCost, complexUpgradeCost, upgradeDays, upgradeTarget } from '../scene/shipUpgrade'
 import { getCountry } from '../data/countryData'
-import { MAX_QUEUED_BUILDS, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
-import { advanceShipyard, bestLevelClass, missingResources, spendCost, refundCost, techBlock } from '../scene/shipyardLogic'
+import { MAX_QUEUED_BUILDS, shipBuildCost, complexShipBuildCost, shipBuildDays, type ResourceCost, type GoodCost } from '../data/shipyardData'
+import { advanceShipyard, bestLevelClass, missingResources, spendCost, refundCost, techBlock, missingEconomyGoods, spendEconomyCost, refundEconomyCost, capitalStockpileOf, capitalWorldIdOf } from '../scene/shipyardLogic'
 
 // One hull on order. Resources are paid up front when it's queued (see
 // queueBuild) and refunded in full if it's cancelled before completion — a
@@ -23,7 +23,12 @@ export interface ShipBuildOrder {
   id: string
   classId: string
   className: string
+  // The strategic-pool cost (Simple mode). In Complex mode this is empty and the
+  // real cost is `goodCost`, paid from the capital's economy stockpile.
   cost: ResourceCost
+  // Complex mode: the economy goods this order drew from the capital stockpile,
+  // refunded there on cancel. Absent in Simple mode.
+  goodCost?: GoodCost
   durationDays: number
   queuedSimDays: number
   startedSimDays: number | null
@@ -40,6 +45,13 @@ export type QueueBuildResult = { ok: true; orderId: string } | { ok: false; reas
 // ordersFor; same "don't hand selectors a fresh object every call" reasoning
 // as techStore's UNTOUCHED_COUNTRY_STATE.
 const NO_ORDERS: ShipBuildOrder[] = []
+
+// Complex mode pays ship/upgrade costs in real goods from the capital's economy
+// stockpile; Simple mode (and anything without an economy capital, e.g. the
+// sandbox) uses the abstract strategic resourceStore pool.
+function paysFromEconomy(countryId: string): boolean {
+  return !isAbstractEconomy() && capitalWorldIdOf(countryId) !== null
+}
 
 // Every nation's own capital shipyard queue — the player's and every AI
 // empire's, built and paid for under exactly the same rules (the AI's
@@ -91,17 +103,26 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
     if (shipClass.role === 'colony' && !isAbstractEconomy()) return { ok: false, reason: 'Colonies need Simple economy mode for now.' }
     if (get().ordersFor(countryId).length >= MAX_QUEUED_BUILDS) return { ok: false, reason: 'The build queue is full.' }
 
-    const cost = shipBuildCost(shipClass)
-    const missing = missingResources(cost, useResourceStore.getState().stateFor(countryId).amounts)
-    if (missing.length > 0) return { ok: false, reason: `Not enough ${missing.join(', ')}.` }
-
-    spendCost(countryId, cost)
+    let cost: ResourceCost = {}
+    let goodCost: GoodCost | undefined
+    if (paysFromEconomy(countryId)) {
+      goodCost = complexShipBuildCost(shipClass)
+      const missing = missingEconomyGoods(goodCost, capitalStockpileOf(countryId))
+      if (missing.length > 0) return { ok: false, reason: `Not enough ${missing.join(', ')} in the capital stockpile.` }
+      spendEconomyCost(countryId, goodCost)
+    } else {
+      cost = shipBuildCost(shipClass)
+      const missing = missingResources(cost, useResourceStore.getState().stateFor(countryId).amounts)
+      if (missing.length > 0) return { ok: false, reason: `Not enough ${missing.join(', ')}.` }
+      spendCost(countryId, cost)
+    }
     orderCounter += 1
     const order: ShipBuildOrder = {
       id: `build-${Date.now()}-${orderCounter}`,
       classId: shipClass.id,
       className: shipClass.name,
       cost,
+      goodCost,
       durationDays: shipBuildDays(shipClass),
       queuedSimDays: simDays,
       startedSimDays: null,
@@ -117,6 +138,7 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
     if (!ship || ship.ownerId !== countryId) return { ok: false, reason: 'No such ship.' }
     const orders = get().ordersFor(countryId)
     const researched = useTechStore.getState().stateFor(countryId).researched
+    const economy = paysFromEconomy(countryId)
     const block = upgradeBlock({
       classId: ship.classId,
       researched,
@@ -126,18 +148,29 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
       engaged: isEngaged(ship.id),
       alreadyQueued: orders.some((o) => o.upgradeShipId === shipId),
       queueFull: orders.length >= MAX_QUEUED_BUILDS,
+      skipResourceCheck: economy,
     })
     if (block) return { ok: false, reason: block }
     const from = resolveShipClass(ship.classId)!
     const to = upgradeTarget(ship.classId, researched, resolveShipClass)!
-    const cost = upgradeCost(from, to)
-    spendCost(countryId, cost)
+    let cost: ResourceCost = {}
+    let goodCost: GoodCost | undefined
+    if (economy) {
+      goodCost = complexUpgradeCost(from, to)
+      const missing = missingEconomyGoods(goodCost, capitalStockpileOf(countryId))
+      if (missing.length > 0) return { ok: false, reason: `Not enough ${missing.join(', ')} in the capital stockpile.` }
+      spendEconomyCost(countryId, goodCost)
+    } else {
+      cost = upgradeCost(from, to)
+      spendCost(countryId, cost)
+    }
     orderCounter += 1
     const order: ShipBuildOrder = {
       id: `upgrade-${Date.now()}-${orderCounter}`,
       classId: to.id,
       className: to.name,
       cost,
+      goodCost,
       durationDays: upgradeDays(to),
       queuedSimDays: simDays,
       startedSimDays: null,
@@ -154,7 +187,8 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
   cancelBuild: (countryId, orderId) => {
     const order = get().ordersFor(countryId).find((o) => o.id === orderId)
     if (!order) return
-    refundCost(countryId, order.cost)
+    if (order.goodCost) refundEconomyCost(countryId, order.goodCost)
+    else refundCost(countryId, order.cost)
     if (order.upgradeShipId) markUpgrading(order.upgradeShipId, false)
     set((s) => ({ ordersByCountry: { ...s.ordersByCountry, [countryId]: (s.ordersByCountry[countryId] ?? []).filter((o) => o.id !== orderId) } }))
     // A cancelled build frees its slip: the next waiting order takes it now.

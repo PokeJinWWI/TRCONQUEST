@@ -4,7 +4,36 @@ Context for a fresh Claude chat. Read `CLAUDE.md` first (project rules). This re
 
 The current state is GREEN except two intentionally-parked test files (`armyScenarios`, `terrainWar` — see task 4). Nothing is committed.
 
-**Done since this doc was written:** TASK 1 (water good) ✅ and the GDP-per-capita / International Earth Dollar display work ✅ — see "COMPLETED" sections below.
+**Done since this doc was written:** TASK 1 (water good) ✅, the GDP-per-capita / International Earth Dollar display work ✅, TASK 2 (shipyard ↔ economy bridge) ✅, and **Complex-mode research** ✅ — see "COMPLETED" sections below. Nothing committed.
+
+## COMPLETED — Complex-mode research income (`economy/research.ts`, `tests/research.test.ts`)
+
+Complex mode now generates research points (it had none — CLAUDE.md's "stays Corvette-only until it does"). Model = **educated workforce + research buildings** (user chose "both"):
+- `nationResearch(worlds)` / `researchByNation(worlds)` (pure): per-tree points/month = skilled pops (technical/professional/investor × `educationLevel`, `RESEARCH_PER_SKILLED_MILLION`) split across trees + `RESEARCH_BY_BUILDING` per building level × (1−idle). Buildings: **University (biggest, all 3 trees)**, dataCenter (physics/eng), semiconductorFab (eng), school (society), financialCenter (society).
+- **University** building (`recipes.ts`, services, T4, buildable NOT seeded — School is the cheaper default education producer so the seed never reaches for it; produces `education` 1400, no new GoodId ⇒ seed hash unchanged). "The biggest resource thing, cooler and bigger" per user.
+- Granted in `economyStore` `grantResearchFor` (in `land`, after each tick, guarded to Complex): `grantResearch(id, tree, pts × steps)` + `processQueue(id)` per nation — mirrors Simple's `abstractEconomyStore`. `economyStore.researchRate` holds the per-mo value (seeded from `seedWorlds()` so the Technology panel shows it from turn one); `TechPanel` reads it in Complex.
+- Magnitudes at start (no universities yet): Mars 16/mo, Earth 13, Venus 9, Lalande 8, Orion 7 — comparable to Simple's ~6–8, scaling with population. A university ~doubles a world's research. Verified in-browser: Technology panel shows "+X/mo" per tree and techs research to completion.
+- **Tunable:** the constants in `economy/research.ts`. The AI now accrues research too but has no Complex research queue yet (it won't spend points until given one — a follow-up).
+
+### Follow-ups (all ✅ DONE):
+- **Exotic/hyperium unified to ONE count in Complex** (`scene/techResources.ts`): in Complex, exotic matter + hyperium are economy goods only. Research resource costs (`techStore` — the ONLY place: `researchResourceAmounts`/`spendResearchResources`) and ship costs both draw them from the capital economy stockpile; the strategic `resourceStore` version is Simple-only — `seedStrategicResources` skips them in Complex, `useStrategicResources` runs `applyExtraction`/`applySynthesis` only in Simple, and `ResourceBar` hides them from the HUD in Complex. Simple mode's deposit/extraction/synthesis system is untouched (`deposits`/`warp` tests green). Verified in-browser: HUD shows only influence + special in Complex.
+- **Research labs, one per tree** (`recipes.ts`, `research.ts`): `physicsLab` / `engineeringLab` / `socialInstitute` — each the strongest single-tree source (4/level), produce `onlineServices`. T3, buildable, not seeded.
+- **University kept separate from schools**: it now produces `onlineServices` (higher-ed/research), NOT `education` — schools teach the population, the University drives the sciences. Still the biggest BROAD research source.
+- **Shipyard stockpile-target controls** (`ShipyardPanel`): −/+ per war material adjusts its reserve target at the capital (`setStockpileTarget`), so the player manages the war reserve (and starts stocking exotic/hyperium for FTL hulls) without leaving the yard.
+- **"Stockpile any good" already exists**: Economy → Stockpiles (`StockpilePanel`) sets a reserve target for ANY good on any owned world.
+
+**Deferred:** the Complex AI accrues research but has no research queue yet (won't spend points until given a tech strategy).
+
+## COMPLETED — Good Detail panel + navigation (Vic3-style market view)
+
+- **Good Detail panel** (`components/GoodDetailPanel.tsx`, `state/goodDetailStore.ts`, `economy/goodMarket.ts` pure): click any good (a building's input/output label, or a Market-tab row) → a floating window showing avg price, supply/demand, produced/industry-use, **producers and consumers by building + world**, household-consumer worlds, **price-by-planet**, a **market-price time graph**, and **per-good trade-policy controls** (import tariff / import subvention / export subvention, −/+). Complex mode.
+- **Price history** (`economyStore.goodPriceHistory`, recorded in `land` per tick) feeds the graph; seeded empty, bounded to HISTORY_LENGTH.
+- **Clickable building rows** → open that exact building in a **floating building window** (`components/BuildingDetailWindow.tsx`, `state/buildingDetailStore.ts`, reuses `ComplexBuildingCard`).
+- **Planet building detail is now a separate window** too: the planet Districts tab opens the building in that floating window instead of inline (`ComplexPlanetTabs` `selectBuilding`).
+- **Back button + Cmd/Ctrl+Z** (`viewStore.navHistory`/`navBack`, `NavBar` `.nav-back-btn`, `useKeyboardControls`): steps back through the menu (category/subcategory) history.
+- **Escape closes the topmost window first**, then the pause menu only if nothing is open (`state/windowRegistry.ts` — every closable `DraggableWindow` registers with its z-index; `handleEscape` calls `closeTopmostWindow()` before `openMenu()`).
+- **Pop drill-down**: the data model doesn't assign pops to a single building (a building employs N of a class from the world's pool), so the employment rows carry a tooltip pointing to the planet's Population tab rather than implying per-building assignment.
+- **NOT done (user cancelled):** an academic district grouping schools/universities/labs — it would change the district system + urban→industrial bonus and need a recalibration; user said don't.
 
 ---
 
@@ -40,11 +69,16 @@ Added `water` good to Complex mode (`category: 'raw'`, basePrice 2) in `goods.ts
 
 **Iron & sulfur**: user decided to leave both as distinct goods (evaluation in chat: iron is the bulk feedstock of steel, wrong scale to co-produce; sulfur is a legit but low-value merge candidate).
 
-## TASK 2 — Shipyard ↔ economy bridge (the "actually critical" fix)
+## TASK 2 — Shipyard ↔ economy bridge ✅ COMPLETED
 
-In Complex mode the military shipyard panel (`state/shipyardStore.ts`, `components/ShipyardPanel.tsx`) charges abstract strategic `resourceStore` goods (Alloys / Energy / Exotic Matter / Hyperium / Special) that the deep economy never produces — "these don't exist in Complex mode." The economy enabler is now in place (a real `alloys` good + metals chain, `rocketFuel`). 
+Complex-mode ship/military construction now **draws real economy goods from the nation's capital WAR-MATERIALS stockpile** (`world.stockpiles`) instead of the strategic `resourceStore` pool. Simple mode is untouched (still `resourceStore`).
+- **Cost mapping** (`data/shipyardData.complexShipBuildCost`): alloys→alloys, +steel (0.6×alloys), +rocketFuel (base + per FTL drive), exoticMatter (warp + folded `special`), hyperium (hyperdrive). Electricity is a flow good → NOT stockpiled (shipyard power is assumed from the grid). `complexUpgradeCost` is the per-good diff.
+- **New goods** (Phase 1, kept per user): `exoticMatter` (basePrice 70) + `hyperium` (130) are REAL economy goods (user: "real goods, not special stuff at the top"), made by `exoticMatterPlant` (gated `exotic-matter-containment`, MIDGAME) and `hyperiumPlant` (gated `hyperium-extraction` — **default-researched, so the near-Sol human nations build it from turn one**; distant low-tier empires can't). Tech-gated + not economy-consumed ⇒ never auto-seeded, but every market prices them ⇒ `worlds` hash changed, `countries` didn't.
+- **Mechanism**: `economyStore.consumeStockpile(worldId, goods, refund?)` (uses the logging `set`, replays onto in-flight ticks). `shipyardLogic` has `capitalWorldIdOf` / `capitalStockpileOf` / `missingEconomyGoods` / `spendEconomyCost` / `refundEconomyCost` / `seedMilitaryStockpile`. `shipyardStore.queueBuild`/`queueUpgrade`/`cancelBuild` branch on `paysFromEconomy(countryId)` = Complex + has a capital world; `ShipBuildOrder.goodCost` carries the economy cost for refund; orphan refund in `advanceShipyard` branches too. `shipUpgrade.upgradeBlock` takes `skipResourceCheck` (Complex does its own goods check).
+- **Starting reserve** (`gameSetup.seedMilitaryStockpile`, Complex only, per nation): `MILITARY_STOCKPILE_TARGET = {alloys:600, steel:360, rocketFuel:300, hyperium:12}` injected + set as standing stockpile targets (economy refills off the market; the player raises exotic/hyperium targets once they build the plants).
+- **UX**: `ShipyardPanel` shows the capital war-materials stockpile + economy-good cost chips in Complex (branches on mode; `COMPLEX_COST_GOODS`). Verified in-browser: Venus builds a Corvette, stockpile drops exactly 33 alloys / 20 steel / 14 rocketFuel / 1 hyperium.
 
-Make Complex-mode ship/military construction **draw from the Complex economy** (alloys, steel, electricity, rocketFuel, etc. from the nation's `economyStore` stockpile) instead of the strategic `resourceStore` pool. Map: Energy→electricity, Alloys→alloys. Decide what Exotic Matter / Hyperium map to (they have techs: `exotic-matter-*`, `hyperium-synthesis`) or add economy goods for them. This touches `shipyardStore` ↔ `economyStore`; Simple mode (`resourceStore` IS the stockpile) must be unaffected. Confirm the exact UX/mapping with the user before building.
+**Known / deferred (user said "adjust later"):** in Complex, exotic/hyperium now exist BOTH as economy goods (ship HULLS) AND strategic `resourceStore` (deposits → drive RESEARCH/operation). Intentional duplication for now. The economy plants synthesise them from inputs (unlimited), flattening the deposit scarcity in Complex — the user's deliberate call. A future unification (drive research drawing economy goods in Complex) is not done. `special` strategic resource is folded into exoticMatter in the Complex cost.
 
 ## TASK 3 — Finish the economy-goods polish
 

@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { getCountry } from '../data/countryData'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
 import { PLAYER_SHIP_CLASSES, SHIP_ROLE_LABELS, describeFtlDrive, type ShipClass } from '../data/shipData'
-import { MAX_QUEUED_BUILDS, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
+import { MAX_QUEUED_BUILDS, shipBuildCost, complexShipBuildCost, shipBuildDays } from '../data/shipyardData'
+import { GOODS, type GoodId } from '../economy/goods'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerResources } from '../hooks/usePlayerResources'
@@ -13,25 +14,31 @@ import { useFleetTabStore } from '../state/fleetTabStore'
 import { useShipDeconstructionStore } from '../state/shipDeconstructionStore'
 import { deconstructionRemaining } from '../scene/shipDeconstruction'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
-import { shipyardRows, shipyardSlotsForWorld, techBlock } from '../scene/shipyardLogic'
+import { useEconomyStore } from '../state/economyStore'
+import { shipyardRows, shipyardSlotsForWorld, techBlock, capitalStockpileOf, capitalWorldIdOf } from '../scene/shipyardLogic'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { starbaseShipyardSlots } from '../scene/starbaseLogic'
 import { useTechStore } from '../state/techStore'
 import { isAbstractEconomy } from '../state/playerStore'
 
 // The resources a hull can actually cost — the ones worth a row in the
-// stockpile readout (minerals only feed a future alloy chain).
+// stockpile readout (minerals only feed a future alloy chain). Simple mode uses
+// the strategic pool; Complex mode draws real economy goods from the capital's
+// war-materials stockpile (COMPLEX_COST_GOODS).
 const COST_RESOURCE_IDS: ResourceId[] = ['alloys', 'energy', 'exoticMatter', 'hyperium', 'special']
 const RESOURCE_SHORT = Object.fromEntries(RESOURCE_TYPES.map((r) => [r.id, r.name])) as Record<ResourceId, string>
+const COMPLEX_COST_GOODS: GoodId[] = ['alloys', 'steel', 'rocketFuel', 'exoticMatter', 'hyperium']
 
-function CostChips({ cost, amounts }: { cost: ResourceCost; amounts: Record<ResourceId, number> }) {
+// A hull's cost chips: which ids to show, how to label them, the cost, and what
+// the nation holds. Works for both the strategic pool and the economy stockpile.
+function CostChips({ ids, labelOf, cost, have }: { ids: string[]; labelOf: (id: string) => string; cost: Record<string, number>; have: Record<string, number> }) {
   return (
     <span className="shipyard-costs">
-      {COST_RESOURCE_IDS.filter((id) => (cost[id] ?? 0) > 0).map((id) => {
-        const short = (cost[id] ?? 0) > (amounts[id] ?? 0)
+      {ids.filter((id) => (cost[id] ?? 0) > 0).map((id) => {
+        const short = (cost[id] ?? 0) > (have[id] ?? 0)
         return (
-          <span key={id} className={`shipyard-cost${short ? ' short' : ''}`} title={`${RESOURCE_SHORT[id]}: need ${cost[id]}, have ${amounts[id] ?? 0}`}>
-            {cost[id]} {RESOURCE_SHORT[id]}
+          <span key={id} className={`shipyard-cost${short ? ' short' : ''}`} title={`${labelOf(id)}: need ${cost[id]}, have ${Math.floor(have[id] ?? 0)}`}>
+            {cost[id]} {labelOf(id)}
           </span>
         )
       })}
@@ -97,16 +104,36 @@ export function ShipyardPanel() {
 
   const slots = shipyardSlotsForWorld(world) + starbaseShipyardSlots(countryId, useStarbaseStore.getState().starbases, simDays)
   const capital = getCountry(countryId)?.capitalBodyName
+
+  // Complex mode: the shipyard spends real economy goods from the capital's
+  // war-materials stockpile, not the strategic pool. `world` (the capital, from
+  // usePlayerEconomy) drives re-render as the economy ticks. Simple mode keeps
+  // the strategic resourceStore readout. (simDays re-renders this periodically.)
+  const complex = !isAbstractEconomy() && capitalWorldIdOf(countryId) !== null
+  // The capital world, read reactively, so the stockpile AND its reserve targets
+  // refresh as the economy ticks and when the player adjusts a target below.
+  const capitalWorld = useEconomyStore((s) => s.worlds.find((w) => w.name === capital))
+  const setStockpileTarget = useEconomyStore((s) => s.setStockpileTarget)
+  const econStock = complex ? capitalWorld?.stockpiles ?? capitalStockpileOf(countryId) : {}
+  const targets = capitalWorld?.stockpileTargets ?? {}
+  const costIds: string[] = complex ? COMPLEX_COST_GOODS : COST_RESOURCE_IDS
+  const have: Record<string, number> = complex ? econStock : amounts
+  const labelOf = (id: string) => (complex ? GOODS[id as GoodId]?.label ?? id : RESOURCE_SHORT[id as ResourceId] ?? id)
+  // Step a war material's reserve target up/down, in sensible units per good.
+  const targetStep = (id: string) => (id === 'exoticMatter' || id === 'hyperium' ? 10 : 100)
+  const adjustTarget = (id: string, delta: number) => {
+    if (capitalWorld) setStockpileTarget(capitalWorld.id, id as GoodId, Math.max(0, (targets[id as GoodId] ?? 0) + delta))
+  }
   const designClasses = useMemo(() => designs.map((d) => resolveShipClass(`design:${d.id}`)).filter((c): c is ShipClass => !!c), [designs])
   const building = orders.filter((o) => o.startedSimDays !== null)
   const waiting = orders.filter((o) => o.startedSimDays === null)
   const queueFull = orders.length >= MAX_QUEUED_BUILDS
 
   const status = (shipClass: ShipClass) => {
-    const cost = shipBuildCost(shipClass)
-    const affordable = COST_RESOURCE_IDS.every((id) => (cost[id] ?? 0) <= (amounts[id] ?? 0))
+    const cost: Record<string, number> = complex ? complexShipBuildCost(shipClass) : shipBuildCost(shipClass)
+    const affordable = costIds.every((id) => (cost[id] ?? 0) <= (have[id] ?? 0))
     const techMissing = techBlock(shipClass, researched)
-    const short = COST_RESOURCE_IDS.filter((id) => (cost[id] ?? 0) > (amounts[id] ?? 0)).map((id) => `${Math.ceil((cost[id] ?? 0) - (amounts[id] ?? 0))} ${RESOURCE_SHORT[id]}`)
+    const short = costIds.filter((id) => (cost[id] ?? 0) > (have[id] ?? 0)).map((id) => `${Math.ceil((cost[id] ?? 0) - (have[id] ?? 0))} ${labelOf(id)}`)
     const reason = techMissing ? `needs ${techMissing}` : queueFull ? `The build queue is full (${MAX_QUEUED_BUILDS} orders)` : !affordable ? `Short of ${short.join(', ')}` : null
     return { cost, affordable, techMissing, reason, canBuild: affordable && !queueFull && !techMissing }
   }
@@ -157,10 +184,19 @@ export function ShipyardPanel() {
       </div>
 
       <div className="shipyard-stockpile">
-        {COST_RESOURCE_IDS.map((id) => (
-          <span key={id} className="shipyard-stock" title={RESOURCE_TYPES.find((r) => r.id === id)?.description}>
-            {RESOURCE_SHORT[id]} <b>{Math.floor(amounts[id] ?? 0).toLocaleString()}</b>
-            {(monthlyDelta[id] ?? 0) > 0 && <span className="shipyard-income"> +{monthlyDelta[id].toLocaleString()}/mo</span>}
+        {complex && <span className="shipyard-stock-label" title="Ships are built from your capital's war-materials stockpile. The economy keeps each good filled toward its reserve target, buying off the market (a treasury cost). Raise a target to keep a bigger reserve, or to start stocking exotic matter / hyperium for FTL hulls.">Capital stockpile:</span>}
+        {costIds.map((id) => (
+          <span key={id} className="shipyard-stock" title={complex ? `${labelOf(id)} — held / reserve target. − / + adjust the target the economy fills toward.` : RESOURCE_TYPES.find((r) => r.id === id)?.description}>
+            {labelOf(id)} <b>{Math.floor(have[id] ?? 0).toLocaleString()}</b>
+            {complex ? (
+              <span className="shipyard-stock-target">
+                <button type="button" className="shipyard-target-btn" onClick={() => adjustTarget(id, -targetStep(id))} title={`Lower the ${labelOf(id)} reserve target`}>−</button>
+                <span className="shipyard-target-val" title="Reserve target">/ {Math.floor(targets[id as GoodId] ?? 0).toLocaleString()}</span>
+                <button type="button" className="shipyard-target-btn" onClick={() => adjustTarget(id, targetStep(id))} title={`Raise the ${labelOf(id)} reserve target`}>+</button>
+              </span>
+            ) : (
+              (monthlyDelta[id as ResourceId] ?? 0) > 0 && <span className="shipyard-income"> +{monthlyDelta[id as ResourceId].toLocaleString()}/mo</span>
+            )}
           </span>
         ))}
       </div>
@@ -248,7 +284,7 @@ export function ShipyardPanel() {
                     {shipClass.ftlDrives.map(describeFtlDrive).join(', ')} · {shipBuildDays(shipClass)} days
                     {shipClass.cargoCapacity ? ` · Hold ${shipClass.cargoCapacity}` : ''}
                   </div>
-                  <CostChips cost={cost} amounts={amounts} />
+                  <CostChips ids={costIds} labelOf={labelOf} cost={cost} have={have} />
                   {reason && <div className="shipyard-reason">Can't build: {reason}</div>}
                 </div>
               ))}

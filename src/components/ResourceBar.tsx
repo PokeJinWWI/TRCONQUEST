@@ -42,7 +42,11 @@ export function ResourceBar() {
   const sandbox = usePlayerStore((s) => s.sandbox)
   const [openId, setOpenId] = useState<ResourceId | null>(null)
   const openResource = RESOURCE_TYPES.find((r) => r.id === openId) ?? null
-  const visibleResources = HUD_RESOURCE_IDS.map((id) => RESOURCE_TYPES.find((r) => r.id === id)!)
+  // In Complex mode exotic matter and hyperium are real economy goods (shown in
+  // the markets, drawn from the capital stockpile), not strategic-pool resources,
+  // so they are not on the strategic HUD bar there.
+  const hiddenInComplex: ResourceId[] = economyModel === 'complex' ? ['exoticMatter', 'hyperium'] : []
+  const visibleResources = HUD_RESOURCE_IDS.filter((id) => !hiddenInComplex.includes(id)).map((id) => RESOURCE_TYPES.find((r) => r.id === id)!)
   // The sandbox has no economy, so no stockpiles to show.
   if (sandbox) return null
 

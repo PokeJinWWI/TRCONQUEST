@@ -180,6 +180,8 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   baseMetalsMine: 'extraction',
   lightMetalsMine: 'extraction',
   metallicHydrogenPlant: 'extraction',
+  exoticMatterPlant: 'extraction',
+  hyperiumPlant: 'extraction',
   waterTreatmentPlant: 'extraction',
   groundwaterPump: 'extraction',
   desalinationPlant: 'extraction',
@@ -245,6 +247,10 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   // Public services
   clinic: 'services',
   school: 'services',
+  university: 'services',
+  physicsLab: 'services',
+  engineeringLab: 'services',
+  socialInstitute: 'services',
   retailShop: 'services',
   artStudio: 'services',
   dataCenter: 'services',
@@ -280,12 +286,13 @@ const CONSTRUCTION_TIER: Record<string, number> = {
   dyeWorks: 2, glassworks: 2, cementWorks: 2, paperMill: 2, clinic: 2, school: 2, retailShop: 2, artStudio: 2, roadNetwork: 2, governmentOffice: 2, constructionSector: 3,
   // T3 — mid/heavy industry, advanced services, civic
   steelMill: 3, alloySmelter: 3, machineryFactory: 3, oilRefinery: 3, rocketFuelRefinery: 3, chemicalPlant: 3, fertilizerPlant: 3, explosivesFactory: 3, electronicsFactory: 3,
+  physicsLab: 3, engineeringLab: 3, socialInstitute: 3,
   engineFactory: 3, automobilePlant: 3, luxuryFactory: 3, dataCenter: 3, railway: 3, urbanCenter: 3, corporateHq: 3, financialCenter: 3,
   // T4 — advanced industry & major infrastructure
   heavyMachineryPlant: 4, electricalMachineryPlant: 4, precisionMachineryPlant: 4, semiconductorFab: 4, locomotiveWorks: 4,
-  aircraftFactory: 4, shipyard: 4, fusionReactor: 4, ministry: 4, spaceport: 4,
+  aircraftFactory: 4, shipyard: 4, fusionReactor: 4, ministry: 4, spaceport: 4, university: 4,
   // T5 — the biggest, most complex yards
-  spaceyard: 5, rocketFactory: 5, metallicHydrogenPlant: 5,
+  spaceyard: 5, rocketFactory: 5, metallicHydrogenPlant: 5, exoticMatterPlant: 5, hyperiumPlant: 5,
 }
 
 const CATEGORY_TIER_DEFAULT: Record<BuildingCategory, number> = {
@@ -603,6 +610,62 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'technical', count: 220 },
           { class: 'professional', count: 200 },
+        ],
+      },
+    ],
+  },
+  // --- Strategic war materials (FTL) ---------------------------------------
+  // Exotic matter and hyperium: synthesised only once the late tech lands, never
+  // demanded by any economy recipe, so they are never auto-seeded — a nation
+  // builds these when it wants to feed an FTL navy (the military shipyard draws
+  // them from the economy in Complex mode). Expensive, power-hungry, low yield.
+  exoticMatterPlant: {
+    id: 'exoticMatterPlant',
+    label: 'Exotic Matter Containment Plant',
+    category: 'extraction',
+    requiresTech: 'exotic-matter-containment',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Negative-Energy Containment',
+        description: 'Condenses and holds exotic matter in magnetic-confinement lattices — the stuff that threads a warp field. Enormous power for a trickle of output; the feedstock of every warp drive.',
+        inputs: [
+          { good: 'electricity', amount: 1400 },
+          { good: 'rareMetals', amount: 90 },
+          { good: 'precisionMachinery', amount: 70 },
+        ],
+        outputs: [{ good: 'exoticMatter', amount: 240 }],
+        jobs: [
+          { class: 'technical', count: 180 },
+          { class: 'professional', count: 220 },
+        ],
+      },
+    ],
+  },
+  hyperiumPlant: {
+    id: 'hyperiumPlant',
+    label: 'Hyperium Synthesis Plant',
+    category: 'extraction',
+    // Gated on hyperium-extraction, which the near-Sol human nations all hold by
+    // default (DEFAULT_RESEARCHED) — only they work with hyperium by lore — while
+    // distant low-tier empires do not. So the human powers can make their own
+    // hyperium from turn one and keep building an FTL navy.
+    requiresTech: 'hyperium-extraction',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Transuranic Synthesis',
+        description: 'Breeds and stabilises hyperium from rare feedstock and vast power — the fuel a hyperdrive folds space with. Rarer and dearer than exotic matter; a handful a month from a whole plant.',
+        inputs: [
+          { good: 'electricity', amount: 1800 },
+          { good: 'rareMetals', amount: 120 },
+          { good: 'rocketFuel', amount: 60 },
+          { good: 'precisionMachinery', amount: 90 },
+        ],
+        outputs: [{ good: 'hyperium', amount: 150 }],
+        jobs: [
+          { class: 'technical', count: 200 },
+          { class: 'professional', count: 260 },
         ],
       },
     ],
@@ -2175,6 +2238,108 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'technical', count: 80 },
           { class: 'professional', count: 160 },
+        ],
+      },
+    ],
+  },
+  // The grand research institution — a tier above the Schools (which teach the
+  // population; see `school`) and distinct from them: the University drives the
+  // SCIENCES across all three trees (the biggest broad source in
+  // economy/research.ts) and sells its higher-education and research work as
+  // online services, rather than schooling. Buildable, never auto-seeded.
+  university: {
+    id: 'university',
+    label: 'University',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Research University',
+        description: 'Lecture halls, graduate schools and research institutes together. The grandest seat of learning — above all it drives the sciences, the largest broad source of research a world can build, and publishes its work as online services.',
+        inputs: [
+          { good: 'consumerGoods', amount: 200 },
+          { good: 'electricity', amount: 320 },
+          { good: 'electronics', amount: 50 },
+          { good: 'precisionMachinery', amount: 20 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 760 }],
+        jobs: [
+          { class: 'technical', count: 140 },
+          { class: 'professional', count: 320 },
+          { class: 'investor', count: 20 },
+        ],
+      },
+    ],
+  },
+  // Dedicated research laboratories — one per tree. Each is the best single-tree
+  // research producer (economy/research.ts), above the broad University per tree,
+  // and sells its findings as online services (data, publications). Buildable, not
+  // auto-seeded (online services is emergent, so the seed never reaches for them).
+  physicsLab: {
+    id: 'physicsLab',
+    label: 'Physics Laboratory',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Physics Research',
+        description: 'Particle accelerators, cryostats and theory groups pushing the physical sciences — the strongest single source of Physics research.',
+        inputs: [
+          { good: 'electricity', amount: 240 },
+          { good: 'electronics', amount: 40 },
+          { good: 'precisionMachinery', amount: 25 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 340 }],
+        jobs: [
+          { class: 'professional', count: 200 },
+          { class: 'technical', count: 90 },
+          { class: 'investor', count: 10 },
+        ],
+      },
+    ],
+  },
+  engineeringLab: {
+    id: 'engineeringLab',
+    label: 'Engineering Laboratory',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Applied Engineering',
+        description: 'Test rigs, prototyping shops and materials labs turning theory into hardware — the strongest single source of Engineering research.',
+        inputs: [
+          { good: 'electricity', amount: 240 },
+          { good: 'electronics', amount: 40 },
+          { good: 'machinery', amount: 30 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 340 }],
+        jobs: [
+          { class: 'professional', count: 180 },
+          { class: 'technical', count: 110 },
+          { class: 'investor', count: 10 },
+        ],
+      },
+    ],
+  },
+  socialInstitute: {
+    id: 'socialInstitute',
+    label: 'Institute of Social Research',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Social Research',
+        description: 'Economists, sociologists and policy scholars studying how societies work — the strongest single source of Society research.',
+        inputs: [
+          { good: 'electricity', amount: 200 },
+          { good: 'consumerGoods', amount: 60 },
+          { good: 'electronics', amount: 30 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 340 }],
+        jobs: [
+          { class: 'professional', count: 210 },
+          { class: 'technical', count: 70 },
+          { class: 'investor', count: 10 },
         ],
       },
     ],

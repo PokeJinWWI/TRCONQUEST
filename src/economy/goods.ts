@@ -52,6 +52,13 @@ export type GoodId =
   // are built from. ROCKET FUEL — refined propellant that launches burn.
   | 'alloys'
   | 'rocketFuel'
+  // Strategic war materials for FTL warships, synthesised only with late tech
+  // (exotic-matter-containment / hyperium-synthesis): EXOTIC MATTER powers warp
+  // drives, HYPERIUM powers hyperdrives. The military shipyard draws these from
+  // the nation's economy in Complex mode. Not consumed by any economy recipe, so
+  // never auto-seeded — a nation builds the plants once it wants an FTL navy.
+  | 'exoticMatter'
+  | 'hyperium'
   | 'concrete'
   | 'lumber'
   | 'fuel'
@@ -144,6 +151,8 @@ export const GOOD_IDS: GoodId[] = [
   'steel',
   'alloys',
   'rocketFuel',
+  'exoticMatter',
+  'hyperium',
   'concrete',
   'lumber',
   'fuel',
@@ -217,6 +226,8 @@ export const GOODS: Record<GoodId, GoodDef> = {
   steel: { id: 'steel', label: 'Steel', category: 'intermediate', basePrice: 8 },
   alloys: { id: 'alloys', label: 'Alloys', category: 'intermediate', basePrice: 20 },
   rocketFuel: { id: 'rocketFuel', label: 'Rocket Fuel', category: 'intermediate', basePrice: 15 },
+  exoticMatter: { id: 'exoticMatter', label: 'Exotic Matter', category: 'intermediate', basePrice: 70 },
+  hyperium: { id: 'hyperium', label: 'Hyperium', category: 'intermediate', basePrice: 130 },
   concrete: { id: 'concrete', label: 'Concrete', category: 'intermediate', basePrice: 3 },
   lumber: { id: 'lumber', label: 'Lumber', category: 'intermediate', basePrice: 5 },
   fuel: { id: 'fuel', label: 'Fuel', category: 'intermediate', basePrice: 8 },

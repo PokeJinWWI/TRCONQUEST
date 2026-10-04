@@ -17,6 +17,8 @@ import { EscapeMenu } from './components/EscapeMenu'
 import { useKeyboardControls } from './hooks/useKeyboardControls'
 import { DiplomacyToast } from './components/DiplomacyPanel'
 import { StarbasePanel } from './components/StarbasePanel'
+import { GoodDetailPanel } from './components/GoodDetailPanel'
+import { BuildingDetailWindow } from './components/BuildingDetailWindow'
 import { TimeControls } from './components/TimeControls'
 import { MapModesButton } from './components/MapModesButton'
 import { useGameClock } from './hooks/useGameClock'
@@ -182,6 +184,8 @@ function App() {
       <EscapeMenu />
       <DiplomacyToast />
       <StarbasePanel />
+      <GoodDetailPanel />
+      <BuildingDetailWindow />
     </div>
   )
 }

@@ -18,10 +18,11 @@ import { formatIED, formatPop } from '../../economy/format'
 import type { Building, BuildingOwner, ConstructionOrder, Country, World } from '../../economy/economyTypes'
 import { PlanetIcon } from './PlanetIcons'
 import { usePlanetViewStore } from '../../state/planetViewStore'
+import { useBuildingDetailStore } from '../../state/buildingDetailStore'
 import { CivicDistrict, MilitaryTiles } from './KeySites'
 import { groupsOf } from './grouping'
 import { ForeignHoldingsRow } from './ForeignHoldings'
-import { BuildingsPanel, ComplexBuildingCard } from '../BuildingsPanel'
+import { BuildingsPanel } from '../BuildingsPanel'
 
 // Complex mode's planet screen tabs (Stellaris-style), over the deep sim: the
 // world's districts — each a card of building tiles with its level, slots and
@@ -113,6 +114,14 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const grouped = usePlanetViewStore((s) => s.groupBuildings)
   const setGrouped = usePlanetViewStore((s) => s.setGroupBuildings)
+  // Clicking a building opens it in its own floating window (BuildingDetailWindow)
+  // rather than inline under this planet panel. `selectedId` still drives the tile
+  // highlight and the identical-building picker.
+  const selectBuilding = (id: string | null) => {
+    setSelectedId(id)
+    if (id) useBuildingDetailStore.getState().openBuilding(world.id, id)
+    else useBuildingDetailStore.getState().close()
+  }
 
   const canBuildHere = !!playerId && world.ownerId === playerId && controller === playerId
   const corpName = (id: string) => corporations.find((c) => c.id === id)?.name ?? 'Company'
@@ -178,9 +187,9 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
               {grouped
                 ? groupsOf(inDistrict).map((g) => {
                     const on = g.some((b) => b.id === selectedId)
-                    return <GroupTile key={g[0].recipeId} group={g} selected={on} onClick={() => setSelectedId(on ? null : g[0].id)} />
+                    return <GroupTile key={g[0].recipeId} group={g} selected={on} onClick={() => selectBuilding(on ? null : g[0].id)} />
                   })
-                : inDistrict.map((b) => <BuildingTile key={b.id} b={b} corpName={corpName} selected={selectedId === b.id} onClick={() => setSelectedId(selectedId === b.id ? null : b.id)} />)}
+                : inDistrict.map((b) => <BuildingTile key={b.id} b={b} corpName={corpName} selected={selectedId === b.id} onClick={() => selectBuilding(selectedId === b.id ? null : b.id)} />)}
               {queued.map((o) => <QueuedTile key={o.id} o={o} />)}
               {free > 0 &&
                 (canBuildHere ? (
@@ -198,19 +207,17 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
               if (!sel) return null
               // In a group, pick which of the identical buildings to look at.
               const siblings = grouped ? inDistrict.filter((b) => b.recipeId === sel.recipeId) : []
+              // The building itself opens in its own floating window; a group of
+              // identical buildings keeps an inline picker to switch which one it shows.
+              if (siblings.length <= 1) return null
               return (
-                <>
-                  {siblings.length > 1 && (
-                    <div className="pl-group-pick">
-                      {siblings.map((b, i) => (
-                        <button key={b.id} type="button" className={`laws-enact-btn${b.id === sel.id ? ' abs-on' : ''}`} onClick={() => setSelectedId(b.id)} title={`${ownerLabel(b.owner, corpName)} · level ${b.level}`}>
-                          #{i + 1} · {ownerLabel(b.owner, corpName)} · Lv {b.level}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <ComplexBuildingCard b={sel} world={world} country={country} owned={!!playerId && world.ownerId === playerId} onClose={() => setSelectedId(null)} />
-                </>
+                <div className="pl-group-pick">
+                  {siblings.map((b, i) => (
+                    <button key={b.id} type="button" className={`laws-enact-btn${b.id === sel.id ? ' abs-on' : ''}`} onClick={() => selectBuilding(b.id)} title={`${ownerLabel(b.owner, corpName)} · level ${b.level}`}>
+                      #{i + 1} · {ownerLabel(b.owner, corpName)} · Lv {b.level}
+                    </button>
+                  ))}
+                </div>
               )
             })()}
             {d === 'urban' && (

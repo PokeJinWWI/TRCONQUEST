@@ -14,11 +14,15 @@ import {
   SHIPYARD_FREE_SLOTS,
   SPACEYARD_RECIPE_ID,
   STARTING_STOCKPILE,
+  MILITARY_STOCKPILE_TARGET,
   type ResourceCost,
+  type GoodCost,
 } from '../data/shipyardData'
 import type { ShipClass } from '../data/shipData'
 import { findTech } from '../data/techData'
-import type { Country } from '../data/countryData'
+import { COUNTRIES, type Country } from '../data/countryData'
+import { GOODS, type GoodId } from '../economy/goods'
+import { economyModel } from '../state/playerStore'
 import type { World } from '../economy/economyTypes'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useResourceStore } from '../state/resourceStore'
@@ -49,6 +53,58 @@ export function spendCost(countryId: string, cost: ResourceCost): void {
 export function refundCost(countryId: string, cost: ResourceCost): void {
   const { addAmount } = useResourceStore.getState()
   for (const [id, amount] of Object.entries(cost) as [ResourceId, number][]) addAmount(countryId, id, amount)
+}
+
+// --- Complex mode: the capital's economy stockpile --------------------------
+// In Complex mode the shipyard spends REAL economy goods from the nation's
+// capital world stockpile (see data/shipyardData.complexShipBuildCost), instead
+// of the abstract strategic pool above.
+export function capitalWorldIdOf(countryId: string): string | null {
+  const name = COUNTRIES.find((c) => c.id === countryId)?.capitalBodyName
+  if (!name) return null
+  return worldByName(useEconomyStore.getState().worlds, name)?.id ?? null
+}
+
+export function capitalStockpileOf(countryId: string): Partial<Record<GoodId, number>> {
+  const name = COUNTRIES.find((c) => c.id === countryId)?.capitalBodyName
+  if (!name) return {}
+  return worldByName(useEconomyStore.getState().worlds, name)?.stockpiles ?? {}
+}
+
+// Labels of every good `cost` needs more of than the capital stockpile holds —
+// empty means affordable.
+export function missingEconomyGoods(cost: GoodCost, stockpiles: Partial<Record<GoodId, number>>): string[] {
+  return (Object.entries(cost) as [GoodId, number][])
+    .filter(([id, need]) => need > (stockpiles[id] ?? 0))
+    .map(([id]) => GOODS[id].label)
+}
+
+export function spendEconomyCost(countryId: string, cost: GoodCost): void {
+  const worldId = capitalWorldIdOf(countryId)
+  if (worldId) useEconomyStore.getState().consumeStockpile(worldId, cost)
+}
+
+export function refundEconomyCost(countryId: string, cost: GoodCost): void {
+  const worldId = capitalWorldIdOf(countryId)
+  if (worldId) useEconomyStore.getState().consumeStockpile(worldId, cost, true)
+}
+
+// Complex-mode game start: give a nation a standing war-materials stockpile
+// target at its capital (the economy refills it off the market) and inject the
+// starting reserve so its opening navy is buildable at once. Idempotent per
+// nation — a re-setup won't double the reserve, since it only tops up to target.
+export function seedMilitaryStockpile(countryId: string): void {
+  const worldId = capitalWorldIdOf(countryId)
+  if (!worldId) return
+  const econ = useEconomyStore.getState()
+  const have = capitalStockpileOf(countryId)
+  const topUp: GoodCost = {}
+  for (const [g, amt] of Object.entries(MILITARY_STOCKPILE_TARGET) as [GoodId, number][]) {
+    econ.setStockpileTarget(worldId, g, amt)
+    const missing = amt - (have[g] ?? 0)
+    if (missing > 0) topUp[g] = missing
+  }
+  if (Object.keys(topUp).length > 0) econ.consumeStockpile(worldId, topUp, true)
 }
 
 // What the gate reads: a Set of researched ids, or anything that can say yes/no (the AI's blackboard).
@@ -171,7 +227,10 @@ export function advanceShipyard(country: Pick<Country, 'id' | 'capitalStarId' | 
   const live = new Set(useShipStore.getState().ships.map((s) => s.id))
   const orphans = orders.filter((o) => o.upgradeShipId && !live.has(o.upgradeShipId))
   if (orphans.length > 0) {
-    for (const o of orphans) refundCost(country.id, o.cost)
+    for (const o of orphans) {
+      if (o.goodCost) refundEconomyCost(country.id, o.goodCost)
+      else refundCost(country.id, o.cost)
+    }
     orders = orders.filter((o) => !orphans.includes(o))
     setOrders(country.id, orders)
   }
@@ -261,9 +320,15 @@ export function seedStrategicResources(countryId: string): void {
   for (const [id, start] of Object.entries(STARTING_STOCKPILE) as [ResourceId, number][]) {
     if ((amounts[id] ?? 0) === 0) setAmount(countryId, id, start)
   }
-  // The scarce ones depend on where the nation lives (data/exoticMatter.ts, data/hyperium.ts).
-  if ((amounts.exoticMatter ?? 0) === 0) setAmount(countryId, 'exoticMatter', startingExoticMatter(countryId))
-  if ((amounts.hyperium ?? 0) === 0) setAmount(countryId, 'hyperium', HYPERIUM_NEAR_SOL)
+  // The scarce ones depend on where the nation lives (data/exoticMatter.ts,
+  // data/hyperium.ts). In Complex mode exotic matter and hyperium are real economy
+  // goods (made by plants, drawn from the capital stockpile), NOT strategic-pool
+  // resources — there is one count each, in the economy — so the strategic pool is
+  // not seeded with them; this is Simple mode's deposit-fed stockpile only.
+  if (economyModel() !== 'complex') {
+    if ((amounts.exoticMatter ?? 0) === 0) setAmount(countryId, 'exoticMatter', startingExoticMatter(countryId))
+    if ((amounts.hyperium ?? 0) === 0) setAmount(countryId, 'hyperium', HYPERIUM_NEAR_SOL)
+  }
   for (const r of RESOURCE_TYPES) setMonthlyDelta(countryId, r.id, RESOURCE_INCOME_PER_MONTH[r.id] ?? 0)
 }
 

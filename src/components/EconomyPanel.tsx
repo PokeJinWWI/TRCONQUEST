@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
+import { useGoodDetailStore } from '../state/goodDetailStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { BudgetFlowChart, DebtToGdpChart, GdpChart, GdpPerCapitaChart, PriceLevelChart, gdpPerCapita } from './complexCharts'
 import { GOOD_IDS, GOODS, type GoodId } from '../economy/goods'
@@ -103,7 +104,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
                   <tr className="market-row" onClick={() => setExpandedGood(open ? null : g)} title="Click to see buyers & sellers">
                     <td>
                       <span className="market-caret">{open ? '▾' : '▸'}</span>
-                      {GOODS[g].label}
+                      <button type="button" className="good-link" onClick={(e) => { e.stopPropagation(); useGoodDetailStore.getState().openGood(g) }} title={`${GOODS[g].label} — open the market view`}>{GOODS[g].label}</button>
                     </td>
                     <td>{fmtPrice(world.market.prices[g])}</td>
                     <td>{r ? r.supply.toFixed(0) : '—'}</td>

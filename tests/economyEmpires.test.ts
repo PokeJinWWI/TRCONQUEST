@@ -34,9 +34,11 @@ console.log('\n=== 1. The home nations\' seed is stable ===')
   // Rehashed when `infrastructure`→`transportation` and when Earth was added as
   // the fifth nation (the Northern Federal Command); again when the water good
   // (treatment plants, a pop drinking need) was added; and again when Earth's
-  // currency was renamed to the International Earth Dollar (IED); and again when
-  // the water producers were right-sized (smaller plants, better demand fit).
-  check('worlds', hash(seedWorlds()) === 'bf2f4c1d2f0c2117')
+  // currency was renamed to the International Earth Dollar (IED); again when
+  // the water producers were right-sized (smaller plants, better demand fit); and
+  // again when exoticMatter + hyperium goods were added (every market now prices
+  // them — no new seeded buildings, so `countries` is unchanged).
+  check('worlds', hash(seedWorlds()) === '6263ee8d4000bf89')
   check('countries', hash(seedCountries()) === '4c74ab14d2187147')
   check('corporations', hash(seedCorporations()) === 'c4949843a4c08459')
   check('banks', hash(seedBanks()) === '7bccfcac62561d47')

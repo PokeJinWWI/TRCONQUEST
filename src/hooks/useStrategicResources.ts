@@ -5,7 +5,7 @@ import { COUNTRIES } from '../data/countryData'
 import { SIM_DAYS_PER_INCOME_TICK } from '../data/shipyardData'
 import { applyStrategicIncome, seedSimplisticStock, seedStrategicResources } from '../scene/shipyardLogic'
 import { applyInfluenceIncome, seedInfluence } from '../scene/colonies'
-import { applyExtraction, applySynthesis } from '../scene/extraction'
+import { applyExtraction } from '../scene/extraction'
 
 // Feeds EVERY nation's strategic stockpile (alloys, exotic matter,
 // hyperium…) with the PLACEHOLDER supply in data/shipyardData.ts: a starting
@@ -46,16 +46,20 @@ export function useStrategicResources() {
       lastTickSimDays += ticks * SIM_DAYS_PER_INCOME_TICK
       if (!started()) return
       for (const country of COUNTRIES) applyInfluenceIncome(country.id, ticks)
-      // Hyperium and exotic matter from the deposits each nation owns, in both modes.
-      for (const country of COUNTRIES) applyExtraction(country.id, ticks)
-      // In Simple mode the resources come from that economy's buildings
-      // (see useEconomyTick), not this flat placeholder.
-      if (usePlayerStore.getState().economyModel === 'abstract') return
-      for (const country of COUNTRIES) {
-        applyStrategicIncome(country.id, ticks)
-        // Complex mode has no Hyperium Refinery building: synthesis is a nation-level step.
-        applySynthesis(country.id, ticks)
+      const complex = usePlayerStore.getState().economyModel === 'complex'
+      // Hyperium and exotic matter from natural deposits feed Simple mode's
+      // strategic pool. In COMPLEX mode they are real economy goods (made by
+      // plants, drawn from the capital stockpile by ships and research) — ONE count
+      // each, in the economy — so the deposit/synthesis strategic system is off.
+      if (!complex) {
+        for (const country of COUNTRIES) applyExtraction(country.id, ticks)
+        // Simple mode's civilian goods come from that economy's buildings
+        // (see useEconomyTick), not this flat placeholder, so stop here.
+        return
       }
+      // Complex: the flat placeholder income for the old HUD resources only
+      // (energy/minerals/alloys; exotic/hyperium are economy goods, not fed here).
+      for (const country of COUNTRIES) applyStrategicIncome(country.id, ticks)
     })
     return () => {
       unsubPlayer()

@@ -151,6 +151,7 @@ export function NavBar() {
   // the current tab's open windows" snapshot rule, so this can't be
   // component-local without becoming a special case for tab switching.
   const activeCategoryName = useViewStore((s) => s.activeNavCategory)
+  const navHistory = useViewStore((s) => s.navHistory)
   const activeSubcategory = useViewStore((s) => s.activeNavSubcategory)
   const setNavCategory = useViewStore((s) => s.setNavCategory)
   const techTreeOpen = useViewStore((s) => s.techTreeOpen)
@@ -197,6 +198,11 @@ export function NavBar() {
       <div className={`nav-sidebar${collapsed ? ' collapsed' : ''}`}>
         <div className="nav-sidebar-content">
           <div className="nav-nation-name">{nationName}</div>
+          {navHistory.length > 0 && (
+            <button type="button" className="nav-back-btn" onClick={() => useViewStore.getState().navBack()} title="Go back to the previous menu (Cmd/Ctrl+Z)">
+              ‹ Back
+            </button>
+          )}
           <div className="nav-category-list">
             {categories.map((category) => (
               <button

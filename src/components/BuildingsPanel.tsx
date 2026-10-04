@@ -7,6 +7,7 @@ import { economicSystemDef, type EconomicSystem } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { useConfirmStore } from '../state/confirmStore'
+import { useGoodDetailStore } from '../state/goodDetailStore'
 import { getCountry } from '../data/countryData'
 import { formatPop, formatIED } from '../economy/format'
 import type { Building, Corporation, Country, World } from '../economy/economyTypes'
@@ -93,7 +94,7 @@ export function BuildingDetail({
           ) : (
             method.inputs.map((i) => (
               <div className="bld-detail-line" key={i.good}>
-                <span>{GOODS[i.good].label}</span>
+                <button type="button" className="good-link" onClick={() => useGoodDetailStore.getState().openGood(i.good)} title={`${GOODS[i.good].label} — open the market view`}>{GOODS[i.good].label}</button>
                 <span>{perTick(i.amount).toFixed(0)}</span>
               </div>
             ))
@@ -106,7 +107,7 @@ export function BuildingDetail({
           ) : (
             method.outputs.map((o) => (
               <div className="bld-detail-line" key={o.good}>
-                <span>{GOODS[o.good].label}</span>
+                <button type="button" className="good-link" onClick={() => useGoodDetailStore.getState().openGood(o.good)} title={`${GOODS[o.good].label} — open the market view`}>{GOODS[o.good].label}</button>
                 <span>{perTick(o.amount).toFixed(0)}</span>
               </div>
             ))
@@ -118,7 +119,7 @@ export function BuildingDetail({
             const posted = j.count * b.level * JOB_SCALE
             const filled = posted * t
             return (
-              <div className="bld-detail-line" key={j.class}>
+              <div className="bld-detail-line" key={j.class} title={`${formatPop(filled)} ${CLASS_LABEL[j.class] ?? j.class} jobs, filled from ${world.name}'s ${(CLASS_LABEL[j.class] ?? j.class).toLowerCase()} population (pops are not assigned to a single building). See them all in this planet's Population tab.`}>
                 <span>{CLASS_LABEL[j.class] ?? j.class}</span>
                 <span>{formatPop(filled)}</span>
               </div>

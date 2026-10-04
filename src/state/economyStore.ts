@@ -33,9 +33,11 @@ import {
 import { convertBetween } from '../economy/fx'
 import { RECIPES, constructionWork } from '../economy/recipes'
 import { useTechStore } from './techStore'
+import { researchByNation } from '../economy/research'
+import type { TechCategory } from '../data/techData'
 import type { Building, BuildingOwner, Character, Corporation, Country, CountryFiscal, World, WorldReport } from '../economy/economyTypes'
 import { SEZ_DEFAULT_TAX_DISCOUNT } from '../economy/economyTypes'
-import type { GoodId } from '../economy/goods'
+import { GOOD_IDS, type GoodId } from '../economy/goods'
 import { hasInvestmentRights } from './treatyStore'
 
 // Shares held by the corporation's OWN (home) government — foreign-state stakes
@@ -259,6 +261,12 @@ interface EconomyStore {
   empireHistory: Record<string, FiscalSample[]>
   // Months the empire simulation has run.
   empireTick: number
+  // Each nation's research points per month, per tree (economy/research.ts) — the
+  // last tick's value, granted to techStore and shown by the Technology panel.
+  researchRate: Record<string, Record<TechCategory, number>>
+  // The player nation's market-average price of each good over time, one point per
+  // tick — the Good Detail panel's price graph (components/GoodDetailPanel.tsx).
+  goodPriceHistory: Partial<Record<GoodId, number[]>>
   advance: (ticks: number) => void
   // Starts the 20 generated empires' economies running alongside this game
   // (Complex mode; economy/empireSim.ts). A no-op once they are.
@@ -339,6 +347,10 @@ interface EconomyStore {
   // one world. 0 (or below) clears the target — tickWorld then neither fills
   // nor releases against it, though any already-held reserve is left in place.
   setStockpileTarget: (worldId: string, good: GoodId, targetAmount: number) => void
+  // Draw goods out of (refund = add back into) a world's strategic stockpile —
+  // the military shipyard's spend/refund in Complex mode. Floors at 0. Goes
+  // through the logging `set`, so it replays correctly onto an in-flight tick.
+  consumeStockpile: (worldId: string, goods: Partial<Record<GoodId, number>>, refund?: boolean) => void
   setSpecialEconomicZone: (worldId: string, active: boolean, taxDiscount?: number) => void
   // The state buys `shares` of a corporation on the exchange (costs treasury);
   // negative sells. Moves shares between the public float and the state.
@@ -525,11 +537,58 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
       return { countries, worlds: out.worlds, corporations: out.corporations, banks: out.banks, worldReports: out.worldReports, countryReports: out.countryReports, moneyReports: out.moneyReports, centralBankEvents: cbEvents, history, tick: out.tick }
     })
 
+  // After a Complex tick: hand each nation the research its worlds did over the
+  // months elapsed (economy/research.ts) and run its research queue — the same
+  // thing Simple mode does in abstractEconomyStore. Research is a side metric, not
+  // an economy good, so it is computed here from the returned worlds. `researchRate`
+  // (per month) is kept for the Technology panel.
+  const grantResearchFor = (worlds: World[], steps: number) => {
+    if (steps <= 0 || usePlayerStore.getState().economyModel !== 'complex') return
+    const rate = researchByNation(worlds)
+    rawSet({ researchRate: rate })
+    const tech = useTechStore.getState()
+    for (const [id, byTree] of Object.entries(rate)) {
+      for (const t of Object.keys(byTree) as TechCategory[]) if (byTree[t] > 0) tech.grantResearch(id, t, byTree[t] * steps)
+      tech.processQueue(id)
+    }
+  }
+
+  // After a tick: append the player nation's transacted-weighted market-average
+  // price of every good, for the Good Detail panel's price graph. One point per
+  // land (batched months contribute a single, latest point).
+  const recordGoodPrices = (worlds: World[], reports: Record<string, WorldReport>) => {
+    const player = usePlayerStore.getState().selectedCountryId
+    if (!player) return
+    const mine = worlds.filter((w) => w.ownerId === player)
+    if (mine.length === 0) return
+    rawSet((state) => {
+      const hist: Partial<Record<GoodId, number[]>> = { ...state.goodPriceHistory }
+      for (const good of GOOD_IDS) {
+        let sum = 0
+        let weight = 0
+        for (const w of mine) {
+          const g = reports[w.id]?.goods?.[good]
+          const price = g?.price ?? w.market.prices[good] ?? 0
+          const t = g?.transacted || 1
+          sum += price * t
+          weight += t
+        }
+        const series = [...(hist[good] ?? []), weight > 0 ? sum / weight : 0]
+        if (series.length > HISTORY_LENGTH) series.splice(0, series.length - HISTORY_LENGTH)
+        hist[good] = series
+      }
+      return { goodPriceHistory: hist }
+    })
+  }
+
   // Lands a finished advance, replays the edits made while it ran, and starts the
   // months that came due meanwhile.
   const land = (out: EconomyStepOutput, epoch: number) => {
     if (epoch !== flight.epoch) return
+    const prevTick = get().tick
     commit(out)
+    grantResearchFor(out.worlds, out.tick - prevTick)
+    recordGoodPrices(out.worlds, out.worldReports)
     const log = flight.log
     flight.log = []
     flight.active = false
@@ -596,6 +655,10 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
   centralBankEvents: [],
   history: {},
   empireSummaries: {},
+  // Seeded from the starting worlds so the Technology panel shows a research rate
+  // from turn one; refreshed after every tick in grantResearchFor.
+  researchRate: researchByNation(seedWorlds()),
+  goodPriceHistory: {},
   empireHistory: {},
   empireTick: 0,
   // Advances `ticks` months. The tick itself is a pure function (economy/
@@ -986,6 +1049,19 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
         if (amt <= 0) delete stockpileTargets[good]
         else stockpileTargets[good] = amt
         return { ...w, stockpileTargets }
+      }),
+    })),
+
+  consumeStockpile: (worldId, goods, refund = false) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => {
+        if (w.id !== worldId) return w
+        const stockpiles = { ...w.stockpiles }
+        const sign = refund ? 1 : -1
+        for (const [g, amount] of Object.entries(goods) as [GoodId, number][]) {
+          stockpiles[g] = Math.max(0, (stockpiles[g] ?? 0) + sign * amount)
+        }
+        return { ...w, stockpiles }
       }),
     })),
 
