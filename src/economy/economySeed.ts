@@ -719,8 +719,8 @@ const WORLD_SPECS: WorldSpec[] = [
     ownerId: 'earth',
     culture: 'terran',
     species: 'baseline-organic',
-    population: 9000,
-    capacity: 45000,
+    population: 4000,
+    capacity: 24000,
     religions: [
       { religion: 'non-affiliated', share: 0.55 },
       { religion: 'old-earth-theravada', share: 0.25 },

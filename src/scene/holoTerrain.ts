@@ -14,6 +14,7 @@ export const HOLO_TERRAIN: Record<TerrainId, { color: string; land: boolean }> =
   desert: { color: '#a4eab8', land: true },
   tundra: { color: '#bdf1ff', land: true },
   mountains: { color: '#e6fffb', land: true },
+  plateau: { color: '#8fb88c', land: true },
   urban: { color: '#ffe3a0', land: true },
   rock: { color: '#4e9ea8', land: true },
   lava: { color: '#ff6b3d', land: true },

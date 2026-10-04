@@ -114,7 +114,7 @@ function RelationsTab() {
             </div>
             <div className="inspect-row">
               <span className="inspect-label">Government</span>
-              <span className="inspect-value">{ai ? 'AI empire' : 'Dormant'}</span>
+              <span className="inspect-value">{c.government ?? (ai ? 'AI empire' : 'Dormant')}</span>
             </div>
           </div>
         )
@@ -282,7 +282,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
         </div>
         <div className="inspect-row">
           <span className="inspect-label">Government</span>
-          <span className="inspect-value">{ai ? 'AI empire' : 'Dormant'}</span>
+          <span className="inspect-value">{getCountry(id)?.government ?? (ai ? 'AI empire' : 'Dormant')}</span>
         </div>
         {theyAreMySubject && (
           <div className="inspect-row">

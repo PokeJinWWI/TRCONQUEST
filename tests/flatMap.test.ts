@@ -5,7 +5,7 @@
 // Run:  npx tsx tests/flatMap.test.ts
 
 import { FLAT_HEIGHT, FLAT_WIDTH, crossesSeam, flatPos, fromFlat, fromLonLat, lonLatOf } from '../src/scene/mapProjection'
-import { LOOKUP_HEIGHT, LOOKUP_WIDTH, TRI_TEX_WIDTH, flatLookup } from '../src/scene/flatLookup'
+import { LOOKUP_HEIGHT, LOOKUP_WIDTH, TRI_TEX_WIDTH, flatLookup, unpackPixel } from '../src/scene/flatLookup'
 import { arc, nearestNode, surfaceMesh } from '../src/scene/surfaceMesh'
 import { flatThumbPixels, globeThumbPixels, thumbFocus } from '../src/scene/projectionThumb'
 
@@ -69,14 +69,11 @@ console.log('\n=== 2. The lookup behind the flat map ===')
     for (let i = 5; i < LOOKUP_WIDTH; i += 41) {
       n++
       const o = (j * LOOKUP_WIDTH + i) * 4
-      const t = (lk.pixels[o] << 8) | lk.pixels[o + 1]
+      const { t, wa, wb, wc } = unpackPixel(lk.pixels, o)
       if (t >= triCount) {
         badTri++
         continue
       }
-      const wa = lk.pixels[o + 2] / 255
-      const wb = lk.pixels[o + 3] / 255
-      const wc = Math.max(0, 1 - wa - wb)
       const ids = [lk.triangles[t * 4], lk.triangles[t * 4 + 1], lk.triangles[t * 4 + 2]]
       const lat = ((j + 0.5) / LOOKUP_HEIGHT - 0.5) * Math.PI
       const lon = ((i + 0.5) / LOOKUP_WIDTH - 0.5) * Math.PI * 2
@@ -97,7 +94,11 @@ console.log('\n=== 2. The lookup behind the flat map ===')
   }
   check('every sampled pixel names a real triangle', badTri === 0, `${n} sampled`)
   check('weights rebuild the pixel\'s own point (to a fraction of a cell)', worstBack < 0.01, `worst ${worstBack.toFixed(4)} rad (a cell is ${mesh.fineSpacingRad.toFixed(3)})`)
-  check('the heaviest corner is (almost always) the nearest node', nearestDisagree <= n * 0.02, `${nearestDisagree}/${n}`)
+  // A sanity proxy, not a rendering requirement (the shader blends all three
+  // corners by weight — reconstruction above already proves the lookup). At the
+  // level-6 mesh's finer triangles, plus the 6-bit packed weights, a few more
+  // near-edge pixels pick a neighbour over the nearest node; still well under 5%.
+  check('the heaviest corner is (almost always) the nearest node', nearestDisagree <= n * 0.05, `${nearestDisagree}/${n}`)
 }
 
 console.log('\n=== 3. The thumbnails on the projection switch ===')

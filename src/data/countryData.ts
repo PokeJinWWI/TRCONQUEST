@@ -8,6 +8,8 @@ export interface Country {
   // body to arrive pre-selected at (see MainMenu.selectCountry).
   capitalStarId: string
   capitalBodyName: string
+  // The nation's form of government (shown in the Diplomacy profile).
+  government?: string
   // The capital city's name, where the setting has one (shown on its key node).
   capitalCityName?: string
   // The capital's name in its own script (Mars's kanji), when it has one.
@@ -25,13 +27,14 @@ export interface Country {
 export interface FixedCity {
   name: string
   at: [number, number] // degrees east, north
-  kind: 'city' | 'spaceport'
+  kind: 'city' | 'spaceport' | 'outpost'
 }
 
 export const COUNTRIES: Country[] = [
   {
     id: 'imperial-state-of-mars',
     name: 'Imperial State of Mars',
+    government: 'Imperial autocracy',
     color: '#c9704a',
     capitalStarId: 'sol',
     capitalBodyName: 'Mars',
@@ -42,6 +45,7 @@ export const COUNTRIES: Country[] = [
   {
     id: 'republic-of-venus',
     name: 'Republic of Venus',
+    government: 'Federal republic',
     color: '#3d7dc9',
     capitalStarId: 'sol',
     capitalBodyName: 'Venus',
@@ -50,6 +54,7 @@ export const COUNTRIES: Country[] = [
   {
     id: 'orion-republic',
     name: 'Orion Republic',
+    government: 'Democratic republic',
     color: '#8fd0ff',
     capitalStarId: 'alpha-centauri',
     capitalBodyName: 'Arcadia',
@@ -59,6 +64,7 @@ export const COUNTRIES: Country[] = [
     // An alien empire — the Tidalians of Lalande 21185 d.
     id: 'kingdom-of-lalande',
     name: 'Kingdom of Lalande',
+    government: 'Constitutional monarchy',
     color: '#5ad1a0',
     capitalStarId: 'lalande-21185',
     capitalBodyName: 'Lalande 21185 d',
@@ -67,34 +73,37 @@ export const COUNTRIES: Country[] = [
   {
     // The surviving core of an old empire — a declining colossus under the
     // Northern Federal Command (a military government). Huge, prestigious and
-    // decaying from within. Capital: Chicago.
+    // decaying from within. Capital: Chengyu (merged Chengdu–Chongqing).
     id: 'earth',
     name: 'Earth',
-    color: '#b89b5e',
+    government: 'Military junta (Northern Federal Command)',
+    color: '#4a6fa5', // a deep steel blue, distinct from Venus/Orion
     capitalStarId: 'sol',
     capitalBodyName: 'Earth',
-    capitalCityName: 'Chicago',
-    capitalCityAt: [-87.63, 41.88], // Chicago (lon east, lat north) — ~179 m, well above the +70 m sea
-    // The surviving urban centres (high-ground interior cities) and the old
-    // empire's spaceports at their real launch sites. Each placed at its true
-    // coordinates, snapped to the nearest land node.
+    capitalCityName: 'Chengyu Megalopolis',
+    capitalCityNative: '成渝',
+    capitalCityAt: [105.4, 30.0], // the Chengdu–Chongqing megalopolis, Sichuan Basin
+    // Earth's four surviving megacities (vast urban sprawls) and the old empire's
+    // spaceports at their real launch sites. Each placed at its true coordinates,
+    // snapped to the nearest land node and named uniquely (not pool-named). The
+    // megacities get a large urban footprint (planetTerrain floodUrban).
     cities: [
-      { name: 'Chengdu', at: [104.07, 30.57], kind: 'city' }, // Sichuan Basin
-      { name: 'Chongqing', at: [106.55, 29.56], kind: 'city' },
-      { name: 'Xi’an', at: [108.94, 34.34], kind: 'city' },
-      { name: 'Kunming', at: [102.83, 24.88], kind: 'city' },
-      { name: 'Lanzhou', at: [103.83, 36.06], kind: 'city' },
-      { name: 'Delhi', at: [77.1, 28.7], kind: 'city' },
+      { name: 'Great Lakes Megalopolis', at: [-87.63, 41.88], kind: 'city' },
       { name: 'São Paulo', at: [-46.63, -23.55], kind: 'city' },
       { name: 'Nairobi', at: [36.82, -1.29], kind: 'city' },
-      { name: 'Kano', at: [8.52, 12.0], kind: 'city' },
-      { name: 'Moscow', at: [37.62, 55.75], kind: 'city' },
-      // Launch sites, spread across the world (not forced to the equator).
-      { name: 'Baikonur', at: [63.34, 45.96], kind: 'spaceport' }, // Kazakhstan (Roscosmos)
-      { name: 'Jiuquan', at: [100.29, 40.96], kind: 'spaceport' }, // Gobi
-      { name: 'Taiyuan', at: [111.6, 38.85], kind: 'spaceport' },
-      { name: 'Cape Canaveral', at: [-80.6, 28.5], kind: 'spaceport' }, // Florida
-      { name: 'Kourou', at: [-52.77, 5.17], kind: 'spaceport' }, // near the equator
+      // Launch sites — real cosmodromes, spread across the world and standalone
+      // (not tied to an urban area): the Gobi, Shanxi, the steppe, the Mojave, the
+      // Kenyan coast, the equatorial Pacific. These are Earth's ONLY spaceports —
+      // the economy's auto-placement is suppressed for curated worlds (spaceportSites).
+      { name: 'Jiuquan Cosmodrome', at: [100.29, 40.96], kind: 'spaceport' },
+      { name: 'Taiyuan Launch Centre', at: [111.6, 38.85], kind: 'spaceport' },
+      { name: 'Baikonur Cosmodrome', at: [63.34, 45.96], kind: 'spaceport' },
+      { name: 'Malindi Space Centre', at: [39.5, -3.5], kind: 'spaceport' }, // coastal Kenya, near Nairobi
+      { name: 'Edwards Spaceport', at: [-117.9, 34.9], kind: 'spaceport' }, // Edwards AFB, Mojave
+      { name: 'Biak Spaceport', at: [136.1, -1.2], kind: 'spaceport' }, // equatorial Indonesia
+      // A frontier settlement key node (the colony outpost snaps to it, so it is
+      // named for its real place instead of the city-name pool).
+      { name: 'Strasbourg', at: [7.75, 48.58], kind: 'outpost' }, // Alsace
     ],
   },
 ]

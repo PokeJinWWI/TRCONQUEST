@@ -166,6 +166,12 @@ console.log('\n=== 2. The Strategist ===')
 console.log('\n=== 3. The Diplomat ===')
 {
   freshWorld()
+  // Earth starts wary of Mars and Venus by design (seedStartingRelations: -15);
+  // that seeded grievance would make the Diplomat mellow it, which is a different
+  // behaviour. This check is about proximity ALONE not creating drift, so put
+  // Earth's opinions back to neutral first.
+  useDiplomacyStore.getState().adjustOpinion('earth', MARS, 15)
+  useDiplomacyStore.getState().adjustOpinion('earth', VENUS, 15)
   const fresh = diplomat(buildBlackboard(MARS, captureSnapshot(0)), captureSnapshot(0), INITIAL_AI_MEMORY)
   check(
     "sharing a system alone isn't a grievance — no opinion drift for anyone at a fresh start",
@@ -574,6 +580,11 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
     }
     const aiIds = [MARS, VENUS, ORION]
     for (const c of COUNTRIES) seedInfluence(c.id)
+    // Starbases that come with the starting map (Earth's pre-built Ring of Heaven
+    // over Sol) are not AI expansion — this section only judges the ones the
+    // Expander builds, so baseline them out.
+    const seeded = new Set(useStarbaseStore.getState().starbases.map((b) => b.id))
+    const builtStarbases = () => useStarbaseStore.getState().starbases.filter((b) => !seeded.has(b.id))
     let firstStarbaseDay = -1
     let surveyedBodies = 0
     for (let day = 1; day <= days; day++) {
@@ -593,7 +604,7 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
       resolveShipyards(day)
       settle(day)
       resolveSurvey(day)
-      if (firstStarbaseDay < 0 && useStarbaseStore.getState().starbases.length > 0) firstStarbaseDay = day
+      if (firstStarbaseDay < 0 && builtStarbases().length > 0) firstStarbaseDay = day
       if (process.env.AI_TRACE && day % 180 === 0) {
         const sv = useSurveyStore.getState().discovered
         console.log(`    ${label} d${day}: starbases=${useStarbaseStore.getState().starbases.map((b) => `${b.ownerId.slice(0, 5)}@${b.starId}`).join(',') || '-'} surveyed=${aiIds.map((id) => `${id.slice(0, 5)}:${sv[id]?.surveyed.size ?? 0}`).join(' ')} tech=${aiIds.map((id) => [...useTechStore.getState().stateFor(id).researched].filter((t) => !['warp-theory', 'hyperspace-theory'].includes(t)).join('+') || '-').join(' | ')}`)
@@ -602,7 +613,7 @@ console.log('\n=== 8. Headless expansion: AI empires research, survey, haul and 
     const sv = useSurveyStore.getState().discovered
     for (const id of aiIds) surveyedBodies += sv[id]?.surveyed.size ?? 0
     const commandsInFlight = useShipStore.getState().ships.reduce((n, sh) => n + (sh.pendingCommands?.length ?? 0), 0)
-    return { firstStarbaseDay, surveyedBodies, starbases: useStarbaseStore.getState().starbases, commandsInFlight }
+    return { firstStarbaseDay, surveyedBodies, starbases: builtStarbases(), commandsInFlight }
   }
 
   const simple = runExpansion('simple', true, 3000)

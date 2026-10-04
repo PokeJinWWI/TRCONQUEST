@@ -144,7 +144,7 @@ console.log('\n=== 5. The empires beside the four nations ===')
   st().advance(5)
   check('with the empires on, each month brings summaries for all 20', Object.keys(afterOne).length === 20 && st().empireTick === 6 && Object.keys(st().empireSummaries).length === 20)
   check('...and a fiscal history per empire', Object.values(st().empireHistory).every((h) => h.length === 6))
-  check('...while the nations hold only their own four', st().countries.length === 4 && st().worlds.length === 6)
+  check('...while the nations hold only their own five', st().countries.length === 5 && st().worlds.length === 7)
   const summary = st().empireSummaries['empire-3']
   check('a summary is headline numbers, not the economy', !!summary && summary.population > 0 && Object.keys(summary).length < 16 && JSON.stringify(summary).length < 600, `${JSON.stringify(summary).length} bytes`)
   check('the empires cost the nations nothing (same four nations as with the empires off)', (() => { fresh(); st().advance(2); return JSON.stringify([st().countries, st().worlds, st().banks]) === nationsOnly })())

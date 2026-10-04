@@ -635,6 +635,9 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
     set((state) => ({
       worlds: state.worlds.map((w) => {
         if (w.id !== worldId) return w
+        // Corporate HQs are the companies' own (corporationAI builds/relocates them),
+        // never state-constructed.
+        if (recipeId === 'corporateHq') return w
         // Tech gate: a building requiring a tech (e.g. the space-elevator anchor)
         // can't be queued until the owning nation has researched it.
         const need = RECIPES[recipeId]?.requiresTech

@@ -49,7 +49,7 @@ console.log('=== 1. Every key node is a building ===')
   }
   const mars = keyBuildingsOf(groundSurface('Mars', owners)!, [], 0, owners, {})
   check('Mars: the Imperial Palace and the Imperial Diet Building', ['Imperial Palace of Mars', 'Imperial Diet Building'].every((n) => mars.some((b) => b.name === n)))
-  check('a city’s building is its City Hall', mars.some((b) => b.kind === 'cityHall' && / City Hall$/.test(b.name)), mars.find((b) => b.kind === 'cityHall')?.name)
+  check('a city’s building is its Municipal Government Building', mars.some((b) => b.kind === 'cityHall' && / Municipal Government Building$/.test(b.name)), mars.find((b) => b.kind === 'cityHall')?.name)
   const phobos = keyBuildingsOf(groundSurface('Phobos', owners)!, [], 0, owners, {})
   check('an outpost’s building is its station', phobos.length === 1 && phobos[0].kind === 'outpostStation', phobos.map((b) => b.name).join())
 }

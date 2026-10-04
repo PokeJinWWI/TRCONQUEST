@@ -311,7 +311,7 @@ export const SIMPLE_WORLD_SEEDS: Record<string, SimpleWorldSeed> = {
   // ageing developed land (resource- and farm-heavy, thin on advanced plants).
   // Its land caps like Venus's, so a 9-billion populace is underdeveloped and
   // underemployed — the struggling giant. 18 spaceports (2 per billion).
-  Earth: { population: 9000, buildings: { civilianFactory: 6, alloyFoundry: 3, consumerFactory: 4, electronicsPlant: 1, farm: 8, mine: 7, powerPlant: 7, physicsLab: 1, engineeringLab: 1, clinic: 1, entertainmentCenter: 1, commercialZone: 1, railway: 2, spaceport: 18, spaceyard: 1, rocketWorks: 1 } },
+  Earth: { population: 4000, buildings: { civilianFactory: 6, alloyFoundry: 3, consumerFactory: 4, electronicsPlant: 1, farm: 8, mine: 7, powerPlant: 7, physicsLab: 1, engineeringLab: 1, clinic: 1, entertainmentCenter: 1, commercialZone: 1, railway: 2, spaceport: 8, spaceyard: 1, rocketWorks: 1 } },
 }
 
 export const OUTPOST_SEED: SimpleWorldSeed = { population: 48, buildings: { mine: 1 } }

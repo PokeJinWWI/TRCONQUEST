@@ -33,9 +33,9 @@ console.log('\n=== 1. The home nations\' seed is stable ===')
 {
   // Rehashed when `infrastructure`→`transportation` and when Earth was added as
   // the fifth nation (the Northern Federal Command).
-  check('worlds', hash(seedWorlds()) === 'ec50d07994f81e95')
-  check('countries', hash(seedCountries()) === '4d4c2d4a4c2849d2')
-  check('corporations', hash(seedCorporations()) === 'cbfdb2410e4ced5e')
+  check('worlds', hash(seedWorlds()) === '9d0c523f09231946')
+  check('countries', hash(seedCountries()) === 'b2edfd4fec2c91f2')
+  check('corporations', hash(seedCorporations()) === 'c4949843a4c08459')
   check('banks', hash(seedBanks()) === '7bccfcac62561d47')
   check('characters', hash(seedCharacters()) === 'fe9da9a53a59c43d')
   check('families', hash(seedFamilies()) === '6c211d4cc3df1023')

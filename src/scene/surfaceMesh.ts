@@ -9,9 +9,10 @@
 //
 //   coarse    subdivision level 2 —    162 nodes
 //   standard  subdivision level 3 —    642 nodes
-//   fine      subdivision level 6 — 40,962 nodes (raised from level 4 for sharp
-//             coastlines — small landmasses like Japan/Korea no longer drown;
-//             gameplay distances are pinned via REFERENCE_CELL_RAD, see below)
+//   fine      subdivision level 6 — 40,962 nodes (raised from level 4 for sharper
+//             coastlines/continents). Gameplay distances go through
+//             REFERENCE_CELL_RAD, pinned to the level-4 cell, so unit speeds,
+//             ranges and the terrain-battle patch are unchanged by the level.
 //
 // Nesting is exact: each subdivision keeps every existing vertex index and
 // appends the new midpoints, so the coarse nodes ARE fine nodes 0..161 and

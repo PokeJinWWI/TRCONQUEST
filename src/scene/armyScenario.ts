@@ -28,6 +28,18 @@ export interface Battlefield {
 // terrain, so the force standing around it really is standing on it.
 const MIN_SAME_TERRAIN_NEIGHBOURS = 4
 
+// Scenario distances are given in REFERENCE cells (the pinned gameplay cell,
+// surfaceMesh.fineSpacingRad), so the geometry is the same at any mesh resolution.
+// The actual fine mesh is finer than that — one graph hop covers only a fraction
+// of a reference cell — so convert reference-cells to graph hops once. (At the
+// level-6 mesh this is ~4; at the old level-4 mesh it is 1, so nothing changes
+// for a resolution where a hop already was a reference cell.)
+const HOPS_PER_CELL = (() => {
+  const m = surfaceMesh()
+  const actual = arc(nodePoint(0), nodePoint(m.neighbors.fine[0][0]))
+  return Math.max(1, Math.round(m.fineSpacingRad / actual))
+})()
+
 function sameTerrainNeighbours(surface: BodySurface, node: number): number {
   const t = terrainAt(surface, node)
   return surfaceMesh().neighbors.fine[node].filter((n) => terrainAt(surface, n) === t).length
@@ -39,7 +51,7 @@ function nodesAtDistance(from: number, cells: number): number[] {
   const mesh = surfaceMesh()
   const seen = new Set<number>([from])
   let frontier = [from]
-  for (let d = 0; d < cells; d++) {
+  for (let d = 0; d < cells * HOPS_PER_CELL; d++) {
     const next: number[] = []
     for (const node of frontier) {
       for (const n of mesh.neighbors.fine[node]) {
@@ -65,7 +77,7 @@ function terrainShare(surface: BodySurface, node: number, cells: number, terrain
   const seen = new Set<number>([node])
   let frontier = [node]
   let same = terrainAt(surface, node) === terrain ? 1 : 0
-  for (let d = 0; d < cells; d++) {
+  for (let d = 0; d < cells * HOPS_PER_CELL; d++) {
     const next: number[] = []
     for (const n of frontier) {
       for (const m of mesh.neighbors.fine[n]) {

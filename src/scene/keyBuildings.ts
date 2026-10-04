@@ -54,7 +54,7 @@ export function keyBuildingsOf(surface: BodySurface, installations: Installation
       out.push({ ...base, id: `key-${slot.node}-seat`, kind: 'seat', name: marks?.seat.name ?? (town ? `${town} Government Seat` : 'Government Seat'), description: marks?.seat.description ?? 'The seat of this world’s government.' })
       for (const [i, m] of (marks?.others ?? []).entries()) out.push({ ...base, id: `key-${slot.node}-landmark-${i}`, kind: 'landmark', name: m.name, description: m.description })
     } else if (slot.kind === 'city') {
-      out.push({ ...base, id: `key-${slot.node}-hall`, kind: 'cityHall', name: town ? `${town} City Hall` : 'City Hall', description: `The civic centre of ${town || 'this city'}.` })
+      out.push({ ...base, id: `key-${slot.node}-hall`, kind: 'cityHall', name: town ? `${town} Municipal Government Building` : 'Municipal Government Building', description: `The seat of municipal government of ${town || 'this city'}.` })
     } else if (slot.kind === 'spaceport') {
       const what = slot.site === 'outlier' ? 'A launch complex out on its own' : slot.site ? 'One of the world’s spaceports' : 'The world’s main spaceport'
       out.push({ ...base, id: `key-${slot.node}-port`, kind: 'spaceport', name: n.label, operator: slot.operator, description: `${what}: landing fields and orbital lift.${slot.operator ? ` Run by ${slot.operator}.` : ''}` })

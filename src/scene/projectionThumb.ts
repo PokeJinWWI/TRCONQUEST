@@ -1,4 +1,4 @@
-import { flatLookup } from './flatLookup'
+import { flatLookup, unpackPixel } from './flatLookup'
 import { flatPos, fromLonLat, lonLatOf } from './mapProjection'
 import { nearestNode, surfaceMesh, type SurfacePoint } from './surfaceMesh'
 import type { HoloNode } from './HoloGlobe'
@@ -23,10 +23,7 @@ export function flatThumbPixels(w: number, h: number, nodes: HoloNode[]): ImageD
     for (let x = 0; x < w; x++) {
       const i = Math.min(lk.width - 1, Math.floor(((x + 0.5) / w) * lk.width))
       const o = (j * lk.width + i) * 4
-      const t = (lk.pixels[o] << 8) | lk.pixels[o + 1]
-      const wa = lk.pixels[o + 2] / 255
-      const wb = lk.pixels[o + 3] / 255
-      const wc = Math.max(0, 1 - wa - wb)
+      const { t, wa, wb, wc } = unpackPixel(lk.pixels, o)
       const ids = [lk.triangles[t * 4], lk.triangles[t * 4 + 1], lk.triangles[t * 4 + 2]]
       const ws = [wa, wb, wc]
       const land = ids.reduce((s, id, k) => s + ws[k] * (nodes[id]?.land ? 1 : 0), 0) > 0.5

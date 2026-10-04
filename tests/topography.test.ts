@@ -56,14 +56,20 @@ console.log('\n=== 3. Known places ===')
   check('Venus: Maxwell Montes is land (and mountains)', at('Venus', 3, 65) === 'mountains', at('Venus', 3, 65))
   check('Venus: the lowland plains are sea', at('Venus', -150, 30) === 'ocean')
   check('Earth: the Himalaya are mountains', at('Earth', 85, 31) === 'mountains')
-  check('Luna: Mare Imbrium is plains (a dark mare)', at('Luna', -16, 34) === 'plains', at('Luna', -16, 34))
+  // Airless bodies are bare grey rock, never green: the maria read through the
+  // real-map relief shading, not a plains terrain tint (no "grass on the Moon").
+  check('Luna: Mare Imbrium is bare rock (a dark mare, not green plains)', at('Luna', -16, 34) === 'rock', at('Luna', -16, 34))
   check('Luna: the far-side highlands are rock or mountains', ['rock', 'mountains'].includes(at('Luna', 170, 10)), at('Luna', 170, 10))
   check('Io: Loki Patera is lava', at('Io', 51, 13) === 'lava', at('Io', 51, 13))
   check('Titan: Kraken Mare is sea', at('Titan', 50, 68) === 'ocean', at('Titan', 50, 68))
   check('Pluto: Sputnik Planitia is plains', at('Pluto', 178, 20) === 'plains', at('Pluto', 178, 20))
   check('Pluto: its far side (never seen) is unmapped', topographyOf('Pluto')!.mapped[node(0, -40)] === 0)
   check('Ceres: Ahuna Mons is mountains', featureAt(topographyOf('Ceres')!, node(-44, -10)) === 'mountain' || at('Ceres', -44, -10) === 'mountains', at('Ceres', -44, -10))
-  check('real terrain is deterministic', realTerrain(topographyOf('Mars')!).every((t, i) => t === realTerrain(topographyOf('Mars')!)[i]))
+  // Compute each pass once, then compare — calling realTerrain() inside .every()
+  // would re-run it per node (O(n²) with sorts + BFS; it hung the level-6 mesh).
+  const rt1 = realTerrain(topographyOf('Mars')!)
+  const rt2 = realTerrain(topographyOf('Mars')!)
+  check('real terrain is deterministic', rt1.every((t, i) => t === rt2[i]))
 }
 
 console.log('\n=== 4. Worlds still work as worlds ===')
@@ -71,14 +77,24 @@ console.log('\n=== 4. Worlds still work as worlds ===')
   for (const c of COUNTRIES) {
     const s = surfaceOf(c.capitalBodyName, 'capital')
     const kinds = s.keySlots.map((k) => k.kind)
-    // All key slots sit on one connected landmass — the capital's (which for
-    // Earth is North America, not the single biggest continent, Eurasia).
+    // Every key slot sits on land, with a capital and a spaceport present. Most
+    // nations put all their key nodes on the capital's own connected landmass;
+    // Earth is the exception — its fixed cities and launch sites are deliberately
+    // global (Chicago, Delhi, São Paulo, Nairobi, cosmodromes worldwide), so they
+    // land on whatever continent they fall on, not one home landmass.
     const capComp = s.landComponent[s.keySlots.find((k) => k.kind === 'capital')!.node]
-    check(`${c.capitalBodyName}: the capital and its spaceport fit on one landmass`, kinds.includes('capital') && kinds.includes('spaceport') && s.keySlots.every((k) => s.landComponent[k.node] === capComp), kinds.join(','))
+    const onLand = s.keySlots.every((k) => s.landComponent[k.node] >= 0)
+    const oneLandmass = c.id === 'earth' || s.keySlots.every((k) => s.landComponent[k.node] === capComp)
+    check(`${c.capitalBodyName}: the capital and its spaceport sit on land${c.id === 'earth' ? '' : ' (one landmass)'}`, kinds.includes('capital') && kinds.includes('spaceport') && onLand && oneLandmass, kinds.join(','))
     const capital = s.keySlots.find((k) => k.kind === 'capital')!
     const urban = (k: number) => [k, ...surfaceMesh().neighbors.fine[k]].flatMap((j) => [j, ...surfaceMesh().neighbors.fine[j]]).filter((j, i, a) => a.indexOf(j) === i && terrainAt(s, j) === 'urban').length
     const cities = s.keySlots.filter((k) => k.kind === 'city')
-    check(`${c.capitalBodyName}: the capital is the biggest city`, cities.every((k) => urban(capital.node) > urban(k.node)), `${urban(capital.node)} vs ${cities.map((k) => urban(k.node)).join('/')}`)
+    // On the single-home-continent nations the capital is the largest city. Earth
+    // is the exception: it has many sprawling megacities (the Great Lakes
+    // Megalopolis, Delhi, …) that can out-sprawl the administrative capital, Chengyu.
+    if (c.id !== 'earth')
+      check(`${c.capitalBodyName}: the capital is the biggest city`, cities.every((k) => urban(capital.node) > urban(k.node)), `${urban(capital.node)} vs ${cities.map((k) => urban(k.node)).join('/')}`)
+    else check(`${c.capitalBodyName}: the capital is a substantial megacity`, urban(capital.node) >= 7, `${urban(capital.node)} urban nodes`)
   }
   const mars = surfaceOf('Mars', 'capital')
   const cap = mars.keySlots.find((k) => k.kind === 'capital')!

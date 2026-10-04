@@ -64,9 +64,10 @@ export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
   // spaceport is added later).
   for (const slot of surface.keySlots) {
     if (slot.kind === 'fortress' || slot.site) continue
-    // A fixed, pre-named settlement (Earth's real survivor cities / launch sites).
+    // A fixed, pre-named settlement (Earth's real survivor cities / launch sites):
+    // use the name as given (it's already a real place like "Jiuquan Cosmodrome").
     if (slot.name) {
-      const label = slot.kind === 'spaceport' ? `${slot.name} Spaceport` : slot.kind === 'capital' ? `${slot.name} (capital)` : slot.name
+      const label = slot.kind === 'capital' ? `${slot.name} (capital)` : slot.kind === 'outpost' ? `${slot.name} Outpost` : slot.name
       out.set(slot.node, { name: slot.name, native: slot.kind === 'capital' ? country?.capitalCityNative : undefined, label })
       continue
     }
