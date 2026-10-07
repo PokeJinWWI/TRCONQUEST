@@ -169,7 +169,7 @@ export function advanceShipyard(country: Pick<Country, 'id' | 'capitalStarId' | 
   let orders = ordersFor(country.id)
   // An upgrade whose ship is gone (destroyed, scrapped, lost to a jump) is dropped, refunded in full.
   const live = new Set(useShipStore.getState().ships.map((s) => s.id))
-  const orphans = orders.filter((o) => o.upgradeShipId && !live.has(o.upgradeShipId))
+  const orphans = orders.filter((o) => (o.upgradeShipId && !live.has(o.upgradeShipId)) || (o.repairShipId && !live.has(o.repairShipId)))
   if (orphans.length > 0) {
     for (const o of orphans) refundCost(country.id, o.cost)
     orders = orders.filter((o) => !orphans.includes(o))
@@ -183,6 +183,7 @@ export function advanceShipyard(country: Pick<Country, 'id' | 'capitalStarId' | 
   setOrders(country.id, step.orders)
   for (const done of step.completed) {
     if (done.upgradeShipId) finishUpgrade(done)
+    else if (done.repairShipId) finishRepair(done)
     else spawnBuiltShip(done, country)
   }
 }
@@ -202,6 +203,14 @@ function finishUpgrade(order: ShipBuildOrder): void {
   const classId = bestLevelClass(order.classId, useTechStore.getState().stateFor(ship.ownerId).researched, resolveShipClass)
   const name = upgradedName(ship.name, resolveShipClass(ship.classId)?.name ?? '', resolveShipClass(classId)?.name ?? '')
   useShipStore.setState((s) => ({ ships: s.ships.map((sh) => (sh.id === ship.id ? { ...sh, classId, name, upgrading: undefined } : sh)) }))
+}
+
+// A repair finished: the ship is a pristine hull of its class again and free to move.
+function finishRepair(order: ShipBuildOrder): void {
+  const ship = useShipStore.getState().ships.find((s) => s.id === order.repairShipId)
+  const shipClass = ship ? resolveShipClass(ship.classId) : null
+  if (!ship || !shipClass) return
+  useShipStore.setState((s) => ({ ships: s.ships.map((sh) => (sh.id === ship.id ? { ...sh, combat: pristineCombatState(shipClass.combat), drift: null, upgrading: undefined } : sh)) }))
 }
 
 let spawnCounter = 0

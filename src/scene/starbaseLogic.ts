@@ -14,6 +14,8 @@ import {
   DEFENSE_MODULE_FIREPOWER,
   DEFENSE_MODULE_INTEGRITY,
   DEFENSE_MODULE_ARMOR,
+  STARBASE_INFLUENCE_COST,
+  STARBASE_INFLUENCE_PER_KLY,
   type StarbaseTier,
   type StarbaseModuleType,
 } from '../data/starbaseData'
@@ -97,6 +99,16 @@ export function isStarbaseActive(sb: Starbase, simDays: number): boolean {
 // nothing to stand at, so no Starbase can exist there either.
 export function starbaseAnchorBody(starId: string): string | null {
   return getSystemStars(starId)[0]?.name ?? null
+}
+
+// The influence a Starbase costs in `targetClusterId`: the base cost, plus
+// STARBASE_INFLUENCE_PER_KLY for every thousand light-years to the nearest of the
+// clusters the nation already stands in (`footholdClusterIds`: its capital's and
+// every one holding a Starbase of its own). Pure; `klyBetween` measures two clusters.
+export function starbaseInfluenceCost(targetClusterId: string, footholdClusterIds: readonly string[], klyBetween: (a: string, b: string) => number): number {
+  if (footholdClusterIds.length === 0 || footholdClusterIds.includes(targetClusterId)) return STARBASE_INFLUENCE_COST
+  const nearest = Math.min(...footholdClusterIds.map((id) => klyBetween(id, targetClusterId)))
+  return STARBASE_INFLUENCE_COST + Math.ceil(nearest * STARBASE_INFLUENCE_PER_KLY)
 }
 
 export function starbasesAt(starId: string, starbases: Starbase[]): Starbase[] {

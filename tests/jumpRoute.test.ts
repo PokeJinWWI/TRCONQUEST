@@ -115,7 +115,7 @@ const VENUS = 'republic-of-venus'
   // A charted lane is a cheaper edge for the nation that charted it only.
   useHyperlaneStore.getState().addHyperlane(MARS, 'sol', 'lalande-21185')
   const charted = plan('lalande-21185', 1)
-  check('once its own nation has charted the direct lane, the direct jump wins', charted.ok && charted.hops.join() === 'lalande-21185' && near(charted.totalLoss, direct * 0.2, 1e-6))
+  check('once its own nation has charted the direct lane, the direct jump wins', charted.ok && charted.hops.join() === 'lalande-21185' && near(charted.totalLoss, starJumpChance(ship, 'sol', 'lalande-21185')!, 1e-9) && charted.totalLoss < direct * 0.26)
   useHyperlaneStore.setState({ lanes: {} })
   useHyperlaneStore.getState().addHyperlane(VENUS, 'sol', 'lalande-21185')
   const foreign = plan('lalande-21185', 1)

@@ -3,7 +3,7 @@
 // barycenter from the StarData fields below. A multi-star system (Alpha
 // Centauri's three stars, Sirius's two, Luyten 726-8's two) lists each real
 // star here, positioned by `offsetAU` from the system barycenter.
-import { SOLAR_NEIGHBORHOOD_ID, findGeneratedStar, generatedStarsFor } from './galaxyGen'
+import { SOLAR_NEIGHBORHOOD_ID, findGeneratedStar, findGeneratedStarByName, generatedStarsFor } from './galaxyGen'
 
 export interface StarComponent {
   name: string
@@ -66,7 +66,9 @@ export function findSystemStar(name: string): StarComponent | undefined {
       if (c.name === name) return c
     }
   }
-  return undefined
+  // A generated star (another cluster's) is a single star named as its system.
+  const generated = findGeneratedStarByName(name)
+  return generated ? getSystemStars(generated.id)[0] : undefined
 }
 
 export const UNITS_PER_LY = 8

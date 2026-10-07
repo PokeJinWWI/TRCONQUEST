@@ -61,6 +61,8 @@ export interface TechNode {
   // until anomalousUnlocked() says so, which is a separate aggregate check
   // rather than an ordinary prerequisite (see that function's own comment).
   locked?: boolean
+  // What researching it gives, as short lines (shown with the description in the Technology panel and tree).
+  gives?: string[]
   // Resources CONSUMED on researching it, besides the research points (a Warp
   // Drive Mk takes exotic matter, a hyperdrive Mk hyperium). Blocked, with the
   // reason shown, while the nation has less (techStore.researchBlock). Free
@@ -117,6 +119,11 @@ const BRANCH_TECHS: TechNode[] = [
       "Continuous stationkeeping thrust, precisely countering a body's gravity well. A ship can hold any position it chooses instead of settling into a natural orbit — at the real cost, in reaction mass and power, of fighting gravity every second it does.",
     cost: 130,
     prerequisites: [['orbital-mechanics']],
+    gives: [
+      'More strategy options in combat: Swarm, Kite and Stall for a ship, and the Divide, Condense and Screen fleet strategies',
+      'Manual node control in the combat arena: send a ship to a chosen point (right-click, Shift to queue stops)',
+      'Ships stop falling into the gravity of the bodies around them (switch it off per ship or fleet to go back)',
+    ],
   },
   {
     id: 'orbital-construction',
@@ -574,6 +581,11 @@ export function findTech(id: string): TechNode | undefined {
 
 // A tree's own roots: nodes none of whose prerequisites are in `techs` (a
 // global root, or the first node of a tree that builds on another tree).
+// A tech's description plus what it gives, for tooltips.
+export function techSummary(node: Pick<TechNode, 'description' | 'gives'>): string {
+  return node.gives && node.gives.length > 0 ? `${node.description} Gives: ${node.gives.join('; ')}.` : node.description
+}
+
 export function localRoots(techs: TechNode[]): TechNode[] {
   const ids = new Set(techs.map((n) => n.id))
   const roots = techs.filter((n) => n.prerequisites.every((set) => set.every((id) => !ids.has(id))))
@@ -747,17 +759,19 @@ export function researchEtas(
   points: Record<TechCategory, number>,
   monthly: Record<TechCategory, number>,
   maxMonths = 360,
+  // Free Research (the dev cheat): every cost is waived, so whatever can be researched goes now.
+  freeCost = false,
 ): Map<string, number | null> {
   const eta = new Map<string, number | null>()
   const have = new Set(researched)
   const left = { ...points }
   let remaining = queue.filter((id) => !have.has(id))
   for (let month = 0; month <= maxMonths && remaining.length > 0; month++) {
-    const now = queuedResearchNow(remaining, have, left)
+    const now = queuedResearchNow(remaining, have, left, freeCost)
     for (const id of now) {
       const node = findTech(id)
       if (!node) continue
-      left[node.category] -= node.cost
+      if (!freeCost) left[node.category] -= node.cost
       have.add(id)
       eta.set(id, month)
     }
@@ -774,4 +788,61 @@ export function formatEta(months: number | null | undefined): string {
   if (months <= 0) return 'now'
   if (months < 24) return `about ${months} month${months === 1 ? '' : 's'}`
   return `about ${Math.round(months / 12)} years`
+}
+
+// What a tech shows as costing: nothing while Free Research waives it.
+export function shownCost(node: Pick<TechNode, 'cost'>, freeCost: boolean): number {
+  return freeCost ? 0 : node.cost
+}
+
+// The queue without whatever has been researched (by the queue or by hand).
+export function queueWithoutResearched(queue: readonly string[], researched: ReadonlySet<string>): string[] {
+  return queue.filter((id) => !researched.has(id))
+}
+
+// --- Toggling research by hand (the Sandbox) ---------------------------------------------------
+
+// Every tech of the default tree (what a Sandbox game starts with researched).
+export function allTechIds(): string[] {
+  return ALL_TECHS.map((t) => t.id)
+}
+
+// What un-researching `id` takes with it: the tech and, transitively, every researched tech that no
+// longer has its prerequisites (an OR of AND-sets, `prerequisitesMet`), plus the Anomalous Phenomena
+// gate if too few techs remain for it. Empty if `id` is not researched. Pure; the order is `ALL_TECHS`
+// order after `id`, which is stable for display.
+export function unresearchPlan(id: string, researched: ReadonlySet<string>): string[] {
+  if (!researched.has(id)) return []
+  const have = new Set(researched)
+  have.delete(id)
+  const removed = [id]
+  for (let changed = true; changed; ) {
+    changed = false
+    for (const node of ALL_TECHS) {
+      if (!have.has(node.id)) continue
+      if (!prerequisitesMet(node, have) || (node.locked === true && !anomalousUnlocked(have))) {
+        have.delete(node.id)
+        removed.push(node.id)
+        changed = true
+      }
+    }
+  }
+  return removed
+}
+
+// What researching `id` by hand adds so the tree stays consistent: whatever prerequisites it is missing
+// (fewest first, depth first) and then itself. Empty if it is already researched. It does not look at
+// cost, points or the Anomalous gate: the caller decides what researching is allowed to cost.
+export function researchPlan(id: string, researched: ReadonlySet<string>): string[] {
+  return queuePlan(id, researched, [])
+}
+
+// The lines a confirmation shows for un-researching `plan` (plan[0] is the clicked tech): empty when
+// nothing but the tech itself goes.
+export function unresearchEffects(plan: readonly string[], maxNamed = 8): string[] {
+  const rest = plan.slice(1)
+  if (rest.length === 0) return []
+  const names = rest.map((id) => findTech(id)?.name ?? id)
+  const shown = names.slice(0, maxNamed).join(', ')
+  return [`Also un-researches ${rest.length}: ${shown}${names.length > maxNamed ? ` and ${names.length - maxNamed} more` : ''}`]
 }

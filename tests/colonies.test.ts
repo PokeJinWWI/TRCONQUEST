@@ -96,7 +96,7 @@ console.log('\n=== 2. Influence costs: a Starbase 30, a colony nothing ===')
   const rules = colonies.slice(colonies.indexOf('export type ColonizeResult'), colonies.indexOf('export function sendToColonize'))
   const ui = strip('src/scene/ShipColonySection.tsx') + strip('src/scene/BodyOrderMenu.tsx') + strip('src/components/InspectPanel.tsx')
   check('colonizing never reads or charges Influence (rules, menus, panels carry no cost or text)', rules.length > 500 && !/influence/i.test(rules) && !/influence/i.test(ui) && !/colonyCostFor|colonyInfluenceCost|COLONY_COST/.test(colonies + ui))
-  check('the AI Expander and the player Starbase rule read the same constant', /STARBASE_INFLUENCE_COST/.test(strip('src/ai/expander.ts')) && /STARBASE_INFLUENCE_COST/.test(strip('src/state/starbaseStore.ts')) && !/influence >= \w*[Cc]olon/.test(strip('src/ai/expander.ts')))
+  check('the AI Expander and the player Starbase rule read the same cost (starbaseInfluenceCostFor, built on the constant)', /starbaseInfluenceCostFor/.test(strip('src/ai/expander.ts')) && /starbaseInfluenceCostFor/.test(strip('src/state/starbaseStore.ts')) && /STARBASE_INFLUENCE_COST/.test(strip('src/scene/starbaseLogic.ts')) && !/influence >= \w*[Cc]olon/.test(strip('src/ai/expander.ts')))
 }
 
 console.log('\n=== 3. When a Colony Ship can found a colony ===')
@@ -110,13 +110,21 @@ console.log('\n=== 3. When a Colony Ship can found a colony ===')
   usePlayerStore.setState({ economyModel: 'complex' })
   check('not in Complex mode', /Simple economy mode/.test(reason()), reason())
   usePlayerStore.setState({ economyModel: 'abstract' })
-  check('not before the world is surveyed', /Survey Titan first/.test(reason()), reason())
+  // A world of a system the nation holds nothing in needs a survey; one of its own system (Titan,
+  // for Mars) is already known (the one survey rule: tests/colonySurvey.test.ts).
+  check('not before the world is surveyed', /Survey Barnard b first/.test(reason('Barnard b', true)) && !/Survey/.test(reason()), reason('Barnard b', true))
   survey(MARS, 'Titan')
-  check('not without a Starbase of your own in the system', /Needs a Starbase of your own in Sol/.test(reason()), reason())
-  useStarbaseStore.setState({ starbases: [{ id: 'sb-sol-venus', starId: 'sol', ownerId: VENUS, integrity: 50, readySimDays: 0 }] })
-  check("...someone else's won't do", /Needs a Starbase of your own/.test(reason()), reason())
-  useStarbaseStore.setState({ starbases: [{ id: 'sb-sol-mars', starId: 'sol', ownerId: MARS, integrity: 50, readySimDays: 5 }] })
-  check('...nor one still being built', /Needs a Starbase of your own/.test(reason()), reason())
+  // Abroad the Starbase rule holds; the nation's own home system (Sol, for Mars) needs none.
+  survey(MARS, 'Barnard b')
+  check('abroad: not without a Starbase of your own in the system', /Needs a Starbase of your own in Barnard/.test(reason('Barnard b', true)), reason('Barnard b', true))
+  useStarbaseStore.setState({ starbases: [{ id: 'sb-barnard-venus', starId: 'barnards-star', ownerId: VENUS, integrity: 50, readySimDays: 0 }] })
+  check("...someone else's won't do", /Needs a Starbase of your own/.test(reason('Barnard b', true)), reason('Barnard b', true))
+  useStarbaseStore.setState({ starbases: [{ id: 'sb-barnard-mars', starId: 'barnards-star', ownerId: MARS, integrity: 50, readySimDays: 5 }] })
+  check('...nor one still being built', /Needs a Starbase of your own/.test(reason('Barnard b', true)), reason('Barnard b', true))
+  useStarbaseStore.setState({ starbases: [{ id: 'sb-barnard-mars', starId: 'barnards-star', ownerId: MARS, integrity: 50, readySimDays: 0 }] })
+  check('...a finished one of its own does', !/Starbase/.test(reason('Barnard b', true)), reason('Barnard b', true))
+  useStarbaseStore.setState({ starbases: [] })
+  check('in the home system no Starbase is needed', !/Starbase/.test(reason()), reason())
   useStarbaseStore.setState({ starbases: [{ id: 'sb-sol-mars', starId: 'sol', ownerId: MARS, integrity: 50, readySimDays: 0 }] })
   check('not with no settlers aboard', /no settlers/.test(reason()), reason())
   useShipStore.getState().setSettlers(id, COLONY_SHIP_SETTLERS)
@@ -292,7 +300,7 @@ console.log('\n=== 8. AI empires colonize and patrol by the same rules (headless
   }
   const colony = firstColony ? useColonyStore.getState().colonies[firstColony.body] : undefined
   const owner = firstColony ? useTerritoryStore.getState().bodyOwner[firstColony.body] : undefined
-  check('...only where it has a Starbase', !!firstColony && useStarbaseStore.getState().starbases.some((sb) => sb.ownerId === owner && sb.starId === bodyStarId(firstColony!.body)))
+  check('...only where it has a Starbase (or in its own home system)', !!firstColony && useStarbaseStore.getState().starbases.some((sb) => sb.ownerId === owner && sb.starId === bodyStarId(firstColony!.body)) || bodyStarId(firstColony!.body) === COUNTRIES.find((c) => c.id === owner)?.capitalStarId)
   check('an AI empire builds a Colony Ship and founds a colony', !!firstColony && !!owner && owner !== LALANDE, JSON.stringify(firstColony) + ' by ' + owner)
   check('...puts a warship on patrol there', patrolSeen)
   check('...and the colony becomes planetary', colony?.stage === 'planetary', colony?.stage)

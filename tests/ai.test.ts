@@ -334,6 +334,11 @@ console.log('\n=== 4b. The Expander ===')
   }
 
   setTech(MARS, ['orbital-construction'])
+  // One build a pass, in the Expander's order: a Colony Ship comes first while there is a
+  // world to settle (its home system needs no Starbase), then the Construction Ship.
+  const firstBuild = plan(MARS).intents.find((i) => i.kind === 'build-ship')
+  check('a world to settle at home comes first: a Colony Ship', firstBuild?.kind === 'build-ship' && firstBuild.classId === 'colony-ship', JSON.stringify(firstBuild))
+  spawnExtra(MARS, 'colony-ship', 1)
   check('once it can build Starbases it wants a Construction Ship', plan(MARS).intents.some((i) => i.kind === 'build-ship' && i.classId === 'construction-ship'))
 
   // A surveyed, unclaimed star with a Construction Ship at home: it loads a kit.

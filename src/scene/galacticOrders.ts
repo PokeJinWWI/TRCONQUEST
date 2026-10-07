@@ -5,6 +5,8 @@
 import { Vector3 } from 'three'
 import type { MoveDestination, ShipInstance } from '../state/shipStore'
 import { clusterScenePosition, isGalacticDestination, isShipInGalacticSpace } from './shipPhysics'
+import { laneEndpoints } from './hyperlanes'
+import { shipClusterId } from './clusters'
 
 // A destination in the galactic frame, or null when it is not one (a star or a world is
 // a place inside a neighbourhood: this view has no coordinate for it).
@@ -32,4 +34,30 @@ export function galacticOrderLines(ships: readonly ShipInstance[], playerId: str
     pending: own.filter((s) => s.pendingMoveOrder && isGalacticDestination(s.pendingMoveOrder.destination)),
     queued: own.filter((s) => (s.orderQueue?.length ?? 0) > 0 && s.order && isGalacticDestination(s.order.destination)),
   }
+}
+
+// The charted hyperlanes BETWEEN clusters (lane keys of two cluster ids; a star-to-star
+// lane is no cluster's and is skipped), as pairs of points for ONE LineSegments draw call.
+// `clusterPosition` returns null for an id that is no cluster.
+export function clusterLaneSegments(lanes: readonly string[], clusterPosition: (id: string) => readonly [number, number, number] | null): Float32Array {
+  const out: number[] = []
+  for (const key of lanes) {
+    const [a, b] = laneEndpoints(key)
+    const pa = clusterPosition(a)
+    const pb = clusterPosition(b)
+    if (pa && pb) out.push(...pa, ...pb)
+  }
+  return new Float32Array(out)
+}
+
+// The player's ships that are inside a cluster (not out between clusters), by cluster: one
+// presence badge each in the galactic view.
+export function shipsByCluster(ships: readonly ShipInstance[]): Map<string, ShipInstance[]> {
+  const map = new Map<string, ShipInstance[]>()
+  for (const ship of ships) {
+    const cluster = shipClusterId(ship)
+    if (cluster === null || isShipInGalacticSpace(ship)) continue
+    map.set(cluster, [...(map.get(cluster) ?? []), ship])
+  }
+  return map
 }

@@ -10,13 +10,15 @@ import { Html, OrbitControls, Stars } from '@react-three/drei'
 import { Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { StarData } from '../data/starData'
-import { getStarsForNeighborhood, starScenePosition, STARS } from '../data/starData'
+import { findStar, getStarsForNeighborhood, starScenePosition, STARS } from '../data/starData'
+import { jumpRiskLine } from './jumpConfirm'
 import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
 import { useViewStore } from '../state/viewStore'
 import type { ShipInstance, MoveDestination } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
 import { useHyperlaneStore, laneEndpoints, allLanesOf } from '../state/hyperlaneStore'
 import { CameraFocusRig } from './CameraFocusRig'
+import { CLUSTER_FIT_MARGIN, boundingSphere, cameraAlong, fitDistance, visibleAspect } from './framing'
 import { SelectionTracker } from './SelectionTracker'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
@@ -27,7 +29,8 @@ import { PendingOrderLine } from './PendingOrderLine'
 import { QueuedRouteLine } from './QueuedRouteLine'
 import { CommsSignals } from './CommsSignals'
 import { ShipPanel } from './ShipPanel'
-import { shipSystemId, clusterRestingShipsByFleet, hyperdriveJumpChance } from './shipPhysics'
+import { shipSystemId, clusterRestingShipsByFleet } from './shipPhysics'
+import { shipClusterId } from './clusters'
 import { useShipOrderMenu } from './ShipOrderMenu'
 import { orderSelectedFleets, playerShipRenderPosition } from './commsVisual'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -36,14 +39,17 @@ import { DraggableWindow } from '../components/DraggableWindow'
 import { RELATION_COLORS, type ShipRelation } from '../data/shipData'
 import { relationOfOwner, useRelationKey } from '../state/shipRelations'
 import { useTerritoryStore } from '../state/territoryStore'
-import { systemClaim, type SystemClaim } from './territory'
+import { type SystemClaim } from './territory'
+import { ownerInfoOf } from '../data/ownerInfo'
+import { UNKNOWN_EMPIRE_ID, shownClaim } from './encroachment'
 import { getCountry } from '../data/countryData'
 import { usePlayerStore } from '../state/playerStore'
-import { canBuildStarbase, useStarbaseStore } from '../state/starbaseStore'
+import { canBuildStarbase, starbaseInfluenceCostFor, useStarbaseStore } from '../state/starbaseStore'
+import { useResourceStore } from '../state/resourceStore'
+import { starbaseActionTitle, starbaseShortReason, withStarbaseCost } from './starbaseNotices'
 import { starbaseOwnersOf, starbasesAt } from './starbaseLogic'
 import { TerritoryDiscs } from './TerritoryDiscs'
 import { ObserverLayer } from './ObserverLayer'
-import { empireClaimsByStar } from './observerView'
 import { useObserverStore } from '../state/observerStore'
 import { ContextMenu, type ContextMenuItem } from './StarContextMenu'
 import { HoverTip } from '../components/HoverTip'
@@ -63,21 +69,23 @@ const UNCLAIMED: SystemClaim = { kind: 'unclaimed' }
 const NO_LANES: string[] = []
 const NO_SHIPS: ShipInstance[] = []
 
-// "Jump risk: 43% (by distance and the destination's mass)" for the riskiest of
-// the selected ships that would hyperdrive to `starId`; null if none would.
+// The risk tip for the riskiest of the selected ships that would hyperdrive to `starId`: the real
+// number the order would roll (scene/jumpConfirm.jumpRiskLine), for any star of the cluster on
+// screen; null if none would jump.
 function jumpRiskText(selected: ShipInstance[], starId: string): string | null {
-  // Only our own neighbourhood's stars can be jumped to.
-  if (!STARS.some((s) => s.id === starId)) return null
-  const simDays = useGameTimeStore.getState().simDays
-  const chances = selected.map((s) => hyperdriveJumpChance(s, starId, simDays)).filter((c): c is number => c !== null)
-  if (chances.length === 0) return null
-  return `Jump risk: ${Math.round(Math.max(...chances) * 100)}% chance the ship is lost (it grows with distance and the destination's mass)`
+  if (!findStar(starId)) return null
+  return jumpRiskLine(selected, { kind: 'star', starId })
 }
 const MAX_DISTANCE = 4200
 const EXIT_DISTANCE = 3500
-// Where the camera opens when zoomed in from the galaxy: far out, a little
-// inside EXIT_DISTANCE so it doesn't zoom straight back out.
-const GALAXY_ARRIVAL_DISTANCE = 2600
+// The camera's field of view (the Canvas below) and the closest a fitted opening gets.
+const CAMERA_FOV_DEG = 50
+const FIT_MIN_DISTANCE = 60
+// The two side panels (the nav and the Outliner) cover this much of the canvas's width together.
+const SIDE_PANELS_PX = 440
+// A fitted opening looks down more steeply than the plain default (a cluster is about as wide as it is
+// deep and a good deal flatter): along the default's low angle its stars pile up behind one another.
+const FIT_CAMERA_DIRECTION: [number, number, number] = [20, 70, 40]
 // The plain "just arrived, nothing selected" camera position — used both as
 // the far-view starting position AND, translated to sit next to whichever
 // star a continuity arrival is returning to (see continuityStarPosition
@@ -168,8 +176,8 @@ interface StarNodeProps {
 // one level out by GalacticViewScene for the neighbourhood-level indicator.
 export function claimRingStyle(claim: SystemClaim): React.CSSProperties | null {
   if (claim.kind === 'unclaimed') return null
-  if (claim.kind === 'owned') return { borderColor: getCountry(claim.countryId)?.color ?? '#888' }
-  const colors = claim.countryIds.map((id) => getCountry(id)?.color ?? '#888')
+  if (claim.kind === 'owned') return { borderColor: ownerInfoOf(claim.countryId)?.color ?? '#888' }
+  const colors = claim.countryIds.map((id) => ownerInfoOf(id)?.color ?? '#888')
   const at = (i: number) => colors[i % colors.length]
   return { borderTopColor: at(0), borderRightColor: at(1), borderBottomColor: at(2), borderLeftColor: at(3) }
 }
@@ -264,9 +272,9 @@ export function InterstellarScene() {
   const [flyingToShip, setFlyingToShip] = useState(false)
   // Which neighborhood's stars this view is currently showing: ours, or a
   // generated one (starData.getStarsForNeighborhood).
-  // Ships, their orders and signals, charted lanes and move orders all live in
-  // OUR neighbourhood's frame (positions in light-years from Sol), so in any
-  // other neighbourhood none of them is drawn and no order can be given.
+  // Every cluster has its own interstellar map (positions in light-years from
+  // its centre: scene/clusters.ts). The view shows the ships, orders and charted
+  // lanes of the cluster on screen, and orders given here go to its stars.
   const home = selectedNeighborhoodId === SOLAR_NEIGHBORHOOD_ID
   const STARS = useMemo(() => getStarsForNeighborhood(selectedNeighborhoodId), [selectedNeighborhoodId])
   const selectedStar = useMemo(() => STARS.find((s) => s.id === selectedId) ?? null, [STARS, selectedId])
@@ -303,20 +311,20 @@ export function InterstellarScene() {
   // inside the distance that zooms back out (EXIT_DISTANCE), the mirror of
   // leaving. Read once at mount, like the continuity star.
   const fromGalaxyRef = useRef(useViewStore.getState().interstellarFromGalaxy && !continuityStarIdRef.current)
-  const clusterCentre = useMemo<[number, number, number]>(() => {
-    if (STARS.length === 0) return [0, 0, 0]
-    const sum = STARS.reduce((acc, s) => {
-      const p = starScenePosition(s)
-      return [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]]
-    }, [0, 0, 0])
-    return [sum[0] / STARS.length, sum[1] / STARS.length, sum[2] / STARS.length]
+  // A cluster's map opens FITTED to its stars (scene/framing.ts), not far out: the
+  // galaxy's own arrival (and any arrival at another cluster) looks at the middle of
+  // its stars from just far enough to hold them all. The Solar Neighbourhood reached
+  // some other way keeps its plain near default.
+  const fitCluster = (fromGalaxyRef.current || !home) && !continuityStarIdRef.current
+  const clusterFrame = useMemo(() => boundingSphere(STARS.map(starScenePosition)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    [])
+  const clusterCentre = clusterFrame.centre
   const initialCameraPosition = useMemo<[number, number, number]>(() => {
-    if (fromGalaxyRef.current) {
-      const len = Math.hypot(...DEFAULT_CAMERA_OFFSET)
-      const k = GALAXY_ARRIVAL_DISTANCE / len
-      return [clusterCentre[0] + DEFAULT_CAMERA_OFFSET[0] * k, clusterCentre[1] + DEFAULT_CAMERA_OFFSET[1] * k, clusterCentre[2] + DEFAULT_CAMERA_OFFSET[2] * k]
+    if (fitCluster) {
+      const aspect = Math.min(visibleAspect(window.innerWidth, window.innerHeight, SIDE_PANELS_PX), 1.2)
+      const distance = Math.max(fitDistance(clusterFrame.radius, CAMERA_FOV_DEG, aspect, CLUSTER_FIT_MARGIN), FIT_MIN_DISTANCE)
+      return cameraAlong(clusterCentre, FIT_CAMERA_DIRECTION, distance)
     }
     if (!continuityStarPosition) return DEFAULT_CAMERA_OFFSET
     return [
@@ -327,7 +335,8 @@ export function InterstellarScene() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const initialTarget = useMemo<[number, number, number]>(
-    () => (fromGalaxyRef.current ? clusterCentre : (continuityStarPosition ?? [0, 0, 0])),
+    () => (fitCluster ? clusterCentre : (continuityStarPosition ?? [0, 0, 0])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [continuityStarPosition, clusterCentre],
   )
 
@@ -339,11 +348,12 @@ export function InterstellarScene() {
   // (below) every nation's.
   const lanesByNation = useHyperlaneStore((s) => s.lanes)
   const lanePlayerId = usePlayerStore((s) => s.selectedCountryId)
-  const lanes = home && lanePlayerId ? lanesByNation[lanePlayerId] ?? NO_LANES : NO_LANES
+  // (A lane whose stars are not on this map, another cluster's or a cluster lane, draws nothing.)
+  const lanes = lanePlayerId ? lanesByNation[lanePlayerId] ?? NO_LANES : NO_LANES
   const allLanes = useMemo(() => allLanesOf(lanesByNation), [lanesByNation])
   const interstellarShips = useMemo(
-    () => (home ? ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind)) : []),
-    [ships, home],
+    () => ships.filter((ship) => isShipInInterstellarSpace(ship.order, ship.location.kind) && shipClusterId(ship) === selectedNeighborhoodId),
+    [ships, selectedNeighborhoodId],
   )
   // One marker per fleet resting together, not per ship — see
   // shipPhysics.clusterRestingShipsByFleet.
@@ -393,11 +403,10 @@ export function InterstellarScene() {
   const claimsByStar = useMemo(
     () => {
       const simDays = useGameTimeStore.getState().simDays
-      const all = new Map(STARS.map((star) => [star.id, systemClaim(star.id, bodyOwner, starbaseOwnersOf(star.id, starbases, simDays))]))
-      if (observer) {
-        for (const [id, claim] of empireClaimsByStar(STARS)) all.set(id, claim)
-        return all
-      }
+      // Body owners and live Starbases, plus the empire that owns the star: by name in
+      // Observer mode, as "Unknown empire" otherwise (scene/encroachment.shownClaim).
+      const all = new Map(STARS.map((star) => [star.id, shownClaim(star.id, bodyOwner, starbaseOwnersOf(star.id, starbases, simDays), observer)]))
+      if (observer) return all
       return visibleClaims(all, intel.known)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -457,8 +466,6 @@ export function InterstellarScene() {
     if (isNewTabModifierHeld()) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: star.id, selectedShipId: null })
     // With none of your ships selected, a right click opens the star's panel full screen.
     if (!hasOwnShipSelected()) return openInViewFull(star.id, 'star')
-    // No ship can leave our neighbourhood yet.
-    if (!home) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
     // With a science or construction ship selected the right-click offers what
@@ -510,10 +517,12 @@ export function InterstellarScene() {
       const checks = builders.map((b) => canBuildStarbase(b.ownerId, star.id, useStarbaseStore.getState().starbases, b.id, { anywhere: true }))
       const ok = checks.some((c) => c.ok)
       const firstReason = checks.find((c) => !c.ok)
+      const cost = starbaseInfluenceCostFor(builders[0].ownerId, star.id, useStarbaseStore.getState().starbases)
+      const short = starbaseShortReason(cost, useResourceStore.getState().stateFor(builders[0].ownerId).amounts.influence ?? 0)
       items.push({
-        label: 'Build Starbase',
+        label: withStarbaseCost('Build Starbase', cost),
         disabled: !ok,
-        title: ok ? 'Fly there and build a Starbase from the hold' : firstReason && !firstReason.ok ? firstReason.reason : undefined,
+        title: starbaseActionTitle(ok, firstReason && !firstReason.ok ? firstReason.reason : null, short, cost, 'Fly there and build a Starbase from the hold'),
         onClick: () => orderSelectedToDoAt(star.id, { kind: 'build-starbase' }),
       })
     }
@@ -521,10 +530,11 @@ export function InterstellarScene() {
   }
 
   const handleOrderToPoint = (point: [number, number, number]) => {
-    if (!selectedShipId || !home) return
+    if (!selectedShipId) return
     const ship = ships.find((s) => s.id === selectedShipId)
     if (!ship) return
-    orderSelectedFleets({ kind: 'interstellar-point', position: point })
+    // A point of THIS cluster's map (absent = the Solar Neighbourhood's).
+    orderSelectedFleets(home ? { kind: 'interstellar-point', position: point } : { kind: 'interstellar-point', position: point, clusterId: selectedNeighborhoodId })
   }
 
   // Right-clicking another ship while one is selected opens a menu: Move
@@ -548,7 +558,7 @@ export function InterstellarScene() {
 
   return (
     <div className="interstellar-wrapper">
-      <Canvas camera={{ position: initialCameraPosition, fov: 50, near: 0.05, far: 5000 }} onPointerMissed={handleUnfocus}>
+      <Canvas camera={{ position: initialCameraPosition, fov: CAMERA_FOV_DEG, near: 0.05, far: 5000 }} onPointerMissed={handleUnfocus}>
         <color attach="background" args={['#020409']} />
         <KeyboardPan controlsRef={controlsRef} />
         <ambientLight intensity={0.3} />
@@ -771,10 +781,10 @@ export function InterstellarScene() {
                 )
               }
               if (claim.kind === 'owned') {
-                const country = getCountry(claim.countryId)
+                const country = ownerInfoOf(claim.countryId)
                 return (
                   <div className="inspect-row">
-                    <span className="inspect-label">Owner</span>
+                    <span className="inspect-label">{claim.countryId === UNKNOWN_EMPIRE_ID ? 'Claimed by' : 'Owner'}</span>
                     <span className="inspect-value" style={{ color: country?.color }}>
                       {country?.name ?? claim.countryId}
                     </span>
@@ -786,9 +796,9 @@ export function InterstellarScene() {
                   <span className="inspect-label">Contested by</span>
                   <span className="inspect-value">
                     {claim.countryIds.map((id, i) => (
-                      <span key={id} style={{ color: getCountry(id)?.color }}>
+                      <span key={id} style={{ color: ownerInfoOf(id)?.color }}>
                         {i > 0 ? ', ' : ''}
-                        {getCountry(id)?.name ?? id}
+                        {ownerInfoOf(id)?.name ?? id}
                       </span>
                     ))}
                   </span>

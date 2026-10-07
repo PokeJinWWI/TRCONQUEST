@@ -11,9 +11,11 @@ import { useGameTimeStore } from '../src/state/gameTimeStore'
 import { HYPERDRIVE_BASE_LOSS_CHANCE, HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE } from '../src/data/shipData'
 import { STARS } from '../src/data/starData'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
-import { hyperdriveJumpChance, hyperdriveJumpRiskFactor, planMoveUnchecked, setJumpRoll } from '../src/scene/shipPhysics'
+import { hyperdriveJumpChance, hyperdriveJumpRiskFactor, planMoveUnchecked, setJumpRoll, starJumpChance } from '../src/scene/shipPhysics'
 import { applyMoveResult } from '../src/scene/commsVisual'
 import { laneSegments } from '../src/scene/observerView'
+import { hyperdriveMkLoss } from '../src/data/warpData'
+import { JUMP_WARN_LOSS } from '../src/scene/jumpWarning'
 import { resetGame } from '../src/scene/gameReset'
 
 let failures = 0
@@ -73,7 +75,7 @@ console.log('\n=== 3. One nation\'s lane is not another\'s ===')
 
   const m2 = spawnOwnedShip('science-ship', MARS, 'sol', 'Mars')!
   const after = { m: hyperdriveJumpChance(ship(m2), 'alpha-centauri', 0)!, v: hyperdriveJumpChance(ship(v), 'alpha-centauri', 0)! }
-  check('Mars\'s next jump there is a fifth as risky (the charted-lane ratio, unchanged)', near(after.m, before.m * (HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE / HYPERDRIVE_BASE_LOSS_CHANCE)), `${(after.m * 100).toFixed(1)}%`)
+  check('Mars\'s next jump there is on the lane: a fifth of the distance risk, the destination\'s mass no longer counted', near(after.m, HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE * hyperdriveJumpRiskFactor(ship(m2), 'alpha-centauri', 0, true)) && after.m < before.m * 0.26, `${(after.m * 100).toFixed(1)}%`)
   check('Venus\'s is exactly what it was: it cannot use Mars\'s lane', after.v === before.v, `${(after.v * 100).toFixed(1)}%`)
   // The roll itself uses the same per-nation lane.
   setJumpRoll(() => (after.m + before.v) / 2)
@@ -91,6 +93,34 @@ console.log('\n=== 3. One nation\'s lane is not another\'s ===')
 
   resetGame()
   check('a new game starts with no lanes', Object.keys(useHyperlaneStore.getState().lanes).length === 0)
+}
+
+console.log('\n=== 5. A charted lane is as safe one way as the other (the mass factor is for blind jumps only) ===')
+{
+  usePlayerStore.setState({ selectedCountryId: MARS, sandbox: false, economyModel: 'abstract' })
+  useGameTimeStore.setState({ simDays: 0, paused: false })
+  useShipStore.setState({ ships: [] })
+  useHyperlaneStore.setState({ lanes: {} })
+  const atSol = spawnOwnedShip('science-ship', MARS, 'sol', 'Mars')!
+  const atBarnard = spawnOwnedShip('science-ship', MARS, 'sol', 'Mars')!
+  useShipStore.getState().setShipLocation(atBarnard, { kind: 'orbiting', systemId: 'barnards-star', bodyName: "Barnard's Star", periodDays: 20, phaseDeg: 0, inclinationDeg: 0 })
+  const out = () => hyperdriveJumpChance(ship(atSol), 'barnards-star', 0)!
+  const back = () => hyperdriveJumpChance(ship(atBarnard), 'sol', 0)!
+  const blind = { out: out(), back: back() }
+  check('uncharted, the jump toward the heavier star (Sol) is the riskier one', blind.back > blind.out, `${(blind.out * 100).toFixed(1)}% out, ${(blind.back * 100).toFixed(1)}% back`)
+  useHyperlaneStore.getState().addHyperlane(MARS, 'sol', 'barnards-star')
+  const ly = Math.hypot(...STARS.find((s) => s.id === 'barnards-star')!.position)
+  const lane = hyperdriveMkLoss(1, ly) * (HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE / HYPERDRIVE_BASE_LOSS_CHANCE)
+  check('charted, both directions carry the same risk', near(out(), back()), `${(out() * 100).toFixed(1)}% out, ${(back() * 100).toFixed(1)}% back`)
+  check('...a fifth of the distance risk alone, no mass factor', near(out(), lane, 1e-9) && near(back(), lane, 1e-9), `${(lane * 100).toFixed(1)}%`)
+  check('...which is under the 5% warning line both ways', out() <= JUMP_WARN_LOSS && back() <= JUMP_WARN_LOSS)
+  check('the route planner sees the same number', near(starJumpChance(ship(atSol), 'barnards-star', 'sol')!, lane, 1e-9) && near(starJumpChance(ship(atSol), 'sol', 'barnards-star')!, lane, 1e-9))
+  // The roll itself: between the old 5.8% and the new 4.6%, the jump home now arrives.
+  setJumpRoll(() => 0.05)
+  check('the jump home is rolled against the lane\'s risk', planMoveUnchecked(ship(atBarnard), { kind: 'star', starId: 'sol' }, 0).kind === 'instant')
+  setJumpRoll(null)
+  useHyperlaneStore.setState({ lanes: {} })
+  check('with the lane gone the mass factor is back', near(back(), blind.back) && near(out(), blind.out))
 }
 
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILED`}`)

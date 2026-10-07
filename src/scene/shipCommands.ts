@@ -6,11 +6,13 @@
 // sends its commands the same way (queueShipCommand): a nation's orders wait on
 // its own comms tier, whoever gives them.
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { useShipStore, type ShipCommand } from '../state/shipStore'
+import { useShipStore, type MoveDestination, type ShipCommand } from '../state/shipStore'
 import { useSurveyStore } from '../state/surveyStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useResourceStore } from '../state/resourceStore'
+import type { ResourceId } from '../data/resourceData'
+import type { ResourceCost } from '../data/shipyardData'
 import { useShipyardStore } from '../state/shipyardStore'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { useTechStore } from '../state/techStore'
@@ -18,6 +20,7 @@ import { getCountry } from '../data/countryData'
 import { commsTierFor } from '../data/commsData'
 import { commsInstantContact, orderSelectedFleets, ownerCommsDelayToShip, shipCommsDelayDays } from './commsVisual'
 import { isPlayerOwned } from '../state/shipRelations'
+import { confirmRiskyJump } from './jumpConfirm'
 import { cargoPlus, cargoSpace, clampToSpace, loadingBody, transferCheck, cargoMinus } from './cargoLogic'
 import { spendCost } from './shipyardLogic'
 import { restingStarId, surveyJobBodies, systemOfShip } from './surveyLogic'
@@ -65,6 +68,15 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
       useShipStore.getState().setShipCargo(shipId, cargoPlus(ship.cargo, taken))
       return
     }
+    case 'unload': {
+      if (!loadingBody(ship, useTerritoryStore.getState().bodyOwner).ok) return
+      const hold = ship.cargo ?? {}
+      const put = command.want ? clampToSpace(command.want, hold, Infinity) : (Object.fromEntries(Object.entries(hold).filter(([, n]) => (n ?? 0) > 0)) as ResourceCost)
+      if (Object.keys(put).length === 0) return
+      for (const [id, n] of Object.entries(put) as [ResourceId, number][]) useResourceStore.getState().addAmount(ship.ownerId, id, n)
+      useShipStore.getState().setShipCargo(shipId, cargoMinus(hold, put))
+      return
+    }
     case 'transfer': {
       const to = useShipStore.getState().ships.find((s) => s.id === command.toShipId)
       if (!to || !transferCheck(ship, to).ok) return
@@ -87,6 +99,9 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
       return
     case 'upgrade':
       useShipyardStore.getState().queueUpgrade(ship.ownerId, shipId, simDays)
+      return
+    case 'repair':
+      useShipyardStore.getState().queueRepair(ship.ownerId, shipId, simDays)
       return
     case 'attack': {
       // Chase it and fight where they meet (scene/aggression.ts).
@@ -135,12 +150,17 @@ export function commandRole(command: ShipCommand): 'science' | 'construction' | 
 
 // "Survey" from a right-click menu: every selected Science Ship surveys the
 // system (or one body of it), flying to each body in turn.
+// The survey job flies the ship itself, so a jump to another star is asked about here
+// (scene/jumpConfirm.confirmRiskyJump: one question for every selected Science Ship, as
+// for any other order; a ship already in the system does not jump and is not asked).
 export function orderSelectedToSurvey(starId: string, bodyName?: string): void {
   const store = useShipStore.getState()
-  for (const s of store.ships) {
-    if (!store.selectedShipIds.includes(s.id) || !isPlayerOwned(s) || resolveShipClass(s.classId)?.role !== 'science') continue
-    queueShipCommand(s.id, { kind: 'survey', starId, bodyName })
-  }
+  const science = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s) && resolveShipClass(s.classId)?.role === 'science')
+  if (science.length === 0) return
+  const destination: MoveDestination = bodyName ? { kind: 'body', systemId: starId, bodyName } : { kind: 'star', starId }
+  confirmRiskyJump(science, destination, () => {
+    for (const s of science) queueShipCommand(s.id, { kind: 'survey', starId, bodyName })
+  })
 }
 
 // A star's right-click menu action: every selected ship of the right kind does

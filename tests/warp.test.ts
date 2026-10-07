@@ -235,7 +235,8 @@ console.log('\n=== 7. A hyperdrive jumps anywhere outside its own system ===')
   // The lane is used by every later jump between the two systems, wherever it lands.
   const back = spawn('science-ship')
   const charted = hyperdriveJumpChance(ship(back), AC, 0)!
-  check('a charted lane cuts the risk of a jump into that system', near(charted / chanceBefore, HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE / HYPERDRIVE_BASE_LOSS_CHANCE), `${(chanceBefore * 100).toFixed(0)}% uncharted, ${(charted * 100).toFixed(0)}% charted`)
+  // (About a fifth: exactly a fifth of the distance risk, the destination's mass factor dropped on a lane.)
+  check('a charted lane cuts the risk of a jump into that system', charted / chanceBefore > 0.15 && charted / chanceBefore < 0.26, `${(chanceBefore * 100).toFixed(0)}% uncharted, ${(charted * 100).toFixed(0)}% charted`)
   let lost = 0
   setJumpRoll(() => (charted + chanceBefore) / 2)
   if (planMoveUnchecked(ship(back), toAcBody, 0).kind === 'lost-in-hyperspace') lost++

@@ -15,6 +15,11 @@ export const STARBASE_COST: ResourceCost = { alloys: 220 }
 // Influence a nation pays to claim a system with a Starbase (paid when it starts
 // building). Colonizing costs no influence. The player and the AI both read this.
 export const STARBASE_INFLUENCE_COST = 30
+// ...plus this much for every thousand light-years between the system's cluster and
+// the nearest cluster the nation already stands in (its capital's, or one holding a
+// Starbase of its own): nothing extra at home or where it already has a base
+// (scene/starbaseLogic.starbaseInfluenceCost).
+export const STARBASE_INFLUENCE_PER_KLY = 10
 export const STARBASE_BUILD_DAYS = 90
 export const STARBASE_INTEGRITY = 50
 export const STARBASE_ARMOR = 1.5

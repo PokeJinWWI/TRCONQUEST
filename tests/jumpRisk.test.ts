@@ -90,7 +90,7 @@ console.log('\n=== 4. A real ship ===')
     const chance = hyperdriveJumpChance(ship, 'sirius', 0)!
     check('the chance shown is base x factor', near(chance, Math.min(1, HYPERDRIVE_BASE_LOSS_CHANCE * toSirius), 1e-6), `${Math.round(chance * 100)}% to Sirius, ${Math.round(hyperdriveJumpChance(ship, 'barnards-star', 0)! * 100)}% to Barnard's Star`)
     useHyperlaneStore.getState().addHyperlane(ship.ownerId, 'sol', 'sirius')
-    check('a charted lane cuts it', near(hyperdriveJumpChance(ship, 'sirius', 0)!, HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE * toSirius, 1e-6))
+    check('a charted lane cuts it to a fifth of the distance risk, the mass factor dropped', near(hyperdriveJumpChance(ship, 'sirius', 0)!, HYPERDRIVE_ESTABLISHED_LANE_LOSS_CHANCE * hyperdriveJumpRiskFactor(ship, 'sirius', 0, true), 1e-6) && hyperdriveJumpRiskFactor(ship, 'sirius', 0, true) !== toSirius)
     check('an unknown star: average', hyperdriveJumpRiskFactor(ship, 'nowhere', 0) === 1)
   }
   if (warper) {

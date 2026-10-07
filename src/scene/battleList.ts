@@ -13,7 +13,7 @@
 //           ground but nobody is firing yet — the same fight in waiting; it
 //           becomes a ground battle the moment shots are exchanged
 import { armyStrength, playerFightLive, type Army } from './armyLogic'
-import { bodyIndex, bodyStarId } from './territory'
+import { bodyInfoOf, bodyStarId } from './territory'
 import { engagementIsContested, type Engagement } from '../state/combatStore'
 import { atWar, type AtWarFn } from '../state/diplomacyStore'
 import type { ShipInstance } from '../state/shipStore'
@@ -177,8 +177,7 @@ function kindsOf(battles: PlayerBattle[]): BattleKind[] {
 // Battles at a body, or — for a planet — at any of its moons (a fight over
 // Luna shows on Earth's marker too). A moon's marker shows only its own.
 export function battlesAtBody(battles: PlayerBattle[], bodyName: string): PlayerBattle[] {
-  const index = bodyIndex()
-  return battles.filter((b) => b.place === bodyName || index.get(b.place)?.parentPlanet === bodyName)
+  return battles.filter((b) => b.place === bodyName || bodyInfoOf(b.place)?.parentPlanet === bodyName)
 }
 
 export function battlesInSystem(battles: PlayerBattle[], starId: string): PlayerBattle[] {

@@ -22,7 +22,8 @@ import { isQueueModifierHeld } from './queueModifier'
 import { useViewStore } from '../state/viewStore'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { getCountry } from '../data/countryData'
-import { STARS, UNITS_PER_LY } from '../data/starData'
+import { findStar, UNITS_PER_LY } from '../data/starData'
+import { clusterOfStar, shipClusterId } from './clusters'
 import { commsDelayDaysForDistanceKm, commsTierFor, type CommsTier } from '../data/commsData'
 import {
   bodyLivePosition,
@@ -39,7 +40,7 @@ import { findEngagementFor } from './combatResolution'
 import { isPlayerOwned } from '../state/shipRelations'
 import { useDiplomacyStore } from '../state/diplomacyStore'
 import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
-import { KM_PER_GALACTIC_UNIT, clusterScenePosition, destinationLabel, getShipRenderPosition, jumpPlaceKey } from './shipPhysics'
+import { KM_PER_GALACTIC_UNIT, clusterOfInfo, clusterScenePosition, destinationLabel, getShipRenderPosition, jumpPlaceKey } from './shipPhysics'
 import { loseShipToJump } from './jumpLoss'
 import { confirmRiskyJump } from './jumpConfirm'
 
@@ -58,13 +59,24 @@ function galacticDistanceFromHomeKm(position: Vector3): number {
   return clusterScenePosition(SOLAR_NEIGHBORHOOD_ID).distanceTo(position) * KM_PER_GALACTIC_UNIT
 }
 
+// A position inside ANOTHER cluster than the capital's is measured cluster to
+// cluster, the same way (the light-years inside either are nothing against kly);
+// null when both are in the same cluster, or the position is out between clusters.
+function crossClusterKm(positionCluster: string | null, capitalStarId: string): number | null {
+  const home = clusterOfStar(capitalStarId)
+  if (positionCluster === null || positionCluster === home) return null
+  return clusterScenePosition(home).distanceTo(clusterScenePosition(positionCluster)) * KM_PER_GALACTIC_UNIT
+}
+
 function distanceFromCapitalKm(
   location: ShipLocation,
   capitalStarId: string,
   capitalBodyName: string,
   simDays: number,
 ): number {
-  const capitalStar = STARS.find((s) => s.id === capitalStarId)
+  const abroad = crossClusterKm(shipClusterId({ order: null, location }), capitalStarId)
+  if (abroad !== null && location.kind !== 'cluster') return abroad
+  const capitalStar = findStar(capitalStarId)
   const capitalStarPosLy = capitalStar ? new Vector3(...capitalStar.position) : new Vector3(0, 0, 0)
 
   if (location.kind === 'interstellar-point') {
@@ -76,7 +88,7 @@ function distanceFromCapitalKm(
   if (location.kind === 'galactic-point') return galacticDistanceFromHomeKm(new Vector3(...location.position))
 
   const shipStarId = location.kind === 'star' ? location.starId : location.systemId
-  const shipStar = STARS.find((s) => s.id === shipStarId)
+  const shipStar = findStar(shipStarId)
   const shipStarPosLy = shipStar ? new Vector3(...shipStar.position) : new Vector3(0, 0, 0)
   const interstellarKm = capitalStarPosLy.distanceTo(shipStarPosLy) * LY_IN_KM
 
@@ -119,7 +131,9 @@ function distanceFromRenderInfoKm(
   capitalBodyName: string,
   simDays: number,
 ): number {
-  const capitalStar = STARS.find((s) => s.id === capitalStarId)
+  const abroad = crossClusterKm(clusterOfInfo(render), capitalStarId)
+  if (abroad !== null) return abroad
+  const capitalStar = findStar(capitalStarId)
   const capitalStarPosLy = capitalStar ? new Vector3(...capitalStar.position) : new Vector3(0, 0, 0)
 
   if (render.space === 'interstellar') {
@@ -129,7 +143,7 @@ function distanceFromRenderInfoKm(
   if (render.space === 'galactic') return galacticDistanceFromHomeKm(render.position)
 
   const shipStarId = render.systemId ?? capitalStarId
-  const shipStar = STARS.find((s) => s.id === shipStarId)
+  const shipStar = findStar(shipStarId)
   const shipStarPosLy = shipStar ? new Vector3(...shipStar.position) : new Vector3(0, 0, 0)
   const interstellarKm = capitalStarPosLy.distanceTo(shipStarPosLy) * LY_IN_KM
   if (shipStarId !== capitalStarId) return interstellarKm

@@ -104,7 +104,7 @@ import {
   type GridDensity,
 } from './combatArena'
 import { getPlanetsForStar } from './planetData'
-import { STARS, findSystemStar } from '../data/starData'
+import { findStar, findSystemStar } from '../data/starData'
 import { getMoonsForPlanet, type MoonData } from './moonData'
 import { angleForYear, getOrbitPosition, MOON_TIME_DILATION } from './orbitMath'
 import { simDaysToSeconds, simSecondsToDays } from '../state/gameTimeStore'
@@ -811,7 +811,7 @@ function moonArenaState(moon: MoonData, simDays: number): { position: ArenaPoint
 
 export function obstaclesForLocation(location: ShipLocation, simDays = 0): CombatObstacle[] {
   if (location.kind === 'star') {
-    const star = STARS.find((s) => s.id === location.starId)
+    const star = findStar(location.starId)
     if (!star) return []
     return [
       {

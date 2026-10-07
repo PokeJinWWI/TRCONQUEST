@@ -14,6 +14,7 @@ import { useCombatStore } from '../state/combatStore'
 import { usePlayerStore } from '../state/playerStore'
 import { liveBodyValue } from '../scene/peace'
 import { hyperdriveJumpChance } from '../scene/shipPhysics'
+import { aiNextStop } from './jumpRules'
 import { batteryDenial, groundKeySurface, hostileDefenseCount, shieldedFor } from '../state/defenseStore'
 import type { AiSnapshot } from './blackboard'
 import { useColonyStore } from '../state/colonyStore'
@@ -56,6 +57,7 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     shieldedFor,
     surfaceOf: (bodyName) => groundKeySurface(bodyName, territory.bodyOwner),
     jumpChanceOf: (ship, destination) => hyperdriveJumpChance(ship, destination, simDays),
+    nextStopOf: (ship, destination) => aiNextStop(ship, destination, simDays),
     orgs: useInternationalOrgStore.getState().orgs,
     subjections: useSubjectStore.getState().subjections,
     embargoedPairs: new Set(Object.entries(useTradePolicyStore.getState().embargoes).filter(([, on]) => on).map(([k]) => k)),

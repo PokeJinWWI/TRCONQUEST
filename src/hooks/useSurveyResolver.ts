@@ -11,6 +11,7 @@ import { reportDelayDays } from '../scene/shipCommands'
 import { isBodySurveyed, isExplored, stepSurveyJob, systemOfShip } from '../scene/surveyLogic'
 import { planMoveUnchecked } from '../scene/shipPhysics'
 import { autoMove } from '../scene/autoTravel'
+import { isHomeCluster, shipClusterId } from '../scene/clusters'
 import { bodyStarId } from '../scene/territory'
 
 // Any ship entering a system explores it, and science ships work through their
@@ -36,7 +37,9 @@ export function resolveSurvey(simDays: number): void {
 
   // A ship resting beside a cluster has visited it (what Turing Scouts' Auto-explore reads).
   for (const ship of useShipStore.getState().ships) {
-    if (!ship.order && ship.location.kind === 'cluster') useClusterVisitStore.getState().markVisited(ship.ownerId, ship.location.clusterId)
+    // A ship resting anywhere inside another cluster has visited it (it arrives at the cluster's entry point).
+    const inCluster = ship.order ? null : shipClusterId(ship)
+    if (inCluster && !isHomeCluster(inCluster)) useClusterVisitStore.getState().markVisited(ship.ownerId, inCluster)
   }
 
   for (const ship of useShipStore.getState().ships) {

@@ -1,5 +1,6 @@
 // Auto-explore for Turing Scouts (src/scene/autoExplore.ts, scene/automation.ts, state/clusterVisitStore.ts).
 // Run:  npx tsx tests/autoExplore.test.ts
+import { shipClusterId } from '../src/scene/clusters'
 import { NEIGHBORHOODS } from '../src/data/neighborhoodData'
 import { SOLAR_NEIGHBORHOOD_ID } from '../src/data/galaxyGen'
 import { SHIP_CLASSES, TURING_HYPERDRIVE_COOLDOWN_DAYS } from '../src/data/shipData'
@@ -215,14 +216,15 @@ console.log('\n=== 7. Intercluster and Both ===')
   useGameTimeStore.setState({ simDays: 1 })
   resolveAutomation(1)
   const loc = ship(id).location
-  check('Intercluster: it jumps to the nearest cluster (and stays out between clusters)', loc.kind === 'cluster' && loc.clusterId !== SOLAR_NEIGHBORHOOD_ID, JSON.stringify(loc.kind === 'cluster' ? loc.clusterId : loc.kind))
-  const nearest = loc.kind === 'cluster' ? loc.clusterId : ''
+  // (A ship arriving at a cluster is at its entry point, inside it: tests/foreignCluster.test.ts.)
+  check('Intercluster: it jumps to the nearest cluster (arriving at its entry point)', loc.kind === 'interstellar-point' && !!loc.clusterId && loc.clusterId !== SOLAR_NEIGHBORHOOD_ID, JSON.stringify(loc))
+  const nearest = shipClusterId(ship(id)) ?? ''
   resolveSurvey(1)
-  check('...resting beside it records the visit', useClusterVisitStore.getState().isVisited(MARS, nearest) && !useClusterVisitStore.getState().isVisited(MARS, 'some-other'))
+  check('...being there records the visit', useClusterVisitStore.getState().isVisited(MARS, nearest) && !useClusterVisitStore.getState().isVisited(MARS, 'some-other'))
   check('...and the home cluster always counts as visited', useClusterVisitStore.getState().isVisited(MARS, SOLAR_NEIGHBORHOOD_ID))
   run(2, 20)
   const next = ship(id).location
-  check('the next jump goes to ANOTHER cluster, not back', next.kind === 'cluster' && next.clusterId !== nearest, JSON.stringify(next.kind === 'cluster' ? next.clusterId : next.kind))
+  check('the next jump goes to ANOTHER cluster, not back', shipClusterId(ship(id)) !== nearest && shipClusterId(ship(id)) !== SOLAR_NEIGHBORHOOD_ID && next.kind === 'interstellar-point', JSON.stringify(next))
   check('hyperlanes between clusters were charted by the jumps', (useHyperlaneStore.getState().lanes[MARS]?.length ?? 0) >= 2)
   const solDist = (cid: string) => { const n = NEIGHBORHOODS.find((x) => x.id === cid)!, s = NEIGHBORHOODS[0]; return Math.hypot(n.position[0] - s.position[0], n.position[1] - s.position[1], n.position[2] - s.position[2]) }
   check('the first cluster really was the nearest to Sol', NEIGHBORHOODS.filter((n) => n.id !== SOLAR_NEIGHBORHOOD_ID).every((n) => solDist(nearest) <= solDist(n.id) + 1e-9))
@@ -239,7 +241,7 @@ console.log('\n=== 7. Intercluster and Both ===')
     const k = ship(both).location.kind
     if (kinds[kinds.length - 1] !== k) kinds.push(k)
   }
-  check('Both: it explores the neighbourhood\'s stars, then crosses to a cluster', exploredCount() >= STARS.filter((s) => s.hasSystemData).length - 1 && ship(both).location.kind === 'cluster', kinds.join(' > '))
+  check('Both: it explores the neighbourhood\'s stars, then crosses to a cluster', exploredCount() >= STARS.filter((s) => s.hasSystemData).length - 1 && shipClusterId(ship(both)) !== SOLAR_NEIGHBORHOOD_ID && ship(both).location.kind === 'interstellar-point', kinds.join(' > '))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

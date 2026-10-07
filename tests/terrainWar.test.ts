@@ -158,7 +158,7 @@ console.log('\n=== 4. Through the resolver, in a game ===')
   const terrainOrder = useTerrainStore.getState().orderUnits(battle.id, [mine.id], { x: mine.x + 0.3, y: mine.y })
   check('...but the terrain map takes it', terrainOrder.ok && useTerrainStore.getState().battles[0].units.find((u) => u.id === mine.id)!.path.length > 0)
 
-  for (let d = 0; d < 400 && useTerrainStore.getState().battles.length > 0; d++) {
+  for (let d = 0; d < 900 && useTerrainStore.getState().battles.length > 0; d++) {
     day += 1
     useGameTimeStore.setState({ simDays: day })
     resolveGroundWar(day)

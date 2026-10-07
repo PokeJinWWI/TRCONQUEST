@@ -9,6 +9,22 @@ export interface ScreenPoint {
 
 export const GALAXY_PICK_RADIUS_PX = 12
 
+// A marker's own label (the name beside a selected or hovered cluster) counts as the
+// marker: a click or right-click on it is a click on the cluster. Rects are screen
+// pixels; the first one holding the point wins.
+export interface ScreenRectOf {
+  id: string
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export function pickInRects(rects: ScreenRectOf[], x: number, y: number): string | null {
+  for (const r of rects) if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return r.id
+  return null
+}
+
 export function pickNearest(points: ScreenPoint[], x: number, y: number, radiusPx = GALAXY_PICK_RADIUS_PX): string | null {
   let best: string | null = null
   let bestD = radiusPx * radiusPx

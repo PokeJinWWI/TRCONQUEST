@@ -177,6 +177,7 @@ export function generateBelts(seed: number, star: Pick<StarData, 'id' | 'name' |
 interface Galaxy {
   starsByCluster: Map<string, StarData[]>
   starById: Map<string, { star: StarData; clusterId: string }>
+  starByName: Map<string, StarData>
 }
 let galaxy: Galaxy | null = null
 
@@ -184,13 +185,17 @@ function theGalaxy(): Galaxy {
   if (galaxy) return galaxy
   const starsByCluster = new Map<string, StarData[]>()
   const starById = new Map<string, { star: StarData; clusterId: string }>()
+  const starByName = new Map<string, StarData>()
   for (const cluster of NEIGHBORHOODS) {
     if (cluster.id === SOLAR_NEIGHBORHOOD_ID) continue
     const stars = generateClusterStars(GALAXY_SEED, cluster)
     starsByCluster.set(cluster.id, stars)
-    for (const star of stars) starById.set(star.id, { star, clusterId: cluster.id })
+    for (const star of stars) {
+      starById.set(star.id, { star, clusterId: cluster.id })
+      starByName.set(star.name, star)
+    }
   }
-  galaxy = { starsByCluster, starById }
+  galaxy = { starsByCluster, starById, starByName }
   return galaxy
 }
 
@@ -207,6 +212,23 @@ export function generatedStarsFor(clusterId: string): StarData[] {
 
 export function findGeneratedStar(starId: string): StarData | undefined {
   return theGalaxy().starById.get(starId)?.star
+}
+
+// A generated star by its NAME (a star is the one body of its own name in its system).
+export function findGeneratedStarByName(name: string): StarData | undefined {
+  return theGalaxy().starByName.get(name)
+}
+
+// The generated star a body name belongs to, in O(1) and without generating
+// anything: a generated planet is named "<star name> <numeral>" (generateRawPlanets),
+// so its star is the name less its last word. Undefined for a hand-authored body
+// or a name that is no generated planet's.
+export function generatedStarOfBody(bodyName: string): StarData | undefined {
+  const cut = bodyName.lastIndexOf(' ')
+  if (cut <= 0) return undefined
+  const star = theGalaxy().starByName.get(bodyName.slice(0, cut))
+  if (!star) return undefined
+  return generatedRawPlanetsFor(star.id).some((p) => p.name === bodyName) ? star : undefined
 }
 
 // The cluster a generated star belongs to (undefined for a hand-authored one).

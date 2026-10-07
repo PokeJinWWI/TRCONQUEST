@@ -8,7 +8,7 @@ import { NEIGHBORHOODS, neighborhoodScenePosition, type NeighborhoodData } from 
 import { getStarsForNeighborhood } from '../data/starData'
 import { useBattleStore } from '../state/battleStore'
 import { battlesInStars } from './battleList'
-import { pickNearest, type ScreenPoint } from './galaxyPick'
+import { pickInRects, pickNearest, type ScreenPoint, type ScreenRectOf } from './galaxyPick'
 import type { SystemClaim } from './territory'
 
 // The galaxy's neighbourhood markers as ONE point cloud (a ring per neighbourhood,
@@ -130,7 +130,18 @@ export function GalaxyMarkers({
         if (v.z > 1 || v.z < -1) return
         points.push({ id: n.id, x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height })
       })
-      const id = pickNearest(points, clientX, clientY)
+      // The dot first, then the name beside a selected or hovered one (a click on its
+      // label is a click on the cluster; the labels are DOM, at most two of them, and only this
+      // view has any, so the document is searched: drei puts them in a container of their own).
+      let id = pickNearest(points, clientX, clientY)
+      if (!id) {
+        const rects: ScreenRectOf[] = []
+        document.querySelectorAll<HTMLElement>('[data-neighborhood-label]').forEach((el) => {
+          const r = (el.querySelector('.marker-label') ?? el).getBoundingClientRect()
+          rects.push({ id: el.dataset.neighborhoodLabel!, left: r.left, top: r.top, right: r.right, bottom: r.bottom })
+        })
+        id = pickInRects(rects, clientX, clientY)
+      }
       return id ? NEIGHBORHOODS.find((n) => n.id === id) ?? null : null
     },
     [camera, gl],
@@ -176,7 +187,7 @@ export function GalaxyMarkers({
         if (i < 0) return null
         return (
           <Html key={`label-${id}`} position={POSITIONS[i]} zIndexRange={[0, 0]} style={{ pointerEvents: 'none' }}>
-            <div className="planet-marker star-node neighborhood-node selected">
+            <div className="planet-marker star-node neighborhood-node selected" data-neighborhood-label={id}>
               <span className="marker-label">{NEIGHBORHOODS[i].name}</span>
             </div>
           </Html>

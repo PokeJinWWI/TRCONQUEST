@@ -13,6 +13,11 @@ import { getCountry } from '../data/countryData'
 import { useCombatStore } from '../state/combatStore'
 import type { ShipInstance } from '../state/shipStore'
 import { orbitedBody } from './armyLogic'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { isStarbaseActive, starbaseModulesOf } from './starbaseLogic'
+import { restingStarId, systemOfShip } from './surveyLogic'
+import { lightYearsBetween } from './colonyLogic'
 import { bestLevelClass, missingResources, techBlock, type ResearchedSet } from './shipyardLogic'
 
 type ClassOf = (classId: string) => ShipClass | null
@@ -46,10 +51,41 @@ export function upgradeDays(to: ShipClass): number {
   return Math.max(1, Math.round(shipBuildDays(to) * UPGRADE_DURATION_FACTOR))
 }
 
-// Whether the ship rests in orbit of its nation's capital: where the shipyard is.
-export function atShipyard(ship: Pick<ShipInstance, 'location' | 'ownerId'>): boolean {
+// A place a nation's ships are served at a yard: its capital world, or a finished
+// Starbase with a shipyard module (the slips are one pool; see starbaseShipyardSlots).
+export interface YardSite {
+  starId: string
+  // The capital world; absent for a Starbase (a ship goes to the star).
+  bodyName?: string
+}
+
+export function yardSites(ownerId: string, simDays: number): YardSite[] {
+  const sites: YardSite[] = []
+  const country = getCountry(ownerId)
+  if (country) sites.push({ starId: country.capitalStarId, bodyName: country.capitalBodyName })
+  for (const sb of useStarbaseStore.getState().starbases) {
+    if (sb.ownerId !== ownerId || !isStarbaseActive(sb, simDays) || !starbaseModulesOf(sb).includes('shipyard')) continue
+    if (!sites.some((x) => x.starId === sb.starId && !x.bodyName)) sites.push({ starId: sb.starId })
+  }
+  return sites
+}
+
+// Whether the ship rests at one of its nation's yards: in orbit of the capital world,
+// or at the star of a Starbase shipyard.
+export function atShipyard(ship: Pick<ShipInstance, 'location' | 'ownerId' | 'order'>): boolean {
   const capital = getCountry(ship.ownerId)?.capitalBodyName
-  return !!capital && orbitedBody(ship) === capital
+  if (capital && orbitedBody(ship) === capital) return true
+  const star = restingStarId(ship)
+  return !!star && yardSites(ship.ownerId, useGameTimeStore.getState().simDays).some((x) => !x.bodyName && x.starId === star)
+}
+
+// The yard nearest the ship (the capital world on a tie, or when it is nowhere known).
+export function nearestYard(ship: Pick<ShipInstance, 'location' | 'ownerId' | 'order'>): YardSite | null {
+  const sites = yardSites(ship.ownerId, useGameTimeStore.getState().simDays)
+  if (sites.length === 0) return null
+  const here = systemOfShip(ship) ?? restingStarId(ship)
+  if (!here) return sites[0]
+  return [...sites].sort((a, b) => lightYearsBetween(here, a.starId) - lightYearsBetween(here, b.starId))[0]
 }
 
 export function isEngaged(shipId: string): boolean {

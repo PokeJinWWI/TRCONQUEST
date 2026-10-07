@@ -66,6 +66,11 @@ export type DiplomacyEventKind =
   | 'colony-founded'
   | 'colony-promoted'
   | 'colony-abandoned'
+  // A Starbase of the player's begun / finished (scene/starbaseNotices.ts); a click goes to its system.
+  | 'starbase-started'
+  | 'starbase-finished'
+  // A Starbase or colony built inside someone else's borders (scene/encroachment.ts).
+  | 'encroachment'
   | 'tech-researched'
   | 'ship-attacked'
   // An order the ship could not carry out, and why (a hyperdrive jump out of range).
@@ -83,6 +88,20 @@ export interface DiplomacyEvent {
   // Where it happened, if it happened somewhere: a notification's left-click
   // goes there.
   place?: EventPlace
+}
+
+// A Starbase or colony built in a system another owner already held
+// (scene/encroachment.ts). `againstId` is a nation or a generated empire;
+// `applied` says whether the opinion cost was applied (a nation) or is still owed
+// (an empire, which has no diplomacy until it becomes a nation).
+export interface Encroachment {
+  id: string
+  byId: string
+  againstId: string
+  starId: string
+  kind: 'starbase' | 'colony'
+  simDays: number
+  applied: boolean
 }
 
 // A ship fired on a nation it was not at war with (scene/aggression.ts). The
@@ -125,6 +144,8 @@ export const STARTING_OPINION = 0
 // Opinion change applied to BOTH sides' view of each other on these events.
 export const OPINION_ON_WAR_DECLARED = -60
 export const OPINION_ON_PEACE = 15
+// A Starbase or colony built inside another nation's borders (scene/encroachment.ts).
+export const OPINION_ON_ENCROACHMENT = -20
 
 // How many diplomacy events the log keeps.
 export const MAX_DIPLOMACY_EVENTS = 60

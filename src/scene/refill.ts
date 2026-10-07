@@ -3,7 +3,7 @@
 // told it can't load. A "station" is any world the nation owns.
 import { confirmRiskyJump } from './jumpConfirm'
 import { STARBASE_COST } from '../data/starbaseData'
-import { STARS } from '../data/starData'
+import { findStar } from '../data/starData'
 import type { ResourceCost } from '../data/shipyardData'
 import type { ResourceId } from '../data/resourceData'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -11,10 +11,12 @@ import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { queueMoveOrder } from './commsVisual'
-import { loadingBody, type Cargo } from './cargoLogic'
+import { cargoTotal, loadingBody, type Cargo } from './cargoLogic'
 import { queueShipCommand } from './shipCommands'
-import { bodyLivePosition, getShipRenderPosition, KM_PER_SYSTEM_UNIT, LY_IN_KM } from './shipPhysics'
-import { bodyIndex, type OwnerMap } from './territory'
+import { isPlayerOwned } from '../state/shipRelations'
+import { bodyLivePosition, clusterOfInfo, clusterScenePosition, galacticPosition, getShipRenderPosition, KM_PER_GALACTIC_UNIT, KM_PER_SYSTEM_UNIT, LY_IN_KM } from './shipPhysics'
+import { clusterOfStar } from './clusters'
+import { bodyInfoOf, type OwnerMap } from './territory'
 
 // How much a refill asks for: as many Starbase kits as the hold fits (a hold too
 // small for one kit just takes alloys), less what it already carries.
@@ -31,13 +33,17 @@ export function refillWant(hold: Cargo | undefined, capacity: number): ResourceC
 }
 
 function starPositionLy(starId: string): [number, number, number] {
-  return STARS.find((s) => s.id === starId)?.position ?? [0, 0, 0]
+  return findStar(starId)?.position ?? [0, 0, 0]
 }
 
 // Rough distance in km from where the ship is now to a body: in-system when they
 // share a system, otherwise dominated by the star-to-star distance.
 function distanceKm(ship: ShipInstance, body: { name: string; starId: string }, simDays: number): number {
   const here = getShipRenderPosition(ship, simDays)
+  // In another cluster than the body's: cluster to cluster (kly dwarf everything inside either).
+  const hereCluster = clusterOfInfo(here)
+  const thereCluster = clusterOfStar(body.starId)
+  if (hereCluster !== thereCluster) return galacticPosition(here).distanceTo(clusterScenePosition(thereCluster)) * KM_PER_GALACTIC_UNIT
   if (here.space === 'system' && here.systemId === body.starId) return here.position.distanceTo(bodyLivePosition(body.name, simDays)) * KM_PER_SYSTEM_UNIT
   const hereStar = here.space === 'system' && here.systemId ? starPositionLy(here.systemId) : here.position.toArray().map((v) => v / 8)
   const there = starPositionLy(body.starId)
@@ -47,8 +53,11 @@ function distanceKm(ship: ShipInstance, body: { name: string; starId: string }, 
 // The nearest world of the ship's own nation, or null if it owns none.
 export function nearestStation(ship: ShipInstance, owners: OwnerMap, simDays: number): { systemId: string; bodyName: string } | null {
   let best: { systemId: string; bodyName: string; km: number } | null = null
-  for (const body of bodyIndex().values()) {
-    if (owners[body.name] !== ship.ownerId) continue
+  // Every world the nation owns, wherever it is (a colony in another cluster included).
+  for (const [name, owner] of Object.entries(owners)) {
+    if (owner !== ship.ownerId) continue
+    const body = bodyInfoOf(name)
+    if (!body) continue
     const km = distanceKm(ship, body, simDays)
     if (!best || km < best.km) best = { systemId: body.starId, bodyName: body.name, km }
   }
@@ -77,4 +86,44 @@ export function orderRefill(shipId: string): void {
     store.setArrivalCommand(shipId, { starId: station.systemId, bodyName: station.bodyName, command: { kind: 'load', want } })
     queueMoveOrder(ship, destination)
   })
+}
+
+// Deposit the hold into the nation's stockpile: at once at one of its worlds,
+// otherwise fly to the nearest and unload on arrival.
+export function orderUnload(shipId: string): void {
+  const store = useShipStore.getState()
+  const ship = store.ships.find((s) => s.id === shipId)
+  if (!ship || cargoTotal(ship.cargo) <= 0) return
+  const owners = useTerritoryStore.getState().bodyOwner
+  if (loadingBody(ship, owners).ok) {
+    queueShipCommand(shipId, { kind: 'unload' })
+    return
+  }
+  const station = nearestStation(ship, owners, useGameTimeStore.getState().simDays)
+  if (!station) return
+  const destination = { kind: 'body' as const, systemId: station.systemId, bodyName: station.bodyName }
+  confirmRiskyJump([ship], destination, () => {
+    store.setArrivalCommand(shipId, { starId: station.systemId, bodyName: station.bodyName, command: { kind: 'unload' } })
+    queueMoveOrder(ship, destination)
+  })
+}
+
+// "Deposit cargo here" from a body's right-click menu: every selected own ship
+// with goods aboard unloads at that world (it must be the nation's own).
+export function orderSelectedToUnload(systemId: string, bodyName: string): void {
+  const store = useShipStore.getState()
+  const owners = useTerritoryStore.getState().bodyOwner
+  const ships = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s) && cargoTotal(s.cargo) > 0 && owners[bodyName] === s.ownerId)
+  if (ships.length === 0) return
+  const destination = { kind: 'body' as const, systemId, bodyName }
+  for (const ship of ships) {
+    if (!ship.order && ship.location.kind === 'orbiting' && ship.location.bodyName === bodyName) {
+      queueShipCommand(ship.id, { kind: 'unload' })
+      continue
+    }
+    confirmRiskyJump([ship], destination, () => {
+      store.setArrivalCommand(ship.id, { starId: systemId, bodyName, command: { kind: 'unload' } })
+      queueMoveOrder(ship, destination)
+    })
+  }
 }

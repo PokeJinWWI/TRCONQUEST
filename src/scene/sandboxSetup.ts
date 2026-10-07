@@ -12,6 +12,8 @@ import { useDiplomacyStore } from '../state/diplomacyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { useShipStore } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
+import { useTechStore } from '../state/techStore'
+import { SANDBOX_FACTION_IDS } from '../data/countryRoster'
 import { useViewStore } from '../state/viewStore'
 import { cellsToRad, groundSurface, landedUnits, musterNode } from './groundLogic'
 import { passableFor, terrainAt } from './planetTerrain'
@@ -22,12 +24,20 @@ import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
 export const SANDBOX_START_SYSTEM = 'sol'
 export const SANDBOX_START_BODY = 'Earth'
 
+// A Sandbox game starts with Free Research on (the existing cheat flag, techStore.freeResearchMode): a click on
+// a tech in the Technology panel or the tree view toggles it with no points, resources or prerequisites. The
+// Debug Console's Free Research checkbox is the way to turn the costs back on.
+export const SANDBOX_FREE_RESEARCH = true
+
 export function startSandbox(): void {
   // Unowned everywhere: no world is anybody's to invade, garrison or cede.
   useTerritoryStore.setState({ bodyOwner: {}, bodyController: {}, nodeHolders: {} })
   useDiplomacyStore.getState().reset()
   useArmyStore.getState().reset()
   useViewStore.getState().enterSystem(SANDBOX_START_SYSTEM, SANDBOX_START_BODY)
+  // The whole default tree is researched, for all four sandbox factions (they share one tree).
+  useTechStore.getState().grantAllTech(SANDBOX_FACTION_IDS)
+  useTechStore.getState().setFreeResearchMode(SANDBOX_FREE_RESEARCH)
   usePlayerStore.getState().startSandbox()
 }
 

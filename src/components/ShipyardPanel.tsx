@@ -131,7 +131,7 @@ export function ShipyardPanel() {
     return (
       <div key={o.id} className="fleet-row">
         <div className="fleet-row-head">
-          <span className="fleet-row-name">{o.upgradeShipId ? `Upgrade: ${o.upgradeShipName} → ${o.className}` : o.className}</span>
+          <span className="fleet-row-name">{o.upgradeShipId ? `Upgrade: ${o.upgradeShipName} → ${o.className}` : o.repairShipId ? `Repair: ${o.repairShipName}` : o.className}</span>
           <span className="fleet-row-class">{started ? `${daysLeft.toFixed(1)}d left` : `${o.durationDays}d once a slot frees`}</span>
           <button type="button" className="ship-panel-unfollow-btn" onClick={() => cancelBuild(countryId, o.id)} title="Cancel and refund the full cost">
             Cancel
@@ -183,8 +183,8 @@ export function ShipyardPanel() {
             {Array.from({ length: slots }, (_, i) => {
               const o = building[i]
               return (
-                <div key={i} className={`shipyard-slip${o ? ' busy' : ''}`} title={o ? (o.upgradeShipId ? `${o.upgradeShipName} being upgraded to ${o.className}` : `${o.className} under construction`) : 'Free slip'}>
-                  {o ? (o.upgradeShipId ? `Upgrade: ${o.upgradeShipName}` : o.className) : 'Free'}
+                <div key={i} className={`shipyard-slip${o ? ' busy' : ''}`} title={o ? (o.upgradeShipId ? `${o.upgradeShipName} being upgraded to ${o.className}` : o.repairShipId ? `${o.repairShipName} being repaired` : `${o.className} under construction`) : 'Free slip'}>
+                  {o ? (o.upgradeShipId ? `Upgrade: ${o.upgradeShipName}` : o.repairShipId ? `Repair: ${o.repairShipName}` : o.className) : 'Free'}
                 </div>
               )
             })}

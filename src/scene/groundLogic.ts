@@ -19,7 +19,7 @@ import {
 import type { AtWarFn } from '../state/diplomacyStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import type { Army, GroundUnit } from './armyLogic'
-import { bodyGroundInfo, passableFor, surfaceOf, terrainAt, type BodySurface, type SettlementTier } from './planetTerrain'
+import { bodyGroundInfoAny, passableFor, surfaceOf, terrainAt, type BodySurface, type SettlementTier } from './planetTerrain'
 import { arc, nearestNode, nodePoint, surfaceMesh, type SurfacePoint } from './surfaceMesh'
 import type { OwnerMap } from './territory'
 
@@ -37,7 +37,7 @@ export function settlementTierOf(bodyName: string, owners: OwnerMap): Settlement
 // The planetary map of a body, or null for something without a surface (a
 // star).
 export function groundSurface(bodyName: string, owners: OwnerMap): BodySurface | null {
-  if (!bodyGroundInfo(bodyName)) return null
+  if (!bodyGroundInfoAny(bodyName)) return null
   return surfaceOf(bodyName, settlementTierOf(bodyName, owners))
 }
 

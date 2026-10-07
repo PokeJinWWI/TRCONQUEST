@@ -12,6 +12,7 @@ import {
   type ConflictTier,
   type DiplomacyEvent,
   type DiplomacyEventKind,
+  type Encroachment,
   type EventPlace,
   type Incident,
   type Relation,
@@ -36,6 +37,9 @@ interface DiplomacyState {
   // (scene/aggression.resolveAggressionNews) — never for an ordinary declaration.
   declareWar: (attackerId: string, defenderId: string, simDays: number, tier?: ConflictTier, opts?: { ignoreTruce?: boolean }) => DeclareWarResult
   addIncident: (incident: Omit<Incident, 'id'>) => void
+  // Building inside someone else's borders (scene/encroachment.ts).
+  encroachments: Encroachment[]
+  addEncroachment: (record: Omit<Encroachment, 'id'>) => Encroachment
   removeIncident: (id: string) => void
   // Dev-tool only (DebugConsole scenarios): puts two nations at war even
   // inside a truce, so a scenario always gets its fight. A no-op if they're
@@ -63,6 +67,7 @@ interface DiplomacyState {
 let eventCounter = 0
 let warCounter = 0
 let incidentCounter = 0
+let encroachmentCounter = 0
 
 // Shared default so a read of a never-touched pair doesn't build a new object
 // every call (same reasoning as techStore's UNTOUCHED_COUNTRY_STATE).
@@ -81,6 +86,13 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
   wars: [],
   events: [],
   incidents: [],
+  encroachments: [],
+  addEncroachment: (record) => {
+    encroachmentCounter += 1
+    const full: Encroachment = { ...record, id: `encroachment-${encroachmentCounter}` }
+    set((s) => ({ encroachments: [...s.encroachments, full] }))
+    return full
+  },
 
   addIncident: (incident) =>
     set((s) => {
@@ -192,7 +204,7 @@ export const useDiplomacyStore = create<DiplomacyState>((set, get) => ({
       return { events: events.length > MAX_DIPLOMACY_EVENTS ? events.slice(events.length - MAX_DIPLOMACY_EVENTS) : events }
     }),
 
-  reset: () => set({ relations: {}, wars: [], events: [], incidents: [] }),
+  reset: () => set({ relations: {}, wars: [], events: [], incidents: [], encroachments: [] }),
 }))
 
 // Whether two nations are currently at war — the one question every hostility

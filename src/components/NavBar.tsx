@@ -90,6 +90,8 @@ const ABSTRACT_CATEGORIES: CategoryDef[] = [
 // diplomacy to open — just what a fight needs, and the sandbox's own controls.
 const SANDBOX_CATEGORIES: CategoryDef[] = [
   { name: SANDBOX_CATEGORY },
+  // The whole tree starts researched; a click on any tech toggles it (scene/sandboxTech.ts).
+  { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY] },
 ]
 

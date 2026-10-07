@@ -25,7 +25,8 @@ import {
   AI_RESEARCH_PATH,
   AI_SCIENCE_SHIPS,
 } from '../data/aiData'
-import { STARBASE_COST, STARBASE_INFLUENCE_COST } from '../data/starbaseData'
+import { STARBASE_COST } from '../data/starbaseData'
+import { starbaseInfluenceCostFor } from '../state/starbaseStore'
 import { STARS, type StarData } from '../data/starData'
 import { canResearch, findTech } from '../data/techData'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -34,7 +35,7 @@ import { orbitedBody } from '../scene/armyLogic'
 import { cargoCovers, transferCheck } from '../scene/cargoLogic'
 import { missingResources } from '../scene/shipyardLogic'
 import { starbaseOwnersOf } from '../scene/starbaseLogic'
-import { isFullySurveyed, restingStarId, systemOfShip, unsurveyedBodies } from '../scene/surveyLogic'
+import { isFullySurveyed, knownSurveyedBodies, restingStarId, systemOfShip, unsurveyedBodies } from '../scene/surveyLogic'
 import { systemClaim } from '../scene/territory'
 import type { ResourceCost } from '../data/shipyardData'
 import { aiJumpAllowed } from './jumpRules'
@@ -106,10 +107,10 @@ function pickStarbaseTarget(bb: Blackboard, snap: AiSnapshot, current: string | 
 export function pickColonyTarget(bb: Blackboard, snap: AiSnapshot): { bodyName: string; starId: string; ly: number } | null {
   const home = bb.capital.capitalStarId
   const candidates: { bodyName: string; starId: string; ly: number }[] = []
-  for (const bodyName of bb.intel?.surveyed ?? []) {
+  for (const bodyName of knownSurveyedBodies(bb.intel, bb.countryId, snap.owners)) {
     if (snap.owners[bodyName]) continue
     const starId = bodyStarId(bodyName)
-    if (!starId || !starbaseOwnersOf(starId, snap.starbases, snap.simDays).includes(bb.countryId)) continue
+    if (!starId || !(starId === bb.capital.capitalStarId || starbaseOwnersOf(starId, snap.starbases, snap.simDays).includes(bb.countryId))) continue
     const surface = groundSurface(bodyName, snap.owners)
     if (!surface || surface.mainland < 0) continue
     candidates.push({ bodyName, starId, ly: lightYearsBetween(home, starId) })
@@ -239,7 +240,7 @@ export function expander(bb: Blackboard, snap: AiSnapshot, memory: AiMemory): Ag
       if (cargoCovers(builder.cargo, kit)) {
         // A Starbase costs influence too; it waits (colonies and Starbases share it).
         if (at === target) {
-          if (influence >= STARBASE_INFLUENCE_COST) intents.push({ kind: 'build-starbase', shipId: builder.id, starId: target })
+          if (influence >= starbaseInfluenceCostFor(bb.countryId, target, snap.starbases)) intents.push({ kind: 'build-starbase', shipId: builder.id, starId: target })
         }
         else goTo(builder, target)
       } else if (atCapital(builder)) {

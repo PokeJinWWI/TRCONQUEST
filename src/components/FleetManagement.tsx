@@ -21,6 +21,7 @@ import { overallHealthFraction, shipCombatProfile, totalHitPoints } from '../sce
 import { getShipStatusText } from '../scene/shipPhysics'
 import { queueStance, queueBombard } from '../scene/commsVisual'
 import { FleetFreeFlightToggle } from '../scene/ShipFreeFlightToggle'
+import { FleetYardButtons } from '../scene/ShipRepairSection'
 import { FleetExploreToggle } from '../scene/ShipAutomationToggle'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS } from '../data/defenseData'
 import { isArmed } from '../scene/armyLogic'
@@ -32,7 +33,7 @@ import { HULL_CHASSES, chassisAvailable, designPowerBudget, designPowerUsed, des
 import { POWER_TIER_BUDGET, POWER_TIER_LABELS, SLOT_SIZE_LABELS, modulesForSlot, powerTiersAvailable, type SlotCategory } from '../data/shipModules'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { usePlayerTech } from '../hooks/usePlayerTech'
-import { strategyBlock } from '../scene/freeFlight'
+import { strategyBlock, strategyListed } from '../scene/freeFlight'
 import { ShipyardPanel } from './ShipyardPanel'
 import { useFleetTabStore } from '../state/fleetTabStore'
 
@@ -167,6 +168,7 @@ function FleetManager() {
               </span>
               <FleetFreeFlightToggle ships={members} />
               <FleetExploreToggle ships={members} />
+              <FleetYardButtons ships={members} />
             </div>
             {expanded &&
               members.map((ship) => {
@@ -616,8 +618,8 @@ function ShipStrategyRow({
 }) {
   const shipClass = resolveShipClass(ship.classId)
   const simDays = useThrottledSimDays()
-  const stanceOptions = fleet?.strategy != null ? [...COMBAT_STANCES, 'fleet' as const] : COMBAT_STANCES
   const researched = usePlayerTech().researched
+  const stanceOptions = (fleet?.strategy != null ? [...COMBAT_STANCES, 'fleet' as const] : [...COMBAT_STANCES]).filter((st) => strategyListed(st, researched))
   return (
     <div className={`fleet-row${ship.id === selectedShipId ? ' selected' : ''}`}>
       <div className="fleet-row-head">
@@ -717,7 +719,7 @@ function Strategizer() {
                 </div>
                 <div className="strategizer-fleet-strategy">
                   <div className="combat-density-row">
-                    {FLEET_STRATEGIES.map((strategy) => {
+                    {FLEET_STRATEGIES.filter((st) => strategyListed(st, researched)).map((strategy) => {
                       const block = members.map((m) => strategyBlock(strategy, researched, m)).find((r) => r) ?? null
                       return (
                         <button

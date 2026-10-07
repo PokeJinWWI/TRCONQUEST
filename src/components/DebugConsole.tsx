@@ -1,3 +1,4 @@
+import { loadSettlersFree } from '../scene/colonies'
 import { useEffect, useRef, useState } from 'react'
 import { pristineCombatState, useShipStore } from '../state/shipStore'
 import type { ShipClass } from '../data/shipData'
@@ -12,8 +13,13 @@ import { getMoonsForPlanet } from '../scene/moonData'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipDesignStore } from '../state/shipDesignStore'
 import { getPlanetsForStar } from '../scene/planetData'
-import { STARS, getSystemStars } from '../data/starData'
-import { SOL_SYSTEM_ID, SOL_BODY_NAME, DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from '../scene/shipPhysics'
+import { getStarsForNeighborhood } from '../data/starData'
+import { NEIGHBORHOODS } from '../data/neighborhoodData'
+import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
+import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
+import { useDiplomacyStore } from '../state/diplomacyStore'
+import { cheatAddResource, cheatEndAllWars, cheatEndWar, cheatJumpDays, defaultNear, nearOptions, spawnLocation, warLabel } from '../scene/cheats'
+import { SOL_SYSTEM_ID, SOL_BODY_NAME } from '../scene/shipPhysics'
 import { SCENARIOS, SCENARIO_DIFFICULTY_LABELS, type Scenario } from '../data/scenarios'
 import { ARMY_SCENARIOS, type ArmyScenario } from '../data/armyScenarios'
 import { currentScenarioOwners, loadArmyScenario, loadShipScenario } from '../scene/scenarioLoader'
@@ -23,8 +29,8 @@ import { useDebugConsoleStore } from '../state/debugConsoleStore'
 import { useTechStore } from '../state/techStore'
 import type { TechCategory } from '../data/techData'
 
-// Only charted systems (hasSystemData) have anything to spawn near.
-const SPAWNABLE_STARS = STARS.filter((s) => s.hasSystemData)
+// Every cluster can be spawned into: the Solar Neighbourhood first, the rest by name.
+const SPAWN_CLUSTERS = [...NEIGHBORHOODS].sort((a, b) => (a.id === SOLAR_NEIGHBORHOOD_ID ? -1 : b.id === SOLAR_NEIGHBORHOOD_ID ? 1 : a.name.localeCompare(b.name)))
 
 // A small, fixed ring of starting orbital phases so ships spawned at the
 // same body don't all start at the same point in their orbit — purely
@@ -77,6 +83,7 @@ export function DebugConsole() {
   const setOpen = useDebugConsoleStore((s) => s.setOpen)
   const sandbox = usePlayerStore((s) => s.sandbox)
   const [classId, setClassId] = useState(PLAYER_SHIP_CLASSES[0].id)
+  const [clusterId, setClusterId] = useState(SOLAR_NEIGHBORHOOD_ID)
   const [starId, setStarId] = useState(SOL_SYSTEM_ID)
   const [nearBody, setNearBody] = useState(SOL_BODY_NAME)
   // Which nation owns a spawned ship — blank means "the player's own".
@@ -93,6 +100,13 @@ export function DebugConsole() {
   const [armyMessage, setArmyMessage] = useState<string | null>(null)
   const [researchCategory, setResearchCategory] = useState<TechCategory>('physics')
   const [researchAmount, setResearchAmount] = useState(100)
+  // The cheats below research: resources, influence, game time, wars.
+  const [cheatResource, setCheatResource] = useState<ResourceId>('alloys')
+  const [cheatAmount, setCheatAmount] = useState(1000)
+  const [influenceAmount, setInfluenceAmount] = useState(100)
+  const [jumpDays, setJumpDays] = useState(30)
+  const [warId, setWarId] = useState('')
+  const [cheatMessage, setCheatMessage] = useState<string | null>(null)
   const spawnCounter = useRef(0)
   const ships = useShipStore((s) => s.ships)
   const spawnShip = useShipStore((s) => s.spawnShip)
@@ -107,7 +121,9 @@ export function DebugConsole() {
 
   // Every real star in the system (component stars for a multi-star system)
   // plus its planets — all valid bodies to spawn a ship orbiting.
-  const spawnNearOptions = [...getSystemStars(starId).map((c) => c.name), ...getPlanetsForStar(starId).map((p) => p.name)]
+  const clusterStars = getStarsForNeighborhood(clusterId)
+  const spawnNearOptions = nearOptions(starId)
+  const wars = useDiplomacyStore((s) => s.wars)
 
   // Every preset (the dev-only tools too: this console is the only place they can be
   // spawned, labelled in the list) plus every custom design built in the Ship Designer's builder
@@ -167,19 +183,13 @@ export function DebugConsole() {
     if (!ownerId) return
     spawnCounter.current += 1
     const phaseDeg = SPAWN_PHASE_OFFSETS_DEG[(spawnCounter.current - 1) % SPAWN_PHASE_OFFSETS_DEG.length]
+    const spawnedId = `ship-${Date.now()}-${spawnCounter.current}`
     spawnShip({
-      id: `ship-${Date.now()}-${spawnCounter.current}`,
+      id: spawnedId,
       classId: shipClass.id,
       name: `${shipClass.name} ${spawnCounter.current}`,
       ownerId,
-      location: {
-        kind: 'orbiting',
-        systemId: starId,
-        bodyName: nearBody,
-        periodDays: DEFAULT_SHIP_ORBIT_PERIOD_DAYS,
-        phaseDeg,
-        inclinationDeg: 0,
-      },
+      location: spawnLocation(clusterId, starId, nearBody, phaseDeg),
       order: null,
       hyperdriveReadySimDays: 0,
       warpReadySimDays: 0,
@@ -191,6 +201,8 @@ export function DebugConsole() {
       combat: pristineCombatState(shipClass.combat),
       stance: 'balanced',
     })
+    // A spawned Colony Ship comes with its settlers (it never went through a yard).
+    loadSettlersFree(spawnedId)
   }
 
   // Loads a pre-built ship fight — see src/data/scenarios.ts for what each
@@ -238,6 +250,27 @@ export function DebugConsole() {
         </div>
 
         <div className="debug-console-row">
+          <label htmlFor="debug-spawn-cluster">Cluster</label>
+          <select
+            id="debug-spawn-cluster"
+            value={clusterId}
+            onChange={(e) => {
+              const nextCluster = e.target.value
+              const first = getStarsForNeighborhood(nextCluster)[0]
+              setClusterId(nextCluster)
+              setStarId(first?.id ?? SOL_SYSTEM_ID)
+              setNearBody(first ? defaultNear(first.id) : SOL_BODY_NAME)
+            }}
+          >
+            {SPAWN_CLUSTERS.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="debug-console-row">
           <label htmlFor="debug-spawn-system">System</label>
           <select
             id="debug-spawn-system"
@@ -247,10 +280,10 @@ export function DebugConsole() {
               setStarId(nextStarId)
               // Default to orbiting the system's primary star (a real
               // component, not the system's display name).
-              setNearBody(getSystemStars(nextStarId)[0]?.name ?? SOL_BODY_NAME)
+              setNearBody(defaultNear(nextStarId))
             }}
           >
-            {SPAWNABLE_STARS.map((s) => (
+            {clusterStars.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -261,9 +294,9 @@ export function DebugConsole() {
         <div className="debug-console-row">
           <label htmlFor="debug-spawn-near">Spawn near</label>
           <select id="debug-spawn-near" value={nearBody} onChange={(e) => setNearBody(e.target.value)}>
-            {spawnNearOptions.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {spawnNearOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>
@@ -414,6 +447,96 @@ export function DebugConsole() {
         >
           Grant Research
         </button>
+
+        <div className="debug-console-divider" />
+
+        {/* Cheats: nothing here is a game rule. Resources and influence go straight into the stockpile
+            (in Complex mode the economy keeps its own goods; strategic ones such as influence, exotic
+            matter and hyperium are the stockpile in both). */}
+        <div className="debug-console-section">CHEAT: resources, influence, time, wars</div>
+        <div className="debug-console-row">
+          <label htmlFor="debug-cheat-resource">Cheat: add resource</label>
+          <select id="debug-cheat-resource" value={cheatResource} onChange={(e) => setCheatResource(e.target.value as ResourceId)}>
+            {RESOURCE_TYPES.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="debug-console-row">
+          <label htmlFor="debug-cheat-amount">Amount</label>
+          <input id="debug-cheat-amount" type="number" value={cheatAmount} onChange={(e) => setCheatAmount(Number(e.target.value) || 0)} />
+        </div>
+        <button
+          type="button"
+          className="debug-console-spawn-btn"
+          disabled={!selectedCountryId}
+          onClick={() => {
+            if (!selectedCountryId) return
+            cheatAddResource(selectedCountryId, cheatResource, cheatAmount)
+            setCheatMessage(`Cheat: ${cheatAmount >= 0 ? 'added' : 'took'} ${Math.abs(cheatAmount)} ${cheatResource}`)
+          }}
+        >
+          Add Resource (cheat)
+        </button>
+        <div className="debug-console-row">
+          <label htmlFor="debug-cheat-influence">Cheat: influence</label>
+          <input id="debug-cheat-influence" type="number" value={influenceAmount} onChange={(e) => setInfluenceAmount(Number(e.target.value) || 0)} />
+        </div>
+        <button
+          type="button"
+          className="debug-console-spawn-btn"
+          disabled={!selectedCountryId}
+          onClick={() => {
+            if (!selectedCountryId) return
+            cheatAddResource(selectedCountryId, 'influence', influenceAmount)
+            setCheatMessage(`Cheat: ${influenceAmount >= 0 ? 'added' : 'took'} ${Math.abs(influenceAmount)} influence`)
+          }}
+        >
+          Add Influence (cheat)
+        </button>
+        <div className="debug-console-row">
+          <label htmlFor="debug-cheat-days">Cheat: jump time (days)</label>
+          <input id="debug-cheat-days" type="number" min={1} value={jumpDays} onChange={(e) => setJumpDays(Math.max(1, Number(e.target.value) || 1))} />
+        </div>
+        <button
+          type="button"
+          className="debug-console-spawn-btn"
+          onClick={() => {
+            cheatJumpDays(jumpDays)
+            setCheatMessage(`Cheat: jumping ${jumpDays} days`)
+          }}
+        >
+          Jump Time (cheat)
+        </button>
+        <div className="debug-console-row">
+          <label htmlFor="debug-cheat-war">Cheat: end war</label>
+          <select id="debug-cheat-war" value={warId || wars[0]?.id || ''} onChange={(e) => setWarId(e.target.value)} disabled={wars.length === 0}>
+            {wars.length === 0 ? <option value="">No wars</option> : wars.map((w) => <option key={w.id} value={w.id}>{warLabel(w)}</option>)}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="debug-console-spawn-btn"
+          disabled={wars.length === 0}
+          onClick={() => {
+            const id = warId && wars.some((w) => w.id === warId) ? warId : wars[0]?.id
+            if (id && cheatEndWar(id)) setCheatMessage('Cheat: war ended (white peace)')
+            setWarId('')
+          }}
+        >
+          End War (cheat)
+        </button>
+        <button
+          type="button"
+          className="debug-console-spawn-btn"
+          disabled={wars.length === 0}
+          onClick={() => setCheatMessage(`Cheat: ended ${cheatEndAllWars()} war(s)`)}
+        >
+          End All Wars (cheat)
+        </button>
+        {cheatMessage && <div className="debug-console-note">{cheatMessage}</div>}
 
         <div className="debug-console-divider" />
 

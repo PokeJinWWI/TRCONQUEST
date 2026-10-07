@@ -5,6 +5,7 @@ import { useTechStore } from './techStore'
 import { isAbstractEconomy } from './playerStore'
 import { useGameTimeStore } from './gameTimeStore'
 import { useShipStore } from './shipStore'
+import { damageFraction, repairBlock, repairCost, repairDays } from '../scene/shipRepair'
 import { atShipyard, isEngaged, upgradeBlock, upgradeCost, upgradeDays, upgradeTarget } from '../scene/shipUpgrade'
 import { getCountry } from '../data/countryData'
 import { MAX_QUEUED_BUILDS, shipBuildCost, shipBuildDays, type ResourceCost } from '../data/shipyardData'
@@ -32,6 +33,9 @@ export interface ShipBuildOrder {
   // when it finishes, instead of a new hull being built. Same queue, slips and refund.
   upgradeShipId?: string
   upgradeShipName?: string
+  // A REPAIR order (queueRepair): the damaged ship restored to a pristine hull on finish.
+  repairShipId?: string
+  repairShipName?: string
 }
 
 export type QueueBuildResult = { ok: true; orderId: string } | { ok: false; reason: string }
@@ -57,6 +61,9 @@ interface ShipyardState {
   // Queues an upgrade of one of this nation's ships to the next level of its class: pays
   // the cost difference up front and takes a slip like a build (scene/shipUpgrade.ts).
   queueUpgrade: (countryId: string, shipId: string, simDays: number) => QueueBuildResult
+  // Queues a damaged ship of this nation for repair at a shipyard: pays the cost up front
+  // and takes a slip like a build (scene/shipRepair.ts).
+  queueRepair: (countryId: string, shipId: string, simDays: number) => QueueBuildResult
   // Wholesale replacement of one country's queue — used by the resolver to
   // apply one step's result (starts + completions) in a single write.
   setOrders: (countryId: string, orders: ShipBuildOrder[]) => void
@@ -124,7 +131,7 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
       classOf: resolveShipClass,
       atYard: atShipyard(ship),
       engaged: isEngaged(ship.id),
-      alreadyQueued: orders.some((o) => o.upgradeShipId === shipId),
+      alreadyQueued: orders.some((o) => o.upgradeShipId === shipId || o.repairShipId === shipId),
       queueFull: orders.length >= MAX_QUEUED_BUILDS,
     })
     if (block) return { ok: false, reason: block }
@@ -151,11 +158,49 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
     return { ok: true, orderId: order.id }
   },
 
+  queueRepair: (countryId, shipId, simDays) => {
+    const ship = useShipStore.getState().ships.find((s) => s.id === shipId)
+    if (!ship || ship.ownerId !== countryId) return { ok: false, reason: 'No such ship.' }
+    const orders = get().ordersFor(countryId)
+    const shipClass = resolveShipClass(ship.classId)
+    const damage = damageFraction(ship)
+    const block = repairBlock({
+      damage,
+      amounts: useResourceStore.getState().stateFor(countryId).amounts,
+      shipClass,
+      engaged: isEngaged(ship.id),
+      alreadyQueued: orders.some((o) => o.repairShipId === shipId || o.upgradeShipId === shipId),
+      queueFull: orders.length >= MAX_QUEUED_BUILDS,
+      atYard: atShipyard(ship),
+    })
+    if (block || !shipClass) return { ok: false, reason: block ?? 'Unknown ship class.' }
+    const cost = repairCost(shipClass, damage)
+    spendCost(countryId, cost)
+    orderCounter += 1
+    const order: ShipBuildOrder = {
+      id: `repair-${Date.now()}-${orderCounter}`,
+      classId: shipClass.id,
+      className: shipClass.name,
+      cost,
+      durationDays: repairDays(shipClass, damage),
+      queuedSimDays: simDays,
+      startedSimDays: null,
+      finishSimDays: null,
+      repairShipId: shipId,
+      repairShipName: ship.name,
+    }
+    markUpgrading(shipId, true)
+    set((s) => ({ ordersByCountry: { ...s.ordersByCountry, [countryId]: [...(s.ordersByCountry[countryId] ?? []), order] } }))
+    startFreeSlips(countryId, simDays)
+    return { ok: true, orderId: order.id }
+  },
+
   cancelBuild: (countryId, orderId) => {
     const order = get().ordersFor(countryId).find((o) => o.id === orderId)
     if (!order) return
     refundCost(countryId, order.cost)
     if (order.upgradeShipId) markUpgrading(order.upgradeShipId, false)
+    if (order.repairShipId) markUpgrading(order.repairShipId, false)
     set((s) => ({ ordersByCountry: { ...s.ordersByCountry, [countryId]: (s.ordersByCountry[countryId] ?? []).filter((o) => o.id !== orderId) } }))
     // A cancelled build frees its slip: the next waiting order takes it now.
     startFreeSlips(countryId, useGameTimeStore.getState().simDays)

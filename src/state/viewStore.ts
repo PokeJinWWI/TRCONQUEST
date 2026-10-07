@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { clusterOfStar } from '../scene/clusters'
 import { bodyIndex } from '../scene/territory'
 
 // 'combat' is the "detailed view" of an engagement, the same way 'satellite'
@@ -162,7 +163,8 @@ export const useViewStore = create<ViewState>((set) => ({
       inViewSelection: null,
     })),
   enterSystem: (starId, preselectBody) =>
-    set({ level: 'system', selectedStarId: starId, selectedBodyName: null, inViewSelection: preselectBody ?? null }),
+    // The system's own cluster comes with it, so zooming out lands on that cluster's map.
+    set({ level: 'system', selectedStarId: starId, selectedNeighborhoodId: clusterOfStar(starId), selectedBodyName: null, inViewSelection: preselectBody ?? null }),
   enterSatellite: (bodyName) => set({ level: 'satellite', selectedBodyName: bodyName, inViewSelection: null }),
   exitSatelliteToSystem: () => set((s) => ({ level: 'system', inViewSelection: s.selectedBodyName })),
   exitSystemToInterstellar: () =>
@@ -177,6 +179,7 @@ export const useViewStore = create<ViewState>((set) => ({
       level: 'system',
       combatEngagementId: null,
       selectedStarId: place?.starId ?? s.selectedStarId,
+      selectedNeighborhoodId: place?.starId ? clusterOfStar(place.starId) : s.selectedNeighborhoodId,
       // Framed near the body the fight was at, the way zooming out of a
       // satellite view is (see exitSatelliteToSystem).
       selectedBodyName: place?.bodyName ?? null,

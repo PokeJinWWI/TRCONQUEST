@@ -27,7 +27,8 @@ import {
   type TerrainId,
   type UnitType,
 } from '../data/groundData'
-import { PLANETS_BY_STAR, type PlanetClass } from './planetData'
+import { PLANETS_BY_STAR, getPlanetsForStar, type PlanetClass } from './planetData'
+import { generatedStarOfBody } from '../data/galaxyGen'
 import { getMoonsForPlanet } from './moonData'
 import { estimateSize } from './bodyStats'
 import { arc, nodePoint, surfaceMesh, type SurfacePoint } from './surfaceMesh'
@@ -103,6 +104,24 @@ export function bodyGroundInfo(bodyName: string): BodyGroundInfo | null {
     }
   }
   return bodyInfoCache.get(bodyName) ?? null
+}
+
+// The same for ANY body: a hand-authored one, or a generated planet of another
+// cluster (looked up on demand, O(1), and remembered). The ground map, colonies and
+// land use this; bodyGroundInfo itself stays the hand-authored bodies only, which is
+// what Complex mode's economy seed asks (its generated empires' worlds must seed
+// exactly as they did before ships could reach them).
+const generatedInfoCache = new Map<string, BodyGroundInfo | null>()
+export function bodyGroundInfoAny(bodyName: string): BodyGroundInfo | null {
+  const authored = bodyGroundInfo(bodyName)
+  if (authored) return authored
+  const cached = generatedInfoCache.get(bodyName)
+  if (cached !== undefined) return cached
+  const star = generatedStarOfBody(bodyName)
+  const p = star ? getPlanetsForStar(star.id).find((x) => x.name === bodyName) : undefined
+  const info = p ? { radiusKm: p.radiusKm, planetClass: p.planetClass, color: p.color } : null
+  generatedInfoCache.set(bodyName, info)
+  return info
 }
 
 export function terrainAt(surface: BodySurface, node: number): TerrainId {
@@ -191,7 +210,7 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
   const key = `${bodyName}|${tier}`
   const hit = cache.get(key)
   if (hit) return hit
-  const info = bodyGroundInfo(bodyName) ?? { radiusKm: 1000, planetClass: 'barren' as PlanetClass, color: '#9fe8ff' }
+  const info = bodyGroundInfoAny(bodyName) ?? { radiusKm: 1000, planetClass: 'barren' as PlanetClass, color: '#9fe8ff' }
   const spec = SURFACE_CLASSES[info.planetClass]
   const seed = hashString(bodyName)
   const mesh = surfaceMesh()

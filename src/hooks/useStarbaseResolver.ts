@@ -7,6 +7,9 @@ import { starbaseAnchorBody, stepStarbaseSieges } from '../scene/starbaseLogic'
 import { ownerDisplay } from '../data/countryRoster'
 import { STARBASE_LOSS_VALUE } from '../data/starbaseData'
 import { recordLoss } from '../scene/peace'
+import { usePlayerStore } from '../state/playerStore'
+import { findStar } from '../data/starData'
+import { finishedBetween, starbaseFinishedText } from '../scene/starbaseNotices'
 
 // Hostile warships parked at a Starbase's own star grind its integrity down,
 // once per sim-day of clock time (scene/starbaseLogic.stepStarbaseSieges) — a
@@ -32,6 +35,17 @@ export function resolveStarbaseSieges(fromSimDays: number, toSimDays: number): v
   useStarbaseStore.getState().applyDamage(damaged, destroyedIds)
 }
 
+// The player's Starbases that finished since the last pass are announced (not other nations':
+// the player does not see those). A click on the notice goes to the system.
+export function announceFinishedStarbases(fromSimDays: number, toSimDays: number): void {
+  const player = usePlayerStore.getState().selectedCountryId
+  if (!player) return
+  const mine = useStarbaseStore.getState().starbases.filter((sb) => sb.ownerId === player)
+  for (const sb of finishedBetween(mine, fromSimDays, toSimDays)) {
+    useDiplomacyStore.getState().pushEvent('starbase-finished', [player], starbaseFinishedText(ownerDisplay(player).name, findStar(sb.starId)?.name ?? sb.starId), toSimDays, { starId: sb.starId })
+  }
+}
+
 export function useStarbaseResolver() {
   useEffect(() => {
     let last = useGameTimeStore.getState().simDays
@@ -41,6 +55,7 @@ export function useStarbaseResolver() {
         return
       }
       if (Math.floor(state.simDays) === Math.floor(last)) return
+      announceFinishedStarbases(last, state.simDays)
       resolveStarbaseSieges(last, state.simDays)
       last = state.simDays
     })

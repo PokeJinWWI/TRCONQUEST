@@ -59,7 +59,19 @@ console.log('\n=== 2. The map ===')
   check('the Himalaya are mountains', at(85, 31) === 'mountains')
   check('East Antarctica is ice', at(80, -80) === 'tundra')
   check('Siberia in the north is ice or forest, not desert', ['tundra', 'forest'].includes(at(100, 62)))
-  check('a node is land exactly when at least half of it is', Array.from({ length: mesh.count.fine }, (_, i) => (values[i] >= 0.5) === (earth.terrain[i] !== 0)).every(Boolean))
+  // Earth's land cutoff is deliberately generous (a node is sea only when >= 210/255 of its cell is
+  // water, so coasts and archipelagos survive: scene/bodyTopography.realTerrain), and the big named
+  // lakes are painted back in as water: so no wet node is ever land, and the only dry nodes that are
+  // ocean are those few lake nodes.
+  const topo = topographyOf('Earth')!
+  let wetLand = 0
+  let dryOcean = 0
+  for (let i = 0; i < mesh.count.fine; i++) {
+    const land = earth.terrain[i] !== 0
+    if (land && topo.water![i] >= 210) wetLand++
+    if (!land && topo.water![i] < 210) dryOcean++
+  }
+  check('a node is sea when most of its cell is water, apart from the painted-in lakes', wetLand === 0 && dryOcean < mesh.count.fine * 0.01, `${wetLand} wet land nodes, ${dryOcean} lake nodes`)
   check('there is a walkable mainland (Eurasia and Africa are one landmass)', earth.mainland >= 0)
   check('Earth has 5+ biomes', new Set(earth.terrain).size >= 5, `${new Set(earth.terrain).size} kinds`)
   check('the terrain map gets the real relief', !!earth.reliefM && earth.reliefM[node(88, 32)] > 3000)

@@ -6,10 +6,11 @@
 //  - On: a jump may risk up to the ship's own max-risk setting, with no
 //    question asked; a route of safe jumps is still taken when there is one.
 // Stateless: every jump is planned afresh from where the ship now is, so a lane
-// charted on the way is used at once. Routes run between the stars of our own
-// neighbourhood only: automation never sends a ship to another cluster.
+// charted on the way is used at once. Routes run between the stars of the ship's
+// own cluster (scene/clusters.ts): a route never crosses between clusters.
 import { AUTO_MAX_RISK_DEFAULT, AUTO_ROUTE_MAX_JUMPS } from '../data/shipData'
-import { STARS } from '../data/starData'
+import { findStar } from '../data/starData'
+import { starsOfShipCluster } from './clusters'
 import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { useShipStore, type MoveDestination, type ShipInstance } from '../state/shipStore'
 import { loseShipToJump } from './jumpLoss'
@@ -38,7 +39,7 @@ export type AutoStep = { next: MoveDestination; last: boolean } | { refused: str
 function placeName(destination: MoveDestination): string {
   if (destination.kind === 'body') return destination.bodyName
   const systemId = destinationSystemId(destination)
-  return STARS.find((s) => s.id === systemId)?.name ?? 'there'
+  return (systemId ? findStar(systemId)?.name : undefined) ?? 'there'
 }
 
 // The next leg of the ship's trip to `destination`: the destination itself when it
@@ -54,7 +55,7 @@ export function nextAutoStep(ship: ShipInstance, destination: MoveDestination, s
   const route = planJumpRoute({
     from,
     to,
-    nodes: STARS.map((s) => s.id),
+    nodes: starsOfShipCluster(ship).map((s) => s.id),
     lossOf: (a, b) => starJumpChance(ship, a, b),
     maxJumps: AUTO_ROUTE_MAX_JUMPS,
     safeLoss: JUMP_WARN_LOSS,

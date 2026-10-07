@@ -6,7 +6,8 @@ import { usePlayerStore } from '../state/playerStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useViewStore } from '../state/viewStore'
 import { goToEvent } from './eventNavigation'
-import { bodyIndex } from './territory'
+import { bodyInfoOf } from './territory'
+import { clusterOfStar, isHomeCluster } from './clusters'
 
 // The key after (dir 1) or before (dir -1) `current` in `keys`, wrapping. With
 // no current selection it takes the first (or last, going back).
@@ -38,10 +39,11 @@ export function cycleFleets(dir: 1 | -1 = 1): void {
 export function ownColonyNames(): string[] {
   const player = usePlayerStore.getState().selectedCountryId
   const owners = useTerritoryStore.getState().bodyOwner
-  const index = bodyIndex()
+  // Home worlds by system then name, then worlds in other clusters.
+  const star = (b: string) => bodyInfoOf(b)?.starId
   return Object.keys(owners)
-    .filter((b) => owners[b] === player && index.has(b))
-    .sort((a, b) => (index.get(a)!.starId).localeCompare(index.get(b)!.starId) || a.localeCompare(b))
+    .filter((b) => owners[b] === player && !!star(b))
+    .sort((a, b) => Number(!isHomeCluster(clusterOfStar(star(a)!))) - Number(!isHomeCluster(clusterOfStar(star(b)!))) || star(a)!.localeCompare(star(b)!) || a.localeCompare(b))
 }
 
 export function cycleColonies(dir: 1 | -1 = 1): void {

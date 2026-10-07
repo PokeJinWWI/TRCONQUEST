@@ -7,16 +7,19 @@ import { isPlayerOwned } from '../state/shipRelations'
 import { useShipStore } from '../state/shipStore'
 import { bodyStarId } from './territory'
 import { orderSelectedToSurvey } from './shipCommands'
+import { starbaseMenuItem } from './starbaseMenu'
 import { isBodySurveyed } from './surveyLogic'
 import { useSurveyStore } from '../state/surveyStore'
 import { useTerritoryStore } from '../state/territoryStore'
+import { cargoTotal } from './cargoLogic'
+import { orderSelectedToUnload } from './refill'
 import { SURVEY_DAYS_PER_BODY } from '../data/surveyData'
 
 // Everything a right-click on a body offers beyond "Move to": Survey (Science
-// Ships) and Colonize (Colony Ships). Empty when nothing selected can do either,
+// Ships), Colonize (Colony Ships), Deposit cargo and, on the star, Build Starbase. Empty when nothing selected can do either,
 // and the scene then just moves.
 export function bodyMenuItems(systemId: string, bodyName: string): ContextMenuItem[] {
-  return [surveyMenuItem(bodyName), colonizeMenuItem(systemId, bodyName)].filter((i): i is ContextMenuItem => !!i)
+  return [surveyMenuItem(bodyName), colonizeMenuItem(systemId, bodyName), depositMenuItem(systemId, bodyName), starbaseMenuItem(systemId, bodyName)].filter((i): i is ContextMenuItem => !!i)
 }
 
 // "Survey <body>" for the player's selected Science Ships, or null if none is
@@ -33,6 +36,21 @@ export function surveyMenuItem(bodyName: string): ContextMenuItem | null {
     disabled: done,
     title: done ? `${bodyName} is already surveyed` : `Fly there and survey it (${SURVEY_DAYS_PER_BODY} days in orbit)`,
     onClick: () => orderSelectedToSurvey(starId, bodyName),
+  }
+}
+
+// "Deposit cargo at <body>" for selected own ships carrying goods: greyed out
+// unless the body is one of their nation's worlds.
+export function depositMenuItem(systemId: string, bodyName: string): ContextMenuItem | null {
+  const store = useShipStore.getState()
+  const haulers = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s) && cargoTotal(s.cargo) > 0)
+  if (haulers.length === 0) return null
+  const own = useTerritoryStore.getState().bodyOwner[bodyName] === haulers[0].ownerId
+  return {
+    label: `Deposit cargo at ${bodyName}`,
+    disabled: !own,
+    title: own ? 'Fly there and put the hold into your stockpile' : `${bodyName} is not one of your worlds`,
+    onClick: () => orderSelectedToUnload(systemId, bodyName),
   }
 }
 
@@ -64,3 +82,5 @@ export function useBodyOrderMenu(): { open: (title: string, items: ContextMenuIt
   const close = useCallback(() => setMenu(null), [])
   return { open, element: menu ? <ContextMenu x={menu.x} y={menu.y} title={menu.title} items={menu.items} onClose={close} /> : null }
 }
+
+export { starbaseMenuItem }

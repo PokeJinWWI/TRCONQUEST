@@ -5,18 +5,19 @@
 import { useConfirmStore } from '../state/confirmStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import type { MoveDestination, ShipInstance } from '../state/shipStore'
-import { driveOfShip, hyperdriveJumpChance, planMoveUnchecked } from './shipPhysics'
+import { driveOfShip, hyperdriveJumpChance, jumpIsCharted, planMoveUnchecked } from './shipPhysics'
 import { formatTripTime, isLongTrip } from './driveChoice'
-import { CHARTED_LANE_RISK_RATIO, formatLossPercent, jumpWarning } from './jumpWarning'
+import { CHARTED_LANE_RISK_RATIO, jumpRiskTipText, jumpWarning } from './jumpWarning'
 
 // `onCancel` undoes whatever the caller set up ahead of the order (an arrival command).
 // A one-line "Jump risk: 43% chance a ship is lost" for the ships a destination's panel
 // or hover is about; null when none would jump (a flight, or a warp ship).
 export function jumpRiskLine(ships: readonly ShipInstance[], destination: MoveDestination): string | null {
   const simDays = useGameTimeStore.getState().simDays
-  const chances = ships.map((s) => hyperdriveJumpChance(s, destination, simDays)).filter((c): c is number => c !== null)
-  if (chances.length === 0) return null
-  return `Jump risk: ${formatLossPercent(Math.max(...chances))} chance the ship is lost`
+  const risks = ships.map((s) => ({ chance: hyperdriveJumpChance(s, destination, simDays), charted: jumpIsCharted(s, destination, simDays) })).filter((r): r is { chance: number; charted: boolean } => r.chance !== null)
+  if (risks.length === 0) return null
+  const worst = risks.reduce((a, b) => (b.chance > a.chance ? b : a))
+  return jumpRiskTipText(worst.chance, worst.charted)
 }
 
 // The longest trip among the ships that would fly there on reaction drive (days), or null

@@ -76,6 +76,9 @@ export interface AiSnapshot {
   // jump (scene/shipPhysics.hyperdriveJumpChance): what ai/jumpRules caps. Optional:
   // absent = no jump is ever refused.
   jumpChanceOf?: (ship: ShipInstance, destination: MoveDestination) => number | null
+  // Where to send a ship to reach a destination its direct jump would be too risky for: the first
+  // stop of a route along charted lanes (ai/jumpRules.aiNextStop); null = no route. Optional.
+  nextStopOf?: (ship: ShipInstance, destination: MoveDestination) => MoveDestination | null
   // Diplomacy layers (optional, absent = none): the international organizations
   // and subject relationships the Diplomat reasons about.
   orgs?: InternationalOrg[]

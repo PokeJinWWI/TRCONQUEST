@@ -8,7 +8,8 @@ import { useHyperlaneStore } from '../state/hyperlaneStore'
 import { planMove } from '../scene/shipPhysics'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { shipCombatProfile, overallHealthFraction } from '../scene/combatResolution'
-import { STARS, type StarData } from '../data/starData'
+import { type StarData } from '../data/starData'
+import { starsOfShipCluster } from '../scene/clusters'
 import { useTechStore } from '../state/techStore'
 import { usableDrives } from '../data/warpData'
 
@@ -56,11 +57,14 @@ export function pickSafeStar(
   allShips: ShipInstance[],
   requireChartedFrom: string | null = null,
 ): StarData | null {
-  const origin = STARS.find((s) => s.id === currentStarId) ?? STARS[0]
+  // The stars of the cluster the ship is in: a retreat never crosses between clusters.
+  const stars = starsOfShipCluster(ship)
+  const origin = stars.find((s) => s.id === currentStarId) ?? stars[0]
+  if (!origin) return null
   const { hasHyperlane } = useHyperlaneStore.getState()
   let best: StarData | null = null
   let bestDistance = Infinity
-  for (const star of STARS) {
+  for (const star of stars) {
     if (star.id === currentStarId) continue
     if (requireChartedFrom && !hasHyperlane(ship.ownerId, requireChartedFrom, star.id)) continue
     const hostilePresent = allShips.some(

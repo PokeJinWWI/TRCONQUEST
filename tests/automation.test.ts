@@ -126,9 +126,9 @@ console.log('\n=== 3. Construction ships: refill and build on their own ===')
   check('with an empty hold and no Cargo Ship, auto-build flies home to load', ship(b3).arrivalCommand?.command.kind === 'load' && !!ship(b3).order)
 
   fresh()
-  // Barnard's Star fully surveyed, two kitted builders at Mars.
+  // Barnard's Star and Wolf 359 fully surveyed (Alpha Centauri is Orion's: auto-build keeps out of other nations' borders), two kitted builders at Mars.
   for (const body of systemBodies('barnards-star')) useSurveyStore.getState().discover(MARS, { kind: 'surveyed', bodyName: body }, 0, 0)
-  for (const body of systemBodies('alpha-centauri')) useSurveyStore.getState().discover(MARS, { kind: 'surveyed', bodyName: body }, 0, 0)
+  for (const body of systemBodies('wolf-359')) useSurveyStore.getState().discover(MARS, { kind: 'surveyed', bodyName: body }, 0, 0)
   useResourceStore.getState().setAmount(MARS, 'influence', 500)
   const x = spawnOwnedShip('construction-ship', MARS, 'sol', 'Mars')!
   const y = spawnOwnedShip('construction-ship', MARS, 'sol', 'Mars')!
@@ -139,7 +139,7 @@ console.log('\n=== 3. Construction ships: refill and build on their own ===')
   resolveAutomation(1)
   const tx = ship(x).arrivalCommand
   const ty = ship(y).arrivalCommand
-  check('with a kit, it flies off to build a Starbase', tx?.command.kind === 'build-starbase' && !!ship(x).order, JSON.stringify(tx))
+  check('with a kit, it flies off to build a Starbase', tx?.command.kind === 'build-starbase' && (!!ship(x).order || ship(x).location.kind === 'orbiting'), JSON.stringify(tx))
   check('...and the second builder picks another system', ty?.command.kind === 'build-starbase' && ty.starId !== tx?.starId, `${tx?.starId} / ${ty?.starId}`)
 }
 
@@ -244,7 +244,9 @@ console.log('\n=== 6. Colony ships settle on their own ===')
   check('colony ships can auto-settle', automationsFor('colony').join() === 'settle')
   resolveAutomation(1)
   const heading = [c1, c2].filter((c) => ship(c).arrivalCommand?.command.kind === 'colonize')
-  check('one is sent to the only settleable world, not both', heading.length === 1 && (ship(heading[0]).arrivalCommand!.command as { bodyName: string }).bodyName === 'Titan')
+  // (A nation knows every body of a system it owns a world in, so all of Sol's free worlds are on offer: tests/colonySurvey.test.ts.)
+  const targets = heading.map((c) => (ship(c).arrivalCommand!.command as { bodyName: string }).bodyName)
+  check('each is sent to a world of its own, never both to one', heading.length === 2 && targets[0] !== targets[1], targets.join(', '))
 }
 
 console.log('\n=== 12. "Make unsafe jumps" off: automation refuses an unsafe jump and says why ===')

@@ -6,8 +6,9 @@ import { ShipSurveySection } from './ShipSurveySection'
 import { ShipAutomationToggle } from './ShipAutomationToggle'
 import { ShipFreeFlightToggle } from './ShipFreeFlightToggle'
 import { ShipDriveSelector } from './ShipDriveSelector'
+import { ShipJumpRiskRow } from './ShipJumpRiskRow'
 import { usePlayerTech } from '../hooks/usePlayerTech'
-import { strategyBlock } from './freeFlight'
+import { hasFreeFlightTech, strategyBlock, strategyListed } from './freeFlight'
 import { ShipCargoSection } from './ShipCargoSection'
 import { anyCivilian, mergeCheck } from './fleetRules'
 import { startFleetMerge } from './fleetMerge'
@@ -15,7 +16,7 @@ import { viewShip } from './shipNav'
 import { useShipStore } from '../state/shipStore'
 import { warpMkOf, warpSpeedCOfMk } from '../data/warpData'
 import { useTechStore } from '../state/techStore'
-import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, JUMP_RISK_MAX_FACTOR, JUMP_RISK_MIN_FACTOR, type HyperDrive } from '../data/shipData'
+import { RELATION_COLORS, RELATION_LABELS, describeFtlDrive, type HyperDrive } from '../data/shipData'
 import { ownerDisplay } from '../data/countryRoster'
 import { isPlayerOwned, shipsHostile, useRelationFn, useRelationTo } from '../state/shipRelations'
 import { resolveShipClass } from '../state/shipClassResolver'
@@ -31,7 +32,6 @@ import {
   getShipStatusText,
   hyperdriveCooldownRemainingDays,
   warpCooldownRemainingDays,
-  hyperdriveLossChance,
   warpEscapeLossChance,
   coreHealthFraction,
 } from './shipPhysics'
@@ -45,6 +45,7 @@ import { DraggableWindow } from '../components/DraggableWindow'
 import { TransportCargo } from '../components/ArmyViews'
 import { ShipColonySection, ShipPatrolToggle } from './ShipColonySection'
 import { ShipUpgradeSection } from './ShipUpgradeSection'
+import { FleetYardButtons, ShipRepairSection } from './ShipRepairSection'
 import { ShipDeconstructSection } from './ShipDeconstructSection'
 
 function formatCooldown(label: string, remainingDays: number): string {
@@ -220,7 +221,7 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
             <span className="inspect-label">Stance (all yours)</span>
           </div>
           <div className="dip-actions">
-            {COMBAT_STANCES.map((stance) => {
+            {COMBAT_STANCES.filter((st) => strategyListed(st, researched)).map((stance) => {
               const block = mine.map((s) => strategyBlock(stance, researched, s)).find((r) => r) ?? null
               return (
                 <button key={stance} type="button" className="detail-view-btn" disabled={!!block} onClick={() => mine.forEach((s) => queueStance(s, stance))} title={block ?? undefined}>
@@ -229,7 +230,7 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
               )
             })}
           </div>
-          {mine.some((s) => strategyBlock('kite', researched, s)) && <div className="ship-panel-hint">Swarm, Kite and Stall need Free Flight (Free-Flight Maneuvering researched, and on for the ship): without it a ship cannot hold chosen positions, and a ship that has them selected fights as Balanced.</div>}
+          {hasFreeFlightTech(researched) && mine.some((s) => strategyBlock('kite', researched, s)) && <div className="ship-panel-hint">Swarm, Kite and Stall are greyed for a ship whose Free Flight is switched off: without it a ship cannot hold chosen positions, and one that has them selected fights as Balanced.</div>}
           {byFleet.length > 1 && (
             <>
               <div className="dip-actions">
@@ -240,6 +241,9 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
               {!merge.ok && <div className="ship-panel-hint">{merge.reason}.</div>}
             </>
           )}
+          <div className="dip-actions">
+            <FleetYardButtons ships={mine} />
+          </div>
           <div className="ship-panel-hint">Right-click a destination to move every selected fleet, each at its slowest ship's pace.</div>
         </>
       )}
@@ -385,17 +389,6 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
   const favor = engagement && participant ? rangeFavor(participant, engagement, ships, simDays) : 'even'
   const coreFraction = shipClass ? coreHealthFraction(ship, shipClass) : 1
   const riskElevated = activelyEngaged || coreFraction < 1
-  // Two figures rather than one live number — there's no "selected
-  // destination" context in this panel to know whether a specific jump
-  // would land on an already-charted lane, so this shows both of the
-  // drive's own fixed rates (see hyperdriveLossChance) as ship-level info,
-  // same spirit as the Cooldowns row above. Collapses to a single number
-  // when both rates are equal (e.g. a Turing Scout's 0% override, which
-  // ignores lane state entirely). Both figures already fold in the current
-  // core-damage and active-engagement modifiers, so what's shown here is
-  // exactly what a jump attempted right now would actually roll against.
-  const jumpRiskNew = hyperDrive ? hyperdriveLossChance(hyperDrive, false, coreFraction, activelyEngaged) : undefined
-  const jumpRiskLane = hyperDrive ? hyperdriveLossChance(hyperDrive, true, coreFraction, activelyEngaged) : undefined
   // Warp has no risk at all for an ordinary trip — see warpEscapeLossChance —
   // so this only ever comes back nonzero while there's something to show:
   // combat damage or an active fight. A permanent "Warp Risk: 0%" row on
@@ -498,22 +491,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           <span className="inspect-value">{cooldownParts.join(' · ')}</span>
         </div>
       )}
-      {jumpRiskNew !== undefined && jumpRiskLane !== undefined && (
-        <div className="inspect-row">
-          <span
-            className="inspect-label"
-            title={`Chance the ship is lost on a hyperdrive jump of average length to an average star. A real jump runs from ${JUMP_RISK_MIN_FACTOR}x to ${JUMP_RISK_MAX_FACTOR}x this: longer jumps and heavier destinations are riskier. Point at a star on the interstellar map to see that jump's risk.`}
-          >
-            Jump Risk
-          </span>
-          <span className="inspect-value">
-            {jumpRiskNew === jumpRiskLane
-              ? formatPercent(jumpRiskNew)
-              : `${formatPercent(jumpRiskNew)} new · ${formatPercent(jumpRiskLane)} charted`}
-            {riskElevated && <span className="ship-panel-combat"> (elevated)</span>}
-          </span>
-        </div>
-      )}
+      {owned && hasHyperdrive && <ShipJumpRiskRow ship={ship} elevated={riskElevated} />}
       {/* Warp itself has no baseline risk for an ordinary trip — this only
           ever appears once there's actually something raising it (core
           damage, or fleeing a live fight), which is also why it's absent
@@ -544,6 +522,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           </label>
         </>
       )}
+      {owned && <ShipRepairSection ship={ship} />}
       {owned && <ShipUpgradeSection ship={ship} />}
       {owned && <ShipDeconstructSection ship={ship} />}
       {owned && <ShipFreeFlightToggle ship={ship} />}

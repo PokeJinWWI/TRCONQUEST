@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INFLUENCE_COST, STARBASE_INTEGRITY, STARBASE_MODULES, STARBASE_TIERS, STARBASE_TIER_ORDER, type StarbaseModuleType } from '../data/starbaseData'
+import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INTEGRITY, STARBASE_MODULES, STARBASE_TIERS, STARBASE_TIER_ORDER, type StarbaseModuleType } from '../data/starbaseData'
 import { useResourceStore } from './resourceStore'
-import { starbaseAnchorBody, starbasesAt, starbaseTierOf, starbaseModulesOf, freeModuleSlots, starbaseMaxIntegrity, type Starbase } from '../scene/starbaseLogic'
+import { starbaseAnchorBody, starbaseInfluenceCost, starbasesAt, starbaseTierOf, starbaseModulesOf, freeModuleSlots, starbaseMaxIntegrity, type Starbase } from '../scene/starbaseLogic'
 import { cargoCovers, cargoMinus } from '../scene/cargoLogic'
 import { isFullySurveyed, restingStarId } from '../scene/surveyLogic'
 import { resolveShipClass } from './shipClassResolver'
@@ -9,7 +9,15 @@ import { useShipStore } from './shipStore'
 import { useSurveyStore } from './surveyStore'
 import { useTerritoryStore } from './territoryStore'
 import { useTechStore } from './techStore'
-import { atWar } from './diplomacyStore'
+import { atWar, useDiplomacyStore } from './diplomacyStore'
+import { usePlayerStore } from './playerStore'
+import { formatDate, simDaysToDate } from './gameTimeStore'
+import { ownerDisplay } from '../data/countryRoster'
+import { findStar } from '../data/starData'
+import { starbaseShortReason, starbaseStartedText } from '../scene/starbaseNotices'
+import { getCountry } from '../data/countryData'
+import { clusterOfStar, klyBetweenClusters } from '../scene/clusters'
+import { recordEncroachments } from '../scene/encroachment'
 
 // Every Starbase in the game (both economy modes — a Construction Ship pays
 // its cost out of the goods in its hold, so no per-mode branching is needed).
@@ -40,6 +48,18 @@ function spendResources(countryId: string, cost: Record<string, number>): boolea
 }
 
 let counter = 0
+
+// The influence `countryId` pays to claim `starId` with a Starbase: the base cost at
+// home and in any cluster it already has a Starbase in, more the further the cluster
+// is from the nearest of those (scene/starbaseLogic.starbaseInfluenceCost). The one
+// number the player's rule, the panels and the AI read.
+export function starbaseInfluenceCostFor(countryId: string, starId: string, starbases: Starbase[]): number {
+  const footholds = new Set<string>()
+  const capitalStar = getCountry(countryId)?.capitalStarId
+  if (capitalStar) footholds.add(clusterOfStar(capitalStar))
+  for (const sb of starbases) if (sb.ownerId === countryId) footholds.add(clusterOfStar(sb.starId))
+  return starbaseInfluenceCost(clusterOfStar(starId), [...footholds], klyBetweenClusters)
+}
 
 // Whether `shipId` (a Construction Ship) can start a Starbase at `starId` for
 // `countryId` right now. The ship does the building and pays out of what it
@@ -73,9 +93,9 @@ export function canBuildStarbase(countryId: string, starId: string, starbases: S
   // standing Starbase first, same as any other contested territory.
   if (here.some((sb) => atWar(sb.ownerId, countryId))) return { ok: false, reason: "An enemy Starbase already holds this system's claim" }
   const influence = useResourceStore.getState().stateFor(countryId).amounts.influence ?? 0
-  if (influence < STARBASE_INFLUENCE_COST) {
-    return { ok: false, reason: `Needs ${STARBASE_INFLUENCE_COST} influence to claim a system (have ${Math.floor(influence)})` }
-  }
+  const influenceCost = starbaseInfluenceCostFor(countryId, starId, starbases)
+  const short = starbaseShortReason(influenceCost, influence)
+  if (short) return { ok: false, reason: short }
   if (!cargoCovers(ship.cargo, STARBASE_COST)) {
     return { ok: false, reason: `The hold is short of materials (needs ${Object.entries(STARBASE_COST).map(([id, n]) => `${n} ${id}`).join(', ')})` }
   }
@@ -90,7 +110,9 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
     if (!check.ok) return check
     const ship = useShipStore.getState().ships.find((s) => s.id === shipId)!
     useShipStore.getState().setShipCargo(ship.id, cargoMinus(ship.cargo, STARBASE_COST))
-    useResourceStore.getState().addAmount(countryId, 'influence', -STARBASE_INFLUENCE_COST)
+    useResourceStore.getState().addAmount(countryId, 'influence', -starbaseInfluenceCostFor(countryId, starId, starbases))
+    // Inside someone else's borders: allowed, at a diplomatic cost (scene/encroachment.ts).
+    recordEncroachments(countryId, starId, 'starbase', simDays, starbases)
     counter += 1
     const sb: Starbase = {
       id: `starbase-${starId}-${countryId}-${counter}-${Math.round(simDays)}`,
@@ -102,6 +124,10 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
       modules: [],
     }
     set({ starbases: [...starbases, sb] })
+    // The player is told when one of theirs begins (fog: never another nation's).
+    if (usePlayerStore.getState().selectedCountryId === countryId) {
+      useDiplomacyStore.getState().pushEvent('starbase-started', [countryId], starbaseStartedText(ownerDisplay(countryId).name, findStar(starId)?.name ?? starId, formatDate(simDaysToDate(sb.readySimDays))), simDays, { starId })
+    }
     return { ok: true }
   },
   // Upgrade to the next tier, paid from the nation's stockpile. Applied at once

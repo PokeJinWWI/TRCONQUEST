@@ -16,6 +16,7 @@ import { clearSandboxArmies, clearSandboxShips, spawnSandboxArmy } from '../scen
 import { getMoonsForPlanet } from '../scene/moonData'
 import { getPlanetsForStar } from '../scene/planetData'
 import { spawnOwnedShip } from '../scene/shipyardLogic'
+import { loadSettlersFree } from '../scene/colonies'
 import { SOL_BODY_NAME, SOL_SYSTEM_ID } from '../scene/shipPhysics'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useArmyStore } from '../state/armyStore'
@@ -84,7 +85,13 @@ export function SandboxPanel() {
 
   const handleSpawnShips = () => {
     let spawned = 0
-    for (let i = 0; i < count; i++) if (spawnOwnedShip(classId, ownerId, starId, nearBody)) spawned++
+    for (let i = 0; i < count; i++) {
+      const id = spawnOwnedShip(classId, ownerId, starId, nearBody)
+      if (!id) continue
+      // A placed Colony Ship comes with its settlers (it never went through a yard).
+      loadSettlersFree(id)
+      spawned++
+    }
     setMessage(spawned > 0 ? `${spawned} × ${resolveShipClass(classId)?.name ?? 'ship'} (${SANDBOX_RELATION_LABELS[relation]}) placed at ${nearBody}` : 'Could not place a ship')
   }
 

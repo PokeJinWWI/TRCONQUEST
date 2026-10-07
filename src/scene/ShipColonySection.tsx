@@ -6,8 +6,10 @@ import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { isArmed, orbitedBody } from './armyLogic'
 import { useState } from 'react'
-import { canColonize, colonizeCandidates, sendToColonize } from './colonies'
+import { canColonize, colonizeGroups, nothingHereText, sendToColonize } from './colonies'
+import { takeBackLabel, takeBackStatus } from './colonyChooser'
 import { bodyStarId } from './territory'
+import { systemOfShip } from './surveyLogic'
 import { queuePatrol } from './commsVisual'
 import { groundSurface } from './groundLogic'
 import { queueShipCommand } from './shipCommands'
@@ -65,11 +67,11 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
       )}
       {(auto || headed) && (
         <div className="ship-panel-btn-row">
-          <span className="ship-panel-hint">{auto ? 'Choosing where to settle by itself' : `Heading to ${headed}`}</span>
+          <span className="ship-panel-hint">{takeBackStatus(auto, headed)}</span>
           <button
             type="button"
             className="detail-view-btn"
-            title="Stop the automatic choice and the current colonizing order, so you can decide where"
+            title={takeBackLabel(auto, headed).hint}
             onClick={() => {
               const st = useShipStore.getState()
               st.setAutomation(ship.id, null)
@@ -77,7 +79,7 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
               setChoosing(true)
             }}
           >
-            Cancel · choose myself
+            {takeBackLabel(auto, headed).text}
           </button>
         </div>
       )}
@@ -97,23 +99,34 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
       {choosing && (
         <div className="colony-chooser">
           {(() => {
-            const list = colonizeCandidates(ship)
-            if (list.length === 0) return <div className="ship-panel-hint">No world to settle yet: survey a world, hold a Starbase in its system, and have settlers aboard.</div>
-            return list.map(({ bodyName }) => (
-              <button
-                key={bodyName}
-                type="button"
-                className="detail-view-btn"
-                onClick={() => {
-                  const systemId = bodyStarId(bodyName)
-                  if (!systemId) return
-                  useShipStore.getState().setAutomation(ship.id, null)
-                  sendToColonize(ship, systemId, bodyName)
-                  setChoosing(false)
-                }}
-              >
-                {bodyName}
-              </button>
+            const groups = colonizeGroups(ship)
+            if (groups.length === 0) return <div className="ship-panel-hint">No world to settle yet: survey a world, hold a Starbase in its system, and have settlers aboard.</div>
+            return groups.map((g) => (
+              <div key={g.starId} className="colony-chooser-group">
+                <div className="colony-chooser-system">
+                  {g.name}
+                  {g.here ? ' · where the ship is' : g.home ? ' · your home system' : ''}
+                </div>
+                {g.waiting && <div className="ship-panel-hint">{g.waiting}.</div>}
+                <div className="colony-chooser-bodies">
+                  {g.bodies.map((bodyName) => (
+                    <button
+                      key={bodyName}
+                      type="button"
+                      className="detail-view-btn"
+                      onClick={() => {
+                        const systemId = bodyStarId(bodyName)
+                        if (!systemId) return
+                        useShipStore.getState().setAutomation(ship.id, null)
+                        sendToColonize(ship, systemId, bodyName)
+                        setChoosing(false)
+                      }}
+                    >
+                      {bodyName}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))
           })()}
         </div>
@@ -135,7 +148,7 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
           {options.map(({ body, check }) => !check.ok && <div key={`${body}-why`} className="inspect-status">Can't colonize {body}: {check.reason}</div>)}
         </div>
       ) : (
-        <div className="inspect-status">{orbit ? 'Nothing here to settle.' : 'Right-click a surveyed, unowned world to colonize it.'}</div>
+        <div className="inspect-status">{orbit || systemOfShip(ship) ? nothingHereText(ship) : 'Right-click a surveyed, unowned world to colonize it.'}</div>
       )}
     </>
   )

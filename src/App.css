@@ -192,6 +192,46 @@
 
 .hud-title {
   font-weight: 700;
+  /* Never wraps into its own lines over the readouts beside it (a narrow window wraps the bar instead). */
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* The top bar wraps rather than squeezing its parts onto one another: each part keeps its own width
+   and the bar grows a row (--hud-top-height follows it, see hooks/useHudBarLayout). */
+.hud-top {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  column-gap: 14px;
+}
+
+.hud-top > * {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+/* The centre slot (resources / tabs) takes the room that is left, and may shrink onto its own row. */
+.hud-top > .hud-center-swap {
+  flex: 1 1 200px;
+}
+
+@media (max-width: 700px) {
+  .hud-top {
+    padding: 6px 10px;
+    font-size: 11px;
+    column-gap: 10px;
+  }
+  .hud-top .hud-top-right {
+    gap: 8px;
+    margin-left: auto;
+    order: 2;
+  }
+  /* The resource readout gets a row of its own under the title and the lock-on / breadcrumb. */
+  .hud-top > .hud-center-swap {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
 }
 
 .hud-bottom-left {
@@ -2544,6 +2584,10 @@
   margin-bottom: 10px;
 }
 
+.tech-node {
+  flex-wrap: wrap;
+}
+
 .tech-node .inspect-label {
   cursor: var(--cursor-default);
 }
@@ -2594,15 +2638,16 @@
 /* Tech Tree graph overlay — rendered via a portal to document.body (see
    TechTreeGraph.tsx), so it sits above every other window regardless of
    which DraggableWindow triggered it. Covers the full width, docked between
-   the top/bottom HUD bars only — deliberately above the side nav/outliner
-   too, per the "above everything else other than top and bottom" brief. */
+   the top/bottom HUD bars only, and is stacked like a maximized window: other
+   windows opened or clicked after it come in front, and notifications and the
+   console always sit above it. */
 .tech-tree-overlay {
   position: fixed;
   top: var(--hud-top-height, 52px);
   bottom: var(--hud-bottom-height, 58px);
   left: 0;
   right: 0;
-  z-index: 80;
+  /* z-index comes inline from the shared layering counter (state/layering.ts), like any window */
   display: flex;
   flex-direction: column;
   background: rgba(2, 6, 12, 0.96);
@@ -4058,15 +4103,27 @@
 }
 
 .outliner-entry-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The name is always shown in full: a long detail ("micro-colony · Barnard's Star") that
+   does not fit beside it drops to a line of its own under the name instead of squeezing it. */
+.outliner-entry {
+  flex-wrap: wrap;
+}
 .outliner-entry-detail {
   margin-left: auto;
   padding-left: 8px;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-size: 10px;
   opacity: 0.55;
 }
@@ -4080,7 +4137,7 @@
   top: var(--hud-top-height, 52px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 50;
+  z-index: 2400;
   width: 260px;
   /* The row list (ship class/system/scenario/research grant/spawned-ship
      list) easily outgrows the viewport well before it outgrows this fixed
@@ -4204,6 +4261,13 @@
 
 .debug-console-spawn-btn:hover {
   background: rgba(255, 176, 59, 0.28);
+}
+
+.debug-console-section {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #f2c26b;
+  margin-bottom: 4px;
 }
 
 .debug-console-divider {
@@ -5296,12 +5360,14 @@ div.fleet-row .combat-density-row {
 .dip-toasts {
   position: fixed;
   top: calc(var(--hud-top-height, 52px) + 10px);
-  right: 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: min(320px, calc(100vw - 32px));
-  z-index: 60;
+  /* Clear of the Outliner (220px wide, 28px collapsed): its title and search box stay reachable.
+     The toasts sit to its left; on a narrow window they shrink to what is left of the width. */
+  right: 232px;
+  width: min(320px, calc(100vw - 244px));
+  z-index: 2500;
   pointer-events: none;
 }
 
@@ -6609,7 +6675,9 @@ button.pl-tile.empty:hover {
 /* Your ships inside the Solar Neighbourhood, as a badge on its marker in the galactic view. */
 .galactic-ship-badge {
   position: relative;
-  transform: translate(10px, -22px);
+  /* Below-left of the cluster's marker: the marker itself, its name (to the right) and a ship
+     marker beside it (up and right, .ship-marker's own offset) stay clear and clickable. */
+  transform: translate(calc(-100% - 12px), 6px);
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -6622,4 +6690,23 @@ button.pl-tile.empty:hover {
 .galactic-ship-badge-count {
   font-size: 10px;
   color: #bfe9cf;
+}
+
+/* The Colonize… chooser: worlds grouped under their system's name. */
+.colony-chooser-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.colony-chooser-system {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.colony-chooser-bodies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }

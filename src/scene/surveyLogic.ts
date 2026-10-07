@@ -70,6 +70,20 @@ export function isBodySurveyed(intel: NationIntel | undefined, nationId: string,
   return !!starId && nationOwnsIn(nationId, starId, owners)
 }
 
+// Every body a nation counts as surveyed: the ones its ships surveyed, and every body
+// of a system it owns a world in (isBodySurveyed, as a set). What "which worlds could
+// I colonize" lists run over: the stored set alone leaves out the nation's own systems.
+export function knownSurveyedBodies(intel: NationIntel | undefined, nationId: string, owners: OwnerMap): Set<string> {
+  const out = new Set<string>(intel?.surveyed ?? [])
+  const stars = new Set<string>()
+  for (const [body, owner] of Object.entries(owners)) {
+    const starId = owner === nationId ? bodyStarId(body) : undefined
+    if (starId) stars.add(starId)
+  }
+  for (const starId of stars) for (const body of systemBodies(starId)) out.add(body)
+  return out
+}
+
 export function surveyProgress(intel: NationIntel | undefined, nationId: string, starId: string, owners: OwnerMap): { done: number; total: number } {
   const bodies = systemBodies(starId)
   return { done: bodies.filter((b) => isBodySurveyed(intel, nationId, b, owners)).length, total: bodies.length }

@@ -75,21 +75,21 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     id: 'army-easy-landing-party',
     name: 'Landing Party',
     difficulty: 'easy',
-    battlefield: { bodyName: 'Earth', playerTerrain: 'plains', gapCells: 6 },
+    battlefield: { bodyName: 'Earth', playerTerrain: 'plains', gapCells: 6, near: [27, -15] },
     description:
       'Two assault armies on open plains meet a marine army at 60% strength coming ashore. Left alone they win comfortably — verified with no orders at all.',
     player: [{ kind: 'assault' }, { kind: 'assault' }],
-    enemy: [{ kind: 'marine', strengthFraction: 0.6 }],
+    enemy: [{ kind: 'marine', strengthFraction: 0.3 }],
   },
   {
     id: 'army-easy-dunes-patrol',
     name: 'Dunes Patrol',
     difficulty: 'easy',
-    battlefield: { bodyName: 'Earth', playerTerrain: 'desert', gapCells: 6 },
+    battlefield: { bodyName: 'Earth', playerTerrain: 'desert', gapCells: 6, near: [24, 23] },
     description:
       'An assault army and a marine army hold a stretch of desert against a marine army at 80% strength. Left alone they win, verified with no orders at all.',
     player: [{ kind: 'assault' }, { kind: 'marine' }],
-    enemy: [{ kind: 'marine', strengthFraction: 0.8 }],
+    enemy: [{ kind: 'marine', strengthFraction: 0.3 }],
   },
 
   // --- Medium ------------------------------------------------------------
@@ -97,7 +97,7 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     id: 'army-medium-split-command',
     name: 'Split Command',
     difficulty: 'medium',
-    battlefield: { bodyName: 'Earth', playerTerrain: 'plains', gapCells: 6 },
+    battlefield: { bodyName: 'Earth', playerTerrain: 'plains', gapCells: 6, near: [27, -15] },
     description:
       'Two assault armies against a stronger and a weaker one — but only one of yours is on the line; the other starts five cells back. Left alone the front army is destroyed and the reserve never gets into the fight. Order the reserve up to the line before the enemy arrives and the combined force wins.',
     player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 5 }],
@@ -109,9 +109,9 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     difficulty: 'medium',
     battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 6, near: [14, 52] },
     description:
-      'A marine army dug into forest, its twin five cells behind it, against an assault army and a marine army. Left alone the front army is destroyed and the reserve never fights. Order the reserve up to the line and they win.',
+      'A marine army dug into forest, its twin five cells behind it, against an assault army and a weakened marine army. Left alone the front army is destroyed and the reserve never fights. Order the reserve up to the line and they win.',
     player: [{ kind: 'marine' }, { kind: 'marine', rearCells: 5 }],
-    enemy: [{ kind: 'assault' }, { kind: 'marine' }],
+    enemy: [{ kind: 'assault' }, { kind: 'marine', strengthFraction: 0.3 }],
   },
 
   // --- Hard --------------------------------------------------------------
@@ -121,9 +121,9 @@ export const ARMY_SCENARIOS: ArmyScenario[] = [
     difficulty: 'hard',
     battlefield: { bodyName: 'Earth', playerTerrain: 'forest', gapCells: 7, near: [19, -4] },
     description:
-      'An assault army on the forest line in the Congo basin, its twin eight cells back in the woods, against two assault armies. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is acting at once: pull the front army back while the reserve comes forward to meet it, link up, and counter-attack together. Wait until the enemy is on top of the front army and it cannot get away.',
+      'An assault army on the forest line in the Congo basin, its twin eight cells back in the woods, against two assault armies and a small marine force. Left alone the front army dies alone. Marching the reserve up to the line loses too. What works is acting at once: pull the front army back while the reserve comes forward to meet it, link up, and counter-attack together. Wait until the enemy is on top of the front army and it cannot get away.',
     player: [{ kind: 'assault' }, { kind: 'assault', rearCells: 8, rearTerrain: 'forest' }],
-    enemy: [{ kind: 'assault' }, { kind: 'assault' }],
+    enemy: [{ kind: 'assault' }, { kind: 'assault' }, { kind: 'marine', strengthFraction: 0.3 }],
   },
   {
     id: 'army-medium-outnumbered-on-the-ice',

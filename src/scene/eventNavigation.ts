@@ -3,8 +3,8 @@
 // tickToasts); goToEvent applies a destination to the view store.
 import type { DiplomacyEvent } from '../data/diplomacyData'
 import { useViewStore } from '../state/viewStore'
-import { bodyIndex } from './territory'
-import { STARS } from '../data/starData'
+import { bodyInfoOf } from './territory'
+import { findStar } from '../data/starData'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
 
 export type EventDestination =
@@ -19,10 +19,10 @@ export type EventDestination =
 
 export function eventDestination(event: Pick<DiplomacyEvent, 'kind' | 'place'>): EventDestination {
   if (event.place?.nav) return { kind: 'panel', category: event.place.nav.category, subcategory: event.place.nav.subcategory }
-  const body = event.place?.bodyName ? bodyIndex().get(event.place.bodyName) : undefined
+  const body = event.place?.bodyName ? bodyInfoOf(event.place.bodyName) : undefined
   if (body) return { kind: 'body', starId: body.starId, bodyName: body.name, ...(body.kind === 'moon' && body.parentPlanet ? { parentPlanet: body.parentPlanet } : {}) }
   if (event.place?.neighborhoodId && NEIGHBORHOODS.some((n) => n.id === event.place!.neighborhoodId)) return { kind: 'galaxy', neighborhoodId: event.place.neighborhoodId }
-  if (event.place?.starId && STARS.some((s) => s.id === event.place!.starId)) return { kind: 'system', starId: event.place.starId }
+  if (event.place?.starId && !!findStar(event.place.starId)) return { kind: 'system', starId: event.place.starId }
   switch (event.kind) {
     case 'war-declared':
     case 'peace-offered':

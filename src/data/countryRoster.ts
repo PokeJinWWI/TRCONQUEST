@@ -59,6 +59,10 @@ export const SANDBOX_PLAYER: RogueFaction = { id: SANDBOX_PLAYER_ID, name: 'Sand
 
 const ALL_FACTIONS: readonly RogueFaction[] = [...ROGUE_FACTIONS, SANDBOX_PLAYER]
 
+// The four owners of a Sandbox game (the player's faction and the three others): they share one tech
+// tree there (techStore.toggleTech), so a spawned enemy flies like the player's own ships.
+export const SANDBOX_FACTION_IDS: readonly string[] = ALL_FACTIONS.map((f) => f.id)
+
 export function isRogueFaction(id: string): boolean {
   return ALL_FACTIONS.some((f) => f.id === id)
 }

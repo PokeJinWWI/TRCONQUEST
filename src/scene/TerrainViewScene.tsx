@@ -19,7 +19,7 @@ import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { KeyboardPan } from './KeyboardPan'
 import { isAdditiveClick } from './selectionInput'
 import { isQueueModifierHeld } from './queueModifier'
-import { bodyGroundInfo } from './planetTerrain'
+import { bodyGroundInfoAny } from './planetTerrain'
 import { classifyFireLine } from './armyLogic'
 import { heightAtLocal, terrainAtLocal, type TerrainGrid } from './terrainMap'
 import { rangeCells } from './terrainBattle'
@@ -616,7 +616,7 @@ function TerrainBattleView({ battleId }: { battleId: string }) {
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
   const glow = useMemo<[number, number, number]>(() => {
     // The world's own colour, as the screen shows it (no lift toward white).
-    const c = new Color(bodyName ? (bodyGroundInfo(bodyName)?.color ?? '#9fe8ff') : '#9fe8ff').convertLinearToSRGB()
+    const c = new Color(bodyName ? (bodyGroundInfoAny(bodyName)?.color ?? '#9fe8ff') : '#9fe8ff').convertLinearToSRGB()
     return [c.r, c.g, c.b]
   }, [bodyName])
 

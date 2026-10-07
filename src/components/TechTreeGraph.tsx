@@ -2,6 +2,7 @@ import { usePlayerMaterialMask } from '../hooks/usePlayerMaterialMask'
 import { useMemo, useState } from 'react'
 import type { ResourceId } from '../data/resourceData'
 import { createPortal } from 'react-dom'
+import { bringToFrontZIndex } from '../state/layering'
 import {
   ALL_TECHS,
   TECHS_BY_CATEGORY,
@@ -9,6 +10,7 @@ import {
   resourceShortfall,
   prerequisitesMet,
   anomalousUnlocked,
+  techSummary,
   visibleNodeIds,
   localRoots,
   externalPrerequisites,
@@ -205,7 +207,10 @@ export function TechTreeGraph({
   onClose,
   queue,
   onQueue,
+  sandbox = false,
 }: {
+  // The Sandbox: every node is shown, and a click on any node calls `onResearch` (which toggles it).
+  sandbox?: boolean
   // Queued research, in order, and toggling a node in or out of the queue.
   queue: readonly string[]
   onQueue: (nodeId: string) => void
@@ -223,17 +228,19 @@ export function TechTreeGraph({
   onClose: () => void
 }) {
   const [tree, setTree] = useState<TreeChoice>(initialTree)
+  // Stacked like a maximized window: the shared counter, raised when clicked.
+  const [zIndex, setZIndex] = useState(bringToFrontZIndex)
   const techs = tree === 'all' ? ALL_TECHS : TECHS_BY_CATEGORY[tree]
   // Names an undiscovered material "???" here, in the research UI only.
   const mask = usePlayerMaterialMask()
-  const visible = useMemo(() => new Set([...visibleNodeIds(techs, researched), ...localRoots(techs).map((n) => n.id)]), [techs, researched])
+  const visible = useMemo(() => (sandbox ? new Set(techs.map((n) => n.id)) : new Set([...visibleNodeIds(techs, researched), ...localRoots(techs).map((n) => n.id)])), [techs, researched, sandbox])
   const layout = useMemo(() => computeLayout(techs, visible), [techs, visible])
   const positionById = useMemo(() => new Map(layout.nodes.map((n) => [n.node.id, n])), [layout])
   const pools: TechCategory[] = tree === 'all' ? ['physics', 'society', 'engineering'] : [tree]
   const title = tree === 'all' ? 'All research' : CATEGORY_LABELS[tree]
 
   const overlay = (
-    <div className="tech-tree-overlay" role="dialog" aria-label={`${title} tech tree`}>
+    <div className="tech-tree-overlay" style={{ zIndex }} onPointerDownCapture={() => setZIndex(bringToFrontZIndex())} role="dialog" aria-label={`${title} tech tree`}>
       <div className="tech-tree-header">
         <span className="tech-tree-title">{title} — Tree View</span>
         <div className="tech-tree-switch">
@@ -287,12 +294,15 @@ export function TechTreeGraph({
               const isResearched = researched.has(node.id)
               const shortfall = !isResearched && !freeResearchMode && resources ? resourceShortfall(node, resources) : null
               const eligible = canResearch(node, researched, researchPoints[node.category], freeResearchMode) && !shortfall
-              const previewOnly = !isResearched && (!prerequisitesMet(node, researched) || (node.locked === true && !anomalousUnlocked(researched)))
-              const stateClass = isResearched ? 'researched' : previewOnly ? 'preview' : eligible ? 'eligible' : 'unaffordable'
+              const previewOnly = !sandbox && !isResearched && (!prerequisitesMet(node, researched) || (node.locked === true && !anomalousUnlocked(researched)))
+              const stateClass = isResearched ? 'researched' : previewOnly ? 'preview' : eligible || (sandbox && freeResearchMode) ? 'eligible' : 'unaffordable'
               const external = externalPrerequisites(node, techs)
               const needs = external.length > 0 ? `Needs ${external.map((t) => `${mask(t.name)} (${CATEGORY_LABELS[t.category]})`).join(', ')}. ` : ''
               const queuePos = queue.indexOf(node.id)
-              const status = isResearched
+              const sandboxCanClick = sandbox && (isResearched || freeResearchMode || eligible)
+              const status = sandbox && isResearched
+                ? 'Researched · click to undo'
+                : isResearched
                 ? 'Researched'
                 : queuePos >= 0
                   ? `Queued #${queuePos + 1}`
@@ -307,11 +317,15 @@ export function TechTreeGraph({
                   transform={`translate(${x}, ${y})`}
                   className={`tech-tree-node ${stateClass}${queuePos >= 0 ? ' queued' : ''} tech-cat-${node.category}`}
                   onClick={() => {
+                    if (sandbox) {
+                      if (sandboxCanClick) onResearch(node.id)
+                      return
+                    }
                     if (isResearched) return
                     if (eligible) onResearch(node.id)
                     else onQueue(node.id)
                   }}
-                  data-tooltip={mask(`${CATEGORY_LABELS[node.category]}. ${needs}${node.description}${isResearched ? '' : shortfall ? ` ${shortfall}.` : ''}${isResearched ? '' : eligible ? ' Click to research.' : queuePos >= 0 ? ' Queued: click to take it out of the queue.' : ' Click to queue it (and what it still needs).'}`)}
+                  data-tooltip={mask(`${CATEGORY_LABELS[node.category]}. ${needs}${techSummary(node)}${isResearched ? '' : shortfall ? ` ${shortfall}.` : ''}${sandbox ? (isResearched ? ' Sandbox: click to un-research it (and whatever needs it).' : sandboxCanClick ? ' Sandbox: click to research it (and what it needs).' : ' Free Research is off: needs the points.') : isResearched ? '' : eligible ? ' Click to research.' : queuePos >= 0 ? ' Queued: click to take it out of the queue.' : ' Click to queue it (and what it still needs).'}`)}
                 >
                   <rect width={NODE_WIDTH} height={NODE_HEIGHT} rx={4} />
                   <line x1={2} y1={3} x2={2} y2={NODE_HEIGHT - 3} className="tech-cat-bar" />

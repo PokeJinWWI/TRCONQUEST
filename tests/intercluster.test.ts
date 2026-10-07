@@ -26,7 +26,7 @@ import { aiMayJump, aiMayJumpNow, aiJumpCap } from '../src/ai/jumpRules'
 import { eventDestination, goToEvent } from '../src/scene/eventNavigation'
 import { confirmRiskyJump, jumpRiskLine } from '../src/scene/jumpConfirm'
 import { jumpLossText, jumpPlaceOf, loseShipToJump } from '../src/scene/jumpLoss'
-import { JUMP_WARN_LOSS, CHARTED_LANE_RISK_RATIO, formatLossPercent, jumpWarning } from '../src/scene/jumpWarning'
+import { JUMP_WARN_LOSS, CHARTED_LANE_RISK_RATIO, formatLossPercent, jumpWarning, saferJumpHint } from '../src/scene/jumpWarning'
 import {
   KM_PER_GALACTIC_UNIT,
   LY_IN_KM,
@@ -43,8 +43,11 @@ import {
   setJumpRoll,
   shipPlaceLabel,
   wouldHyperjump,
+  galacticPosition,
 } from '../src/scene/shipPhysics'
+import { shipClusterId } from '../src/scene/clusters'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
+import { orderSelectedToSurvey } from '../src/scene/shipCommands'
 import { useConfirmStore } from '../src/state/confirmStore'
 import { useDiplomacyStore } from '../src/state/diplomacyStore'
 import { useGameTimeStore } from '../src/state/gameTimeStore'
@@ -156,6 +159,9 @@ console.log('\n=== 2. The warning threshold ===')
   check('a hair over the line never reads as 5%', formatLossPercent(0.0504) === '5.0%' && formatLossPercent(0.0996) === '10%', `${formatLossPercent(0.0504)}, ${formatLossPercent(0.0996)}`)
   check('percentages read cleanly', formatLossPercent(0.43) === '43%' && formatLossPercent(0.999) === '>99%' && formatLossPercent(1) === '100%' && formatLossPercent(0.06) === '6.0%' && formatLossPercent(0.123) === '12%')
 
+  check('a risky jump says what would make it safer: a higher Mk while there is one', /higher Hyperdrive Mk \(you have Mk 1 of 5\)/.test(saferJumpHint(1, 1, 5) ?? '') && /charted/.test(saferJumpHint(0.3, 5, 5) ?? '') && !/higher/.test(saferJumpHint(0.3, 5, 5) ?? ''))
+  check('...and nothing at or under the 5% line', saferJumpHint(0.05, 1, 5) === null && saferJumpHint(0.004, 5, 5) === null)
+
   // With real ships: a jump to the nearest cluster warns, a flight in the system does not.
   fresh()
   const id = spawn('science-ship')
@@ -188,6 +194,26 @@ console.log('\n=== 2. The warning threshold ===')
   const w2 = spawn(warpHullId('corvette-hull'))
   check('a warp ship never asks, however far', asked(toNear, [w2]).ran && jumpRiskLine([ship(w2)], toNear) === null)
   useConfirmStore.setState({ pending: null })
+
+  // "Survey system" flies the ship itself, so it asks like any other order (it used not to).
+  fresh()
+  const sci = spawn('science-ship')
+  const surveyOrdered = () => !!ship(sci).surveyJob || (ship(sci).pendingCommands ?? []).some((c) => c.command.kind === 'survey')
+  useShipStore.setState({ selectedShipIds: [sci] })
+  orderSelectedToSurvey('alpha-centauri')
+  const surveyAsk = useConfirmStore.getState().pending
+  check('Survey system at another star asks before the risky jump, and orders nothing yet', !!surveyAsk && /Risky jump/.test(surveyAsk.title) && !surveyOrdered())
+  useConfirmStore.getState().resolve(false)
+  check('...declined, there is no survey order', !surveyOrdered() && useConfirmStore.getState().pending === null)
+  orderSelectedToSurvey('alpha-centauri')
+  useConfirmStore.getState().resolve(true)
+  check('...confirmed, the survey order goes out', surveyOrdered())
+  fresh()
+  const sciHome = spawn('science-ship')
+  useShipStore.setState({ selectedShipIds: [sciHome] })
+  orderSelectedToSurvey('sol', 'Ceres')
+  check('a survey inside the ship\'s own system never asks', useConfirmStore.getState().pending === null, useConfirmStore.getState().pending?.title ?? 'no question')
+  useConfirmStore.setState({ pending: null })
 }
 
 console.log('\n=== 3. A hyperdrive jump between clusters ===')
@@ -198,12 +224,12 @@ console.log('\n=== 3. A hyperdrive jump between clusters ===')
   check('the distance is measured between the clusters, in light-years', Math.abs((jumpDistanceLy(ship(id), toNear, 100) ?? 0) - jumpDistanceLyFromSol(NEAR)) < 1)
   check('it is no flight: the loss chance is Mk I\'s at that distance', near(hyperdriveJumpChance(ship(id), toNear, 100)!, Math.min(1, hyperdriveMkLoss(1, jumpDistanceLyFromSol(NEAR))), 1e-9))
   const jump = planMoveUnchecked(ship(id), toNear, 100)
-  check('with a good roll the jump is instant', jump.kind === 'instant' && jump.location.kind === 'cluster' && jump.location.clusterId === NEAR)
+  check('with a good roll the jump is instant, to the cluster\'s entry point (a point of its own interstellar map)', jump.kind === 'instant' && jump.location.kind === 'interstellar-point' && jump.location.clusterId === NEAR)
   check('...starting the drive\'s cooldown', jump.kind === 'instant' && jump.hyperdriveReadySimDays > 100)
   check('...and charting the lane Sol-cluster to cluster', jump.kind === 'instant' && jump.hyperlaneEstablished?.join() === `${SOLAR_NEIGHBORHOOD_ID},${NEAR}`)
   applyMoveResult(ship(id), toNear, jump)
-  check('the ship rests beside the cluster, out in galactic space', ship(id).location.kind === 'cluster' && isShipInGalacticSpace(ship(id)) && getShipRenderPosition(ship(id), 100).space === 'galactic')
-  check('...near the cluster\'s own position in the galactic view', getShipRenderPosition(ship(id), 100).position.distanceTo(clusterScenePosition(NEAR)) < 3)
+  check('the ship is inside the cluster, in its interstellar space (tests/foreignCluster.test.ts)', shipClusterId(ship(id)) === NEAR && !isShipInGalacticSpace(ship(id)) && getShipRenderPosition(ship(id), 100).space === 'interstellar')
+  check('...standing at the cluster\'s own position in the galactic view', galacticPosition(getShipRenderPosition(ship(id), 100)).distanceTo(clusterScenePosition(NEAR)) < 1e-9)
   check('the lane is on the map', useHyperlaneStore.getState().hasHyperlane(MARS, SOLAR_NEIGHBORHOOD_ID, NEAR))
   check('a lane to the nearest cluster is not Sol-to-star: it is cluster to cluster', !useHyperlaneStore.getState().hasHyperlane(MARS, 'sol', NEAR))
 
@@ -246,7 +272,7 @@ console.log('\n=== 3. A hyperdrive jump between clusters ===')
   check('out between clusters a star order is refused, with the reason', star.kind === 'unreachable' && /Solar Neighbourhood/.test(star.reason), star.kind === 'unreachable' ? star.reason : star.kind)
   check('...a body order too', planMoveUnchecked(ship(id4), { kind: 'body', systemId: 'sol', bodyName: 'Mars' }, 100).kind === 'unreachable')
   const there = planMoveUnchecked(ship(id4), toNear, 100)
-  check('a ship cannot be sent to the cluster it is already at', there.kind === 'unreachable' && /already at/.test(there.reason) && !isJumpDestination(ship(id4), toNear, 100))
+  check('a ship cannot be sent to the cluster it is already in', there.kind === 'unreachable' && /already in/.test(there.reason) && !isJumpDestination(ship(id4), toNear, 100))
   check('...nor to its own cluster from inside the Solar Neighbourhood', planMoveUnchecked(ship(spawn('science-ship')), toSol, 100).kind === 'unreachable')
   check('reachabilityBlock agrees', reachabilityBlock(ship(id4), { kind: 'galactic-point', position: [0, 0, 0] }, 100) === null && reachabilityBlock(ship(id4), { kind: 'interstellar-point', position: [0, 0, 0] }, 100) !== null)
   const toPoint: MoveDestination = { kind: 'galactic-point', position: [100, 0, 100] }
@@ -281,7 +307,7 @@ console.log('\n=== 4. Warp flies between clusters at the owner\'s warp speed ===
     const before = getShipRenderPosition(ship(id), o.departSimDays).position
     const after = getShipRenderPosition(ship(id), o.arrivalSimDays).position
     check('...starting at Sol\'s cluster and ending at the target\'s', before.distanceTo(clusterScenePosition(SOLAR_NEIGHBORHOOD_ID)) < 1 && after.distanceTo(clusterScenePosition(NEAR)) < 1)
-    check('on arrival it rests beside the cluster', resolveArrivalLocation(o.destination, id).kind === 'cluster')
+    check('on arrival it is at the cluster\'s entry point', resolveArrivalLocation(o.destination, id).kind === 'interstellar-point' && (resolveArrivalLocation(o.destination, id) as { clusterId?: string }).clusterId === NEAR)
     check('its label says where it is going', /^to /.test(shipPlaceLabel(ship(id))))
   }
   // Every Mk is faster, for the same trip.

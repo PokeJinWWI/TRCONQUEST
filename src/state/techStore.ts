@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { useDiplomacyStore } from './diplomacyStore'
 import { usePlayerStore } from './playerStore'
 import { useGameTimeStore } from './gameTimeStore'
-import { canResearch, findTech, queuePlan, queuedResearchNow, researchTerms, resourceShortfall, type TechCategory } from '../data/techData'
+import { allTechIds, canResearch, findTech, queuePlan, queueWithoutResearched, queuedResearchNow, researchPlan, researchTerms, resourceShortfall, unresearchPlan, type TechCategory } from '../data/techData'
+import { SANDBOX_FACTION_IDS, SANDBOX_PLAYER_ID } from '../data/countryRoster'
 import { useResourceStore } from './resourceStore'
 import type { ResourceId } from '../data/resourceData'
 
@@ -95,12 +96,27 @@ interface TechStore {
   unqueueTech: (countryId: string, nodeId: string) => void
   // Researches every queued tech that can be now, in queue order.
   processQueue: (countryId: string) => void
+  // The Sandbox: every tech of the default tree researched for these owners (a new Sandbox game).
+  grantAllTech: (countryIds: readonly string[]) => void
+  // The Sandbox only (false anywhere else, nothing changes): a click on a tech flips it for every
+  // sandbox faction at once. Researched -> un-researched, together with every researched tech that
+  // then lacks its prerequisites (techData.unresearchPlan), always free. Not researched -> researched
+  // with the prerequisites it is missing (techData.researchPlan); while Free Research is on that costs
+  // nothing and ignores points, resources and the Anomalous gate, else it is the ordinary
+  // `researchNode` for the player's faction (costs and prerequisites apply) and the others follow.
+  // Returns whether anything changed.
+  toggleTech: (nodeId: string) => boolean
 }
 
 export const useTechStore = create<TechStore>((set, get) => ({
   byCountry: {},
   freeResearchMode: false,
-  setFreeResearchMode: (on) => set({ freeResearchMode: on }),
+  // Switching it on settles every nation's queue at once: what was queued while it cost something
+  // is free now, so it completes (not at the next month, and not one click each).
+  setFreeResearchMode: (on) => {
+    set({ freeResearchMode: on })
+    if (on) for (const countryId of Object.keys(get().byCountry)) get().processQueue(countryId)
+  },
 
   stateFor: (countryId) => get().byCountry[countryId] ?? UNTOUCHED_COUNTRY_STATE,
 
@@ -132,6 +148,8 @@ export const useTechStore = create<TechStore>((set, get) => ({
           ...current,
           researchPoints: { ...current.researchPoints, [node.category]: current.researchPoints[node.category] - cost },
           researched: new Set(current.researched).add(nodeId),
+          // A tech researched by hand leaves the queue too.
+          ...(current.queue ? { queue: queueWithoutResearched(current.queue, new Set([nodeId])) } : {}),
         },
       },
     }))
@@ -178,5 +196,41 @@ export const useTechStore = create<TechStore>((set, get) => ({
     const after = get().byCountry[countryId]!
     const queue = (after.queue ?? []).filter((id) => !after.researched.has(id))
     if (queue.length !== (after.queue ?? []).length) set((state) => ({ byCountry: { ...state.byCountry, [countryId]: { ...after, queue } } }))
+  },
+  grantAllTech: (countryIds) =>
+    set((state) => {
+      const byCountry = { ...state.byCountry }
+      for (const id of countryIds) byCountry[id] = { ...(byCountry[id] ?? freshTechState()), researched: new Set(allTechIds()), queue: [] }
+      return { byCountry }
+    }),
+
+  toggleTech: (nodeId) => {
+    if (!usePlayerStore.getState().sandbox || !findTech(nodeId)) return false
+    const setResearched = (countryId: string, change: (have: Set<string>) => void) =>
+      set((state) => {
+        const current = state.byCountry[countryId] ?? freshTechState()
+        const researched = new Set(current.researched)
+        change(researched)
+        return { byCountry: { ...state.byCountry, [countryId]: { ...current, researched, queue: current.queue ? queueWithoutResearched(current.queue, researched) : current.queue } } }
+      })
+    const have = get().stateFor(SANDBOX_PLAYER_ID).researched
+    if (have.has(nodeId)) {
+      for (const id of SANDBOX_FACTION_IDS) {
+        const gone = unresearchPlan(nodeId, get().stateFor(id).researched)
+        setResearched(id, (h) => gone.forEach((g) => h.delete(g)))
+      }
+      return true
+    }
+    if (get().freeResearchMode) {
+      for (const id of SANDBOX_FACTION_IDS) {
+        const add = researchPlan(nodeId, get().stateFor(id).researched)
+        setResearched(id, (h) => add.forEach((a) => h.add(a)))
+      }
+      return true
+    }
+    // Real costs: the player's faction pays and needs the prerequisites; the others get the same tech.
+    if (!get().researchNode(SANDBOX_PLAYER_ID, nodeId)) return false
+    for (const id of SANDBOX_FACTION_IDS) if (id !== SANDBOX_PLAYER_ID) setResearched(id, (h) => h.add(nodeId))
+    return true
   },
 }))

@@ -24,6 +24,7 @@ import { systemKnownToPlayer, unidentifiedStarbaseStars, visibleClaims } from '.
 import type { Starbase } from '../src/scene/starbaseLogic'
 import type { SystemClaim } from '../src/scene/territory'
 import { safeJumps } from './testWarp'
+import { useConfirmStore } from '../src/state/confirmStore'
 
 // Not about jump risk: ships always arrive (the roll is tested in tests/warp.test.ts).
 safeJumps()
@@ -227,6 +228,9 @@ console.log('\n=== Right-click menus ===')
   reset(scienceShip({ location: { kind: 'star', starId: 'sol', offset: [0, 0, 0] } }), true)
   useShipStore.getState().selectShips(['sci1'])
   orderSelectedToSurvey(AC)
+  // The jump to Alpha Centauri is over the warning line: the order asks first (tests/intercluster.test.ts).
+  check('...asking first, since the jump is risky', !useShipStore.getState().ships[0].surveyJob && useConfirmStore.getState().pending?.title === 'Risky jump')
+  useConfirmStore.getState().resolve(true)
   const away = useShipStore.getState().ships[0]
   check('Survey system from afar: a job for that system, and the ship on its way', away.surveyJob?.starId === AC && (!!away.order || away.location.kind !== 'star'), JSON.stringify(away.order?.destination ?? away.location))
   reset(scienceShip({ location: { kind: 'star', starId: 'sol', offset: [0, 0, 0] } }), true)

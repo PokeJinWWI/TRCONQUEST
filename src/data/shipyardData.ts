@@ -70,6 +70,12 @@ export function shipBuildDays(shipClass: ShipClass): number {
 // time. Its cost is the build-cost difference between the two levels (no number of its own).
 export const UPGRADE_DURATION_FACTOR = 0.5
 
+// Repairing a damaged ship at a shipyard (scene/shipRepair.ts): it holds a slip for
+// REPAIR_DAYS_FACTOR of its build time scaled by how damaged it is, and costs that
+// share of REPAIR_COST_FACTOR x its build cost (energy and alloys only).
+export const REPAIR_DAYS_FACTOR = 0.5
+export const REPAIR_COST_FACTOR = 0.25
+
 // --- The shipyard itself --------------------------------------------------
 //
 // Ships are built at the player's capital. Capacity is how many hulls can be

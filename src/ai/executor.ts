@@ -5,7 +5,7 @@
 // empire without Hyper Comms waits on its distant fleets like the player does.
 // Anything a rule refuses (unaffordable, orbit not clear, …) is simply
 // dropped — the agents will reassess next pass.
-import { aiMayJumpNow } from './jumpRules'
+import { aiMayJumpNow, aiNextStop } from './jumpRules'
 import { ownerDisplay } from '../data/countryRoster'
 import type { PeaceTerms } from '../data/diplomacyData'
 import { AI_PLAYER_OFFER_COOLDOWN_DAYS, AI_PLAYER_OFFER_MAX_COOLDOWN_DAYS, AI_PLAYER_OFFER_MIN_GAP_DAYS } from '../data/aiData'
@@ -151,12 +151,15 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
         if (movedFleets.has(ship.fleetId)) break
         movedFleets.add(ship.fleetId)
         const destination: MoveDestination = intent.bodyName ? { kind: 'body', systemId: intent.systemId, bodyName: intent.bodyName } : { kind: 'star', starId: intent.systemId }
-        // Never a jump riskier than its cap (ai/jumpRules): the fleet stays put.
-        if (fleetMembersOf(ship, ships).some((m) => !aiMayJumpNow(m, destination, simDays))) break
+        // Never a jump riskier than its cap (ai/jumpRules): a far star is reached by hopping
+        // along lanes its nation has charted (aiNextStop), else the fleet stays put.
+        const members = fleetMembersOf(ship, ships)
+        const stop = aiNextStop(ship, destination, simDays)
+        if (!stop || members.some((m) => !aiMayJumpNow(m, stop, simDays))) break
         // The order goes out as a signal from the capital (queueFleetMoveOrder):
         // instant at Hyper Comms or when the fleet is at home, else it lands
         // after the delay to wherever the fleet is.
-        queueFleetMoveOrder(fleetMembersOf(ship, ships), destination)
+        queueFleetMoveOrder(members, stop)
         break
       }
       case 'split-fleet': {

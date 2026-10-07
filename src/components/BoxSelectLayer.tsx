@@ -24,7 +24,7 @@ export function BoxSelectLayer() {
       // Only a drag that starts on a map (the scene canvas, or one of its
       // markers) — never on a panel.
       const t = e.target
-      if (!(t instanceof HTMLCanvasElement) && !(t instanceof Element && t.closest('.ship-marker, .ground-unit-marker'))) return
+      if (!(t instanceof HTMLCanvasElement) && !(t instanceof Element && t.closest('.ship-marker, .galactic-ship-badge, .ground-unit-marker'))) return
       drag.current = { x: e.clientX, y: e.clientY, active: false, pointerId: e.pointerId }
     }
     const onMove = (e: PointerEvent) => {

@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
 import { STARBASE_COST } from '../data/starbaseData'
-import { STARS } from '../data/starData'
+import { findStar } from '../data/starData'
 import type { ResourceCost } from '../data/shipyardData'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useResourceStore } from '../state/resourceStore'
-import { useStarbaseStore, canBuildStarbase } from '../state/starbaseStore'
+import { useStarbaseStore, canBuildStarbase, starbaseInfluenceCostFor } from '../state/starbaseStore'
+import { starbaseActionTitle, starbaseShortReason, withStarbaseCost } from './starbaseNotices'
+
 import { useTerritoryStore } from '../state/territoryStore'
 import { queueShipCommand } from './shipCommands'
 import { cargoSpace, cargoTotal, loadingBody, transferCheck } from './cargoLogic'
 import { restingStarId } from './surveyLogic'
-import { nearestStation, orderRefill, refillWant } from './refill'
+import { nearestStation, orderRefill, orderUnload, refillWant } from './refill'
 import { useGameTimeStore } from '../state/gameTimeStore'
 
 const NAMES = Object.fromEntries(RESOURCE_TYPES.map((r) => [r.id, r.name])) as Record<ResourceId, string>
@@ -47,6 +49,9 @@ export function ShipCargoSection({ ship }: { ship: ShipInstance }) {
   const target = others.find((s) => s.id === targetId) ?? others[0]
   const star = restingStarId(ship)
   const build = shipClass?.role === 'construction' ? canBuildStarbase(ship.ownerId, star ?? '', starbases, ship.id) : null
+  const influence = stock.influence ?? 0
+  const cost = star ? starbaseInfluenceCostFor(ship.ownerId, star, starbases) : null
+  const short = cost !== null ? starbaseShortReason(cost, influence) : null
   const pending = (ship.pendingCommands ?? []).length
   const refillEmpty = Object.keys(refillWant(ship.cargo, capacity)).length === 0
   const station = loading.ok ? null : nearestStation(ship, owners, simDays)
@@ -117,6 +122,26 @@ export function ShipCargoSection({ ship }: { ship: ShipInstance }) {
         ))}
       </div>
 
+      <div className="ship-panel-btn-row">
+        <button
+          type="button"
+          className="detail-view-btn"
+          disabled={cargoTotal(hold) <= 0 || (!loading.ok && !station)}
+          title={
+            cargoTotal(hold) <= 0
+              ? 'The hold is empty'
+              : loading.ok
+                ? `Put everything in the hold into your stockpile at ${loading.bodyName}`
+                : station
+                  ? `Fly to ${station.bodyName}, your nearest world, and deposit the hold there`
+                  : 'You own no world to deposit at'
+          }
+          onClick={() => orderUnload(ship.id)}
+        >
+          {loading.ok ? 'Deposit all' : 'Deposit at nearest world'}
+        </button>
+      </div>
+
       <div className="ship-panel-hint">{others.length > 0 ? 'Hand goods to a ship here:' : 'No other cargo-carrying ship of yours is resting here to hand goods to.'}</div>
       {others.length > 0 && (
         <div className="ship-panel-btn-row">
@@ -144,13 +169,14 @@ export function ShipCargoSection({ ship }: { ship: ShipInstance }) {
           type="button"
           className="detail-view-btn"
           disabled={!build.ok}
-          title={build.ok ? `Build a Starbase at ${STARS.find((s) => s.id === star)?.name ?? star}, paid from the hold` : build.reason}
+          title={starbaseActionTitle(build.ok, build.ok ? null : build.reason, short, cost ?? 0, `Build a Starbase at ${(star ? findStar(star)?.name : undefined) ?? star}, paid from the hold`)}
           onClick={() => queueShipCommand(ship.id, { kind: 'build-starbase' })}
         >
-          Build Starbase
+          {cost !== null ? withStarbaseCost('Build Starbase', cost) : 'Build Starbase'}
         </button>
       )}
       {build && !build.ok && <div className="ship-panel-hint">{build.reason}</div>}
+      {build && !build.ok && short && short !== build.reason && <div className="ship-panel-hint">{short}</div>}
     </>
   )
 }

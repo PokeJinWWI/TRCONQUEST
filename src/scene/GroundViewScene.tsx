@@ -21,7 +21,7 @@ import { atWar } from '../state/diplomacyStore'
 import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
 import { classifyFireLine } from './armyLogic'
-import { bodyGroundInfo, TERRAIN_IDS, type BodySurface } from './planetTerrain'
+import { bodyGroundInfoAny, TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, nodePoint, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
 import { HoloGlobe, HoloHalo, type HoloNode } from './HoloGlobe'
 import { hologramTint } from './HoloPlanet'
@@ -237,7 +237,7 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
   const nodeAt = useSurfaceNodeAt(surface)
   // The map glows in the world's own colour, as the planet does from orbit.
   const glow = useMemo<[number, number, number]>(() => {
-    const c = hologramTint(bodyGroundInfo(bodyName)?.color ?? '#9fe8ff')
+    const c = hologramTint(bodyGroundInfoAny(bodyName)?.color ?? '#9fe8ff')
     return [c.r, c.g, c.b]
   }, [bodyName])
   const flat = useGroundViewStore((s) => s.projection === 'flat')

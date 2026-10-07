@@ -15,6 +15,7 @@
 // borders mid-war.
 import { PLANETS_BY_STAR, getPlanetsForStar } from './planetData'
 import { getMoonsForPlanet } from './moonData'
+import { generatedStarOfBody } from '../data/galaxyGen'
 
 export type OwnerMap = Record<string, string>
 
@@ -45,8 +46,32 @@ export function bodyIndex(): Map<string, BodyInfo> {
   return index
 }
 
+// One body's entry: a hand-authored one from the index, or a generated planet of
+// another cluster looked up on demand (data/galaxyGen.generatedStarOfBody, O(1)).
+// bodyIndex() itself stays the Solar Neighbourhood's bodies, which is what the
+// loops over "every body" run on; a generated body is reached by name only.
+export function bodyInfoOf(bodyName: string): BodyInfo | undefined {
+  const authored = bodyIndex().get(bodyName)
+  if (authored) return authored
+  const star = generatedStarOfBody(bodyName)
+  return star ? { name: bodyName, starId: star.id, kind: 'planet' } : undefined
+}
+
+// Every body a nation owns, as entries: the Solar Neighbourhood's in index order,
+// then any in other clusters (a colony founded there), by name.
+export function ownedBodyInfos(countryId: string, owners: OwnerMap): BodyInfo[] {
+  const index = bodyIndex()
+  const home = [...index.values()].filter((b) => owners[b.name] === countryId)
+  const abroad = Object.keys(owners)
+    .filter((name) => owners[name] === countryId && !index.has(name))
+    .sort()
+    .map((name) => bodyInfoOf(name))
+    .filter((b): b is BodyInfo => !!b)
+  return [...home, ...abroad]
+}
+
 export function bodyStarId(bodyName: string): string | undefined {
-  return bodyIndex().get(bodyName)?.starId
+  return bodyInfoOf(bodyName)?.starId
 }
 
 // Every body in one system — its planets/dwarfs and their moons.

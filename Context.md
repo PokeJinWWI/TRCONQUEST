@@ -1336,3 +1336,163 @@ User request (un-parks the "orbit-locked combat" memory), plan approved. Finding
 Built (rules in CLAUDE.md, **Orbital combat & Free Flight**): `combatArena.ts` (`SIGNIFICANT_GRAVITY_MS2`, `hasSignificantGravity`, `orbitPrimary`, `gravitationalAcceleration` significant-only), `combatData.POWERED_GRAVITY_ACCEL_SHARE`, `combatResolution.integrateMotion` (orbit around `orbitPrimary` when idle, capped pull when under way), `scene/freeFlight.ts`, `ShipInstance.freeFlight / pendingFreeFlight` + setters, `commsVisual.applyFreeFlight / queueFreeFlight`, `useCommsResolver`, `useCombatResolver` (`freeFlightActive`), `aiData.AI_RESEARCH_PATH`, `scene/ShipFreeFlightToggle.tsx` (ship panel + Fleet Manager), `tests/freeFlight.test.ts`.
 Live-verified (Mars vs Venus at Mars): an idle Venus (AI, no tech) ship flew at exactly the circular-orbit speed; with the tech granted Mars's ship held still (default on); ship-panel Off dropped its waypoint and it orbited at the orbital speed with its radius kept; On brought it to rest; the Fleet Manager button set all 5 ships, read Mixed, and one click from Mixed turned all on.
 Notes: at planets the pull is mild (a cruiser passing Earth bends ~0.01 units); Titan has no mass in the moon data so it has no gravity; the comms-delayed branch of the toggle is not exercised (nations now start with Hyper Comms = zero delay).
+
+## Addendum (2026-10-03): travel into a neighbouring cluster, Starbase and colony there
+
+User request, plan approved. Reproduced first (headless + live): the cluster lane WAS created (`arm3-227::solar-neighborhood` under Mars) but never drawn (the galactic view had no lane layer); a star/body order from beside the cluster returned `unreachable`. Root cause: one interstellar frame (home's), `STARS`-only lookups, `bodyIndex()` home-only. User's calls: arrive at the cluster's entry point then fly by interstellar rules; empires become real nations with diplomacy/ships and FIRST CONTACT (meeting in a system) in the NEXT round, for now "claimed by unknown empire", building inside allowed with a contested claim + opinion hit (recorded for empires); Starbase influence grows with the distance from the nearest own Starbase; same lists, cluster named.
+
+Built (rules in CLAUDE.md, **Foreign clusters**): `scene/clusters.ts`; cluster-aware `shipPhysics` (ShipRenderInfo/MoveOrder/interstellar-point `clusterId`, arrival at the entry point, `reachabilityBlock`, `galacticPosition`, lane origin); generated-body lookups (`galaxyGen.generatedStarOfBody/findGeneratedStarByName`, `territory.bodyInfoOf/ownedBodyInfos`, `starData.findSystemStar`, `planetTerrain.bodyGroundInfo`); `commsVisual` cross-cluster distance; `InterstellarScene` per-cluster ships/orders/lanes + unknown-empire claims; `GalacticShips` lane layer + per-cluster badges (`galacticOrders.clusterLaneSegments/shipsByCluster`); `starbaseLogic.starbaseInfluenceCost` + `starbaseStore.starbaseInfluenceCostFor` (`STARBASE_INFLUENCE_PER_KLY` 10); `scene/encroachment.ts` + `diplomacyStore.encroachments` + `OPINION_ON_ENCROACHMENT` -20 + event kind `encroachment`; `ownerInfo` unknown owner; `viewStore.enterSystem` sets the cluster; `shipNav`, `eventNavigation`, `cycling`, `battleList`, `Outliner`, `refill`, `automation` (+ the other chat's Auto-explore adapted: a scout abroad counts as "at" that cluster), `autoTravel`, `useEscapeBehavior`, `useSurveyResolver` (cluster visit), `ai/expander` (cost function). Sol-only sites changed are listed in the chat report.
+Live-verified (Mars, Simple): 3 ships jumped to Apus Marches and drew at its entry point; a cluster lane drew in the galactic view (a far test lane was added to see it: the real 2.5 kly one hides under the two cluster markers), another nation's did not; right-click "Survey system" on Apus Marches Delta jumped the Science Ship in and surveyed its world; Starbase built for 56 influence; the Colonize button was disabled until the Starbase finished, then founded a micro-colony; the Mars border bubble drew around Delta; the home map was unchanged; an explored empire system read "Claimed by Unknown empire" with a grey bubble; Outliner listed the colony and Starbase with "Apus Marches".
+
+## Addendum (2026-10-03): charted lanes drop the mass factor; one survey rule for colonizing
+
+- User report: Sol -> Barnard's Star safe on a charted lane, 5.8% back. Cause: the destination-mass factor (0.8 to Barnard's, 1.25 to Sol) still applied on the lane. User's rule: the mass factor applies only without a hyperlane. `shipPhysics.hyperdriveJumpRiskFactor(..., charted)` and `starJumpChance` now use mass factor 1 on a charted lane (4.6% both ways). Tests updated: hyperlanes (new section 5), jumpRisk, jumpRoute, warp.
+- User report: Pluto could not be surveyed ("every body here is surveyed") nor colonized ("Survey Pluto first"). Cause: `canColonize` read the stored `surveyed` set, while the survey rule (`isBodySurveyed`) counts every body of a system the nation owns a world in. Fixed with `surveyLogic.knownSurveyedBodies` + `isBodySurveyed` in `colonies.ts`, `automation.ts` (auto-settle), `ai/expander.pickColonyTarget`. New `tests/colonySurvey.test.ts`; `automation.test.ts` section 6 updated (both colony ships now find a world each in Sol).
+
+# Project Context — handoff #9 (2026-10-04, after /newchat)
+
+(`Context.md` == `CONTEXT.md` on this case-insensitive FS: append only. `CLAUDE.md` is the authoritative rules/architecture reference and is CURRENT for everything below; the addenda above hold per-feature detail.)
+
+## Objective
+Terra Relicta: Conquest, early game in Simple mode (mechanics, not balance). This session added, on top of the still-uncommitted work of handoffs #7/#8: per-nation hyperlanes + risk-aware automation routes ("Make unsafe jumps" + max-risk slider), orbital combat without Free Flight (capped gravity + per-ship/fleet toggle), travel into other clusters with Starbases/colonies there (cluster-aware positions, distance-scaled Starbase influence, "Unknown empire" claims, encroachment), charted lanes dropping the mass factor, one survey rule for colonizing (Pluto), settlers on cheat-spawned Colony Ships, and an observation-only live playtest. NOTHING IS COMMITTED.
+
+## Current State
+- Last full sweep (Node 24, 90 test files): `tsc` and `npm run build` pass; failing only `colonies.test.ts` section 8 (4 checks, AI first colony on day ~8,700 against a 3,000-day horizon since lanes became per nation) and `ground.test.ts` (load-sensitive timing, passes alone). After that sweep only the settlers fix was made (its test, `colonies`, `automation` and the build were re-run, not the whole suite).
+- Playtest (Mars, Simple): all three goals done (Eris day 287 no cheats; Barnard b day 519; Starbase + colony in Apus Marches day 785). Cheats: Free Research twice (Orbital Construction; Hyperdrive Mk II-V). 29 findings: report at `docs/playtest-2026-10-03.md` (copy of the scratchpad report). Nothing from it has been fixed.
+- `src/main.tsx` is clean.
+- ANOTHER CLAUDE CHAT edits the same tree (minor fixes). During this session it added Turing-Scout Auto-explore (`scene/autoExplore.ts`, `state/clusterVisitStore.ts`), ship repair (`scene/shipRepair.ts`, `ShipRepairSection.tsx`), a drive picker (`driveOfShip`), an `earth` nation, and changed `canColonize` so a nation's HOME system needs no Starbase (`colonies.isHomeSystem`). Don't revert its edits; CLAUDE.md's Colonies section still states the old Starbase rule.
+
+## Decisions (user-confirmed this session)
+- Automation routes: any star may be a stopover; at most 4 jumps; box off = never a jump over 5%; box on = per-jump max-risk slider (10-100%, step 5, default 100%).
+- Hyperlanes are per nation; no sharing (pure `mergeLanes` hook only). Destination-mass factor applies ONLY without a charted lane.
+- Orbital combat: gravity pulls while moving too, capped at 50% of the ship's own acceleration; significant gravity = real surface gravity >= 0.5 m/s2; toggle per ship, any time; AI keeps Free Flight on and has the tech on its research path.
+- Foreign clusters: arrive at the cluster's entry point, then ordinary interstellar rules; Starbase influence 30 + 10/kly from the nearest cluster the nation stands in; same lists with the cluster named; empire systems read "Unknown empire", building inside is allowed, makes the system contested and costs -20 opinion (recorded only, for empires).
+- NEXT ROUND (agreed, not built, needs its own plan): generated empires become real nations (diplomacy, ships, AI); first contact = meeting in a system (your ship in the same system as their ship, Starbase or world, report arrived), also for the human nations.
+
+## Constraints
+- Never commit unless asked. Sweep after any change: `npx tsc -b`, every `tests/*.test.ts`, `npm run build`, under Node 24 (`export PATH="/Users/pikaj/.nvm/versions/node/v24.9.0/bin:$PATH"`; the default node 16 breaks the build).
+- Plan mode first for big features; AskUserQuestion for unspecified calls; balance numbers as named constants; Simple changes must not touch Complex mode (a ground-lookup change once shifted Complex's empire seed: `bodyGroundInfo` stays home-only, `bodyGroundInfoAny` is the generated-aware one).
+- Store probes in `main.tsx` reverted every turn; never read/overwrite Context.md whole; macOS `sed -i ''`.
+- Browser pane: real mouse clicks are unreliable under an emulated viewport, and a synthetic right-click needs a pointerdown at the same spot first (the drag guard swallows it otherwise).
+
+## Open Questions
+- AI colony slowdown from per-nation lanes (`colonies.test.ts` section 8): raise the test horizon, or make the AI chart its own lane first (recommended), or share lanes (ruled out for now).
+- Encroachment in a SHARED HOME system: founding Eris cost -20 with Earth and Venus and wars followed; should a nation's home system be exempt?
+- Which playtest findings to fix first (top: home-system encroachment; "Survey system" skips the risky-jump warning; cluster jump is 100% loss at Mk I with no hint; stale cluster-panel risk; "Go To" from the galaxy view; Outliner colony rows losing names; gas giants offered as colonizable).
+- Still open from before: commit the large uncommitted tree (split by feature?); galaxy empire placement weighting; Complex mode has no research income (gated hulls, Free Flight, Orbital Construction unreachable there).
+
+## Next Steps
+1. Ask which of the open questions to take first (home-system encroachment and the AI colony slowdown are the two that leave something wrong in play/tests).
+2. Fix the chosen playtest findings, each with a regression test and a live check.
+3. Plan the empires-as-nations + first-contact round (plan mode).
+4. Ask whether to commit.
+
+## User Preferences
+- Mechanics over balance; plan mode for big features; AskUserQuestion for unspecified calls; a pure-function test per rule; live browser verification of UI; reproduce first and fix the root cause; report unverified items honestly; list files touched; short mid-task corrections are authoritative; don't do what wasn't asked.
+
+# Project Context — handoff #10 (2026-10-06, after /newchat)
+
+(Appended, not overwritten: Context.md and CONTEXT.md are the SAME file here — a case-insensitive filesystem — and it is the git-tracked running log. Earlier handoffs above stay valid unless contradicted below.)
+
+## Objective
+Terra Relicta: Conquest (Vite + React + TS + r3f + zustand; user = mr1noobfatfish). This session was a run of user-requested gameplay/UI fixes; all of it is UNCOMMITTED in the working tree (never commit unless asked).
+
+## Current State
+Standard sweep (tsc, every tests/*.test.ts, build) was clean at the end of the last item. Done this session:
+- **Comms/tech:** nations start with Hyper Comms (`techStore.startingCommsTech`), every prerequisite of a starter also starts researched; quantum-communications removed; Hyper Comms needs hyperspace-theory + quantum-mechanics; Warp Comms needs warp-theory + quantum-mechanics, costs `WARP_COMMS_EXOTIC_COST` (2) exotic matter, tier 3, not on `AI_RESEARCH_PATH`. `tests/testComms.warpCommsOnly()` pins delay-dependent tests; `ai.test.ts` is pinned to it.
+- **Tooltips:** native `title`s are moved to `data-tip` for good (MutationObserver) so no white browser tooltips.
+- **Galactic view:** `GalacticViewScene` now renders `ShipPanel` (+ Go To); Sol badge box-selects (`scene/galacticSelection.ts`).
+- **Upgrades:** upgrading renames "<Old class> N" -> "<New class> N"; away ships fly to the yard and queue on arrival (`scene/upgradeOrders.ts`; the other session extended it to nearest yard + repair). No heal/repair existed before.
+- **Drive selector** (`scene/driveChoice.ts`, `ShipDriveSelector.tsx`, `ShipInstance.driveChoice`, `shipPhysics.driveOfShip`): Auto/Reaction/Hyperdrive/Warp per ship, persists; Turing defaults Hyperdrive; Reaction trips over a year confirm; selection shows the slowest ship's.
+- **Free Flight gating:** without it Swarm/Kite/Stall + Divide/Condense/Screen run as Balanced and arena "send to a point" is refused (`freeFlight.usableStrategy/strategyBlock/moveOrderBlock`).
+- **Auto-explore** (Turing only: `scene/autoExplore.ts`, `clusterVisitStore`, `ShipInstance.exploreScope`; Interstellar default / Intercluster / Both; never surveys; scouts split targets).
+- **Merge** of origin/main: 9 conflicts resolved (merge commit b2ebe1c is the user's). Army scenarios pinned with `near` anchors and enemy strengths retuned (`data/armyScenarios.ts`), `earth.test.ts` updated for the new land cutoff, `terrainWar.test.ts` cap 900 days.
+- **AI:** `ai/jumpRules.aiNextStop` lets the AI hop along its charted lanes (executor/snapshot/blackboard); colonies test passes again (home system needs no Starbase).
+- **Colonize/Starbase UI** (`scene/colonyChooser.ts`, `starbaseNotices.ts`, `starbaseMenu.ts`): chooser grouped by named system (own system first), reason lines incl. "Waiting for the Starbase here to finish, ready about <date>", plain take-back wording, Build Starbase shows "· 30 influence" + shortfall, `starbase-started/finished` notifications (player's own only), Outliner names never squeezed.
+- **Jump risk truthfulness** (`ShipJumpRiskRow.tsx`, `jumpWarning.jumpRiskTipText/jumpRiskRow`, `shipPhysics.jumpIsCharted`, `jumpConfirm.jumpRiskLine`): real lane-aware numbers in tips and the ship panel (hidden with no destination); Outliner cluster pick keeps the ship selected; survey orders confirm like moves; cluster panel follows research.
+
+## Decisions
+- Cluster "unexplored" = visited (a ship rested beside it); nothing left to explore = stay on and say so; Both scope = stars first then clusters.
+- Drive default Auto (original rule); mixed selections follow the slowest ship; Reaction allowed with a long-trip confirm.
+- Positioning tactics (not Balanced/Flee/targeting/chase/ram/boosts) need Free Flight; fleet strategies Divide/Condense/Screen included.
+- Starbase start/finish notices are for the player's own nation only (fog).
+- Do not change: jump-risk formula, JUMP_WARN_LOSS, Mk scaling, AI jump caps, research costs, Starbase influence constant, colonization rules.
+
+## Constraints
+- Never commit unless asked. Standard sweep after every change; live browser check for UI; store-probe in `src/main.tsx` must be reverted before ending (it is reverted now).
+- Context.md == CONTEXT.md (one 550KB file): append, never overwrite. Don't read it whole.
+- Another Claude session has edited this same working tree concurrently (cluster/starbase/repair work); its uncommitted changes sit alongside. Check `git status` and running processes before a sweep.
+- The pane's Browser server on :5173 is already running (not started by preview_start).
+
+## Important Details
+- Gas giants (Jupiter..Neptune), Mercury, Titan, Pluto are colonizable under the CURRENT rules (no habitability check; founding succeeds). The chooser matches the rules. Decision pending from the user.
+- `colonies.test.ts` / army tests pass in the last full sweep; `shipUpgrade.test.ts` once failed mid-sweep while another session edited `upgradeOrders.ts` and passed on every re-run.
+- Weak spots noticed: the Jump Risk row only follows picked Solar-Neighbourhood stars; multi-ship panel has no Jump Risk row; star menu tip verified via its function, not by right-click.
+
+## Open Questions
+- Should gas giants / Mercury be colonizable (needs a rule decision, then a regression test)?
+- Commit the working tree (large, mixed with the other session's changes)?
+- Regenerate `economy/empireCalibration.ts` (took the incoming populated version after the merge)?
+
+## Next Steps
+1. Ask the user about the gas-giant colonization rule and about committing.
+2. Re-run the standard sweep on a settled tree (check no other session is running).
+3. Empires-as-nations + first-contact round remains planned (plan mode first).
+
+## User Preferences
+- Mechanics over balance; plan mode for big features (AskUserQuestion for unspecified calls); a pure-function test per rule; reproduce live first and fix the root cause; report unverified items honestly; list files touched; short corrections are authoritative; do not do what wasn't asked; never commit unprompted.
+
+---
+
+# Galactic-view navigation & selection round (2026-10-06, after handoff #10)
+
+(Appended. Scale: INTERCLUSTER = galactic view; a cluster's own map is INTERSTELLAR. View-only: no jump rule, risk, order or arrow changed. UNCOMMITTED.)
+
+## Reproduced live first (real mouse where the tool allows)
+1. **Ship selection**: a real left-click on a badge or an unobstructed galactic marker DID select and opened the panel (the earlier "cannot select" was not a panel/pick gate). Real causes: (a) the default galaxy view opened on the galaxy's centre with the Solar Neighbourhood under the Outliner and the nearest cluster 34 px away; (b) the cluster badge sat at `translate(10px,-22px)`, the SAME place as a `.ship-marker` (`translate(4px,-18px)`), so a ship leaving a cluster was hidden under the badge (`elementFromPoint` at the ship returned the badge). Box select works (synthetic Shift events: the drag tool cannot hold Shift, so a real Shift+drag is UNVERIFIED); a box started ON a badge never began (`BoxSelectLayer.onDown` only allowed canvas / `.ship-marker`).
+2. **Right-click on a cluster**: the dot works (real right-click ordered the ship to the cluster). The NAME label is DOM with pointer-events none, so a right-click on it was a free-space order (`galactic-point`). Fixed: `galaxyPick.pickInRects` + labels carry `data-neighborhood-label`; `GalaxyMarkers.pick` checks the dot, then the label rects (document query: drei puts them in a container of their own, not under the canvas parent).
+3. **Go To**: opened the cluster map for a ship at an entry point, but a ship in a SYSTEM went to the system view. `shipNav.viewShip` now, from the galactic view, opens the cluster's interstellar map (`enterInterstellar(cluster, true)`) for any ship inside a cluster; elsewhere unchanged.
+4. **Status text**: `scene/shipStatus.ts` (pure): "At the entry point of <Cluster>" / "In <Cluster>, Deep Space" / "Between clusters", each plus " — waiting for the drive (Xd)" while the hyperdrive cooldown runs (`getShipStatusText`).
+5. **Default galaxy framing**: opens on the player's home cluster (`scene/homeCluster.ts`, capital star's cluster; Sol for the sandbox) from `framing.separationDistance` so the nearest cluster is 150 px away (about 412 units for Sol/Apus). Zooming out still shows the whole galaxy. Badge moved below-left of the marker (`translate(calc(-100% - 12px), 6px)`); Shift-click on a badge toggles.
+6. **Cluster map framing**: a map opened from the galaxy, or any foreign cluster's, is fitted to its stars (`framing.boundingSphere` + `fitDistance`, `CLUSTER_FIT_MARGIN` 1.05, aspect of the area between the side panels `visibleAspect`, steeper `FIT_CAMERA_DIRECTION`); was 2,600 units out. The Solar Neighbourhood reached by the breadcrumb keeps its near default.
+7. **Cluster window**: "From <ship>" and "From home" rows (`scene/clusterDistances.ts` pure, `ClusterDistanceRows.tsx` on `useThrottledSimDays`; home row hidden in the sandbox / for home itself; "inside this cluster" for a ship already there).
+
+## Tests / verification
+`tests/galacticNavigation.test.ts` (51 checks: label pick, framing incl. every real cluster fits, distances, status text, Go To). Live: default framing, badge/marker hit-test (all four markers on top), real click select + panel, real label right-click -> `pendingHyperdriveJumpTo {kind:'cluster'}`, status line, Go To from the galaxy, cluster map framing (Cepheus Expanse, 11 stars all separate; one pair of labels still touches), cluster window rows, synthetic box-select from a badge and Shift-click. Store-probe in main.tsx reverted.
+Dev-server gotcha: after editing files while Vite is mid-edit the browser can cache a stale `?t=` module; `touch` the file and reload.
+
+## Unverified / known
+- Real Shift+drag (tool cannot hold Shift). Labels of stars nearly in line still overlap. A box over a badge still takes only its lead ship (earlier design, tested in galacticSelection.test.ts).
+
+---
+
+# Dev cheats, research queue and layout round (2026-10-07)
+
+(Appended. UI/debug tooling only; no research cost, tech tree, notification rule or clock behaviour changed. UNCOMMITTED.)
+
+## Reproduced live, then fixed
+1. **Free Research queue**: with it on, a queue made earlier kept the old cost/ETA ("40 pts, about 8 months"), nothing completed on its own, and a tech researched by hand stayed queued. Causes: `setFreeResearchMode` never settled the queue; `researchNode` never removed a researched id from it; the queue list ignored free mode. Now: switching it on runs `processQueue` for every nation (queued ones complete at once, in order); `researchNode` drops the tech from its queue; the list shows `shownCost` (0 pts) and `researchEtas(..., freeCost)` ("now"). **Month check (reported):** in Simple mode the next monthly tick already ran `processQueue` and cleared the queue (35 days advanced: all three researched, queue `[]`), so the stale rows were only between toggling and the month; in Complex mode `processQueue` is never called (no research income there), so before the fix nothing would ever have cleared it. `tests/techQueue.test.ts`.
+2. **Debug Console cheats** (`scene/cheats.ts`: pure `spawnLocation`/`nearOptions`/`jumpPlan`, store writes `cheatAddResource`/`cheatJumpDays`/`cheatEndWar`/`cheatEndAllWars`; UI section "CHEAT: ..."): add any resource, add influence, jump N days (10-day steps, works paused, does not unpause), end one war / all wars (white peace through `makePeace`), and spawn a ship in ANY cluster (Cluster select; per system: bodies, the bare star, or the cluster entry point). `tests/cheats.test.ts`.
+3. **Notifications over the Outliner**: `.dip-toasts` now sit left of the 220px Outliner (`right: 232px`, width `min(320px, 100vw - 244px)`).
+4. **Top bar at 519px**: `.hud-top` wraps (title nowrap, parts keep their own width) and under 700px the resource row drops to its own line, lock-on/breadcrumb on a second; `--hud-top-height` follows via useHudBarLayout.
+
+## Unverified / known
+- At 519px the left nav + Outliner leave ~109px of map and the toasts still cross the nav (nothing left to put them beside); the bottom bar is also clipped there (not part of this round).
+- Complex mode: the cheat resource add writes the stockpile the economy may overwrite for goods; influence/exotic/hyperium are fine.
+
+---
+
+# Sandbox tech round (2026-10-07, plan-mode first)
+
+(Appended. Sandbox only; normal games, research costs, the tree and AI research unchanged. UNCOMMITTED.)
+
+## Behaviour
+- **Start**: `startSandbox()` (`scene/sandboxSetup.ts`) researches the whole default tree (56 techs, `techData.allTechIds`) for ALL FOUR sandbox owners (`countryRoster.SANDBOX_FACTION_IDS`: the player's faction + friendly/neutral/pirates; they share one tree so a spawned enemy flies like yours) and turns on the existing `freeResearchMode` via the named constant `SANDBOX_FREE_RESEARCH = true`. No AI runs in the sandbox, so no AI research changed.
+- **Access**: the sandbox nav had no Technology category and `NationTechPanel` needed an economy country; now `SANDBOX_CATEGORIES` has Technology and the panel/tree work without a country (every node shown, `sandbox` prop on `TechTreeGraph`).
+- **Toggle**: `techStore.toggleTech(nodeId)` (sandbox-guarded, false elsewhere). Researched -> un-researched with a CASCADE (`techData.unresearchPlan`: every researched tech that then fails `prerequisitesMet`, plus Anomalous Phenomena if the aggregate gate is no longer met), always free. Not researched -> researched with its missing prerequisites (`researchPlan`, reuses `queuePlan`); Free Research on = no points/resources/prerequisite blocking; Free Research off (Debug Console checkbox) = the player's faction pays through the ordinary `researchNode` (costs + prerequisites) and the other factions follow. Un-researching with dependents asks first through `confirmStore` (`scene/sandboxTech.requestToggleTech`, names what goes too).
+- **Consistency**: existing ships/designs are kept, new builds/upgrades/designer picks are blocked by the existing gates; derived state is all live reads of the researched Set (Mk is the highest CONSECUTIVE Mk, which is why the cascade matters). Queue/free-ETA fixes from the cheat round are shared (a toggled-off tech leaves the queue).
+- Tests: `tests/sandboxTech.test.ts` (pure plans, start, toggles, derived Mk/gates, costs-on mode, normal games untouched).
+
+## Verified live (real clicks): Sandbox start in Simple and Complex mode (all 56 researched, Free on, Technology in nav); un-research Frigate Hulls (confirm names the 3 hulls that go), Free-Flight Maneuvering, Hyperdrive Mk I (ship panel: "Orbital (needs Free-Flight Maneuvering)", Hyperdrive button disabled with the reason, Upgrade row "Needs Autonomous Navigation"), Shipyard rows ("Can't build: needs Frigate Hulls"), designer hull picker (Civilian/Corvette/Frigate only); tree view click on Warp Theory (cascade of 9) and re-research (shared by all 4 factions); normal game: 9 default techs, Free off, Queue buttons, no undo controls.
+## Unverified / known
+- Free-off researching in the real UI (covered by tests only). The top "Shipyard" quick button opens nothing in the sandbox (no yard, as before); the shipyard list is under Fleet Management > Navy > Shipyard.

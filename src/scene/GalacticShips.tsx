@@ -6,7 +6,6 @@
 import { Html } from '@react-three/drei'
 import { useMemo } from 'react'
 import { RELATION_COLORS } from '../data/shipData'
-import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
 import { usePlayerStore } from '../state/playerStore'
 import { useShipStore, type MoveDestination, type ShipInstance } from '../state/shipStore'
 import { forwardWheelToCanvas } from '../utils/forwardWheel'
@@ -14,10 +13,15 @@ import { NavigationLine } from './NavigationLine'
 import { PendingOrderLine } from './PendingOrderLine'
 import { QueuedRouteLine } from './QueuedRouteLine'
 import { playerShipRenderPosition } from './commsVisual'
-import { galacticDestinationPosition, galacticOrderLines } from './galacticOrders'
+import { clusterLaneSegments, galacticDestinationPosition, galacticOrderLines, shipsByCluster } from './galacticOrders'
+import { NEIGHBORHOODS, neighborhoodScenePosition } from '../data/neighborhoodData'
+import { useHyperlaneStore, allLanesOf } from '../state/hyperlaneStore'
+import { useObserverStore } from '../state/observerStore'
+import { clusterName } from './clusters'
 import { ShipMarker } from './ShipMarker'
 import { SHIP_ICON_SIZE, ShipIcon, roleOfClass } from './ShipIcon'
 import { homeBadgeLeadId } from './galacticSelection'
+import { isAdditiveClick } from './selectionInput'
 import { clusterRestingShipsByFleet, clusterScenePosition, galacticPosition, isShipInGalacticSpace } from './shipPhysics'
 
 const NAV_ARROW_LENGTH = 5
@@ -40,14 +44,31 @@ export function GalacticShips() {
   const own = useMemo(() => ships.filter((s) => s.ownerId === playerId), [ships, playerId])
   const out = useMemo(() => own.filter(isShipInGalacticSpace), [own])
   const outClusters = useMemo(() => clusterRestingShipsByFleet(out), [out])
-  // The ones inside the Solar Neighbourhood, as a badge on it.
-  const home = useMemo(() => own.filter((s) => !isShipInGalacticSpace(s)), [own])
+  // The ones inside a cluster (the Solar Neighbourhood, or another they have entered),
+  // as a badge on that cluster.
+  const inside = useMemo(() => [...shipsByCluster(own)], [own])
+  // The charted lanes between clusters: the player's own, every nation's in Observer
+  // mode, as ONE LineSegments.
+  const lanesByNation = useHyperlaneStore((s) => s.lanes)
+  const observer = useObserverStore((s) => s.on)
+  const laneSegments = useMemo(() => {
+    const lanes = observer ? allLanesOf(lanesByNation) : playerId ? lanesByNation[playerId] ?? [] : []
+    const at = new Map(NEIGHBORHOODS.map((n) => [n.id, neighborhoodScenePosition(n)]))
+    return clusterLaneSegments(lanes, (id) => at.get(id) ?? null)
+  }, [lanesByNation, playerId, observer])
   // The same three kinds of order arrow the interstellar view draws (scene/galacticOrders.ts).
   const lines = useMemo(() => galacticOrderLines(ships, playerId), [ships, playerId])
-  const homePosition = useMemo(() => clusterScenePosition(SOLAR_NEIGHBORHOOD_ID), [])
 
   return (
     <>
+      {laneSegments.length > 0 && (
+        <lineSegments key={laneSegments.length} frustumCulled={false}>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[laneSegments, 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial color="#7ce8ff" transparent opacity={0.9} />
+        </lineSegments>
+      )}
       {outClusters.map((cluster) => (
         <ShipMarker key={cluster.key} ships={cluster.ships} iconSize={GALACTIC_ICON_PX} />
       ))}
@@ -77,17 +98,20 @@ export function GalacticShips() {
           resolveTarget={resolveGalacticTarget}
         />
       ))}
-      {home.length > 0 && (
-        <group position={homePosition}>
+      {inside.map(([clusterId, home]) => (
+        <group key={clusterId} position={clusterScenePosition(clusterId)}>
           <Html zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
             <div
               className="galactic-ship-badge"
               // Shift+drag box selection picks the badge by this (components/BoxSelectLayer).
               data-select-ship={homeBadgeLeadId(home) ?? undefined}
-              title={`${home.length} of your ships in the Solar Neighbourhood`}
+              title={`${home.length} of your ships in ${clusterName(clusterId)}`}
               onClick={(e) => {
                 e.stopPropagation()
-                selectShip(homeBadgeLeadId(home)!)
+                const lead = homeBadgeLeadId(home)!
+                // Shift adds to / removes from the selection, as on every ship marker.
+                if (isAdditiveClick(e)) useShipStore.getState().toggleShipSelection(lead)
+                else selectShip(lead)
               }}
               onWheel={forwardWheelToCanvas}
             >
@@ -96,7 +120,7 @@ export function GalacticShips() {
             </div>
           </Html>
         </group>
-      )}
+      ))}
     </>
   )
 }

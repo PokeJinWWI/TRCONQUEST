@@ -33,7 +33,10 @@ export type ShipLocation =
   | { kind: 'orbiting'; systemId: string; bodyName: string; periodDays: number; phaseDeg: number; inclinationDeg: number }
   | { kind: 'system-point'; systemId: string; position: [number, number, number] }
   | { kind: 'star'; starId: string; offset: [number, number, number] }
-  | { kind: 'interstellar-point'; position: [number, number, number] }
+  // `clusterId`: whose interstellar map the point is on (scene/clusters.ts);
+  // absent = the Solar Neighbourhood's. Arriving at a cluster lands here, at its
+  // entry point (the map's origin).
+  | { kind: 'interstellar-point'; position: [number, number, number]; clusterId?: string }
   // Between clusters (the galactic view): resting beside a cluster other than the
   // Solar Neighbourhood (arriving at ours lands in interstellar space, at Sol),
   // or at a bare point of galactic space. Galactic scene units
@@ -58,7 +61,7 @@ export type MoveDestination =
     }
   | { kind: 'point'; systemId: string; position: [number, number, number] }
   | { kind: 'star'; starId: string }
-  | { kind: 'interstellar-point'; position: [number, number, number] }
+  | { kind: 'interstellar-point'; position: [number, number, number]; clusterId?: string }
   | { kind: 'cluster'; clusterId: string }
   | { kind: 'galactic-point'; position: [number, number, number] }
 
@@ -76,6 +79,8 @@ export type ShipCommand =
   | { kind: 'survey'; starId?: string; bodyName?: string }
   // Take goods from the nation's stockpile aboard (at an owned world).
   | { kind: 'load'; want: ResourceCost }
+  // Put goods from the hold into the nation's stockpile (at an owned world); no `want` = everything.
+  | { kind: 'unload'; want?: ResourceCost }
   // Hand goods to another of the nation's ships in the same place.
   | { kind: 'transfer'; toShipId: string; want: ResourceCost }
   // A Construction Ship builds a Starbase at the star it rests at, paid from
@@ -90,6 +95,8 @@ export type ShipCommand =
   | { kind: 'attack'; targetShipId: string }
   // Queue this ship for its next level at the shipyard (scene/upgradeOrders.ts flies it there first).
   | { kind: 'upgrade' }
+  // Queue this ship for repair at the shipyard (scene/yardOrders.ts flies it there first).
+  | { kind: 'repair' }
 
 export interface PendingShipCommand {
   command: ShipCommand
@@ -107,6 +114,9 @@ export interface MoveOrder {
   // are always in the same units).
   space: 'system' | 'interstellar' | 'galactic'
   systemId?: string
+  // For an interstellar leg: the cluster whose map it is flown on (absent = the
+  // Solar Neighbourhood's).
+  clusterId?: string
   startPosition: [number, number, number]
   endPosition: [number, number, number]
   // Whether this order is actually using the ship's warp drive (vs. falling

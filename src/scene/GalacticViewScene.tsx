@@ -23,12 +23,16 @@ import { GalacticShips } from './GalacticShips'
 import { clusterScenePosition, isShipInGalacticSpace } from './shipPhysics'
 import { orderSelectedFleets, playerShipRenderPosition } from './commsVisual'
 import { hasOwnShipSelected } from './panelOpen'
-import { jumpRiskLine } from './jumpConfirm'
+import { ClusterJumpRow } from './ClusterJumpRow'
 import { useShipStore } from '../state/shipStore'
-import { isPlayerOwned } from '../state/shipRelations'
 import { SOLAR_NEIGHBORHOOD_ID } from '../data/galaxyGen'
 import { ShipPanel } from './ShipPanel'
 import { galacticPanels } from './galacticSelection'
+import { cameraAlong, nearestDistance, separationDistance } from './framing'
+import { homeClusterOf } from './homeCluster'
+import { ClusterDistanceRows } from './ClusterDistanceRows'
+import { clusterCoreDistanceKly } from './clusterDistances'
+import { usePlayerStore } from '../state/playerStore'
 import { DraggableWindow } from '../components/DraggableWindow'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useStarbaseStore } from '../state/starbaseStore'
@@ -53,7 +57,13 @@ const ENTER_INTERSTELLAR_DISTANCE = 6
 // "offset either way" idea InterstellarScene's own DEFAULT_CAMERA_OFFSET
 // already uses one level down.
 const DEFAULT_CAMERA_OFFSET: [number, number, number] = [40, 60, 110]
-const FAR_START: [number, number, number] = [0, 900, 1600]
+// The default opening (no cluster to come back to) looks at the player's own cluster, from far
+// enough that its nearest neighbour sits NEIGHBOUR_SEPARATION_PX away on screen: ring, ship badge
+// and the lane between them stay apart and clickable. (It used to open on the galaxy's centre,
+// with the Solar Neighbourhood's markers under the Outliner and the nearest cluster on top of it.)
+// Zooming out still shows the whole galaxy.
+const CAMERA_FOV_DEG = 50
+const NEIGHBOUR_SEPARATION_PX = 150
 
 // Whoever holds ground in this neighbourhood's charted systems — the union
 // of every one of its stars' own systemClaim (bodies plus Starbases, see
@@ -88,8 +98,6 @@ export function GalacticViewScene() {
 
   const selectedShipId = useShipStore((s) => s.selectedShipId)
   const trackedShip = useShipStore((s) => (selectedShipId ? s.ships.find((x) => x.id === selectedShipId) ?? null : null))
-  // A ship of yours that is selected, for the risk line of the cluster panel.
-  const selectedShipIdsKey = useShipStore((s) => s.selectedShipIds.join(','))
   const panels = galacticPanels(selectedShipId, selectedId)
   const selected = useMemo(() => NEIGHBORHOODS.find((n) => n.id === selectedId) ?? null, [selectedId])
   const focused = useMemo(() => NEIGHBORHOODS.find((n) => n.id === focusedId) ?? null, [focusedId])
@@ -124,8 +132,18 @@ export function GalacticViewScene() {
     return neighborhood ? neighborhoodScenePosition(neighborhood) : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  // Home: the cluster the player's capital is in. Read once, at mount, like the continuity neighbourhood.
+  const homeClusterId = useMemo(() => homeClusterOf(usePlayerStore.getState().selectedCountryId), [])
+  const cameraHomeId = homeClusterId ?? SOLAR_NEIGHBORHOOD_ID
+  const homeFrame = useMemo(() => {
+    const at = clusterScenePosition(cameraHomeId).toArray() as [number, number, number]
+    const others = NEIGHBORHOODS.filter((n) => n.id !== cameraHomeId).map(neighborhoodScenePosition)
+    const gap = nearestDistance(at, others)
+    const distance = Number.isFinite(gap) ? separationDistance(gap, NEIGHBOUR_SEPARATION_PX, CAMERA_FOV_DEG, window.innerHeight) : 400
+    return { target: at, position: cameraAlong(at, DEFAULT_CAMERA_OFFSET, Math.min(Math.max(distance, 120), MAX_DISTANCE / 2)) }
+  }, [cameraHomeId])
   const initialCameraPosition = useMemo<[number, number, number]>(() => {
-    if (!continuityNeighborhoodPosition) return FAR_START
+    if (!continuityNeighborhoodPosition) return homeFrame.position
     return [
       continuityNeighborhoodPosition[0] + DEFAULT_CAMERA_OFFSET[0],
       continuityNeighborhoodPosition[1] + DEFAULT_CAMERA_OFFSET[1],
@@ -134,8 +152,8 @@ export function GalacticViewScene() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const initialTarget = useMemo<[number, number, number]>(
-    () => continuityNeighborhoodPosition ?? [0, 0, 0],
-    [continuityNeighborhoodPosition],
+    () => continuityNeighborhoodPosition ?? homeFrame.target,
+    [continuityNeighborhoodPosition, homeFrame],
   )
 
   // Select-first, same as every other level: clicking just locks the camera
@@ -187,7 +205,7 @@ export function GalacticViewScene() {
 
   return (
     <div className="galactic-wrapper">
-      <Canvas camera={{ position: initialCameraPosition, fov: 50, near: 0.5, far: 20000 }} onPointerMissed={handleUnfocus}>
+      <Canvas camera={{ position: initialCameraPosition, fov: CAMERA_FOV_DEG, near: 0.5, far: 20000 }} onPointerMissed={handleUnfocus}>
         <color attach="background" args={['#020409']} />
         <KeyboardPan controlsRef={controlsRef} />
         <ambientLight intensity={0.3} />
@@ -253,26 +271,18 @@ export function GalacticViewScene() {
         />
       </Canvas>
 
-      {panels.ship && <ShipPanel onGoTo={trackedShip ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />}
+      {/* Go To flies the camera only to a ship that is ON this map (out between clusters);
+          a ship inside a cluster gets the panel's default: open the map it is in (shipNav.viewShip). */}
+      {panels.ship && <ShipPanel onGoTo={trackedShip && isShipInGalacticSpace(trackedShip) ? () => setFlyingToShip(true) : undefined} goToPending={flyingToShip} />}
 
       {panels.cluster && selected && (
         <DraggableWindow title={selected.name} memoryKey="galaxy-selection" onClose={() => selectInView(null)}>
           <div className="inspect-row">
             <span className="inspect-label">Distance from core</span>
-            <span className="inspect-value">{Math.hypot(selected.position[0], selected.position[1]).toFixed(1)} kly</span>
+            <span className="inspect-value">{clusterCoreDistanceKly(selected.id).toFixed(1)} kly</span>
           </div>
-          {(() => {
-            void selectedShipIdsKey
-            const store = useShipStore.getState()
-            const mine = store.ships.filter((s) => store.selectedShipIds.includes(s.id) && isPlayerOwned(s))
-            const line = selected.id === SOLAR_NEIGHBORHOOD_ID ? null : jumpRiskLine(mine, { kind: 'cluster', clusterId: selected.id })
-            return line ? (
-              <div className="inspect-row" title="A hyperdrive jump's loss chance grows with distance (and falls with your Hyperdrive Mk, and on a lane you have charted). Warp ships fly instead, at warp speed.">
-                <span className="inspect-label">Jump</span>
-                <span className="inspect-value">{line.replace('Jump risk: ', '')}</span>
-              </div>
-            ) : null
-          })()}
+          <ClusterDistanceRows clusterId={selected.id} homeClusterId={homeClusterId} />
+          {selected.id !== SOLAR_NEIGHBORHOOD_ID && <ClusterJumpRow clusterId={selected.id} />}
           <div className="inspect-divider" />
           {selected.hasInterstellarData ? (
             focused ? (

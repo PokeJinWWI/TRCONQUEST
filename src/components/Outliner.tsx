@@ -4,7 +4,8 @@ import { isCivilianClass } from '../scene/fleetRules'
 import { useViewStore } from '../state/viewStore'
 import { useShipStore } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
-import { bodyIndex } from '../scene/territory'
+import { ownedBodyInfos } from '../scene/territory'
+import { clusterName, clusterOfStar, isHomeCluster } from '../scene/clusters'
 import { isNewTabClick, isNewTabContextMenu } from '../scene/selectionInput'
 import { useWorkspaceStore } from '../state/workspaceStore'
 import { battleTabPatch } from '../scene/battleNav'
@@ -12,7 +13,7 @@ import { isAdditiveClick } from '../scene/selectionInput'
 import { useFleetStore } from '../state/fleetStore'
 import { usePlayerStore } from '../state/playerStore'
 import { getPlanetsForStar } from '../scene/planetData'
-import { getStarsForNeighborhood, getSystemStars, STARS } from '../data/starData'
+import { findStar, getStarsForNeighborhood, getSystemStars } from '../data/starData'
 import { NEIGHBORHOODS } from '../data/neighborhoodData'
 import { getMoonsForPlanet } from '../scene/moonData'
 import { RELATION_COLORS } from '../data/shipData'
@@ -160,14 +161,17 @@ function useColonyEntries(): OutlinerEntry[] {
   return useMemo(() => {
     if (!selectedCountryId) return []
     const micro = new Set(microKey.split('|'))
-    const owned = [...bodyIndex().values()].filter((b) => bodyOwner[b.name] === selectedCountryId)
+    const owned = ownedBodyInfos(selectedCountryId, bodyOwner)
     const spansSystems = new Set(owned.map((b) => b.starId)).size > 1
     return owned.map((b) => {
       const color =
         b.kind === 'moon'
           ? getMoonsForPlanet(b.parentPlanet ?? '').moons.find((m) => m.name === b.name)?.color
           : getPlanetsForStar(b.starId).find((p) => p.name === b.name)?.color
-      const system = spansSystems ? STARS.find((st) => st.id === b.starId)?.name : undefined
+      // A world in another cluster is named with it.
+      const cluster = clusterOfStar(b.starId)
+      const systemName = spansSystems ? findStar(b.starId)?.name : undefined
+      const system = isHomeCluster(cluster) ? systemName : clusterName(cluster)
       const detail = [micro.has(b.name) ? 'micro-colony' : undefined, system].filter(Boolean).join(' · ') || undefined
       return { key: b.name, name: b.name, color: color ?? '#ffffff', kind: b.kind, parentPlanet: b.parentPlanet, starId: b.starId, detail }
     })
@@ -206,8 +210,9 @@ function useStarbaseEntries(): OutlinerEntry[] {
     return starbases
       .filter((sb) => sb.ownerId === selectedCountryId)
       .map((sb) => {
-        const star = STARS.find((s) => s.id === sb.starId)
-        return { key: sb.id, name: star?.name ?? sb.starId, color: star?.color ?? '#ffffff', kind: 'starbase' as const, starId: sb.starId }
+        const star = findStar(sb.starId)
+        const cluster = clusterOfStar(sb.starId)
+        return { key: sb.id, name: star?.name ?? sb.starId, color: star?.color ?? '#ffffff', kind: 'starbase' as const, starId: sb.starId, detail: isHomeCluster(cluster) ? undefined : clusterName(cluster) }
       })
   }, [selectedCountryId, starbases])
 }
@@ -457,7 +462,7 @@ function OutlinerSection({
               >
                 <OutlinerIcon color={entry.color} kind={entry.kind} />
                 <span className="outliner-entry-name">{entry.name}</span>
-                {entry.detail && <span className="outliner-entry-detail">{entry.detail}</span>}
+                {entry.detail && <span className="outliner-entry-detail" title={entry.detail}>{entry.detail}</span>}
               </li>
             ))}
           </ul>
@@ -511,7 +516,9 @@ export function Outliner() {
   // does for a marker click.
   const handleInViewClick = (entry: OutlinerEntry, e: { ctrlKey: boolean; metaKey: boolean }) => {
     if (isNewTabClick(e)) return useWorkspaceStore.getState().openInNewTab({ inViewSelection: entry.key, selectedShipId: null })
-    selectShip(null)
+    // Picking a cluster keeps the ship selected (as clicking its marker does), so the ship's
+    // jump risk to it can be read; any other pick drops the ship selection.
+    if (entry.kind !== 'neighborhood') selectShip(null)
     selectInView(entry.key)
   }
   // A colony can be in any system: go to its system first (a moon: its

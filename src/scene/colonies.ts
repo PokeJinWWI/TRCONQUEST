@@ -29,11 +29,15 @@ import { lightYearsBetween, placeOutpostNode } from './colonyLogic'
 import { queueMoveOrder } from './commsVisual'
 import { groundSurface } from './groundLogic'
 import { queueShipCommand } from './shipCommands'
-import { bodyStarId } from './territory'
+import { bodyStarId, systemBodies } from './territory'
+import { groupColonizeWorlds, nothingHereReason, type ChooserGroup, type ChooserWorld } from './colonyChooser'
+import { formatDate, simDaysToDate } from '../state/gameTimeStore'
+import { isBodySurveyed, knownSurveyedBodies, restingStarId, systemOfShip } from './surveyLogic'
 import { starbaseOwnersOf } from './starbaseLogic'
 import { useStarbaseStore } from '../state/starbaseStore'
+import { recordEncroachments } from './encroachment'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { STARS } from '../data/starData'
+import { findStar } from '../data/starData'
 
 function nameOf(id: string): string {
   return ownerDisplay(id).name
@@ -75,7 +79,13 @@ export function seedColonies(simDays: number): void {
   if (changed) useColonyStore.getState().setColonies(colonies)
 }
 
-// Founding a colony costs no Influence (only a Starbase in the system, settlers and time).
+// A nation's own home system (its capital's star) needs no Starbase to colonize in: the
+// Starbase rule is for claiming ground abroad.
+export function isHomeSystem(nationId: string, starId: string): boolean {
+  return getCountry(nationId)?.capitalStarId === starId
+}
+
+// Founding a colony costs no Influence (only a Starbase in the system unless it is the nation's home system, settlers and time).
 export type ColonizeResult = { ok: true } | { ok: false; reason: string }
 
 // Whether this Colony Ship could found a colony on `bodyName` now.
@@ -84,10 +94,11 @@ export function canColonize(ship: ShipInstance, bodyName: string, opts: { anywhe
   if (!isAbstractEconomy()) return { ok: false, reason: 'Colonies need Simple economy mode for now' }
   if (resolveShipClass(ship.classId)?.role !== 'colony') return { ok: false, reason: 'Only a Colony Ship can found a colony' }
   if (!opts.anywhere && orbitedBody(ship) !== bodyName) return { ok: false, reason: `The ship must be in orbit of ${bodyName}` }
-  if (!useSurveyStore.getState().discovered[ship.ownerId]?.surveyed.has(bodyName)) return { ok: false, reason: `Survey ${bodyName} first` }
+  // The one survey rule (a nation knows the bodies of a system it owns a world in).
+  if (!isBodySurveyed(useSurveyStore.getState().discovered[ship.ownerId], ship.ownerId, bodyName, useTerritoryStore.getState().bodyOwner)) return { ok: false, reason: `Survey ${bodyName} first` }
   const starId = bodyStarId(bodyName)
-  if (!starId || !starbaseOwnersOf(starId, useStarbaseStore.getState().starbases, useGameTimeStore.getState().simDays).includes(ship.ownerId)) {
-    return { ok: false, reason: `Needs a Starbase of your own in ${STARS.find((s) => s.id === starId)?.name ?? 'that system'}` }
+  if (!starId || !(isHomeSystem(ship.ownerId, starId) || starbaseOwnersOf(starId, useStarbaseStore.getState().starbases, useGameTimeStore.getState().simDays).includes(ship.ownerId))) {
+    return { ok: false, reason: `Needs a Starbase of your own in ${(starId ? findStar(starId)?.name : undefined) ?? 'that system'}` }
   }
   const owner = useTerritoryStore.getState().bodyOwner[bodyName]
   if (owner) return { ok: false, reason: owner === ship.ownerId ? `You already hold ${bodyName}` : `${nameOf(owner)} already holds ${bodyName}` }
@@ -134,6 +145,9 @@ export function foundColony(shipId: string, bodyName: string, simDays: number): 
   const check = canColonize(ship, bodyName)
   if (!check.ok) return false
   const owner = ship.ownerId
+  // Inside someone else's borders: allowed, at a diplomatic cost (scene/encroachment.ts).
+  const colonyStar = bodyStarId(bodyName)
+  if (colonyStar) recordEncroachments(owner, colonyStar, 'colony', simDays, useStarbaseStore.getState().starbases)
   useTerritoryStore.getState().claimBody(bodyName, owner)
   useAbstractEconomyStore.getState().addColonyWorld(bodyName, ship.settlers ?? 0, Math.min(landForBody(bodyName), MICRO_COLONY_LAND))
   const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
@@ -159,6 +173,14 @@ export function embarkSettlers(shipId: string, countryId: string): void {
   if (taken <= 0) return
   useAbstractEconomyStore.getState().adjustPopulation(capital, -taken)
   useShipStore.getState().setSettlers(shipId, taken)
+}
+
+// A Colony Ship placed by a cheat (the Debug Console, the Sandbox panel) comes with
+// a full load of settlers, taken from nowhere: it was not built at a yard, so nothing
+// embarked them, and without settlers it could never found a colony.
+export function loadSettlersFree(shipId: string): void {
+  const capacity = resolveShipClass(useShipStore.getState().ships.find((s) => s.id === shipId)?.classId ?? '')?.settlerCapacity ?? 0
+  if (capacity > 0) useShipStore.getState().setSettlers(shipId, capacity)
 }
 
 // The player's "Colonize" order for the selected Colony Ships: at once if one
@@ -189,23 +211,65 @@ export function colonizeFromPlanet(bodyName: string): { ok: true; shipName: stri
   return { ok: true, shipName: pick.s.name }
 }
 
-// Worlds this Colony Ship could found a colony on now, nearest its capital first (the
-// chooser's list). Worlds another Colony Ship is already headed for are left out.
-export function colonizeCandidates(ship: ShipInstance): { bodyName: string }[] {
+// Worlds this Colony Ship could found a colony on now (what canColonize allows), with their
+// system and distance from its capital. Worlds another Colony Ship is already headed for
+// are left out. Each system's worlds come in the system's own order.
+export function colonizeWorlds(ship: ShipInstance): ChooserWorld[] {
   const taken = new Set<string>()
   for (const o of useShipStore.getState().ships) {
     if (o.id === ship.id) continue
     if (o.founding) taken.add(o.founding.bodyName)
     if (o.arrivalCommand?.command.kind === 'colonize') taken.add(o.arrivalCommand.command.bodyName)
   }
-  const out: { bodyName: string; ly: number }[] = []
   const capitalStar = getCountry(ship.ownerId)?.capitalStarId ?? 'sol'
-  for (const bodyName of useSurveyStore.getState().discovered[ship.ownerId]?.surveyed ?? []) {
+  const out: ChooserWorld[] = []
+  for (const bodyName of knownSurveyedBodies(useSurveyStore.getState().discovered[ship.ownerId], ship.ownerId, useTerritoryStore.getState().bodyOwner)) {
     if (taken.has(bodyName)) continue
-    const c = canColonize(ship, bodyName, { anywhere: true })
-    if (c.ok) out.push({ bodyName, ly: lightYearsBetween(capitalStar, bodyStarId(bodyName) ?? capitalStar) })
+    const starId = bodyStarId(bodyName)
+    if (starId && canColonize(ship, bodyName, { anywhere: true }).ok) out.push({ bodyName, starId, ly: lightYearsBetween(capitalStar, starId) })
   }
-  return out.sort((a, b) => a.ly - b.ly || a.bodyName.localeCompare(b.bodyName)).map(({ bodyName }) => ({ bodyName }))
+  const order = (w: ChooserWorld) => systemBodies(w.starId).indexOf(w.bodyName)
+  return out.sort((a, b) => a.ly - b.ly || a.starId.localeCompare(b.starId) || order(a) - order(b) || a.bodyName.localeCompare(b.bodyName))
+}
+
+export function colonizeCandidates(ship: ShipInstance): { bodyName: string }[] {
+  return colonizeWorlds(ship).map(({ bodyName }) => ({ bodyName }))
+}
+
+// The nation's Starbases that are still being built: system and when each is done.
+function buildingStarbases(nationId: string, simDays: number): { starId: string; readySimDays: number }[] {
+  return useStarbaseStore.getState().starbases.filter((sb) => sb.ownerId === nationId && sb.readySimDays > simDays).map((sb) => ({ starId: sb.starId, readySimDays: sb.readySimDays }))
+}
+
+// The chooser's list: worlds grouped by named system, the ship's own system first, and
+// the systems whose Starbase is still being built said so (no worlds can be offered there yet).
+export function colonizeGroups(ship: ShipInstance): ChooserGroup[] {
+  const simDays = useGameTimeStore.getState().simDays
+  const worlds = colonizeWorlds(ship)
+  const here = systemOfShip(ship) ?? restingStarId(ship)
+  const withWorlds = new Set(worlds.map((w) => w.starId))
+  const waiting = buildingStarbases(ship.ownerId, simDays)
+    .filter((sb) => !withWorlds.has(sb.starId) && (here === sb.starId || systemBodies(sb.starId).some((b) => isBodySurveyed(useSurveyStore.getState().discovered[ship.ownerId], ship.ownerId, b, useTerritoryStore.getState().bodyOwner))))
+    .map((sb) => ({ starId: sb.starId, readyText: formatDate(simDaysToDate(sb.readySimDays)) }))
+  return groupColonizeWorlds({ worlds, waiting, hereStarId: here, homeStarId: getCountry(ship.ownerId)?.capitalStarId ?? null, starName: (id) => findStar(id)?.name ?? id })
+}
+
+// Why a Colony Ship has nothing to settle where it is (the line in its panel).
+export function nothingHereText(ship: ShipInstance): string {
+  const simDays = useGameTimeStore.getState().simDays
+  const starId = systemOfShip(ship) ?? restingStarId(ship)
+  const orbit = orbitedBody(ship)
+  const mine = starId ? useStarbaseStore.getState().starbases.filter((sb) => sb.starId === starId && sb.ownerId === ship.ownerId) : []
+  const building = mine.find((sb) => sb.readySimDays > simDays)
+  const owners = useTerritoryStore.getState().bodyOwner
+  return nothingHereReason({
+    systemName: (starId ? findStar(starId)?.name : undefined) ?? 'this system',
+    starbase: mine.some((sb) => sb.readySimDays <= simDays) ? 'finished' : building ? 'building' : 'none',
+    readyText: building ? formatDate(simDaysToDate(building.readySimDays)) : undefined,
+    isHomeSystem: !!starId && isHomeSystem(ship.ownerId, starId),
+    hasSettlers: (ship.settlers ?? 0) > 0,
+    orbit: !orbit ? 'none' : !owners[orbit] && (groundSurface(orbit, owners)?.mainland ?? -1) >= 0 ? 'settleable' : 'not',
+  })
 }
 
 export function sendToColonize(ship: ShipInstance, systemId: string, bodyName: string): void {

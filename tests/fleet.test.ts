@@ -5,6 +5,8 @@
 //
 // Run:  npx tsx tests/fleet.test.ts
 
+import { SOLAR_NEIGHBORHOOD_ID } from '../src/data/galaxyGen'
+import { NEIGHBORHOODS } from '../src/data/neighborhoodData'
 import { viewShip } from '../src/scene/shipNav'
 import { useViewStore } from '../src/state/viewStore'
 import { resolveShipClass } from '../src/state/shipClassResolver'
@@ -198,6 +200,11 @@ console.log('\n=== 4c. Going to a ship from anywhere ===')
   check('...and does not reopen a system already in view', view().level === 'system')
   viewShip(at({ kind: 'interstellar-point', position: [1, 2, 3] }))
   check('a ship in deep space opens the interstellar map', view().level === 'interstellar')
+  // A ship among another cluster's stars: that cluster's map (the galaxy view's Go To uses this).
+  const foreign = NEIGHBORHOODS.find((n) => n.id !== SOLAR_NEIGHBORHOOD_ID && n.hasInterstellarData)!
+  useViewStore.setState({ level: 'galactic' })
+  viewShip(at({ kind: 'interstellar-point', position: [0, 0, 0], clusterId: foreign.id }))
+  check('a ship inside another cluster opens that cluster\'s map', view().level === 'interstellar' && view().selectedNeighborhoodId === foreign.id, `${view().level} ${view().selectedNeighborhoodId}`)
 }
 
 console.log('\n=== 5. Multi-selection ===')

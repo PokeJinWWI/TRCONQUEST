@@ -2,7 +2,7 @@
 // stands, and when a micro-colony becomes a planetary colony. Store I/O is in
 // scene/colonies.ts; data in data/colonyData.ts.
 import { COLONY_PATROL_DAYS } from '../data/colonyData'
-import { STARS } from '../data/starData'
+import { findStar } from '../data/starData'
 import { TERRAIN } from '../data/groundData'
 import type { AtWarFn } from '../state/diplomacyStore'
 import type { Colony } from '../state/colonyStore'
@@ -14,8 +14,8 @@ import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
 export type PatrolShipLike = ShipLike & { patrol?: boolean }
 
 export function lightYearsBetween(starA: string, starB: string): number {
-  const a = STARS.find((s) => s.id === starA)
-  const b = STARS.find((s) => s.id === starB)
+  const a = findStar(starA)
+  const b = findStar(starB)
   if (!a || !b) return 0
   return Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2])
 }

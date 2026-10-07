@@ -50,6 +50,13 @@ export function strategyBlock(strategy: string, researched: ReadonlySet<string>,
   return why ? `${why}: without free flight a ship cannot hold chosen positions` : null
 }
 
+// Whether a strategy appears in the strategizer at all: one that needs free flight is
+// listed only once its owner has researched Free-Flight Maneuvering (then it is greyed,
+// with the reason, for any ship whose own Free Flight is switched off: strategyBlock).
+export function strategyListed(strategy: string, researched: ReadonlySet<string>): boolean {
+  return !strategyNeedsFreeFlight(strategy) || hasFreeFlightTech(researched)
+}
+
 export function moveOrderBlock(researched: ReadonlySet<string>, ship: { freeFlight?: boolean }): string | null {
   const why = freeFlightBlock(researched, ship)
   return why ? `${why}: without free flight a ship cannot be sent to a point` : null

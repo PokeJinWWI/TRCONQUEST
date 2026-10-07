@@ -4,7 +4,7 @@ import type { ShipInstance } from '../state/shipStore'
 import { useShipStore } from '../state/shipStore'
 import { useSurveyStore } from '../state/surveyStore'
 import { useTerritoryStore } from '../state/territoryStore'
-import { STARS } from '../data/starData'
+import { findStar } from '../data/starData'
 import { SURVEY_DAYS_PER_BODY } from '../data/surveyData'
 import { queueShipCommand } from './shipCommands'
 import { surveyProgress, systemOfShip } from './surveyLogic'
@@ -23,7 +23,7 @@ export function ShipSurveySection({ ship }: { ship: ShipInstance }) {
 
   if (resolveShipClass(ship.classId)?.role !== 'science') return null
   const star = systemOfShip(ship)
-  const starName = star ? (STARS.find((s) => s.id === star)?.name ?? star) : null
+  const starName = star ? (findStar(star)?.name ?? star) : null
   const progress = star ? surveyProgress(known, ship.ownerId, star, owners) : null
   // What is actually left for the ship (it knows before the capital does).
   const left = star ? surveyProgress(discovered, ship.ownerId, star, owners) : null
