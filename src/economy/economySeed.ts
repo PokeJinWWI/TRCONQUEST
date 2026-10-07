@@ -287,7 +287,7 @@ const MOTHBALL_SLACK = 1.5 // …and this much more than the estimate says it ne
 // Goods every chain runs on (and construction needs): their plants are never
 // mothballed — trimmed to the estimate, a chain whose links all feed each
 // other (steel ↔ machinery ↔ coal) ran dry once the AI started building.
-const NEVER_MOTHBALLED: GoodId[] = ['electricity', 'steel', 'tools', 'machinery', 'coal', 'ironOre', 'concrete', 'lumber', 'glass', 'fuel']
+const NEVER_MOTHBALLED: GoodId[] = ['electricity', 'water', 'steel', 'tools', 'machinery', 'coal', 'ironOre', 'concrete', 'lumber', 'glass', 'fuel']
 function balancedNation(specs: WorldSpec[]): Map<string, BuildingSpec[]> {
   const adoption = seedAdoption()
   const household = {} as Record<GoodId, number>
@@ -792,6 +792,10 @@ function withTransport(spec: WorldSpec): WorldSpec {
     have++
   }
   if (!buildings.some((b) => b.recipe === 'seaport') && seaShareOf(spec.id) > SEA_SHARE_FOR_SEAPORT) buildings.push({ recipe: 'seaport', level: 1, owner: operator ?? 'state' })
+  // Fishing wharves and urban centers are buildable (they consume ocean-going ships
+  // and automobiles), but NOT auto-seeded: seeding them per world piled new power,
+  // fuel and labour demand onto small economies and spiralled them. The AI/player
+  // builds them where a world wants them; the base economy stays as calibrated.
   return { ...spec, buildings }
 }
 function seaShareOf(bodyName: string): number {
@@ -1040,7 +1044,7 @@ const COUNTRIES: Country[] = [
   {
     // Earth — the declining colossus. A command economy run by the Northern
     // Federal Command: huge but ossified, heavily indebted, with a thin treasury.
-    // Its currency, the Earth Dollar, is the interstellar reserve (rate 1.0, the
+    // Its currency, the International Earth Dollar (IED), is the interstellar reserve (rate 1.0, the
     // FX anchor), run by the Central Bank of Earth.
     id: 'earth',
     taxRate: 0.14,
@@ -1061,7 +1065,7 @@ const COUNTRIES: Country[] = [
     logisticsCapacity: 9000,
     subsidies: { corporations: {}, buildings: {} },
     investmentPool: 20000,
-    currency: { name: 'Earth Dollar', code: 'E$', rate: 1.0, target: 1.0 },
+    currency: { name: 'International Earth Dollar', code: 'IED', rate: 1.0, target: 1.0 },
     centralBank: seedCentralBank('earth', 'Central Bank of Earth', {
       status: 'state-bank',
       structure: 'regional-branches',

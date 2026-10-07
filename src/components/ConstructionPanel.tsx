@@ -3,7 +3,7 @@ import { RECIPES, DISTRICT_TYPES, DISTRICT_LABELS, districtOfRecipe, buildingGro
 import { districtUsage, canBuild, estimateConstructionCost, constructionCapacityOf } from '../economy/economyTick'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
-import { formatMoney } from '../economy/format'
+import { formatIED } from '../economy/format'
 import type { BuildingOwner } from '../economy/economyTypes'
 
 const DISTRICT_COLOR: Record<string, string> = {
@@ -43,6 +43,8 @@ export function ConstructionPanel() {
   const [funder, setFunder] = useState('state')
 
   if (!country || !world) return <div className="nav-placeholder">No world in focus.</div>
+  const rate = country.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   const usage = districtUsage(world)
   const myCorps = corporations.filter((c) => c.countryId === country.id)
   const owner: BuildingOwner = funder === 'state' ? { kind: 'state' } : { kind: 'corporation', corporationId: funder }
@@ -80,11 +82,11 @@ export function ConstructionPanel() {
       </div>
       <div className="inspect-row">
         <span className="inspect-label">Government pool (treasury)</span>
-        <span className="inspect-value">{formatMoney(country.treasury)}</span>
+        <span className="inspect-value">{fmt(country.treasury)}</span>
       </div>
       <div className="inspect-row" title="The private sector's pooled capital — a slice of company profits, managed by the financial sector — that finances PRIVATE construction.">
         <span className="inspect-label">Private investment pool</span>
-        <span className="inspect-value">{formatMoney(country.investmentPool)}</span>
+        <span className="inspect-value">{fmt(country.investmentPool)}</span>
       </div>
 
       <div className="econ-subtitle" style={{ marginTop: 10 }}>
@@ -113,7 +115,7 @@ export function ConstructionPanel() {
                   type="button"
                   className="econ-build-btn"
                   disabled={!room}
-                  title={room ? `Build a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${formatMoney(estimateConstructionCost(r.id, world.market.prices))} of materials` : `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full`}
+                  title={room ? `Build a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${fmt(estimateConstructionCost(r.id, world.market.prices))} of materials` : `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full`}
                   onClick={() => queueConstruction(world.id, r.id, owner)}
                 >
                   + {r.label}

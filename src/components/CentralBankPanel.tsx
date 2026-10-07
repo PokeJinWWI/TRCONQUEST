@@ -2,7 +2,7 @@ import { useEconomyStore } from '../state/economyStore'
 import { CredibilityChart, ExchangeRateChart, FxReservesChart, InterestRatesChart, MoneySupplyChart, OutputGapChart } from './complexCharts'
 import { useConfirmStore } from '../state/confirmStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
-import { formatMoney, formatPop } from '../economy/format'
+import { formatPop, formatIED } from '../economy/format'
 import { centralBankEquity } from '../economy/centralBank'
 import {
   CENTRAL_BANK_STATUSES,
@@ -116,6 +116,8 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
   const tick = useEconomyStore((s) => s.tick)
 
   if (!country) return <div className="nav-placeholder">No national government in context.</div>
+  const rate = country.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
 
   const cb = country.centralBank
   // No record, or a record explicitly set to 'no-bank' — offer to establish one.
@@ -242,25 +244,25 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
     return (
       <div className="econ-panel">
         <div className="econ-subtitle">Balance sheet & money</div>
-        <MoneySupplyChart h={h} tick={tick} />
+        <MoneySupplyChart h={h} tick={tick} rate={rate} />
         {money ? (
           <>
             <div className="cb-facts">
-              <div><span className="inspect-label">Base money (M0)</span><span>{formatMoney(money.baseMoney)}</span></div>
-              <div><span className="inspect-label">Broad money (M2)</span><span>{formatMoney(money.broadMoney)}</span></div>
-              <div><span className="inspect-label">Currency in circulation</span><span>{formatMoney(money.currency)}</span></div>
-              <div><span className="inspect-label">Bank deposits</span><span>{formatMoney(money.deposits)}</span></div>
-              <div><span className="inspect-label">Bank reserves</span><span>{formatMoney(money.bankReserves)}</span></div>
-              <div><span className="inspect-label">Loans outstanding</span><span>{formatMoney(money.loans)}</span></div>
+              <div><span className="inspect-label">Base money (M0)</span><span>{fmt(money.baseMoney)}</span></div>
+              <div><span className="inspect-label">Broad money (M2)</span><span>{fmt(money.broadMoney)}</span></div>
+              <div><span className="inspect-label">Currency in circulation</span><span>{fmt(money.currency)}</span></div>
+              <div><span className="inspect-label">Bank deposits</span><span>{fmt(money.deposits)}</span></div>
+              <div><span className="inspect-label">Bank reserves</span><span>{fmt(money.bankReserves)}</span></div>
+              <div><span className="inspect-label">Loans outstanding</span><span>{fmt(money.loans)}</span></div>
               <div><span className="inspect-label">Reserve ratio</span><span>{(money.reserveRatio * 100).toFixed(1)}% <span style={{ opacity: 0.5 }}>(req {(cb.reserveRequirement * 100).toFixed(0)}%)</span></span></div>
               <div><span className="inspect-label">Loan / deposit</span><span>{(money.loanToDeposit * 100).toFixed(0)}%</span></div>
             </div>
             <div className="ship-panel-hint" style={{ margin: '6px 0 2px' }}>Central bank balance sheet</div>
             <div className="cb-facts">
-              <div><span className="inspect-label">Gov. securities</span><span>{formatMoney(cb.govSecurities)}</span></div>
-              <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
-              <div><span className="inspect-label">Loans to banks</span><span>{formatMoney(cb.loansToBanks)}</span></div>
-              <div><span className="inspect-label">CB equity</span><span>{formatMoney(centralBankEquity(cb, money.bankReserves))}</span></div>
+              <div><span className="inspect-label">Gov. securities</span><span>{fmt(cb.govSecurities)}</span></div>
+              <div><span className="inspect-label">FX reserves</span><span>{fmt(cb.fxReserves)}</span></div>
+              <div><span className="inspect-label">Loans to banks</span><span>{fmt(cb.loansToBanks)}</span></div>
+              <div><span className="inspect-label">CB equity</span><span>{fmt(centralBankEquity(cb, money.bankReserves))}</span></div>
             </div>
           </>
         ) : (
@@ -276,28 +278,28 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
       <div className="econ-panel">
         <div className="econ-subtitle">Currency & exchange rate</div>
         <ExchangeRateChart h={h} tick={tick} code={country.currency?.code ?? 'Rate'} showPeg={cb.exchangeRegime !== 'float'} />
-        <FxReservesChart h={h} tick={tick} />
+        <FxReservesChart h={h} tick={tick} rate={rate} />
         {country.currency ? (
           <>
             <div className="cb-facts">
               <div><span className="inspect-label">Currency</span><span>{country.currency.name} ({country.currency.code})</span></div>
-              <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} E$</span></div>
+              <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} IED</span></div>
               <div><span className="inspect-label">Regime</span><span>{exchangeRateRegimeDef(cb.exchangeRegime).name}</span></div>
               {cb.exchangeRegime !== 'float' && (
                 <div>
                   <span className="inspect-label">Peg target</span>
                   <span>
-                    {country.currency.target.toFixed(3)} E${' '}
+                    {country.currency.target.toFixed(3)} IED{' '}
                     <span style={{ opacity: 0.6 }}>
                       ({country.currency.rate >= country.currency.target ? 'held' : `−${(((country.currency.target - country.currency.rate) / country.currency.target) * 100).toFixed(1)}%`})
                     </span>
                   </span>
                 </div>
               )}
-              <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
+              <div><span className="inspect-label">FX reserves</span><span>{fmt(cb.fxReserves)}</span></div>
             </div>
             <div className="ship-panel-hint" style={{ marginTop: 2 }}>
-              1 E$ = the Earth Dollar, the interstellar reference. A higher rate is a stronger currency; cross-border
+              1 IED = the International Earth Dollar, the interstellar reference. A higher rate is a stronger currency; cross-border
               trade, dividends and investment convert through it. The full cross-nation table is in Markets → Forex.
             </div>
           </>
@@ -351,7 +353,7 @@ export function CentralBankPanel({ section = 'overview' }: { section?: CentralBa
             <span className={(fiscal.outputGap ?? 0) >= 0 ? 'econ-pos' : 'econ-neg'}>{((fiscal.outputGap ?? 0) * 100).toFixed(1)}%</span>
           </div>
           {(fiscal.monetaryFinanced ?? 0) > 0 && (
-            <div><span className="inspect-label">Money-financed deficit</span><span className="econ-neg">{formatMoney(fiscal.monetaryFinanced ?? 0)}/mo</span></div>
+            <div><span className="inspect-label">Money-financed deficit</span><span className="econ-neg">{fmt(fiscal.monetaryFinanced ?? 0)}/mo</span></div>
           )}
         </div>
       )}

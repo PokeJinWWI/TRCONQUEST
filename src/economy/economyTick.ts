@@ -77,8 +77,12 @@ const THROUGHPUT_RAMP_UP = 0.05
 const THROUGHPUT_RAMP_DOWN = 0.15
 // How fast mothballed capacity (Building.idle) reopens while its good is scarce.
 const REOPEN_PER_MONTH = 0.2
-// Equipment used as a recipe input (see the production step).
-const CAPITAL_INPUTS = new Set<GoodId>(['tools', 'machinery', 'heavyMachinery', 'precisionMachinery', 'electricalMachinery'])
+// Equipment and strategic materials used as a recipe input: a shortfall DEGRADES
+// output to a floor rather than halting it (see the production step). Alloys and
+// rocket fuel are here so a thin supply of the long metals→alloys chain throttles
+// ships/vehicles softly instead of collapsing the transport backbone that seaports
+// and spaceports run on (which would spiral market access).
+const CAPITAL_INPUTS = new Set<GoodId>(['tools', 'machinery', 'heavyMachinery', 'precisionMachinery', 'electricalMachinery', 'alloys', 'rocketFuel', 'water'])
 const CAPITAL_INPUT_FLOOR = 0.6
 export const NEW_BUILDING_THROUGHPUT = 0.1
 

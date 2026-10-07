@@ -32,9 +32,14 @@ const hash = (x: unknown) => createHash('sha256').update(JSON.stringify(x)).dige
 console.log('\n=== 1. The home nations\' seed is stable ===')
 {
   // Rehashed when `infrastructure`→`transportation` and when Earth was added as
-  // the fifth nation (the Northern Federal Command).
-  check('worlds', hash(seedWorlds()) === '9d0c523f09231946')
-  check('countries', hash(seedCountries()) === 'b2edfd4fec2c91f2')
+  // the fifth nation (the Northern Federal Command); again when the water good
+  // (treatment plants, a pop drinking need) was added; and again when Earth's
+  // currency was renamed to the International Earth Dollar (IED); again when
+  // the water producers were right-sized (smaller plants, better demand fit); and
+  // again when exoticMatter + hyperium goods were added (every market now prices
+  // them — no new seeded buildings, so `countries` is unchanged).
+  check('worlds', hash(seedWorlds()) === '6263ee8d4000bf89')
+  check('countries', hash(seedCountries()) === '4c74ab14d2187147')
   check('corporations', hash(seedCorporations()) === 'c4949843a4c08459')
   check('banks', hash(seedBanks()) === '7bccfcac62561d47')
   check('characters', hash(seedCharacters()) === 'fe9da9a53a59c43d')

@@ -1,12 +1,12 @@
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { getCountry } from '../data/countryData'
-import { formatMoney } from '../economy/format'
+import { formatIED } from '../economy/format'
 import { exchangeRateRegimeDef } from '../economy/centralBank'
 import { convert } from '../economy/fx'
 
 // Markets → Forex. The interstellar currency market: every nation's currency,
-// its exchange rate against the Earth Dollar (E$), its regime, and the
+// its exchange rate against the International Earth Dollar (IED), its regime, and the
 // reserves its central bank holds to defend it. Rates against YOUR currency are
 // shown too, so you can read what a cross-border deal really costs. Read-only —
 // currency policy is set on your own Central Bank panel.
@@ -26,7 +26,7 @@ export function ForexPanel() {
     <div className="econ-panel">
       <div className="econ-subtitle">Foreign Exchange</div>
       <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
-        1 E$ = the Earth Dollar, issued by the Central Bank of Earth — the common reference. A higher rate is a stronger currency.
+        1 IED = the International Earth Dollar, issued by the Central Bank of Earth — the common reference. A higher rate is a stronger currency.
         {home ? ` Prices are also shown in your ${home.code}.` : ''}
       </div>
       <table className="fx-table">
@@ -56,7 +56,7 @@ export function ForexPanel() {
                 <td style={{ textAlign: 'right' }}>{cur.rate.toFixed(3)}</td>
                 {home && <td style={{ textAlign: 'right' }}>{isHome ? '—' : perHome.toFixed(3)}</td>}
                 <td>{cb ? exchangeRateRegimeDef(cb.exchangeRegime).name : '—'}{belowPeg ? ' ⚠' : ''}</td>
-                <td style={{ textAlign: 'right' }}>{cb ? formatMoney(cb.fxReserves) : '—'}</td>
+                <td style={{ textAlign: 'right' }}>{cb ? formatIED(cb.fxReserves) : '—'}</td>
               </tr>
             )
           })}

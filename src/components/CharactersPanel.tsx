@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
-import { formatMoney } from '../economy/format'
+import { formatIED } from '../economy/format'
 import { CULTURES, RELIGIONS } from '../economy/demographics'
 import type { Character } from '../economy/economyTypes'
 
@@ -48,7 +48,7 @@ function CharacterDetail({ character }: { character: Character }) {
         </div>
         <div className="inspect-row">
           <span className="inspect-label">Wealth</span>
-          <span className="inspect-value">{formatMoney(character.wealth)}</span>
+          <span className="inspect-value">{formatIED(character.wealth)}</span>
         </div>
       </div>
       <div className="char-traits">

@@ -1,11 +1,12 @@
 import { Fragment, useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
+import { useGoodDetailStore } from '../state/goodDetailStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { BudgetFlowChart, DebtToGdpChart, GdpChart, GdpPerCapitaChart, PriceLevelChart, gdpPerCapita } from './complexCharts'
 import { GOOD_IDS, GOODS, type GoodId } from '../economy/goods'
 import { RECIPES, getMethod } from '../economy/recipes'
 import { NEED_TIERS, SPECIES_TEMPLATES } from '../economy/species'
-import { MONTHS_PER_YEAR, formatPop, formatMoney, formatPrice } from '../economy/format'
+import { MONTHS_PER_YEAR, formatPop, formatIED, formatIEDPrice } from '../economy/format'
 import type { Country, World } from '../economy/economyTypes'
 
 // For a good on a world: which buildings produce it (sellers) and which
@@ -70,6 +71,12 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
   const setWelfare = useEconomyStore((s) => s.setWelfare)
   const setPublicServiceCoverage = useEconomyStore((s) => s.setPublicServiceCoverage)
 
+  // All money shown in the International Earth Dollar, converting this nation's
+  // local-currency books by its exchange rate.
+  const rate = country?.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
+  const fmtPrice = (n: number) => formatIEDPrice(n, rate)
+
   // Market is per-world; the fiscal tabs are national (per country).
   if (subcategory === 'Market') {
     if (!world) return <div className="nav-placeholder">{worldName ? `${worldName} is uninhabited — no market.` : 'No world in focus.'}</div>
@@ -97,9 +104,9 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
                   <tr className="market-row" onClick={() => setExpandedGood(open ? null : g)} title="Click to see buyers & sellers">
                     <td>
                       <span className="market-caret">{open ? '▾' : '▸'}</span>
-                      {GOODS[g].label}
+                      <button type="button" className="good-link" onClick={(e) => { e.stopPropagation(); useGoodDetailStore.getState().openGood(g) }} title={`${GOODS[g].label} — open the market view`}>{GOODS[g].label}</button>
                     </td>
-                    <td>{formatPrice(world.market.prices[g])}</td>
+                    <td>{fmtPrice(world.market.prices[g])}</td>
                     <td>{r ? r.supply.toFixed(0) : '—'}</td>
                     <td>{r ? r.demand.toFixed(0) : '—'}</td>
                   </tr>
@@ -138,23 +145,23 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
       <div className="econ-panel">
         <div className="ship-panel-hint" style={{ marginBottom: 6 }}>All flows are per year (the Overview and Finance use the same figures).</div>
         <div className="econ-subtitle">Revenue (per year)</div>
-        <FiscalRow label="Tax revenue" value={perYear(fiscal?.revenue)} tone="pos" />
+        <FiscalRow label="Tax revenue" value={perYear(fiscal?.revenue)} tone="pos" rate={rate} />
         <div className="econ-subtitle" style={{ marginTop: 8 }}>
           Expenditure (per year)
         </div>
-        <FiscalRow label="Welfare (pensions)" value={perYear(fiscal?.welfare)} tone="neg" />
-        <FiscalRow label="Public services" value={perYear(fiscal?.services)} tone="neg" />
-        <FiscalRow label="Admin & defense" value={perYear(fiscal?.admin)} tone="neg" />
-        <FiscalRow label="Subsidies" value={perYear(fiscal?.subsidiesSpent)} tone="neg" />
-        <FiscalRow label="Construction" value={perYear(fiscal?.construction)} tone="neg" />
-        <FiscalRow label="Stockpile purchases" value={perYear(fiscal?.stockpileSpend)} tone="neg" />
-        <FiscalRow label="Debt interest" value={perYear(fiscal?.interest)} tone="neg" />
-        <FiscalRow label="Total spending" value={perYear(fiscal?.expenditure)} tone="neg" />
+        <FiscalRow label="Welfare (pensions)" value={perYear(fiscal?.welfare)} tone="neg" rate={rate} />
+        <FiscalRow label="Public services" value={perYear(fiscal?.services)} tone="neg" rate={rate} />
+        <FiscalRow label="Admin & defense" value={perYear(fiscal?.admin)} tone="neg" rate={rate} />
+        <FiscalRow label="Subsidies" value={perYear(fiscal?.subsidiesSpent)} tone="neg" rate={rate} />
+        <FiscalRow label="Construction" value={perYear(fiscal?.construction)} tone="neg" rate={rate} />
+        <FiscalRow label="Stockpile purchases" value={perYear(fiscal?.stockpileSpend)} tone="neg" rate={rate} />
+        <FiscalRow label="Debt interest" value={perYear(fiscal?.interest)} tone="neg" rate={rate} />
+        <FiscalRow label="Total spending" value={perYear(fiscal?.expenditure)} tone="neg" rate={rate} />
         <div className="inspect-divider" />
-        <FiscalRow label="Balance (per year)" value={perYear(fiscal?.balance)} tone="signed" />
-        <FiscalRow label="Treasury" value={fiscal?.treasury} tone="signed" />
-        <FiscalRow label="National debt" value={fiscal?.debt} tone="neg" />
-        <FiscalRow label="Private investment pool" value={country.investmentPool} tone="pos" />
+        <FiscalRow label="Balance (per year)" value={perYear(fiscal?.balance)} tone="signed" rate={rate} />
+        <FiscalRow label="Treasury" value={fiscal?.treasury} tone="signed" rate={rate} />
+        <FiscalRow label="National debt" value={fiscal?.debt} tone="neg" rate={rate} />
+        <FiscalRow label="Private investment pool" value={country.investmentPool} tone="pos" rate={rate} />
 
         <div className="inspect-divider" />
         <div className="econ-subtitle">Controls</div>
@@ -176,7 +183,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             <button type="button" onClick={() => setWelfare(country.id, country.welfarePerCapita - 0.5)}>
               −
             </button>
-            <span className="econ-control-value">{formatMoney(country.welfarePerCapita)}/person</span>
+            <span className="econ-control-value">{fmt(country.welfarePerCapita)}/person</span>
             <button type="button" onClick={() => setWelfare(country.id, country.welfarePerCapita + 0.5)}>
               +
             </button>
@@ -216,8 +223,8 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
               </label>
               <div className="welfare-service-detail">
                 <span>
-                  State pays <b className="econ-neg">{formatMoney(cost)}/mo</b>
-                  {gross > 0 ? <span style={{ opacity: 0.6 }}> of {formatMoney(gross)} pops spend</span> : <span style={{ opacity: 0.6 }}> (advance time for live cost)</span>}
+                  State pays <b className="econ-neg">{fmt(cost)}/mo</b>
+                  {gross > 0 ? <span style={{ opacity: 0.6 }}> of {fmt(gross)} pops spend</span> : <span style={{ opacity: 0.6 }}> (advance time for live cost)</span>}
                 </span>
                 <button
                   type="button"
@@ -246,10 +253,10 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
       <div className="econ-panel">
         <div className="econ-fiscal-headline">
           <span>
-            GDP/yr <b>{fiscal ? formatMoney(fiscal.gdp * MONTHS_PER_YEAR) : '—'}</b>
+            GDP/yr <b>{fiscal ? fmt(fiscal.gdp * MONTHS_PER_YEAR) : '—'}</b>
           </span>
           <span>
-            GDP/capita <b>{fiscal && gdpPerCapita(fiscal.gdp * MONTHS_PER_YEAR, fiscal.population) !== undefined ? formatMoney(gdpPerCapita(fiscal.gdp * MONTHS_PER_YEAR, fiscal.population)!) : '—'}</b>
+            GDP/capita <b>{fiscal && gdpPerCapita(fiscal.gdp * MONTHS_PER_YEAR, fiscal.population) !== undefined ? fmt(gdpPerCapita(fiscal.gdp * MONTHS_PER_YEAR, fiscal.population)!) : '—'}</b>
           </span>
           <span>
             Pop <b>{fiscal ? formatPop(fiscal.population) : '—'}</b>
@@ -264,10 +271,10 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
             Rating <b className={`rating-${fiscal?.rating ?? 'AAA'}`}>{fiscal?.rating ?? '—'}</b>
           </span>
         </div>
-        <GdpChart h={series} tick={economyTick} />
-        <GdpPerCapitaChart h={series} tick={economyTick} />
+        <GdpChart h={series} tick={economyTick} rate={rate} />
+        <GdpPerCapitaChart h={series} tick={economyTick} rate={rate} />
         <PriceLevelChart h={series} tick={economyTick} />
-        <BudgetFlowChart h={series} tick={economyTick} />
+        <BudgetFlowChart h={series} tick={economyTick} rate={rate} />
         <DebtToGdpChart h={series} tick={economyTick} />
       </div>
     )
@@ -295,12 +302,12 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
   )
 }
 
-function FiscalRow({ label, value, tone }: { label: string; value: number | undefined; tone: 'pos' | 'neg' | 'signed' }) {
+function FiscalRow({ label, value, tone, rate = 1 }: { label: string; value: number | undefined; tone: 'pos' | 'neg' | 'signed'; rate?: number }) {
   const cls = value === undefined ? '' : tone === 'pos' ? 'econ-pos' : tone === 'neg' ? 'econ-neg' : value >= 0 ? 'econ-pos' : 'econ-neg'
   return (
     <div className="inspect-row">
       <span className="inspect-label">{label}</span>
-      <span className={`inspect-value ${cls}`}>{value === undefined ? '—' : formatMoney(value)}</span>
+      <span className={`inspect-value ${cls}`}>{value === undefined ? '—' : formatIED(value, rate)}</span>
     </div>
   )
 }

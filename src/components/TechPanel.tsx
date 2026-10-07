@@ -8,6 +8,7 @@ import { CATEGORY_LABELS, TechTreeGraph, formatResearch } from './TechTreeGraph'
 import { requestToggleTech } from '../scene/sandboxTech'
 import { usePlayerStore } from '../state/playerStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { useEconomyStore } from '../state/economyStore'
 import {
   TECHS_BY_CATEGORY,
   canResearch,
@@ -131,8 +132,12 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
   // The Sandbox: every tech is shown and a click toggles it (scene/sandboxTech.ts), no economy country needed.
   const sandbox = usePlayerStore((s) => s.sandbox)
   const countryId = playerId ?? ''
-  // Research earned last month, per tree (Simple mode's labs; Complex has none).
-  const monthly = useAbstractEconomyStore((s) => (playerId ? s.reports[playerId]?.researchByTree : undefined)) ?? null
+  // Research earned last month, per tree: Simple mode's labs, or Complex mode's
+  // educated workforce + research buildings (economy/research.ts).
+  const complexMode = usePlayerStore((s) => s.economyModel === 'complex')
+  const abstractMonthly = useAbstractEconomyStore((s) => (playerId ? s.reports[playerId]?.researchByTree : undefined))
+  const complexMonthly = useEconomyStore((s) => (playerId ? s.researchRate[playerId] : undefined))
+  const monthly = (complexMode ? complexMonthly : abstractMonthly) ?? null
 
   const category = subcategoryToCategory(subcategory)
   const techs = TECHS_BY_CATEGORY[category]

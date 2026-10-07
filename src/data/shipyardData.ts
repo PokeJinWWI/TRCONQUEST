@@ -10,9 +10,13 @@
 // exotic matter) to be fine-tuned later. Change the constants, not the
 // formulas, when tuning.
 import type { ResourceId } from './resourceData'
+import type { GoodId } from '../economy/goods'
 import type { ShipClass } from './shipData'
 
 export type ResourceCost = Partial<Record<ResourceId, number>>
+// A hull's cost in Complex-economy goods (drawn from the nation's capital
+// stockpile). See complexShipBuildCost.
+export type GoodCost = Partial<Record<GoodId, number>>
 
 // --- What a hull costs ----------------------------------------------------
 //
@@ -56,6 +60,48 @@ export function shipBuildCost(shipClass: ShipClass): ResourceCost {
   if (aiNavigators > 0) cost.special = SPECIAL_PER_AI_NAVIGATOR * aiNavigators
   return cost
 }
+
+// --- What a hull costs in Complex mode ------------------------------------
+//
+// In Complex mode the military shipyard draws REAL economy goods from the
+// nation's capital WAR-MATERIALS stockpile instead of the abstract strategic
+// pool. The cost is the same hull-derived quantities, re-expressed in storable
+// economy goods (electricity is a flow good, not stockpiled — the shipyard's
+// power is assumed from the grid):
+//   alloys → alloys      exoticMatter → exoticMatter      hyperium → hyperium
+//   special (AI-navigator core) → exoticMatter
+// plus two goods the strategic pool never tracked but a real hull obviously
+// needs: STEEL (structure alongside alloys) and ROCKET FUEL (propellant, scaled
+// by the FTL drives aboard). Quantities are convenience picks, same as above.
+export const STEEL_PER_ALLOY = 0.6
+export const ROCKET_FUEL_BASE = 8
+export const ROCKET_FUEL_PER_FTL_DRIVE = 6
+
+export function complexShipBuildCost(shipClass: ShipClass): GoodCost {
+  const strategic = shipBuildCost(shipClass)
+  const alloys = strategic.alloys ?? 0
+  const ftlDrives = shipClass.ftlDrives.length
+  const cost: GoodCost = {
+    alloys,
+    steel: Math.round(alloys * STEEL_PER_ALLOY),
+    rocketFuel: ROCKET_FUEL_BASE + ROCKET_FUEL_PER_FTL_DRIVE * ftlDrives,
+  }
+  // Warp → exotic matter; the rare AI-navigator core folds into exotic matter too.
+  const exotic = (strategic.exoticMatter ?? 0) + (strategic.special ?? 0)
+  if (exotic > 0) cost.exoticMatter = exotic
+  if (strategic.hyperium) cost.hyperium = strategic.hyperium
+  return cost
+}
+
+// Complex mode: the standing war-materials stockpile each nation keeps at its
+// capital. The economy buys these off its own market toward the target (so a
+// nation that can't make alloys/steel can't sustain a navy); the shipyard draws
+// them down. Also injected at game start so a starting navy is buildable from
+// turn one. Includes a little hyperium — every hyperdrive hull needs one, and the
+// near-Sol nations have the Hyperium Synthesis Plant by default to make more.
+// Exotic matter is NOT kept by default (only player-designed warp hulls need it,
+// a midgame choice): a nation raises its target once it builds the plant.
+export const MILITARY_STOCKPILE_TARGET: GoodCost = { alloys: 600, steel: 360, rocketFuel: 300, hyperium: 12 }
 
 // --- How long it takes ----------------------------------------------------
 export const BASE_BUILD_DAYS = 10

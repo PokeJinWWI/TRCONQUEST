@@ -130,6 +130,10 @@ interface ViewState {
   activeNavCategory: string | null
   activeNavSubcategory: string | null
   setNavCategory: (category: string | null, subcategory: string | null) => void
+  // A back stack of previous (category, subcategory) nav states, so a Back button
+  // / Cmd-Z can step back through the menus you opened.
+  navHistory: { category: string | null; subcategory: string | null }[]
+  navBack: () => void
   // Whether the Technology panel's full-screen Tree View overlay is open —
   // lives here (not local state in TechPanel.tsx) for the same reason
   // activeNavCategory does: it needs to survive a workspace-tab switch, which
@@ -197,8 +201,21 @@ export const useViewStore = create<ViewState>((set) => ({
         : { level: 'satellite', inViewSelection: null, terrainBattleId: null }
     }),
   activeNavCategory: null,
+  navHistory: [],
   activeNavSubcategory: null,
-  setNavCategory: (category, subcategory) => set({ activeNavCategory: category, activeNavSubcategory: subcategory }),
+  setNavCategory: (category, subcategory) =>
+    set((s) => {
+      if (s.activeNavCategory === category && s.activeNavSubcategory === subcategory) return {}
+      const history = [...s.navHistory, { category: s.activeNavCategory, subcategory: s.activeNavSubcategory }].slice(-30)
+      return { activeNavCategory: category, activeNavSubcategory: subcategory, navHistory: history }
+    }),
+  navBack: () =>
+    set((s) => {
+      if (s.navHistory.length === 0) return {}
+      const history = [...s.navHistory]
+      const prev = history.pop()!
+      return { activeNavCategory: prev.category, activeNavSubcategory: prev.subcategory, navHistory: history }
+    }),
   techTreeOpen: false,
   setTechTreeOpen: (open) => set({ techTreeOpen: open }),
 }))

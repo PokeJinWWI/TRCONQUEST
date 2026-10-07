@@ -4,6 +4,8 @@ import { useGameTimeStore } from '../state/gameTimeStore'
 import { useGroundViewStore } from '../state/groundViewStore'
 import { useMenuStore } from '../state/menuStore'
 import { usePlayerStore } from '../state/playerStore'
+import { useViewStore } from '../state/viewStore'
+import { closeTopmostWindow } from '../state/windowRegistry'
 import { installQueueModifier } from '../scene/queueModifier'
 import { cycleColonies, cycleFleets } from '../scene/cycling'
 
@@ -32,6 +34,9 @@ export function handleEscape(): void {
     ground.setMode({ kind: 'order' })
     return
   }
+  // With menus/windows open, Escape closes the topmost one first; only with
+  // nothing open does it bring up the pause menu (state/windowRegistry.ts).
+  if (closeTopmostWindow()) return
   menu.openMenu()
 }
 
@@ -60,6 +65,10 @@ export function useKeyboardControls() {
         // C / Shift+C: next / previous colony of yours.
         e.preventDefault()
         cycleColonies(e.shiftKey ? -1 : 1)
+      } else if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        // Cmd/Ctrl+Z: step back to the previous menu (see viewStore.navBack).
+        e.preventDefault()
+        useViewStore.getState().navBack()
       } else if (e.code === 'Space' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // Also stops Space "clicking" whichever button was clicked last.
         e.preventDefault()

@@ -13,7 +13,7 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { economyModel } from '../state/playerStore'
 import { bodiesOwnedBy } from './territory'
-import { spawnOwnedShip } from './shipyardLogic'
+import { spawnOwnedShip, seedMilitaryStockpile } from './shipyardLogic'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { seedColonies } from './colonies'
 import { groundSurface, musterNode } from './groundLogic'
@@ -42,8 +42,13 @@ export function setUpNewGame(): void {
   seedColonies(useGameTimeStore.getState().simDays)
   seedRingOfHeaven()
   seedStartingRelations()
-  // Complex mode runs the generated empires' economies too (economy/empireSeed.ts).
-  if (economyModel() === 'complex') useEconomyStore.getState().seedEmpires()
+  // Complex mode runs the generated empires' economies too (economy/empireSeed.ts),
+  // and the military shipyard draws real goods from the capital stockpile, so each
+  // nation opens with a standing war-materials reserve + targets (scene/shipyardLogic).
+  if (economyModel() === 'complex') {
+    useEconomyStore.getState().seedEmpires()
+    for (const country of COUNTRIES) seedMilitaryStockpile(country.id)
+  }
 }
 
 // Earth, the old imperial core, eyes the breakaway inner worlds warily: it

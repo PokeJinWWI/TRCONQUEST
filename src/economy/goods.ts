@@ -14,11 +14,23 @@
 export type GoodId =
   // Power
   | 'electricity'
+  // WATER — a universal utility like electricity: pops drink it and farms,
+  // chemicals and power cooling draw on it. Collected as surface water (treatment
+  // plants), pumped from the ground, or desalinated from the sea.
+  | 'water'
   // Raw extraction
   | 'ironOre'
   | 'coal'
   | 'oil'
   | 'rareMetals'
+  // Non-ferrous metals — mined, then mixed into ALLOYS (below). Kept few on
+  // purpose: base metals (copper, nickel) and light metals (aluminium, titanium,
+  // lithium) come from two co-product mines, not one each.
+  | 'copper'
+  | 'aluminium'
+  | 'nickel'
+  | 'titanium'
+  | 'lithium'
   | 'timber'
   | 'phosphate'
   | 'sulfur'
@@ -36,6 +48,17 @@ export type GoodId =
   | 'fish'
   // Intermediate / industrial
   | 'steel'
+  // ALLOYS — the mix of non-ferrous metals that aerospace, ships and vehicles
+  // are built from. ROCKET FUEL — refined propellant that launches burn.
+  | 'alloys'
+  | 'rocketFuel'
+  // Strategic war materials for FTL warships, synthesised only with late tech
+  // (exotic-matter-containment / hyperium-synthesis): EXOTIC MATTER powers warp
+  // drives, HYPERIUM powers hyperdrives. The military shipyard draws these from
+  // the nation's economy in Complex mode. Not consumed by any economy recipe, so
+  // never auto-seeded — a nation builds the plants once it wants an FTL navy.
+  | 'exoticMatter'
+  | 'hyperium'
   | 'concrete'
   | 'lumber'
   | 'fuel'
@@ -104,10 +127,16 @@ export type GoodId =
 
 export const GOOD_IDS: GoodId[] = [
   'electricity',
+  'water',
   'ironOre',
   'coal',
   'oil',
   'rareMetals',
+  'copper',
+  'aluminium',
+  'nickel',
+  'titanium',
+  'lithium',
   'timber',
   'phosphate',
   'sulfur',
@@ -120,6 +149,10 @@ export const GOOD_IDS: GoodId[] = [
   'meat',
   'fish',
   'steel',
+  'alloys',
+  'rocketFuel',
+  'exoticMatter',
+  'hyperium',
   'concrete',
   'lumber',
   'fuel',
@@ -169,10 +202,16 @@ export interface GoodDef {
 
 export const GOODS: Record<GoodId, GoodDef> = {
   electricity: { id: 'electricity', label: 'Electricity', category: 'power', basePrice: 4 },
+  water: { id: 'water', label: 'Water', category: 'raw', basePrice: 2 },
   ironOre: { id: 'ironOre', label: 'Iron Ore', category: 'raw', basePrice: 3 },
   coal: { id: 'coal', label: 'Coal', category: 'raw', basePrice: 2 },
   oil: { id: 'oil', label: 'Oil', category: 'raw', basePrice: 5 },
   rareMetals: { id: 'rareMetals', label: 'Rare Metals', category: 'raw', basePrice: 16 },
+  copper: { id: 'copper', label: 'Copper', category: 'raw', basePrice: 7 },
+  aluminium: { id: 'aluminium', label: 'Aluminium', category: 'raw', basePrice: 6 },
+  nickel: { id: 'nickel', label: 'Nickel', category: 'raw', basePrice: 9 },
+  titanium: { id: 'titanium', label: 'Titanium', category: 'raw', basePrice: 15 },
+  lithium: { id: 'lithium', label: 'Lithium', category: 'raw', basePrice: 13 },
   timber: { id: 'timber', label: 'Timber', category: 'raw', basePrice: 3 },
   phosphate: { id: 'phosphate', label: 'Phosphate', category: 'raw', basePrice: 4 },
   sulfur: { id: 'sulfur', label: 'Sulfur', category: 'raw', basePrice: 4 },
@@ -185,6 +224,10 @@ export const GOODS: Record<GoodId, GoodDef> = {
   meat: { id: 'meat', label: 'Meat', category: 'agricultural', basePrice: 7 },
   fish: { id: 'fish', label: 'Fish', category: 'agricultural', basePrice: 6 },
   steel: { id: 'steel', label: 'Steel', category: 'intermediate', basePrice: 8 },
+  alloys: { id: 'alloys', label: 'Alloys', category: 'intermediate', basePrice: 20 },
+  rocketFuel: { id: 'rocketFuel', label: 'Rocket Fuel', category: 'intermediate', basePrice: 15 },
+  exoticMatter: { id: 'exoticMatter', label: 'Exotic Matter', category: 'intermediate', basePrice: 70 },
+  hyperium: { id: 'hyperium', label: 'Hyperium', category: 'intermediate', basePrice: 130 },
   concrete: { id: 'concrete', label: 'Concrete', category: 'intermediate', basePrice: 3 },
   lumber: { id: 'lumber', label: 'Lumber', category: 'intermediate', basePrice: 5 },
   fuel: { id: 'fuel', label: 'Fuel', category: 'intermediate', basePrice: 8 },

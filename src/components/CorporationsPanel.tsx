@@ -3,7 +3,7 @@ import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { useConfirmStore } from '../state/confirmStore'
 import { corporationValue, sharePrice } from '../economy/economyTick'
-import { formatMoney } from '../economy/format'
+import { formatIED } from '../economy/format'
 import type { Corporation } from '../economy/economyTypes'
 
 // Corporations category. Two tabs: State Owned and Private. The state can found
@@ -26,6 +26,8 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
 
   const kind: Corporation['kind'] = subcategory === 'Private' ? 'private' : subcategory === 'Financial Districts' ? 'financial' : 'state'
   if (!countryId) return <div className="nav-placeholder">No nation selected.</div>
+  const rate = country?.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   const mine = corporations.filter((c) => c.countryId === countryId && c.kind === kind)
 
   const buildingsOf = (corpId: string) => {
@@ -75,16 +77,16 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
               </div>
               <div className="corp-card-stats">
                 <span>
-                  Cash <b className={c.cash >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(c.cash)}</b>
+                  Cash <b className={c.cash >= 0 ? 'econ-pos' : 'econ-neg'}>{fmt(c.cash)}</b>
                 </span>
                 <span>
-                  Profit/tick <b className={c.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(c.lastProfit)}</b>
+                  Profit/tick <b className={c.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{fmt(c.lastProfit)}</b>
                 </span>
                 <span>
-                  Value <b>{formatMoney(corporationValue(c, worlds))}</b>
+                  Value <b>{fmt(corporationValue(c, worlds))}</b>
                 </span>
                 <span>Buildings {buildingsOf(c.id)}</span>
-                <span>Share {formatMoney(price)}</span>
+                <span>Share {fmt(price)}</span>
                 <span>State stake {Math.round((stateStake / c.totalShares) * 100)}%</span>
                 {foreignHeld > 0 && (
                   <span title="Equity held by foreign governments or companies — their dividends are repatriated abroad.">
@@ -106,7 +108,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                     >
                       −
                     </button>
-                    <span className="econ-control-value">{formatMoney(country.subsidies.corporations[c.id] ?? 0)}</span>
+                    <span className="econ-control-value">{fmt(country.subsidies.corporations[c.id] ?? 0)}</span>
                     <button
                       type="button"
                       onClick={() => setSubsidyForCorporation(countryId, c.id, (country.subsidies.corporations[c.id] ?? 0) + 50)}
@@ -126,7 +128,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                         title: `Nationalize ${c.name}?`,
                         body: 'The company becomes a state-owned enterprise you control directly.',
                         effects: [
-                          `Pay shareholders ${formatMoney(corporationValue(c, worlds) * 0.6)} in compensation from the treasury`,
+                          `Pay shareholders ${fmt(corporationValue(c, worlds) * 0.6)} in compensation from the treasury`,
                           `Lose ~${400 + buildingsOf(c.id) * 300} bureaucracy (administrative takeover)`,
                           `Gain full control of ${buildingsOf(c.id)} building(s) and the company's cash`,
                           'It moves to the State Owned tab',
@@ -147,7 +149,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
                         title: `Privatize ${c.name}?`,
                         body: 'Float this state enterprise on the exchange.',
                         effects: [
-                          `Sell 70% to the public, banking ${formatMoney(sharePrice(c, worlds) * c.totalShares * 0.7)} to the treasury`,
+                          `Sell 70% to the public, banking ${fmt(sharePrice(c, worlds) * c.totalShares * 0.7)} to the treasury`,
                           'The state keeps a 30% stake',
                           'It moves to the Private tab and its owners run it themselves',
                         ],

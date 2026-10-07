@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { bringToFrontZIndex } from '../state/layering'
+import { registerWindow, updateWindow, unregisterWindow } from '../state/windowRegistry'
 import { DOCKED_WINDOW_KEYS, useWindowLayoutStore, type OpenMode } from '../state/windowLayoutStore'
 
 interface DraggableWindowProps {
@@ -101,6 +102,26 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
   // Starts already on top of anything opened before it — a freshly opened
   // window shouldn't appear to open BEHIND an existing one until clicked.
   const [zIndex, setZIndex] = useState(bringToFrontZIndex)
+  // Register in the window stack so Escape can close the topmost window first
+  // (state/windowRegistry.ts). Only closable windows take part. The onClose ref
+  // keeps the registry pointing at the latest handler without re-registering.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const regIdRef = useRef<number | null>(null)
+  const closable = !!onClose
+  useEffect(() => {
+    if (!closable) return
+    const id = registerWindow(() => onCloseRef.current?.(), zIndex)
+    regIdRef.current = id
+    return () => {
+      unregisterWindow(id)
+      regIdRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closable])
+  useEffect(() => {
+    if (regIdRef.current !== null) updateWindow(regIdRef.current, () => onCloseRef.current?.(), zIndex)
+  }, [zIndex])
   // Windows-style maximize/restore — computed as an ordinary `pos`/`size`
   // change (see handleToggleMaximize), not a separate CSS positioning
   // scheme, specifically so it animates through the exact same

@@ -1,5 +1,5 @@
 import type { FiscalSample } from '../state/economyStore'
-import { MONTHS_PER_YEAR, formatMoney } from '../economy/format'
+import { MONTHS_PER_YEAR, formatIED } from '../economy/format'
 import { TimeChart } from './TimeChart'
 
 // Every Complex-mode economy chart, defined ONCE — the Economy Overview, the
@@ -72,14 +72,17 @@ export function yoyGrowth(h: FiscalSample[]): number[] {
 interface ChartProps {
   h: FiscalSample[]
   tick: number
+  // The nation's exchange rate, to show money charts in International Earth
+  // Dollars (local books × rate × IED scale). Ratio/percentage charts ignore it.
+  rate?: number
 }
 
-export function GdpChart({ h, tick }: ChartProps) {
+export function GdpChart({ h, tick, rate = 1 }: ChartProps) {
   return (
     <TimeChart
       title="GDP (per year)"
       endTick={tick}
-      format={formatMoney}
+      format={(n) => formatIED(n, rate)}
       series={[
         { label: 'Nominal', color: CHART_COLORS.nominal, values: h.map(gdpPerYear) },
         { label: 'Real', color: CHART_COLORS.real, values: h.map(realGdpPerYear) },
@@ -89,12 +92,12 @@ export function GdpChart({ h, tick }: ChartProps) {
   )
 }
 
-export function GdpPerCapitaChart({ h, tick }: ChartProps) {
+export function GdpPerCapitaChart({ h, tick, rate = 1 }: ChartProps) {
   return (
     <TimeChart
       title="GDP per capita (per year)"
       endTick={tick}
-      format={formatMoney}
+      format={(n) => formatIED(n, rate)}
       series={[
         { label: 'Nominal', color: CHART_COLORS.nominal, values: trailingSeries(h, (p) => gdpPerCapita(gdpPerYear(p), p.population)) },
         { label: 'Real', color: CHART_COLORS.real, values: trailingSeries(h, (p) => gdpPerCapita(realGdpPerYear(p), p.population)) },
@@ -201,12 +204,12 @@ export function DebtToGdpChart({ h, tick }: ChartProps) {
   )
 }
 
-export function BudgetFlowChart({ h, tick }: ChartProps) {
+export function BudgetFlowChart({ h, tick, rate = 1 }: ChartProps) {
   return (
     <TimeChart
       title="Revenue vs spending (per year)"
       endTick={tick}
-      format={formatMoney}
+      format={(n) => formatIED(n, rate)}
       includeZero
       series={[
         { label: 'Revenue', color: CHART_COLORS.revenue, values: h.map((p) => p.revenue * MONTHS_PER_YEAR) },
@@ -217,12 +220,12 @@ export function BudgetFlowChart({ h, tick }: ChartProps) {
   )
 }
 
-export function TreasuryDebtChart({ h, tick }: ChartProps) {
+export function TreasuryDebtChart({ h, tick, rate = 1 }: ChartProps) {
   return (
     <TimeChart
       title="Treasury & debt"
       endTick={tick}
-      format={formatMoney}
+      format={(n) => formatIED(n, rate)}
       includeZero
       series={[
         { label: 'Treasury', color: CHART_COLORS.treasury, values: h.map((p) => p.treasury) },
@@ -246,12 +249,12 @@ export function CredibilityChart({ h, tick }: ChartProps) {
   )
 }
 
-export function MoneySupplyChart({ h, tick }: ChartProps) {
+export function MoneySupplyChart({ h, tick, rate = 1 }: ChartProps) {
   return (
     <TimeChart
       title="Money supply & credit"
       endTick={tick}
-      format={formatMoney}
+      format={(n) => formatIED(n, rate)}
       series={[
         { label: 'M2', color: CHART_COLORS.m2, values: trailingSeries(h, (p) => p.broadMoney) },
         { label: 'Deposits', color: CHART_COLORS.deposits, values: trailingSeries(h, (p) => p.deposits) },
@@ -266,24 +269,24 @@ export function MoneySupplyChart({ h, tick }: ChartProps) {
 export function ExchangeRateChart({ h, tick, code, showPeg }: ChartProps & { code: string; showPeg: boolean }) {
   return (
     <TimeChart
-      title="Exchange rate (E$ per unit)"
+      title="Exchange rate (IED per unit)"
       endTick={tick}
       format={(v) => v.toFixed(3)}
       series={[
         { label: code, color: CHART_COLORS.rate, values: trailingSeries(h, (p) => p.exchangeRate) },
         ...(showPeg ? [{ label: 'Target', color: CHART_COLORS.peg, values: trailingSeries(h, (p) => p.pegTarget) }] : []),
       ]}
-      tip="What one unit of your currency is worth in Earth Dollars. Under a peg or managed float the bank spends FX reserves to steer it toward the target."
+      tip="What one unit of your currency is worth in International Earth Dollars. Under a peg or managed float the bank spends FX reserves to steer it toward the target."
     />
   )
 }
 
-export function FxReservesChart({ h, tick }: ChartProps) {
+export function FxReservesChart({ h, tick, rate = 1 }: ChartProps) {
   return (
     <TimeChart
       title="FX reserves"
       endTick={tick}
-      format={formatMoney}
+      format={(n) => formatIED(n, rate)}
       includeZero
       series={[{ label: 'FX reserves', color: CHART_COLORS.fx, values: trailingSeries(h, (p) => p.fxReserves) }]}
       tip="Foreign currency the bank holds to defend the exchange rate. A peg breaks when these run out."

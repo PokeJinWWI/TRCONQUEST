@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useEconomyStore, unemploymentOf } from '../state/economyStore'
 import { useViewStore } from '../state/viewStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
-import { MONTHS_PER_YEAR, formatMoney, formatPop } from '../economy/format'
+import { MONTHS_PER_YEAR, formatIED, formatPop } from '../economy/format'
 import { effectiveIndependence, exchangeRateRegimeDef, hasCentralBank } from '../economy/centralBank'
 import {
   BudgetFlowChart,
@@ -89,6 +89,10 @@ export function EconomyOverview() {
 
   const h = history ?? []
   const Y = MONTHS_PER_YEAR
+  // Metrics in the International Earth Dollar, converting the nation's
+  // local-currency books by its exchange rate.
+  const rate = country.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   const gdpYear = fiscal.gdp * Y
   const realGdpYear = fiscal.priceLevel > 0 ? gdpYear / fiscal.priceLevel : gdpYear
   const perCapita = gdpPerCapita(gdpYear, fiscal.population)
@@ -123,37 +127,37 @@ export function EconomyOverview() {
   return (
     <div className="econ-panel">
       <div className="abs-headline">
-        <span className="abs-econtype" title="Your currency and its value in Earth Dollars">
-          {country.currency ? `${country.currency.code} · ${country.currency.rate.toFixed(3)} E$` : 'National economy'}
+        <span className="abs-econtype" title="Your currency and its value in International Earth Dollars">
+          {country.currency ? `${country.currency.code} · ${country.currency.rate.toFixed(3)} IED` : 'National economy'}
         </span>
         <span className={`abs-rating rating-${fiscal.rating}`} title="Credit rating — how safe lenders think your debt is, from AAA down to CCC. It follows debt-to-GDP.">{fiscal.rating}</span>
       </div>
 
       <div className="abs-statcards">
-        <Card label="GDP / YR" value={formatMoney(gdpYear)} color="#4ade80" active={metric === 'gdp'} onClick={() => setMetric('gdp')} tip="Everything the nation produces in a year." />
-        <Card label="GDP / CAPITA" value={perCapita === undefined ? '—' : formatMoney(perCapita)} color="#8ab4ff" active={metric === 'perCapita'} onClick={() => setMetric('perCapita')} tip="GDP per person per year — how much the economy produces for each inhabitant." />
+        <Card label="GDP / YR" value={fmt(gdpYear)} color="#4ade80" active={metric === 'gdp'} onClick={() => setMetric('gdp')} tip="Everything the nation produces in a year." />
+        <Card label="GDP / CAPITA" value={perCapita === undefined ? '—' : fmt(perCapita)} color="#8ab4ff" active={metric === 'perCapita'} onClick={() => setMetric('perCapita')} tip="GDP per person per year — how much the economy produces for each inhabitant." />
         <Card label="REAL GROWTH" value={growth === undefined ? '—' : pct(growth, 1)} color="#9be37b" active={metric === 'growth'} onClick={() => setMetric('growth')} tip="Real GDP vs a year earlier." />
         <Card label="INFLATION" value={pct(fiscal.inflation, 2)} color="#ff6b6b" active={metric === 'inflation'} onClick={() => setMetric('inflation')} tip="How fast prices are rising, per year." />
         <Card label="UNEMPLOYMENT" value={pct(unemployment, 1)} color="#ffd23f" active={metric === 'unemployment'} onClick={() => setMetric('unemployment')} tip="Share of workers without a job." />
         <Card label="POLICY RATE" value={fiscal.policyRate === undefined ? '—' : pct(fiscal.policyRate, 2)} color="#6fe3ff" active={metric === 'rate'} onClick={() => setMetric('rate')} tip="The central bank's interest rate." />
         <Card label="DEBT / GDP" value={pct(fiscal.debtToGdp, 0)} color="#ff9a6b" active={metric === 'debt'} onClick={() => setMetric('debt')} tip="National debt as a share of a year's GDP." />
-        <Card label="BALANCE / YR" value={formatMoney(fiscal.balance * Y)} color={fiscal.balance >= 0 ? '#4ade80' : '#ff6b6b'} active={metric === 'balance'} onClick={() => setMetric('balance')} tip="Revenue minus spending over a year — negative is a deficit." />
-        <Card label="EXCHANGE RATE" value={country.currency ? country.currency.rate.toFixed(3) : '—'} color="#6fe3ff" active={metric === 'currency'} onClick={() => setMetric('currency')} tip="Your currency's value in Earth Dollars." />
+        <Card label="BALANCE / YR" value={fmt(fiscal.balance * Y)} color={fiscal.balance >= 0 ? '#4ade80' : '#ff6b6b'} active={metric === 'balance'} onClick={() => setMetric('balance')} tip="Revenue minus spending over a year — negative is a deficit." />
+        <Card label="EXCHANGE RATE" value={country.currency ? country.currency.rate.toFixed(3) : '—'} color="#6fe3ff" active={metric === 'currency'} onClick={() => setMetric('currency')} tip="Your currency's value in International Earth Dollars." />
       </div>
-      {metric === 'gdp' && <GdpChart h={h} tick={tick} />}
-      {metric === 'perCapita' && <GdpPerCapitaChart h={h} tick={tick} />}
+      {metric === 'gdp' && <GdpChart h={h} tick={tick} rate={rate} />}
+      {metric === 'perCapita' && <GdpPerCapitaChart h={h} tick={tick} rate={rate} />}
       {metric === 'growth' && <GrowthChart h={h} tick={tick} />}
       {metric === 'inflation' && <InflationChart h={h} tick={tick} />}
       {metric === 'unemployment' && <UnemploymentChart h={h} tick={tick} />}
       {metric === 'rate' && <InterestRatesChart h={h} tick={tick} />}
       {metric === 'debt' && <DebtToGdpChart h={h} tick={tick} />}
-      {metric === 'balance' && <BudgetFlowChart h={h} tick={tick} />}
+      {metric === 'balance' && <BudgetFlowChart h={h} tick={tick} rate={rate} />}
       {metric === 'currency' && <ExchangeRateChart h={h} tick={tick} code={country.currency?.code ?? 'Rate'} showPeg={!!cb && cb.exchangeRegime !== 'float'} />}
 
       <div className="cb-facts">
-        <div><span className="inspect-label">Real GDP</span><span>{formatMoney(realGdpYear)}/yr</span></div>
+        <div><span className="inspect-label">Real GDP</span><span>{fmt(realGdpYear)}/yr</span></div>
         <div><span className="inspect-label">Population</span><span>{formatPop(fiscal.population)}</span></div>
-        <div title="GDP per person per year"><span className="inspect-label">GDP per capita</span><span>{perCapita === undefined ? '—' : `${formatMoney(perCapita)}/yr`}</span></div>
+        <div title="GDP per person per year"><span className="inspect-label">GDP per capita</span><span>{perCapita === undefined ? '—' : `${fmt(perCapita)}/yr`}</span></div>
         <div><span className="inspect-label">Price level</span><span>{fiscal.priceLevel.toFixed(3)}</span></div>
         {fiscal.outputGap !== undefined && (
           <div><span className="inspect-label">Output gap</span><span className={fiscal.outputGap > 0.02 ? 'econ-neg' : ''}>{pct(fiscal.outputGap, 1)}</span></div>
@@ -163,18 +167,18 @@ export function EconomyOverview() {
       <Section title="Budget (per year)" category="Economy" sub="Budget">
         <div className="abs-deficit">
           <span title="Revenue minus spending. Negative is a deficit, borrowed or printed.">Yearly balance</span>
-          <span className={fiscal.balance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(fiscal.balance * Y)} ({pct(deficitPct)} GDP)</span>
+          <span className={fiscal.balance >= 0 ? 'econ-pos' : 'econ-neg'}>{fmt(fiscal.balance * Y)} ({pct(deficitPct)} GDP)</span>
         </div>
         <div className="abs-budget-cols">
           <div className="abs-budget-col">
-            <div className="abs-budget-title econ-neg">Expenditure {formatMoney(fiscal.expenditure * Y)}</div>
+            <div className="abs-budget-title econ-neg">Expenditure {fmt(fiscal.expenditure * Y)}</div>
             {expenses.map((e) => (
-              <div key={e.label} title={e.tip}><span>{e.label}</span><span>{formatMoney(e.value * Y)}</span></div>
+              <div key={e.label} title={e.tip}><span>{e.label}</span><span>{fmt(e.value * Y)}</span></div>
             ))}
           </div>
           <div className="abs-budget-col">
-            <div className="abs-budget-title econ-pos">Revenue {formatMoney(fiscal.revenue * Y)}</div>
-            <div title="Income tax on all wages and profits"><span>Tax revenue</span><span>{formatMoney(fiscal.revenue * Y)}</span></div>
+            <div className="abs-budget-title econ-pos">Revenue {fmt(fiscal.revenue * Y)}</div>
+            <div title="Income tax on all wages and profits"><span>Tax revenue</span><span>{fmt(fiscal.revenue * Y)}</span></div>
             <div className="eco-tax-row" title="The income tax rate — your main revenue lever">
               <span>Tax rate</span>
               <span className="econ-control">
@@ -185,14 +189,14 @@ export function EconomyOverview() {
             </div>
           </div>
         </div>
-        <BudgetFlowChart h={h} tick={tick} />
+        <BudgetFlowChart h={h} tick={tick} rate={rate} />
         <div className="cb-facts" style={{ marginTop: 4 }}>
-          <div><span className="inspect-label">Treasury</span><span className={fiscal.treasury < 0 ? 'econ-neg' : ''}>{formatMoney(fiscal.treasury)}</span></div>
-          <div><span className="inspect-label">National debt</span><span>{formatMoney(fiscal.debt)}</span></div>
+          <div><span className="inspect-label">Treasury</span><span className={fiscal.treasury < 0 ? 'econ-neg' : ''}>{fmt(fiscal.treasury)}</span></div>
+          <div><span className="inspect-label">National debt</span><span>{fmt(fiscal.debt)}</span></div>
           <div><span className="inspect-label">Debt / GDP</span><span>{pct(fiscal.debtToGdp, 0)}</span></div>
           <div><span className="inspect-label">Credit rating</span><span className={`rating-${fiscal.rating}`}>{fiscal.rating}</span></div>
         </div>
-        <TreasuryDebtChart h={h} tick={tick} />
+        <TreasuryDebtChart h={h} tick={tick} rate={rate} />
       </Section>
 
       <Section title="Money & central bank" category="Central Bank" sub="Monetary Policy">
@@ -202,9 +206,9 @@ export function EconomyOverview() {
               {fiscal.policyRate !== undefined && <div><span className="inspect-label">Policy rate</span><span>{pct(fiscal.policyRate, 2)}</span></div>}
               {fiscal.realRate !== undefined && <div><span className="inspect-label">Real rate</span><span>{pct(fiscal.realRate, 2)}</span></div>}
               {fiscal.inflationExpectation !== undefined && <div><span className="inspect-label">Expectations</span><span>{pct(fiscal.inflationExpectation, 1)}</span></div>}
-              {money && <div><span className="inspect-label">Broad money (M2)</span><span>{formatMoney(money.broadMoney)}</span></div>}
+              {money && <div><span className="inspect-label">Broad money (M2)</span><span>{fmt(money.broadMoney)}</span></div>}
               <div><span className="inspect-label">Regime</span><span>{exchangeRateRegimeDef(cb.exchangeRegime).name}</span></div>
-              <div><span className="inspect-label">FX reserves</span><span>{formatMoney(cb.fxReserves)}</span></div>
+              <div><span className="inspect-label">FX reserves</span><span>{fmt(cb.fxReserves)}</span></div>
             </div>
             <div className="cb-governance">
               <Meter label="Credibility" value={cb.credibility} title="How much markets trust the bank to hold its mandate." />
@@ -220,8 +224,8 @@ export function EconomyOverview() {
         <div className="cb-facts">
           <div title="Goods shipped between your worlds this month"><span className="inspect-label">Trade volume</span><span>{fiscal.tradeVolume.toFixed(0)}</span></div>
           <div title="How much freight your logistics can move a month"><span className="inspect-label">Freight capacity</span><span>{fiscal.logisticsCapacity.toFixed(0)}</span></div>
-          {country.currency && <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} E$</span></div>}
-          <div title="Private capital pooled to finance construction"><span className="inspect-label">Investment pool</span><span>{formatMoney(country.investmentPool)}</span></div>
+          {country.currency && <div><span className="inspect-label">Exchange rate</span><span>{country.currency.rate.toFixed(3)} IED</span></div>}
+          <div title="Private capital pooled to finance construction"><span className="inspect-label">Investment pool</span><span>{fmt(country.investmentPool)}</span></div>
         </div>
       </Section>
 

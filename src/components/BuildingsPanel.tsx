@@ -7,8 +7,9 @@ import { economicSystemDef, type EconomicSystem } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { useConfirmStore } from '../state/confirmStore'
+import { useGoodDetailStore } from '../state/goodDetailStore'
 import { getCountry } from '../data/countryData'
-import { formatPop, formatMoney } from '../economy/format'
+import { formatPop, formatIED } from '../economy/format'
 import type { Building, Corporation, Country, World } from '../economy/economyTypes'
 
 const CLASS_LABEL: Record<string, string> = {
@@ -75,6 +76,8 @@ export function BuildingDetail({
   const bureaucracy = BUREAUCRACY_OUTPUT[b.recipeId]
   const subsidyKey = `${world.id}:${b.id}`
   const subsidy = country?.subsidies.buildings[subsidyKey] ?? 0
+  const rate = country?.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
 
   return (
     <div className="bld-detail">
@@ -91,7 +94,7 @@ export function BuildingDetail({
           ) : (
             method.inputs.map((i) => (
               <div className="bld-detail-line" key={i.good}>
-                <span>{GOODS[i.good].label}</span>
+                <button type="button" className="good-link" onClick={() => useGoodDetailStore.getState().openGood(i.good)} title={`${GOODS[i.good].label} — open the market view`}>{GOODS[i.good].label}</button>
                 <span>{perTick(i.amount).toFixed(0)}</span>
               </div>
             ))
@@ -104,7 +107,7 @@ export function BuildingDetail({
           ) : (
             method.outputs.map((o) => (
               <div className="bld-detail-line" key={o.good}>
-                <span>{GOODS[o.good].label}</span>
+                <button type="button" className="good-link" onClick={() => useGoodDetailStore.getState().openGood(o.good)} title={`${GOODS[o.good].label} — open the market view`}>{GOODS[o.good].label}</button>
                 <span>{perTick(o.amount).toFixed(0)}</span>
               </div>
             ))
@@ -116,7 +119,7 @@ export function BuildingDetail({
             const posted = j.count * b.level * JOB_SCALE
             const filled = posted * t
             return (
-              <div className="bld-detail-line" key={j.class}>
+              <div className="bld-detail-line" key={j.class} title={`${formatPop(filled)} ${CLASS_LABEL[j.class] ?? j.class} jobs, filled from ${world.name}'s ${(CLASS_LABEL[j.class] ?? j.class).toLowerCase()} population (pops are not assigned to a single building). See them all in this planet's Population tab.`}>
                 <span>{CLASS_LABEL[j.class] ?? j.class}</span>
                 <span>{formatPop(filled)}</span>
               </div>
@@ -160,7 +163,7 @@ export function BuildingDetail({
       )}
       <div className="bld-detail-foot">
         Throughput {Math.round(t * 100)}% · Employs {formatPop(b.employed)} of {formatPop(b.jobsPosted)} jobs · Profit{' '}
-        <span className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</span>/tick
+        <span className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{fmt(b.lastProfit)}</span>/tick
       </div>
       {owned && country && (
         <>
@@ -173,7 +176,7 @@ export function BuildingDetail({
               <button type="button" onClick={() => setSubsidyForBuilding(country.id, world.id, b.id, subsidy - 20)}>
                 −
               </button>
-              <span className="econ-control-value">{formatMoney(subsidy)}</span>
+              <span className="econ-control-value">{fmt(subsidy)}</span>
               <button type="button" onClick={() => setSubsidyForBuilding(country.id, world.id, b.id, subsidy + 20)}>
                 +
               </button>
@@ -207,7 +210,7 @@ export function BuildingDetail({
                         ? `Seize this whole building from its ${b.owner.kind === 'corporation' ? 'company' : 'co-op'}. It becomes state-run and its method is unpinned.`
                         : `Seize ${xfer} level${xfer > 1 ? 's' : ''} from this ${b.owner.kind === 'corporation' ? 'company' : 'co-op'} into a state building of the same type. The rest stays with its owner.`,
                     effects: [
-                      `Pay ${formatMoney(xfer * BUILD_COST_PER_LEVEL * (b.owner.kind === 'corporation' ? 0.6 : 0.15))} compensation from the treasury`,
+                      `Pay ${fmt(xfer * BUILD_COST_PER_LEVEL * (b.owner.kind === 'corporation' ? 0.6 : 0.15))} compensation from the treasury`,
                       xfer >= b.level ? 'The entire building becomes state-owned' : `This building drops to level ${b.level - xfer}; a state ${recipe!.label} gains ${xfer} level${xfer > 1 ? 's' : ''}`,
                       `Lose ~${20 + xfer * 20} bureaucracy`,
                     ],
@@ -244,7 +247,7 @@ export function BuildingDetail({
                     title: `Privatize ${xfer} of ${b.level} level${b.level > 1 ? 's' : ''} — ${recipe!.label}?`,
                     body: "Sell to the private sector — the country's largest private company (or a newly floated one if none exists) takes the levels over and runs them for profit.",
                     effects: [
-                      `Bank ${formatMoney(xfer * BUILD_COST_PER_LEVEL * 0.7)} in sale proceeds to the treasury`,
+                      `Bank ${fmt(xfer * BUILD_COST_PER_LEVEL * 0.7)} in sale proceeds to the treasury`,
                       xfer >= b.level ? 'The entire state building is sold off' : `This state building drops to level ${b.level - xfer}`,
                       `A private company gains ${xfer} level${xfer > 1 ? 's' : ''} of this type and runs it itself`,
                     ],
@@ -336,6 +339,8 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const totalPop = world.pops.reduce((s, p) => s + p.populationSize, 0)
   const owned = !!countryId && world.ownerId === countryId
   const treasury = country?.treasury ?? 0
+  const rate = country?.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   const buildable = Object.values(RECIPES).filter((r) => !groups || groups.includes(buildingGroup(r.id)))
 
   // Once a tab holds more than a handful of distinct building types, a flat
@@ -350,8 +355,8 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
     <div className="econ-panel">
       <div className="econ-summary">
         <span>
-          <span className="econ-summary-label">{world.name}</span> · Pop {formatPop(totalPop)} · GDP {formatMoney(estimateWorldGdp(world) * TICKS_PER_YEAR)}/yr
-          {owned && <> · Treasury {formatMoney(treasury)}</>}
+          <span className="econ-summary-label">{world.name}</span> · Pop {formatPop(totalPop)} · GDP {fmt(estimateWorldGdp(world) * TICKS_PER_YEAR)}/yr
+          {owned && <> · Treasury {fmt(treasury)}</>}
         </span>
         {country && (
           <div className="econ-econsystem">
@@ -423,7 +428,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                                 type="button"
                                 className="bld-level-btn"
                                 onClick={() => downgradeBuilding(world.id, b.id)}
-                                title={b.level > 1 ? `Tear down one level (instant, salvages ${formatMoney(BUILD_COST_PER_LEVEL * 0.3)})` : `Demolish this building (instant, salvages ${formatMoney(BUILD_COST_PER_LEVEL * 0.3)})`}
+                                title={b.level > 1 ? `Tear down one level (instant, salvages ${fmt(BUILD_COST_PER_LEVEL * 0.3)})` : `Demolish this building (instant, salvages ${fmt(BUILD_COST_PER_LEVEL * 0.3)})`}
                               >
                                 −
                               </button>
@@ -441,8 +446,8 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                                 !canBuild(world, b.recipeId)
                                   ? 'District is full — no room to expand'
                                   : control === 'state'
-                                    ? `Queue an upgrade to level ${b.level + 1} — about ${formatMoney(estimateConstructionCost(b.recipeId, world.market.prices))} of materials, built over time`
-                                    : `Build a state-owned ${recipe!.label} here (about ${formatMoney(estimateConstructionCost(b.recipeId, world.market.prices))} of materials, built over time) — separate from this ${control === 'worker' ? 'co-op' : 'company'}`
+                                    ? `Queue an upgrade to level ${b.level + 1} — about ${fmt(estimateConstructionCost(b.recipeId, world.market.prices))} of materials, built over time`
+                                    : `Build a state-owned ${recipe!.label} here (about ${fmt(estimateConstructionCost(b.recipeId, world.market.prices))} of materials, built over time) — separate from this ${control === 'worker' ? 'co-op' : 'company'}`
                               }
                             >
                               +
@@ -509,7 +514,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                       <td title={`${formatPop(b.employed)} employed of ${formatPop(b.jobsPosted)} jobs posted`}>
                         {b.jobsPosted > 0 ? `${formatPop(b.employed)} (${jobPct}%)` : '—'}
                       </td>
-                      <td className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(b.lastProfit)}</td>
+                      <td className={b.lastProfit >= 0 ? 'econ-pos' : 'econ-neg'}>{fmt(b.lastProfit)}</td>
                     </tr>
                     {open && (
                       <tr className="market-detail-row">
@@ -578,7 +583,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                       className="econ-build-btn"
                       onClick={() => queueConstruction(world.id, r.id)}
                       disabled={!room}
-                      title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${formatMoney(estimateConstructionCost(r.id, world.market.prices))} of materials, built over time`}
+                      title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${fmt(estimateConstructionCost(r.id, world.market.prices))} of materials, built over time`}
                     >
                       + {r.label}
                     </button>
@@ -603,6 +608,8 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
 // level with upgrade/downgrade, production method, owner, then the full
 // BuildingDetail — inputs, outputs, employment, reserves, subsidy and transfers.
 export function ComplexBuildingCard({ b, world, country, owned, onClose }: { b: Building; world: World; country?: Country; owned: boolean; onClose: () => void }) {
+  const rate = country?.currency?.rate ?? 1
+  const fmt = (n: number) => formatIED(n, rate)
   const corporations = useEconomyStore((s) => s.corporations)
   const queueConstruction = useEconomyStore((s) => s.queueConstruction)
   const downgradeBuilding = useEconomyStore((s) => s.downgradeBuilding)
@@ -628,11 +635,11 @@ export function ComplexBuildingCard({ b, world, country, owned, onClose }: { b: 
       {owned && (
         <div className="pl-detail-actions">
           <button type="button" className="laws-enact-btn" disabled={!room} onClick={() => queueConstruction(world.id, b.recipeId, { kind: 'state' })}
-            title={!room ? 'District is full — develop it first' : `Queue another state-owned level — about ${formatMoney(estimateConstructionCost(b.recipeId, world.market.prices))} of materials`}>
+            title={!room ? 'District is full — develop it first' : `Queue another state-owned level — about ${fmt(estimateConstructionCost(b.recipeId, world.market.prices))} of materials`}>
             + Upgrade
           </button>
           <button type="button" className="laws-enact-btn" disabled={control !== 'state'} onClick={() => downgradeBuilding(world.id, b.id)}
-            title={control !== 'state' ? "Can't demolish a company's or co-op's property — nationalize it first" : `Tear down one level (instant, salvages ${formatMoney(BUILD_COST_PER_LEVEL * 0.3)})`}>
+            title={control !== 'state' ? "Can't demolish a company's or co-op's property — nationalize it first" : `Tear down one level (instant, salvages ${fmt(BUILD_COST_PER_LEVEL * 0.3)})`}>
             − Downgrade
           </button>
           {recipe.methods.length > 1 && (

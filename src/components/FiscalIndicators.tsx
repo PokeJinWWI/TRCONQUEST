@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { usePlayerStore } from '../state/playerStore'
-import { formatMoney } from '../economy/format'
+import { formatMoney, formatIED } from '../economy/format'
 import { DraggableWindow } from './DraggableWindow'
 
 type FiscalIndicatorId = 'treasury' | 'balance'
@@ -37,6 +37,10 @@ export function FiscalIndicators() {
   const revenue = abstractMode ? (absReport?.revenue ?? 0) / 12 : f?.revenue ?? 0
   const expenditure = abstractMode ? (absReport?.spending ?? 0) / 12 : f?.expenditure ?? 0
   const rating = abstractMode ? absReport?.rating : f?.rating
+  // Simple mode shows local $; Complex shows the International Earth Dollar,
+  // converting the nation's local-currency books by its exchange rate.
+  const rate = country?.currency?.rate ?? 1
+  const fmt = (n: number) => (abstractMode ? formatMoney(n) : formatIED(n, rate))
 
   return (
     <div className="fiscal-indicators">
@@ -47,7 +51,7 @@ export function FiscalIndicators() {
         onClick={() => setOpenId('treasury')}
       >
         <span className="fiscal-ind-label">Treasury</span>
-        <span className={`fiscal-ind-val ${treasury >= 0 ? 'econ-pos' : 'econ-neg'}`}>{formatMoney(treasury)}</span>
+        <span className={`fiscal-ind-val ${treasury >= 0 ? 'econ-pos' : 'econ-neg'}`}>{fmt(treasury)}</span>
       </button>
       <button
         type="button"
@@ -58,7 +62,7 @@ export function FiscalIndicators() {
         <span className="fiscal-ind-label">Balance</span>
         <span className={`fiscal-ind-val ${balance >= 0 ? 'econ-pos' : 'econ-neg'}`}>
           {balance >= 0 ? '+' : ''}
-          {formatMoney(balance)}/mo
+          {fmt(balance)}/mo
         </span>
       </button>
 
@@ -66,18 +70,18 @@ export function FiscalIndicators() {
         <DraggableWindow title="Treasury" onClose={() => setOpenId(null)} maximizable={false}>
           <div className="inspect-row">
             <span className="inspect-label">Treasury</span>
-            <span className={`inspect-value${treasury >= 0 ? ' econ-pos' : ' econ-neg'}`}>{formatMoney(treasury)}</span>
+            <span className={`inspect-value${treasury >= 0 ? ' econ-pos' : ' econ-neg'}`}>{fmt(treasury)}</span>
           </div>
           <div className="inspect-row">
             <span className="inspect-label">Monthly</span>
             <span className={`inspect-value${balance >= 0 ? ' econ-pos' : ' econ-neg'}`}>
               {balance >= 0 ? '+' : ''}
-              {formatMoney(balance)}/mo
+              {fmt(balance)}/mo
             </span>
           </div>
           <div className="inspect-row">
             <span className="inspect-label">Debt</span>
-            <span className={`inspect-value${debt > 0 ? ' econ-neg' : ''}`}>{formatMoney(debt)}</span>
+            <span className={`inspect-value${debt > 0 ? ' econ-neg' : ''}`}>{fmt(debt)}</span>
           </div>
           {rating && (
             <div className="inspect-row">
@@ -99,16 +103,16 @@ export function FiscalIndicators() {
             <span className="inspect-label">Balance</span>
             <span className={`inspect-value${balance >= 0 ? ' econ-pos' : ' econ-neg'}`}>
               {balance >= 0 ? '+' : ''}
-              {formatMoney(balance)}/mo
+              {fmt(balance)}/mo
             </span>
           </div>
           <div className="inspect-row">
             <span className="inspect-label">Revenue</span>
-            <span className="inspect-value econ-pos">+{formatMoney(revenue)}/mo</span>
+            <span className="inspect-value econ-pos">+{fmt(revenue)}/mo</span>
           </div>
           <div className="inspect-row">
             <span className="inspect-label">Expenditure</span>
-            <span className="inspect-value econ-neg">−{formatMoney(expenditure)}/mo</span>
+            <span className="inspect-value econ-neg">−{fmt(expenditure)}/mo</span>
           </div>
           <div className="inspect-divider" />
           <div className="resource-info-description">

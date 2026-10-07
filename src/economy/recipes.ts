@@ -79,6 +79,7 @@ export const LOGISTICS_OUTPUT: Record<string, number> = {
   railway: 1200,
   spaceport: 2000,
   seaport: 1500,
+  urbanCenter: 450,
 }
 
 // Construction points a Construction Sector adds to its WORLD's build capacity
@@ -176,6 +177,15 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   coalMine: 'extraction',
   oilWell: 'extraction',
   rareMetalsMine: 'extraction',
+  baseMetalsMine: 'extraction',
+  lightMetalsMine: 'extraction',
+  metallicHydrogenPlant: 'extraction',
+  exoticMatterPlant: 'extraction',
+  hyperiumPlant: 'extraction',
+  waterTreatmentPlant: 'extraction',
+  groundwaterPump: 'extraction',
+  desalinationPlant: 'extraction',
+  iceMine: 'extraction',
   loggingCamp: 'extraction',
   phosphateMine: 'extraction',
   sulfurMine: 'extraction',
@@ -185,12 +195,14 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   riceFarm: 'agriculture',
   hydroponicsFarm: 'agriculture',
   fishery: 'agriculture',
+  fishingWharf: 'agriculture',
   livestockRanch: 'agriculture',
   sugarPlantation: 'agriculture',
   coffeePlantation: 'agriculture',
   teaPlantation: 'agriculture',
   // Heavy industry — primary metals, tools, machinery tiers, electronics
   steelMill: 'heavyIndustry',
+  alloySmelter: 'heavyIndustry',
   sawmill: 'heavyIndustry',
   toolWorkshop: 'heavyIndustry',
   machineryFactory: 'heavyIndustry',
@@ -201,6 +213,7 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   semiconductorFab: 'heavyIndustry',
   // Chemicals & materials
   oilRefinery: 'chemicals',
+  rocketFuelRefinery: 'chemicals',
   chemicalPlant: 'chemicals',
   fertilizerPlant: 'chemicals',
   explosivesFactory: 'chemicals',
@@ -229,10 +242,15 @@ const RECIPE_GROUP: Record<string, BuildingGroup> = {
   railway: 'infrastructure',
   spaceport: 'infrastructure',
   seaport: 'infrastructure',
+  urbanCenter: 'infrastructure',
   spaceElevatorAnchor: 'infrastructure',
   // Public services
   clinic: 'services',
   school: 'services',
+  university: 'services',
+  physicsLab: 'services',
+  engineeringLab: 'services',
+  socialInstitute: 'services',
   retailShop: 'services',
   artStudio: 'services',
   dataCenter: 'services',
@@ -259,20 +277,22 @@ const CONSTRUCTION_WORK_BY_TIER: Record<number, number> = { 1: 100, 2: 250, 3: 4
 // Explicit tier per building. Anything unlisted falls back to a category default.
 const CONSTRUCTION_TIER: Record<string, number> = {
   // T1 — primary sector, quick to build
-  ironMine: 1, coalMine: 1, oilWell: 1, rareMetalsMine: 1, loggingCamp: 1, phosphateMine: 1, sulfurMine: 1, hardwoodLogging: 1,
-  wheatFarm: 1, riceFarm: 1, fishery: 1, livestockRanch: 1, sugarPlantation: 1, coffeePlantation: 1, teaPlantation: 1,
-  hydroponicsFarm: 3,
+  ironMine: 1, coalMine: 1, oilWell: 1, rareMetalsMine: 1, baseMetalsMine: 1, loggingCamp: 1, phosphateMine: 1, sulfurMine: 1, hardwoodLogging: 1,
+  wheatFarm: 1, riceFarm: 1, fishery: 1, fishingWharf: 1, livestockRanch: 1, sugarPlantation: 1, coffeePlantation: 1, teaPlantation: 1,
+  waterTreatmentPlant: 1, groundwaterPump: 1,
+  lightMetalsMine: 2, hydroponicsFarm: 3, desalinationPlant: 2, iceMine: 2,
   // T2 — light industry, services, basic power/infra
   solarPlant: 2, coalPowerPlant: 2, foodProcessor: 2, meatPacking: 2, consumerGoodsFactory: 2, furnitureFactory: 2, sawmill: 2, toolWorkshop: 2,
   dyeWorks: 2, glassworks: 2, cementWorks: 2, paperMill: 2, clinic: 2, school: 2, retailShop: 2, artStudio: 2, roadNetwork: 2, governmentOffice: 2, constructionSector: 3,
   // T3 — mid/heavy industry, advanced services, civic
-  steelMill: 3, machineryFactory: 3, oilRefinery: 3, chemicalPlant: 3, fertilizerPlant: 3, explosivesFactory: 3, electronicsFactory: 3,
-  engineFactory: 3, automobilePlant: 3, luxuryFactory: 3, dataCenter: 3, railway: 3, corporateHq: 3, financialCenter: 3,
+  steelMill: 3, alloySmelter: 3, machineryFactory: 3, oilRefinery: 3, rocketFuelRefinery: 3, chemicalPlant: 3, fertilizerPlant: 3, explosivesFactory: 3, electronicsFactory: 3,
+  physicsLab: 3, engineeringLab: 3, socialInstitute: 3,
+  engineFactory: 3, automobilePlant: 3, luxuryFactory: 3, dataCenter: 3, railway: 3, urbanCenter: 3, corporateHq: 3, financialCenter: 3,
   // T4 — advanced industry & major infrastructure
   heavyMachineryPlant: 4, electricalMachineryPlant: 4, precisionMachineryPlant: 4, semiconductorFab: 4, locomotiveWorks: 4,
-  aircraftFactory: 4, shipyard: 4, fusionReactor: 4, ministry: 4, spaceport: 4,
+  aircraftFactory: 4, shipyard: 4, fusionReactor: 4, ministry: 4, spaceport: 4, university: 4,
   // T5 — the biggest, most complex yards
-  spaceyard: 5, rocketFactory: 5,
+  spaceyard: 5, rocketFactory: 5, metallicHydrogenPlant: 5, exoticMatterPlant: 5, hyperiumPlant: 5,
 }
 
 const CATEGORY_TIER_DEFAULT: Record<BuildingCategory, number> = {
@@ -334,8 +354,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Thermal Generation',
-        description: 'Burns coal for reliable bulk electricity.',
-        inputs: [{ good: 'coal', amount: 300 }],
+        description: 'Burns coal for reliable bulk electricity, with water for cooling.',
+        inputs: [
+          { good: 'coal', amount: 300 },
+          { good: 'water', amount: 140 },
+        ],
         outputs: [{ good: 'electricity', amount: 2500 }],
         jobs: [
           { class: 'labor', count: 200 },
@@ -352,10 +375,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Magnetic Confinement',
-        description: 'Enormous clean output from rare metals and electrical machinery — but a specialist workforce.',
+        description: 'Enormous clean output from rare metals and electrical machinery, with coolant water — but a specialist workforce.',
         inputs: [
           { good: 'rareMetals', amount: 40 },
           { good: 'electricalMachinery', amount: 40 },
+          { good: 'water', amount: 180 },
         ],
         outputs: [{ good: 'electricity', amount: 3600 }],
         jobs: [
@@ -485,6 +509,242 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'labor', count: 150 },
           { class: 'technical', count: 150 },
+        ],
+      },
+    ],
+  },
+  baseMetalsMine: {
+    id: 'baseMetalsMine',
+    label: 'Base Metals Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Open-Pit Mining',
+        description: 'Copper and nickel from open-pit ore — the base metals, as co-products of one mine.',
+        inputs: [],
+        outputs: [
+          { good: 'copper', amount: 320 },
+          { good: 'nickel', amount: 140 },
+        ],
+        jobs: [
+          { class: 'labor', count: 300 },
+          { class: 'technical', count: 50 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Flotation Line',
+        description: 'Powered crushing and flotation lift the yield of copper and nickel.',
+        inputs: [
+          { good: 'electricity', amount: 220 },
+          { good: 'heavyMachinery', amount: 30 },
+        ],
+        outputs: [
+          { good: 'copper', amount: 660 },
+          { good: 'nickel', amount: 300 },
+        ],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 150 },
+        ],
+      },
+    ],
+  },
+  lightMetalsMine: {
+    id: 'lightMetalsMine',
+    label: 'Light Metals Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'manual',
+        label: 'Ore & Brine Works',
+        description: 'Aluminium ore, titanium sands and lithium brine — the light metals, from one works.',
+        inputs: [],
+        outputs: [
+          { good: 'aluminium', amount: 300 },
+          { good: 'titanium', amount: 90 },
+          { good: 'lithium', amount: 110 },
+        ],
+        jobs: [
+          { class: 'labor', count: 300 },
+          { class: 'technical', count: 60 },
+        ],
+      },
+      {
+        id: 'mechanized',
+        label: 'Electrolytic Line',
+        description: 'Electrolysis and powered processing raise the yield of all three light metals, on heavy power.',
+        inputs: [
+          { good: 'electricity', amount: 420 },
+          { good: 'heavyMachinery', amount: 35 },
+        ],
+        outputs: [
+          { good: 'aluminium', amount: 640 },
+          { good: 'titanium', amount: 200 },
+          { good: 'lithium', amount: 240 },
+        ],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 170 },
+        ],
+      },
+    ],
+  },
+  metallicHydrogenPlant: {
+    id: 'metallicHydrogenPlant',
+    label: 'Metallic Hydrogen Plant',
+    category: 'extraction',
+    requiresTech: 'metallic-hydrogen',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Gas-Giant Skimming',
+        description: 'Skims and compresses gas-giant hydrogen into metastable metallic hydrogen — an enormous, clean source of rocket fuel. A late-game megastructure-tier work.',
+        inputs: [
+          { good: 'electricity', amount: 1200 },
+          { good: 'heavyMachinery', amount: 120 },
+          { good: 'precisionMachinery', amount: 80 },
+        ],
+        outputs: [{ good: 'rocketFuel', amount: 2600 }],
+        jobs: [
+          { class: 'technical', count: 220 },
+          { class: 'professional', count: 200 },
+        ],
+      },
+    ],
+  },
+  // --- Strategic war materials (FTL) ---------------------------------------
+  // Exotic matter and hyperium: synthesised only once the late tech lands, never
+  // demanded by any economy recipe, so they are never auto-seeded — a nation
+  // builds these when it wants to feed an FTL navy (the military shipyard draws
+  // them from the economy in Complex mode). Expensive, power-hungry, low yield.
+  exoticMatterPlant: {
+    id: 'exoticMatterPlant',
+    label: 'Exotic Matter Containment Plant',
+    category: 'extraction',
+    requiresTech: 'exotic-matter-containment',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Negative-Energy Containment',
+        description: 'Condenses and holds exotic matter in magnetic-confinement lattices — the stuff that threads a warp field. Enormous power for a trickle of output; the feedstock of every warp drive.',
+        inputs: [
+          { good: 'electricity', amount: 1400 },
+          { good: 'rareMetals', amount: 90 },
+          { good: 'precisionMachinery', amount: 70 },
+        ],
+        outputs: [{ good: 'exoticMatter', amount: 240 }],
+        jobs: [
+          { class: 'technical', count: 180 },
+          { class: 'professional', count: 220 },
+        ],
+      },
+    ],
+  },
+  hyperiumPlant: {
+    id: 'hyperiumPlant',
+    label: 'Hyperium Synthesis Plant',
+    category: 'extraction',
+    // Gated on hyperium-extraction, which the near-Sol human nations all hold by
+    // default (DEFAULT_RESEARCHED) — only they work with hyperium by lore — while
+    // distant low-tier empires do not. So the human powers can make their own
+    // hyperium from turn one and keep building an FTL navy.
+    requiresTech: 'hyperium-extraction',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Transuranic Synthesis',
+        description: 'Breeds and stabilises hyperium from rare feedstock and vast power — the fuel a hyperdrive folds space with. Rarer and dearer than exotic matter; a handful a month from a whole plant.',
+        inputs: [
+          { good: 'electricity', amount: 1800 },
+          { good: 'rareMetals', amount: 120 },
+          { good: 'rocketFuel', amount: 60 },
+          { good: 'precisionMachinery', amount: 90 },
+        ],
+        outputs: [{ good: 'hyperium', amount: 150 }],
+        jobs: [
+          { class: 'technical', count: 200 },
+          { class: 'professional', count: 260 },
+        ],
+      },
+    ],
+  },
+  // --- Water ---------------------------------------------------------------
+  // Three ways to supply the universal water utility. The seed prefers the
+  // treatment plant (cheapest power), pumping and desalination are built where a
+  // world has no surface water or runs on the sea.
+  waterTreatmentPlant: {
+    id: 'waterTreatmentPlant',
+    label: 'Water Treatment Plant',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Surface Water Treatment',
+        description: 'Collects and treats surface water — rivers, lakes and reservoirs — into clean supply. Cheap to run, the backbone of a world\'s water.',
+        inputs: [{ good: 'electricity', amount: 16 }],
+        outputs: [{ good: 'water', amount: 1000 }],
+        jobs: [
+          { class: 'labor', count: 50 },
+          { class: 'technical', count: 13 },
+        ],
+      },
+    ],
+  },
+  groundwaterPump: {
+    id: 'groundwaterPump',
+    label: 'Groundwater Pumps',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Aquifer Pumping',
+        description: 'Pumps groundwater from aquifers — more power than surface treatment, but it works where there is no river to draw on.',
+        inputs: [{ good: 'electricity', amount: 58 }],
+        outputs: [{ good: 'water', amount: 900 }],
+        jobs: [
+          { class: 'labor', count: 40 },
+          { class: 'technical', count: 18 },
+        ],
+      },
+    ],
+  },
+  desalinationPlant: {
+    id: 'desalinationPlant',
+    label: 'Desalination Plant',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Reverse-Osmosis Desalination',
+        description: 'Turns seawater into fresh water on heavy power. Expensive, but a world covered in sea can water itself without a drop of rain.',
+        inputs: [{ good: 'electricity', amount: 225 }],
+        outputs: [{ good: 'water', amount: 1200 }],
+        jobs: [
+          { class: 'labor', count: 26 },
+          { class: 'technical', count: 56 },
+        ],
+      },
+    ],
+  },
+  iceMine: {
+    id: 'iceMine',
+    label: 'Ice Mine',
+    category: 'extraction',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Volatile Ice Extraction',
+        description: 'Mines frozen volatiles — surface and subsurface water ice — and melts them into supply. The way an airless, frozen world or an outer moon waters itself; energy-hungry, but it needs neither rivers nor a sea.',
+        inputs: [
+          { good: 'electricity', amount: 120 },
+          { good: 'heavyMachinery', amount: 7 },
+        ],
+        outputs: [{ good: 'water', amount: 1000 }],
+        jobs: [
+          { class: 'labor', count: 50 },
+          { class: 'technical', count: 27 },
         ],
       },
     ],
@@ -626,11 +886,12 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mechanized',
         label: 'Mechanized Farming',
-        description: 'Fertilizer, tools and power raise yields with fewer, more skilled hands.',
+        description: 'Fertilizer, tools, water and power raise yields with fewer, more skilled hands.',
         inputs: [
           { good: 'fertilizer', amount: 120 },
           { good: 'tools', amount: 30 },
-          { good: 'electricity', amount: 60 },
+          { good: 'water', amount: 120 },
+          { good: 'electricity', amount: 45 },
         ],
         outputs: [{ good: 'grains', amount: 2000 }],
         jobs: [
@@ -660,11 +921,12 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'mechanized',
         label: 'Mechanized Paddy',
-        description: 'Fertilizer, tools and pumps lift yields.',
+        description: 'Fertilizer, tools, flood water and pumps lift yields.',
         inputs: [
           { good: 'fertilizer', amount: 110 },
           { good: 'tools', amount: 25 },
-          { good: 'electricity', amount: 50 },
+          { good: 'water', amount: 160 },
+          { good: 'electricity', amount: 40 },
         ],
         outputs: [{ good: 'grains', amount: 1900 }],
         jobs: [
@@ -716,10 +978,11 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Vertical Hydroponics',
-        description: 'Stacked, climate-controlled grain growing — high yield in little space, on power and fertilizer. The backbone of food security on marginal worlds.',
+        description: 'Stacked, climate-controlled grain growing — high yield in little space, on power, water and fertilizer. The backbone of food security on marginal worlds.',
         inputs: [
           { good: 'fertilizer', amount: 100 },
-          { good: 'electricity', amount: 200 },
+          { good: 'water', amount: 90 },
+          { good: 'electricity', amount: 185 },
           { good: 'machinery', amount: 20 },
         ],
         outputs: [{ good: 'grains', amount: 2600 }],
@@ -759,6 +1022,28 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'labor', count: 130 },
           { class: 'technical', count: 70 },
+        ],
+      },
+    ],
+  },
+  fishingWharf: {
+    id: 'fishingWharf',
+    label: 'Fishing Wharves',
+    category: 'agriculture',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Fishing Fleet',
+        description: 'A fleet of ocean-going boats works the coast and the open sea, landing fish at the wharves. The boats are consumed as they wear out and are replaced — a world with sea turns ships into food.',
+        inputs: [
+          { good: 'oceanGoingShips', amount: 6 },
+          { good: 'fuel', amount: 60 },
+          { good: 'electricity', amount: 50 },
+        ],
+        outputs: [{ good: 'fish', amount: 1500 }],
+        jobs: [
+          { class: 'labor', count: 180 },
+          { class: 'technical', count: 50 },
         ],
       },
     ],
@@ -905,6 +1190,31 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
   },
+  alloySmelter: {
+    id: 'alloySmelter',
+    label: 'Alloy Smelter',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Alloying Furnace',
+        description: 'Blends copper, aluminium, nickel, titanium and lithium into high-performance alloys — the metal that ships, aircraft and vehicles are built from.',
+        inputs: [
+          { good: 'copper', amount: 180 },
+          { good: 'aluminium', amount: 220 },
+          { good: 'nickel', amount: 90 },
+          { good: 'titanium', amount: 70 },
+          { good: 'lithium', amount: 60 },
+          { good: 'electricity', amount: 300 },
+        ],
+        outputs: [{ good: 'alloys', amount: 620 }],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'technical', count: 190 },
+        ],
+      },
+    ],
+  },
   sawmill: {
     id: 'sawmill',
     label: 'Sawmill',
@@ -949,6 +1259,28 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
   },
+  rocketFuelRefinery: {
+    id: 'rocketFuelRefinery',
+    label: 'Rocket Fuel Refinery',
+    category: 'industry',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Propellant Synthesis',
+        description: 'Refines crude oil and chemicals into cryogenic rocket propellant — the fuel that spaceport launches and rockets burn. Drawn from oil directly, so it does not compete with the fuel market.',
+        inputs: [
+          { good: 'oil', amount: 300 },
+          { good: 'chemicals', amount: 140 },
+          { good: 'electricity', amount: 280 },
+        ],
+        outputs: [{ good: 'rocketFuel', amount: 560 }],
+        jobs: [
+          { class: 'labor', count: 120 },
+          { class: 'technical', count: 160 },
+        ],
+      },
+    ],
+  },
   chemicalPlant: {
     id: 'chemicalPlant',
     label: 'Chemical Plant',
@@ -957,12 +1289,13 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Petrochemistry',
-        description: 'Cracks oil into industrial chemicals in machinery-driven plant.',
+        description: 'Cracks oil into industrial chemicals in machinery-driven plant, with process water.',
         inputs: [
           { good: 'sulfur', amount: 60 },
           { good: 'oil', amount: 300 },
+          { good: 'water', amount: 110 },
           { good: 'machinery', amount: 40 },
-          { good: 'electricity', amount: 220 },
+          { good: 'electricity', amount: 200 },
         ],
         outputs: [{ good: 'chemicals', amount: 720 }],
         jobs: [
@@ -1497,9 +1830,10 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Hull Assembly',
-        description: 'Steel, engines and electronics into ocean-going ships for planetary logistics.',
+        description: 'Steel, alloys, engines and electronics into ocean-going ships for planetary logistics.',
         inputs: [
-          { good: 'steel', amount: 300 },
+          { good: 'steel', amount: 240 },
+          { good: 'alloys', amount: 60 },
           { good: 'engines', amount: 150 },
           { good: 'electronics', amount: 80 },
           { good: 'electricity', amount: 220 },
@@ -1520,12 +1854,14 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Orbital Assembly',
-        description: 'Precision machinery, electronics, heavy machinery and engines into spaceships — expensive, low-throughput, late-game capital construction.',
+        description: 'Steel, alloys, precision machinery, electronics, heavy machinery and engines into spaceships — expensive, low-throughput, late-game capital construction.',
         inputs: [
+          { good: 'steel', amount: 100 },
+          { good: 'alloys', amount: 90 },
           { good: 'precisionMachinery', amount: 120 },
           { good: 'electronics', amount: 150 },
-          { good: 'heavyMachinery', amount: 100 },
-          { good: 'engines', amount: 100 },
+          { good: 'heavyMachinery', amount: 70 },
+          { good: 'engines', amount: 80 },
           { good: 'electricity', amount: 500 },
         ],
         outputs: [{ good: 'spaceships', amount: 15 }],
@@ -1544,10 +1880,12 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Booster Assembly',
-        description: 'Precision machinery, explosives and electronics into rockets for spaceport-tier logistics.',
+        description: 'Alloys, rocket fuel, precision machinery, explosives and electronics into rockets for spaceport-tier logistics — the boosters come fuelled.',
         inputs: [
-          { good: 'precisionMachinery', amount: 80 },
-          { good: 'explosives', amount: 100 },
+          { good: 'alloys', amount: 60 },
+          { good: 'rocketFuel', amount: 90 },
+          { good: 'precisionMachinery', amount: 60 },
+          { good: 'explosives', amount: 70 },
           { good: 'electronics', amount: 90 },
           { good: 'electricity', amount: 300 },
         ],
@@ -1591,9 +1929,10 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Vehicle Assembly',
-        description: 'Steel, engines and electronics into automobiles for the population.',
+        description: 'Steel, alloys, engines and electronics into automobiles for the population.',
         inputs: [
-          { good: 'steel', amount: 200 },
+          { good: 'steel', amount: 160 },
+          { good: 'alloys', amount: 50 },
           { good: 'engines', amount: 150 },
           { good: 'electronics', amount: 70 },
           { good: 'electricity', amount: 200 },
@@ -1614,9 +1953,10 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Locomotive Assembly',
-        description: 'Heavy rolling stock from steel, engines and heavy machinery — the backbone of railways.',
+        description: 'Heavy rolling stock from steel, alloys, engines and heavy machinery — the backbone of railways.',
         inputs: [
-          { good: 'steel', amount: 300 },
+          { good: 'steel', amount: 270 },
+          { good: 'alloys', amount: 40 },
           { good: 'engines', amount: 120 },
           { good: 'heavyMachinery', amount: 40 },
           { good: 'electricity', amount: 200 },
@@ -1637,9 +1977,10 @@ export const RECIPES: Record<string, Recipe> = {
       {
         id: 'standard',
         label: 'Airframe Assembly',
-        description: 'Aircraft from steel, engines, electronics and electrical machinery — for spaceports and the wealthy.',
+        description: 'Aircraft from alloys, steel, engines, electronics and electrical machinery — lightweight airframes for spaceports and the wealthy.',
         inputs: [
-          { good: 'steel', amount: 200 },
+          { good: 'alloys', amount: 130 },
+          { good: 'steel', amount: 90 },
           { good: 'engines', amount: 180 },
           { good: 'electronics', amount: 120 },
           { good: 'precisionMachinery', amount: 40 },
@@ -1812,6 +2153,32 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
   },
+  urbanCenter: {
+    id: 'urbanCenter',
+    label: 'Urban Center',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'City District',
+        description: 'A dense urban core of roads, transit and commerce. Automobiles and power keep a city moving and trading — it runs on the cars its people drive.',
+        inputs: [
+          { good: 'automobiles', amount: 28 },
+          { good: 'fuel', amount: 80 },
+          { good: 'electricity', amount: 200 },
+        ],
+        outputs: [
+          { good: 'transportation', amount: 350 },
+          { good: 'retail', amount: 650 },
+        ],
+        jobs: [
+          { class: 'labor', count: 150 },
+          { class: 'professional', count: 220 },
+          { class: 'technical', count: 70 },
+        ],
+      },
+    ],
+  },
   clinic: {
     id: 'clinic',
     label: 'Clinic',
@@ -1871,6 +2238,108 @@ export const RECIPES: Record<string, Recipe> = {
         jobs: [
           { class: 'technical', count: 80 },
           { class: 'professional', count: 160 },
+        ],
+      },
+    ],
+  },
+  // The grand research institution — a tier above the Schools (which teach the
+  // population; see `school`) and distinct from them: the University drives the
+  // SCIENCES across all three trees (the biggest broad source in
+  // economy/research.ts) and sells its higher-education and research work as
+  // online services, rather than schooling. Buildable, never auto-seeded.
+  university: {
+    id: 'university',
+    label: 'University',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Research University',
+        description: 'Lecture halls, graduate schools and research institutes together. The grandest seat of learning — above all it drives the sciences, the largest broad source of research a world can build, and publishes its work as online services.',
+        inputs: [
+          { good: 'consumerGoods', amount: 200 },
+          { good: 'electricity', amount: 320 },
+          { good: 'electronics', amount: 50 },
+          { good: 'precisionMachinery', amount: 20 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 760 }],
+        jobs: [
+          { class: 'technical', count: 140 },
+          { class: 'professional', count: 320 },
+          { class: 'investor', count: 20 },
+        ],
+      },
+    ],
+  },
+  // Dedicated research laboratories — one per tree. Each is the best single-tree
+  // research producer (economy/research.ts), above the broad University per tree,
+  // and sells its findings as online services (data, publications). Buildable, not
+  // auto-seeded (online services is emergent, so the seed never reaches for them).
+  physicsLab: {
+    id: 'physicsLab',
+    label: 'Physics Laboratory',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Physics Research',
+        description: 'Particle accelerators, cryostats and theory groups pushing the physical sciences — the strongest single source of Physics research.',
+        inputs: [
+          { good: 'electricity', amount: 240 },
+          { good: 'electronics', amount: 40 },
+          { good: 'precisionMachinery', amount: 25 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 340 }],
+        jobs: [
+          { class: 'professional', count: 200 },
+          { class: 'technical', count: 90 },
+          { class: 'investor', count: 10 },
+        ],
+      },
+    ],
+  },
+  engineeringLab: {
+    id: 'engineeringLab',
+    label: 'Engineering Laboratory',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Applied Engineering',
+        description: 'Test rigs, prototyping shops and materials labs turning theory into hardware — the strongest single source of Engineering research.',
+        inputs: [
+          { good: 'electricity', amount: 240 },
+          { good: 'electronics', amount: 40 },
+          { good: 'machinery', amount: 30 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 340 }],
+        jobs: [
+          { class: 'professional', count: 180 },
+          { class: 'technical', count: 110 },
+          { class: 'investor', count: 10 },
+        ],
+      },
+    ],
+  },
+  socialInstitute: {
+    id: 'socialInstitute',
+    label: 'Institute of Social Research',
+    category: 'services',
+    methods: [
+      {
+        id: 'standard',
+        label: 'Social Research',
+        description: 'Economists, sociologists and policy scholars studying how societies work — the strongest single source of Society research.',
+        inputs: [
+          { good: 'electricity', amount: 200 },
+          { good: 'consumerGoods', amount: 60 },
+          { good: 'electronics', amount: 30 },
+        ],
+        outputs: [{ good: 'onlineServices', amount: 340 }],
+        jobs: [
+          { class: 'professional', count: 210 },
+          { class: 'technical', count: 70 },
+          { class: 'investor', count: 10 },
         ],
       },
     ],
