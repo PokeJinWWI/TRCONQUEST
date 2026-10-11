@@ -1,0 +1,107 @@
+# Installed by Pokefish Multitool. Lets the Dev Lab run Claude Code agents in
+# this repository. Each run uses the Claude subscription of the person who
+# started it, through their own repository secret (POKEFISH_CLAUDE_<id>).
+name: Pokefish agent
+run-name: "pokefish:${{ inputs.run_id }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Pokefish run id
+        required: true
+        type: string
+      base_branch:
+        description: Branch to start from
+        required: true
+        type: string
+      work_branch:
+        description: Branch the agent works on
+        required: true
+        type: string
+      token_secret:
+        description: Name of the requester's Claude Code token secret
+        required: true
+        type: string
+      max_turns:
+        description: Turn limit for Claude
+        required: true
+        type: string
+        default: "80"
+      setup:
+        description: Extra setup (none or browser)
+        required: false
+        type: string
+        default: none
+      prompt:
+        description: Task prompt
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: pokefish-${{ inputs.work_branch }}
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_branch }}
+          fetch-depth: 0
+
+      - name: Create work branch
+        env:
+          WORK_BRANCH: ${{ inputs.work_branch }}
+        run: |
+          git checkout -b "$WORK_BRANCH"
+          mkdir -p pokefish-output
+
+      - name: Install browser
+        if: inputs.setup == 'browser'
+        run: npx --yes playwright@1.56.1 install --with-deps chromium
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets[inputs.token_secret] }}
+          prompt: ${{ inputs.prompt }}
+          claude_args: >-
+            --max-turns ${{ inputs.max_turns }}
+            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,WebFetch,TodoWrite"
+
+      - name: Push work branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          WORK_BRANCH: ${{ inputs.work_branch }}
+        run: |
+          git config user.name "pokefish-agent"
+          git config user.email "pokefish-agent@users.noreply.github.com"
+          git add -A -- . ':!pokefish-output'
+          if ! git diff --cached --quiet; then
+            git commit -m "Pokefish agent run $RUN_ID: uncommitted changes"
+          fi
+          if [ "$(git rev-list --count "origin/$BASE_BRANCH..HEAD")" -gt 0 ]; then
+            git push "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$WORK_BRANCH"
+          else
+            echo "No commits to push."
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokefish-output
+          path: pokefish-output/
+          if-no-files-found: ignore
+          retention-days: 14
