@@ -1,6 +1,7 @@
 # Installed by Pokefish Multitool. Lets the Dev Lab run Claude Code agents in
 # this repository. Each run uses the Claude subscription of the person who
 # started it, through their own repository secret (POKEFISH_CLAUDE_<id>).
+# pokefish-workflow-version: 2
 name: Pokefish agent
 run-name: "pokefish:${{ inputs.run_id }}"
 
@@ -16,23 +17,27 @@ on:
         required: true
         type: string
       work_branch:
-        description: Branch the agent works on
+        description: Branch the agent works on (the same as base_branch when continuing)
         required: true
         type: string
       token_secret:
         description: Name of the requester's Claude Code token secret
         required: true
         type: string
-      max_turns:
-        description: Turn limit for Claude
-        required: true
-        type: string
-        default: "80"
       setup:
         description: Extra setup (none or browser)
         required: false
         type: string
         default: none
+      claude_args:
+        description: Model, effort, turn limit and tools for Claude Code
+        required: true
+        type: string
+      settings:
+        description: Claude Code settings JSON (deny rules, compaction)
+        required: false
+        type: string
+        default: "{}"
       prompt:
         description: Task prompt
         required: true
@@ -49,19 +54,24 @@ concurrency:
 jobs:
   agent:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Check out base branch
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.base_branch }}
           fetch-depth: 0
+          # Claude gets no git credentials, so it cannot push anywhere.
+          persist-credentials: false
 
-      - name: Create work branch
+      - name: Prepare work branch
         env:
+          BASE_BRANCH: ${{ inputs.base_branch }}
           WORK_BRANCH: ${{ inputs.work_branch }}
         run: |
-          git checkout -b "$WORK_BRANCH"
+          if [ "$BASE_BRANCH" != "$WORK_BRANCH" ]; then
+            git checkout -b "$WORK_BRANCH"
+          fi
           mkdir -p pokefish-output
 
       - name: Install browser
@@ -69,13 +79,42 @@ jobs:
         run: npx --yes playwright@1.56.1 install --with-deps chromium
 
       - name: Run Claude Code
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets[inputs.token_secret] }}
           prompt: ${{ inputs.prompt }}
-          claude_args: >-
-            --max-turns ${{ inputs.max_turns }}
-            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,WebFetch,TodoWrite"
+          settings: ${{ inputs.settings }}
+          claude_args: ${{ inputs.claude_args }}
+
+      - name: Save usage and transcript
+        if: always()
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          CLAUDE_TOKEN: ${{ secrets[inputs.token_secret] }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          path = os.environ.get("EXECUTION_FILE") or ""
+          if not path or not os.path.exists(path):
+              raise SystemExit(0)
+          raw = open(path, encoding="utf-8", errors="replace").read()
+          for secret in (os.environ.get("CLAUDE_TOKEN"), os.environ.get("GH_TOKEN")):
+              if secret:
+                  raw = raw.replace(secret, "[redacted]")
+          try:
+              data = json.loads(raw)
+              messages = data if isinstance(data, list) else [data]
+          except ValueError:
+              messages = [json.loads(line) for line in raw.splitlines() if line.strip().startswith("{")]
+          results = [m for m in messages if isinstance(m, dict) and m.get("type") == "result"]
+          if results:
+              r = results[-1]
+              keep = ("total_cost_usd", "num_turns", "duration_ms", "duration_api_ms", "usage", "modelUsage", "is_error", "subtype", "session_id")
+              json.dump({k: r.get(k) for k in keep}, open("pokefish-output/usage.json", "w"))
+          json.dump(messages, open("pokefish-output/transcript.json", "w"))
+          PY
 
       - name: Push work branch
         if: always()
@@ -91,6 +130,7 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "Pokefish agent run $RUN_ID: uncommitted changes"
           fi
+          # Only ever push the work branch, whatever Claude did locally.
           if [ "$(git rev-list --count "origin/$BASE_BRANCH..HEAD")" -gt 0 ]; then
             git push "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$WORK_BRANCH"
           else
