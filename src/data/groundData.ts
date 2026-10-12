@@ -29,6 +29,10 @@ export type TerrainId =
   | 'mountains'
   | 'plateau'
   | 'urban'
+  // Developed ground the districts of an owned world become (scene/footprint.ts): industrial works, mines, farmland.
+  | 'industrial'
+  | 'mining'
+  | 'farmland'
   | 'rock'
   | 'lava'
   | 'cloud'
@@ -59,6 +63,9 @@ export const TERRAIN: Record<TerrainId, TerrainSpec> = {
   mountains: { id: 'mountains', name: 'Mountains', tint: '#7a7470', passable: 'all', moveCost: 2.5, defense: 1.5, paintable: true },
   plateau: { id: 'plateau', name: 'Plateau', tint: '#9b8c66', passable: 'all', moveCost: 1.3, defense: 1.15, paintable: true },
   urban: { id: 'urban', name: 'Urban', tint: '#a0a0ae', passable: 'all', moveCost: 1.3, defense: 1.4, paintable: true },
+  industrial: { id: 'industrial', name: 'Industrial', tint: '#b07a3c', passable: 'all', moveCost: 1.2, defense: 1.25, paintable: true },
+  mining: { id: 'mining', name: 'Mining', tint: '#8a6a4a', passable: 'all', moveCost: 1.3, defense: 1.1, paintable: true },
+  farmland: { id: 'farmland', name: 'Farmland', tint: '#7a9a4a', passable: 'all', moveCost: 1, defense: 1, paintable: true },
   rock: { id: 'rock', name: 'Barren Rock', tint: '#66605a', passable: 'all', moveCost: 1.1, defense: 1, paintable: true },
   lava: { id: 'lava', name: 'Lava', tint: '#5a1a0a', passable: 'none', moveCost: 99, defense: 1, paintable: false },
   cloud: { id: 'cloud', name: 'Cloud Deck', tint: '#3a3f55', passable: 'none', moveCost: 99, defense: 1, paintable: false },
@@ -116,7 +123,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
     rangeKmRef: CONTACT_RANGE_KM_REF,
     amphibious: false,
     holdsPosition: false,
-    terrain: { forest: { defense: 1.2 }, urban: { defense: 1.2 }, mountains: { defense: 1.2 } },
+    terrain: { forest: { defense: 1.2 }, urban: { defense: 1.2 }, industrial: { defense: 1.2 }, mountains: { defense: 1.2 } },
     description: 'The line. Holds rough ground well.',
   },
   armour: {
@@ -136,6 +143,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
       desert: { attack: 1.2 },
       forest: { speed: 0.5 },
       urban: { speed: 0.5 },
+      industrial: { speed: 0.5 },
       mountains: { impassable: true },
     },
     description: 'Fast and hard-hitting in the open; slowed by forest and cities, and can\'t cross mountains.',
@@ -182,7 +190,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeSpec> = {
     rangeKmRef: CONTACT_RANGE_KM_REF,
     amphibious: false,
     holdsPosition: true,
-    terrain: { urban: { defense: 1.3 } },
+    terrain: { urban: { defense: 1.3 }, industrial: { defense: 1.3 } },
     description: 'Static defenders. Never leave their post; strongest in cities.',
   },
 }
@@ -305,6 +313,9 @@ export const TERRAIN_RELIEF: Record<TerrainId, { base: number; amp: number }> = 
   mountains: { base: 2600, amp: 1400 },
   plateau: { base: 1900, amp: 300 },
   urban: { base: 120, amp: 60 },
+  industrial: { base: 140, amp: 60 },
+  mining: { base: 500, amp: 300 },
+  farmland: { base: 150, amp: 80 },
   rock: { base: 700, amp: 400 },
   lava: { base: 0, amp: 0 },
   cloud: { base: 0, amp: 0 },

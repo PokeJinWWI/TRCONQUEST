@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMapModeStore, type MapMode } from '../state/mapModeStore'
 import { BuildingsPanel } from './BuildingsPanel'
+import { LensPalette } from './LensPalette'
 import { useContextEconomy } from '../hooks/useContextEconomy'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
@@ -30,10 +31,11 @@ interface PanelDef {
 // not Complex mode's recipes): one tab per district, plus All.
 const SIMPLE_TAB_ALL = 'All'
 const simpleTabName = (d: SimpleDistrictId) => SIMPLE_DISTRICT_DEFS[d].name.replace(' District', '')
-const SIMPLE_SUBTABS = [SIMPLE_TAB_ALL, ...SIMPLE_DISTRICTS.map(simpleTabName)]
+const LENS_TAB = 'Build lens'
+const SIMPLE_SUBTABS = [LENS_TAB, SIMPLE_TAB_ALL, ...SIMPLE_DISTRICTS.map(simpleTabName)]
 
 const PANELS: PanelDef[] = [
-  { id: 'buildings', title: 'Buildings', icon: '⚙', mapMode: 'gdp', subtabs: ['Development', 'Agriculture', 'Resources', 'Industry', 'Services'] },
+  { id: 'buildings', title: 'Buildings', icon: '⚙', mapMode: 'gdp', subtabs: ['Build lens', 'Development', 'Agriculture', 'Resources', 'Industry', 'Services'] },
   { id: 'politics', title: 'Politics', icon: '⚖', mapMode: 'political', subtabs: ['Decrees', 'Government Actions'] },
   { id: 'diplomacy', title: 'Diplomacy', icon: '⚑', mapMode: 'political', subtabs: ['Diplomatic Actions', 'Diplomatic Demands'] },
 ]
@@ -176,7 +178,9 @@ export function ActionBar() {
             </div>
           )}
           <div className="action-dock-content">
-            {activePanel.id === 'buildings' && simple ? (
+            {activePanel.id === 'buildings' && activeSubtab === LENS_TAB ? (
+              <LensPalette bodyName={scopeName} />
+            ) : activePanel.id === 'buildings' && simple ? (
               scopeName ? <SimpleDistrictsTab key={`${scopeName}-${activeSubtab}`} countryId={playerCountryId} bodyName={scopeName} only={simpleDistrict} /> : <div className="nav-placeholder">No world selected</div>
             ) : activePanel.id === 'buildings' ? (
               <BuildingsPanel subtab={activeSubtab} worldName={scopeName} world={scopeWorld} country={scopeCountry} />

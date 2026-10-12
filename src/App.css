@@ -6825,3 +6825,218 @@ button.pl-tile.empty:hover {
   flex-wrap: wrap;
   gap: 4px;
 }
+
+/* Save slots (components/SaveSlots.tsx) */
+.save-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  min-width: 420px;
+  max-width: 640px;
+}
+.save-slot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.save-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.save-slot-name {
+  flex: 1;
+  color: #cdeeff;
+}
+.save-slot-name small {
+  display: block;
+  opacity: 0.65;
+}
+.save-slots .confirm-btn,
+.save-slot .confirm-btn {
+  width: auto;
+}
+.save-slot-files {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.save-slot-message {
+  margin: 0;
+}
+
+/* The "where?" chooser (components/planet/SiteChooser.tsx) */
+.pl-chooser {
+  border: 1px solid rgba(111, 227, 255, 0.35);
+  background: rgba(8, 22, 34, 0.9);
+  padding: 8px;
+  margin: 6px 0;
+}
+.pl-chooser-title {
+  font-size: 11px;
+  color: #cdeeff;
+  margin-bottom: 6px;
+}
+.pl-chooser-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.pl-chooser-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #cdeeff;
+  background: rgba(111, 227, 255, 0.06);
+  border: 1px solid rgba(111, 227, 255, 0.2);
+}
+.pl-chooser-row.picked {
+  border-color: #6fe3ff;
+  background: rgba(111, 227, 255, 0.18);
+}
+.pl-chooser-row.blocked {
+  opacity: 0.55;
+}
+.pl-chooser-meta {
+  opacity: 0.7;
+}
+.pl-chooser-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* By-area cards (components/planet/AreaView.tsx) */
+.pl-site-card {
+  margin-bottom: 6px;
+}
+.pl-site-card.captured {
+  border-color: #ff6b4a;
+}
+.pl-site-districts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  margin: 3px 0;
+}
+.pl-site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* The build lens on the ground map — see components/LensHud.tsx, scene/LensLayers.tsx. */
+.lens-hud {
+  position: fixed;
+  top: calc(var(--hud-top-height, 52px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(460px, calc(100% - 32px));
+  background: rgba(4, 10, 20, 0.9);
+  border: 1px solid rgba(111, 227, 255, 0.45);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #cfe9f5;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lens-hud-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lens-hud-tool {
+  font-weight: bold;
+  color: #6fe3ff;
+  flex: 1;
+}
+.lens-hud-line.ok {
+  color: #7ee8a0;
+}
+.lens-hud-line.bad {
+  color: #ff8a80;
+}
+.lens-hud-brush {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lens-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lens-group-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8ab4c4;
+  margin: 4px 0 2px;
+}
+.lens-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lens-tool {
+  background: rgba(111, 227, 255, 0.08);
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  color: #cfe9f5;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: var(--cursor-pointer);
+}
+.lens-tool:hover:not(:disabled) {
+  background: rgba(111, 227, 255, 0.18);
+}
+.lens-tool.active {
+  background: rgba(111, 227, 255, 0.35);
+  border-color: #6fe3ff;
+}
+.lens-tool:disabled {
+  opacity: 0.45;
+  cursor: var(--cursor-blocked);
+}
+.ground-key-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.ground-key-wrap .ground-key-row {
+  flex: 1;
+}
+.ground-key-rename {
+  background: transparent;
+  border: 1px solid rgba(111, 227, 255, 0.3);
+  color: #8ab4c4;
+  border-radius: 3px;
+  cursor: var(--cursor-pointer);
+}
+.ground-key-name-input {
+  flex: 1;
+  background: rgba(4, 10, 20, 0.9);
+  border: 1px solid #6fe3ff;
+  color: #cfe9f5;
+  padding: 3px 6px;
+  font-family: inherit;
+}

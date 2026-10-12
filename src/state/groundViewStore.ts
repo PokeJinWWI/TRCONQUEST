@@ -23,6 +23,9 @@ interface GroundViewState {
   mode: GroundClickMode
   // The node under the pointer (for the terrain tooltip), or null.
   hoverNode: number | null
+  // The Zoning map mode: every district's zone drawn as a bordered, tinted area with what is built inside it picked out.
+  zoningMode: boolean
+  setZoningMode: (on: boolean) => void
   // A one-line message from the last click (a refused landing, etc.).
   notice: string | null
   selectUnit: (id: string | null) => void
@@ -45,6 +48,8 @@ export const useGroundViewStore = create<GroundViewState>((set) => ({
   density: 'standard',
   mode: { kind: 'order' },
   hoverNode: null,
+  zoningMode: false,
+  setZoningMode: (zoningMode) => set({ zoningMode }),
   notice: null,
   selectUnit: (id) => set({ selectedUnitIds: id ? [id] : [] }),
   toggleUnit: (id) =>

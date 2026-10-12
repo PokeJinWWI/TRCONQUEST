@@ -1,5 +1,6 @@
 import { resetGame } from '../scene/gameReset'
 import { useMenuStore } from '../state/menuStore'
+import { SaveSlots } from './SaveSlots'
 import { SettingsPanel } from './SettingsPanel'
 
 // The Escape menu: resume, settings, and quit to the empire-select screen.
@@ -23,13 +24,16 @@ export function EscapeMenu() {
   return (
     <div className="confirm-overlay escape-menu-overlay" onClick={close}>
       <div className="confirm-box escape-menu" onClick={(e) => e.stopPropagation()}>
-        <div className="confirm-title">{view === 'settings' ? 'Settings' : view === 'quit' ? 'Quit to empire select?' : 'Paused'}</div>
+        <div className="confirm-title">{view === 'settings' ? 'Settings' : view === 'saves' ? 'Save / Load' : view === 'quit' ? 'Quit to empire select?' : 'Paused'}</div>
 
         {view === 'main' && (
           <>
             <div className="escape-menu-buttons">
               <button type="button" className="confirm-btn confirm-btn-go" onClick={close}>
                 Resume
+              </button>
+              <button type="button" className="confirm-btn" onClick={() => setView('saves')}>
+                Save / Load
               </button>
               <button type="button" className="confirm-btn" onClick={() => setView('settings')}>
                 Settings
@@ -46,6 +50,18 @@ export function EscapeMenu() {
           </>
         )}
 
+        {view === 'saves' && (
+          <>
+            {/* A loaded game is paused; the menu closing must not unpause it. */}
+            <SaveSlots canSave onLoaded={() => useMenuStore.setState({ open: false, view: 'main', pausedByMenu: false })} />
+            <div className="confirm-actions">
+              <button type="button" className="confirm-btn confirm-btn-go" onClick={() => setView('main')}>
+                Back
+              </button>
+            </div>
+          </>
+        )}
+
         {view === 'settings' && (
           <>
             <SettingsPanel />
@@ -59,7 +75,7 @@ export function EscapeMenu() {
 
         {view === 'quit' && (
           <>
-            <div className="confirm-body">The game is not saved. You will return to the empire select screen and start over.</div>
+            <div className="confirm-body">Unsaved progress is lost. You will return to the empire select screen and start over.</div>
             <div className="confirm-actions">
               <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setView('main')}>
                 Cancel

@@ -11,6 +11,7 @@
 // tiers a pop reaches) and building OWNERSHIP (state / corporation / worker),
 // which routes each building's profit to a different place.
 
+import { UNREST_SOL_CAP, UNREST_SOL_PER_POINT } from '../data/demolitionData'
 import { GOOD_IDS, GOODS, priceFloor, priceCeiling, type GoodId } from './goods'
 import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor, type NeedTier, type NeedGroup } from './species'
 import { buildingLevelsByDistrict, districtBonus, withDistrictLevel } from './districts'
@@ -861,6 +862,8 @@ function tickWorld(
     // Standard of Living: weighted needs satisfaction, smoothed.
     let solRaw = 0
     for (const tier of NEED_TIERS) solRaw += SOL_TIER_WEIGHT[tier] * nextSatisfaction[tier]
+    // People a demolition displaced are unhappy for a while (absent = none: nothing moves).
+    if (world.displacedUnrest) solRaw = Math.max(0, solRaw - Math.min(UNREST_SOL_CAP, world.displacedUnrest * UNREST_SOL_PER_POINT))
     const standardOfLiving = clamp(pop.standardOfLiving * (1 - SOL_SMOOTHING) + solRaw * SOL_SMOOTHING, 0, 1)
     // Savings beyond a buffer are deposited and lent on: a share goes into the
     // nation's investment pool each month, financing new construction — the
@@ -912,7 +915,8 @@ function tickWorld(
     // a cut costs wages, which costs demand, which triggers the next cut — and
     // still did with wages bargained over value added, even throttling only in
     // a deep glut); a glut is bled off by inventory decay + the price floor.
-    const instantScale = laborScale * inputScale
+    // A building cut off from its hub (scene/infrastructureNet.ts) can only move a share of what it makes.
+    const instantScale = laborScale * inputScale * (b.siteAccess ?? 1)
     const throughput = rampToward(b.throughput, instantScale)
     const runScale = throughput
     const outputMalus = outputFactor(b)
@@ -1790,7 +1794,7 @@ export function constructionCapacityOf(world: World): number {
 }
 
 export function districtUsage(world: World): Record<DistrictType, number> {
-  const used = { core: 0, urban: 0, industrial: 0, resource: 0, military: 0 } as Record<DistrictType, number>
+  const used = Object.fromEntries(DISTRICT_TYPES.map((d) => [d, 0])) as Record<DistrictType, number>
   for (const b of world.buildings) used[districtOfRecipe(b.recipeId)] += b.level
   for (const o of world.constructionQueue) if (!o.district) used[districtOfRecipe(o.recipeId)] += 1
   used.urban += world.foreignSlots ?? 0

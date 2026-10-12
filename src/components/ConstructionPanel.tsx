@@ -1,3 +1,5 @@
+import { SiteChooser } from './planet/SiteChooser'
+import { usePlayerStore } from '../state/playerStore'
 import { useState } from 'react'
 import { RECIPES, DISTRICT_TYPES, DISTRICT_LABELS, districtOfRecipe, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
 import { districtUsage, canBuild, estimateConstructionCost, constructionCapacityOf } from '../economy/economyTick'
@@ -10,7 +12,8 @@ const DISTRICT_COLOR: Record<string, string> = {
   core: '#c77dff',
   urban: '#6fe3ff',
   industrial: '#ffd23f',
-  resource: '#4ade80',
+  mining: '#c98a5a',
+  agricultural: '#4ade80',
 }
 
 // The full roster (~55 building types) bucketed into its finer sub-categories
@@ -40,14 +43,16 @@ export function ConstructionPanel() {
   const corporations = useEconomyStore((s) => s.corporations)
   const queueConstruction = useEconomyStore((s) => s.queueConstruction)
   const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
-  const [funder, setFunder] = useState('state')
+  // The "where?" step for a new building.
+  const [choosing, setChoosing] = useState<string | null>(null)
+  const playerId = usePlayerStore((s) => s.selectedCountryId)
 
   if (!country || !world) return <div className="nav-placeholder">No world in focus.</div>
   const rate = country.currency?.rate ?? 1
   const fmt = (n: number) => formatIED(n, rate)
   const usage = districtUsage(world)
-  const myCorps = corporations.filter((c) => c.countryId === country.id)
-  const owner: BuildingOwner = funder === 'state' ? { kind: 'state' } : { kind: 'corporation', corporationId: funder }
+  // The government spends only the government's money: a player order is always state-owned and paid from the treasury.
+  const owner: BuildingOwner = { kind: 'state' }
 
   return (
     <div className="econ-panel">
@@ -92,17 +97,19 @@ export function ConstructionPanel() {
       <div className="econ-subtitle" style={{ marginTop: 10 }}>
         Build — construction consumes materials over time
       </div>
-      <div className="econ-econsystem" style={{ marginBottom: 6 }}>
-        <span>Owner / funding:</span>
-        <select className="econ-method-select" value={funder} onChange={(e) => setFunder(e.target.value)}>
-          <option value="state">Government — state-owned, paid by the treasury</option>
-          {myCorps.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} — private, financed by the investment pool
-            </option>
-          ))}
-        </select>
+      <div className="ship-panel-hint" style={{ marginTop: 0, marginBottom: 6 }}>
+        The government builds with the government's money: the treasury pays, and the building is state-owned. Companies build with their own money, by their own decisions.
       </div>
+      {choosing && playerId && (
+        <SiteChooser
+          request={{ bodyName: world.name, builderId: playerId, title: RECIPES[choosing]?.label ?? choosing, ref: { mode: 'complex' as const, id: choosing } }}
+          onCancel={() => setChoosing(null)}
+          onChoose={(siteId) => {
+            queueConstruction(world.id, choosing, owner, siteId)
+            setChoosing(null)
+          }}
+        />
+      )}
       {RECIPE_GROUPS.map(({ group, items }) => (
         <div className="econ-build-group" key={group}>
           <div className="econ-build-group-label">{BUILDING_GROUP_LABELS[group]}</div>
@@ -116,7 +123,7 @@ export function ConstructionPanel() {
                   className="econ-build-btn"
                   disabled={!room}
                   title={room ? `Build a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${fmt(estimateConstructionCost(r.id, world.market.prices))} of materials` : `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full`}
-                  onClick={() => queueConstruction(world.id, r.id, owner)}
+                  onClick={() => setChoosing(r.id)}
                 >
                   + {r.label}
                 </button>

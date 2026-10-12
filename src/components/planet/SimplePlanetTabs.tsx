@@ -43,7 +43,8 @@ import { formatPop } from '../../economy/format'
 import { PlanetIcon } from './PlanetIcons'
 import { usePlanetViewStore } from '../../state/planetViewStore'
 import { ForeignHoldingsRow } from './ForeignHoldings'
-import { CivicDistrict, MilitaryTiles } from './KeySites'
+import { CoreCard, MilitaryTiles } from './KeySites'
+import { SiteChooser } from './SiteChooser'
 
 // Simple mode's planet screen tabs (Stellaris-style): the world's summary
 // numbers, its districts with their building slots, and its population.
@@ -263,6 +264,8 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   // A queued or progressing tile the player clicked, to stop it.
   const [stopping, setStopping] = useState<number | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  // The "where?" step: a building (with how many) or a district level waiting for its site.
+  const [choosing, setChoosing] = useState<{ building?: SimpleBuildingId; count?: number; district?: SimpleDistrictId } | null>(null)
   const [selected, setSelected] = useState<SimpleBuildingId | null>(null)
   const grouped = usePlanetViewStore((s) => s.groupBuildings)
   const setGrouped = usePlanetViewStore((s) => s.setGroupBuildings)
@@ -279,14 +282,14 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
   const addable = only ? [] : SIMPLE_DISTRICTS.filter((d) => !shown.includes(d))
 
   const run = (res: { ok: boolean; reason?: string }) => setMessage(res.ok ? null : res.reason ?? null)
-  const build = (b: SimpleBuildingId, count = qty) => {
+  const build = (b: SimpleBuildingId, count = qty, siteId?: string) => {
     if (!countryId) return
     const room = Math.max(1, freeSlots(w, queue ?? [], DISTRICT_OF_BUILDING[b]))
     const n = count === 0 ? room : count
     let last: { ok: boolean; reason?: string } = { ok: true }
     let made = 0
     for (let i = 0; i < n; i++) {
-      last = queueBuilding(countryId, bodyName, b)
+      last = queueBuilding(countryId, bodyName, b, siteId)
       if (!last.ok) break
       made++
     }
@@ -294,7 +297,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
     run(made > 0 && n > made && !last.ok ? { ok: false, reason: `Queued ${made} of ${n}: ${last.reason}` } : last)
     setPicking(null)
   }
-  const develop = (d: SimpleDistrictId) => countryId && run(queueDistrict(countryId, bodyName, d))
+  const develop = (d: SimpleDistrictId, siteId?: string) => countryId && run(queueDistrict(countryId, bodyName, d, siteId))
   const removeLevel = (d: SimpleDistrictId) => countryId && run(queueDemolishDistrict(countryId, bodyName, d))
 
   const queueList = (
@@ -345,7 +348,19 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
         </label>
       </div>
 
-      {(!only || only === 'urban') && <CivicDistrict bodyName={bodyName} />}
+      {!only && <CoreCard bodyName={bodyName} />}
+
+      {choosing && countryId && (
+        <SiteChooser
+          request={{ bodyName, builderId: countryId, title: choosing.building ? SIMPLE_BUILDING_DEFS[choosing.building].name : `${SIMPLE_DISTRICT_DEFS[choosing.district!].name} level`, ...(choosing.building ? { ref: { mode: 'simple' as const, id: choosing.building } } : { district: choosing.district }) }}
+          onCancel={() => setChoosing(null)}
+          onChoose={(siteId) => {
+            if (choosing.building) build(choosing.building, choosing.count ?? qty, siteId)
+            else develop(choosing.district!, siteId)
+            setChoosing(null)
+          }}
+        />
+      )}
 
       {shown.map((d) => {
         const def = SIMPLE_DISTRICT_DEFS[d]
@@ -378,7 +393,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                 </span>
               )}
               {canBuild && (
-                <button type="button" className="pl-develop" disabled={land <= 0} title={land <= 0 ? `Can't: no land left on ${bodyName} (every unit of land already holds a district level, queued ones included)` : `Develop another level: +${SLOTS_PER_DISTRICT} slots · ${DISTRICT_COST} construction points · uses 1 land`} onClick={() => develop(d)}>
+                <button type="button" className="pl-develop" disabled={land <= 0} title={land <= 0 ? `Can't: no land left on ${bodyName} (every unit of land already holds a district level, queued ones included)` : `Develop another level: +${SLOTS_PER_DISTRICT} slots · ${DISTRICT_COST} construction points · uses 1 land`} onClick={() => setChoosing({ district: d })}>
                   + Level
                 </button>
               )}
@@ -420,7 +435,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
               </div>
             )}
             {selected && DISTRICT_OF_BUILDING[selected] === d && (
-              <SimpleBuildingDetail w={w} b={selected} countryId={countryId} canBuild={canBuild} onBuild={() => build(selected)} onClose={() => setSelected(null)} />
+              <SimpleBuildingDetail w={w} b={selected} countryId={countryId} canBuild={canBuild} onBuild={() => setChoosing({ building: selected })} onClose={() => setSelected(null)} />
             )}
             {(() => {
               const sel = queuedHere.find((o) => o.id === stopping)
@@ -451,7 +466,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                   // A building behind a tech greys out and says which.
                   const gate = countryId ? buildingTechBlock(countryId, b) : null
                   return (
-                    <button key={b} type="button" className="pl-pick" disabled={!!gate} title={gate ? `Can't build: ${gate}\n${SIMPLE_BUILDING_DEFS[b].description}` : SIMPLE_BUILDING_DEFS[b].description} onClick={() => build(b)}>
+                    <button key={b} type="button" className="pl-pick" disabled={!!gate} title={gate ? `Can't build: ${gate}\n${SIMPLE_BUILDING_DEFS[b].description}` : SIMPLE_BUILDING_DEFS[b].description} onClick={() => setChoosing({ building: b, count: qty })}>
                       <PlanetIcon id={b} size={18} />
                       <span>{SIMPLE_BUILDING_DEFS[b].name}</span>
                       <span className="abs-dim">{gate ? gate : `${pickerSummary(b)} · ${SIMPLE_BUILDING_DEFS[b].cost} CP · ${SIMPLE_BUILDING_DEFS[b].jobs}M jobs`}</span>

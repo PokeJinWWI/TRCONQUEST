@@ -25,6 +25,7 @@ import { useSubjectStore, subjectionOf } from '../state/subjectStore'
 import { useShipStore } from '../state/shipStore'
 import { useInternationalOrgStore } from '../state/internationalOrgStore'
 import { spaceportSitesOf } from '../state/nationEconomy'
+import { applyTerritorialArticle, validateTerritorialArticle } from './territorialAgreements'
 
 export type TreatyOfferResult = { ok: true; treatyId: string } | { ok: false; reason: string }
 
@@ -83,6 +84,11 @@ function validateArticle(article: TreatyArticle, a: string, b: string): string |
       if (org.memberIds.includes(article.joiningId)) return 'Already a member'
       return null
     }
+    case 'construction-right':
+    case 'access-right':
+    case 'territorial-recognition':
+    case 'territorial-transfer':
+      return validateTerritorialArticle(article, a, b)
     default:
       return null
   }
@@ -97,6 +103,8 @@ function applyInstantArticle(article: TreatyArticle, simDays: number): void {
     useShipStore.setState((s) => ({ ships: s.ships.map((ship) => (ship.id === article.shipId ? { ...ship, ownerId: article.toId } : ship)) }))
   } else if (article.kind === 'join-power-bloc') {
     useInternationalOrgStore.getState().join(article.orgId, article.joiningId)
+  } else if (article.kind === 'territorial-recognition' || article.kind === 'territorial-transfer') {
+    applyTerritorialArticle(article, simDays)
   }
 }
 

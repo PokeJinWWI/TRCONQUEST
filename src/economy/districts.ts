@@ -25,7 +25,8 @@ export const DISTRICT_DESCRIPTIONS: Record<DistrictType, string> = {
   core: 'Government and corporate headquarters — ministries, offices, the state apparatus.',
   urban: 'Services and city life — clinics, schools, shops. A lively urban core also lifts the industry around it.',
   industrial: 'Factories, refineries, power and shipyards. Industry clusters: every plant here makes the others more productive.',
-  resource: 'Mines, wells, farms and forestry. Extraction sites here share rail, storage and processing.',
+  mining: 'Mines, wells and forestry. Extraction sites here share rail, storage and processing with the farms beside them.',
+  agricultural: 'Farms, ranches, plantations and fisheries: the land that feeds the world. Cheap to clear, slow to rebuild.',
   military: 'Fortresses, shield generators and defense batteries — the world’s planetary defenses. Each takes one slot while it stands.',
 }
 
@@ -55,14 +56,16 @@ export function freeLandOfWorld(world: Pick<World, 'districtCapacity' | 'distric
 
 // Building levels in each district (built buildings only).
 export function buildingLevelsByDistrict(world: Pick<World, 'buildings'>): Record<DistrictType, number> {
-  const out = { core: 0, urban: 0, industrial: 0, resource: 0, military: 0 } as Record<DistrictType, number>
+  const out = Object.fromEntries(DISTRICT_TYPES.map((d) => [d, 0])) as Record<DistrictType, number>
   for (const b of world.buildings) out[districtOfRecipe(b.recipeId)] += b.level
   return out
 }
 
 // The ecosystem bonus for one district of a world.
 export function districtBonus(world: Pick<World, 'buildings' | 'districtCapacity' | 'districts'>, d: DistrictType, levels = buildingLevelsByDistrict(world)): { cluster: number; link: number; total: number } {
-  const cluster = Math.min(CLUSTER_MAX, CLUSTER_PER_LEVEL * Math.max(0, levels[d] - 1))
+  // The mining and agricultural districts share rail, storage and processing: one ecosystem, as when they were a single resource district.
+  const grouped = d === 'mining' || d === 'agricultural' ? levels.mining + levels.agricultural : levels[d]
+  const cluster = Math.min(CLUSTER_MAX, CLUSTER_PER_LEVEL * Math.max(0, grouped - 1))
   const link = d === 'industrial' ? Math.min(LINK_MAX, URBAN_TO_INDUSTRIAL * districtLevels(world).urban) : 0
   return { cluster, link, total: cluster + link }
 }
@@ -79,5 +82,20 @@ export function withDistrictLevel(world: World, d: DistrictType): World {
     ...world,
     districts: { ...lv, [d]: lv[d] + 1 },
     districtCapacity: { ...world.districtCapacity, [d]: (world.districtCapacity[d] ?? 0) + SLOTS_PER_DISTRICT_LEVEL },
+  }
+}
+
+// A world with one level of `d` taken away (its slots too), or why it cannot be: what stands in the district, or is queued for it, must still fit.
+export function withoutDistrictLevel(world: World, d: DistrictType): { ok: true; world: World } | { ok: false; reason: string } {
+  const lv = districtLevels(world)
+  if (lv[d] <= 0) return { ok: false, reason: 'There is no such district level.' }
+  const capacityAfter = (lv[d] - 1) * SLOTS_PER_DISTRICT_LEVEL
+  let used = 0
+  for (const b of world.buildings) if (districtOfRecipe(b.recipeId) === d) used += b.level
+  for (const o of world.constructionQueue) if (!o.district && districtOfRecipe(o.recipeId) === d) used += 1
+  if (used > capacityAfter) return { ok: false, reason: 'Its buildings would no longer fit: take some down first.' }
+  return {
+    ok: true,
+    world: { ...world, districts: { ...lv, [d]: lv[d] - 1 }, districtCapacity: { ...world.districtCapacity, [d]: Math.max(0, (world.districtCapacity[d] ?? 0) - SLOTS_PER_DISTRICT_LEVEL) } },
   }
 }

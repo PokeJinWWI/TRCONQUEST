@@ -37,6 +37,11 @@ import { HOLO_TERRAIN } from './holoTerrain'
 import { DistanceThresholdWatcher } from './DistanceThresholdWatcher'
 import { isAdditiveClick } from './selectionInput'
 import { useGroundKeySurface } from '../hooks/useGroundKeySurface'
+import { ensureSeededFor } from './placementOrders'
+import { LensLayers } from './LensLayers'
+import { LensHud } from '../components/LensHud'
+import { lensClick, lensHover, lensRightClick } from './lensActions'
+import { useLensStore } from '../state/lensStore'
 import { GroundPanel, UnitCard, describeDefense, describeMoveCost, handleGroundClick, orderSelectedUnitsTo, targetWithSelection } from '../components/GroundPanel'
 
 // The planetary map: a world's surface as a globe of terrain, its front lines
@@ -74,6 +79,11 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
   // Every key node the war recognises: the terrain's, the economy's
   // spaceports, the installations' (hooks/useGroundKeySurface).
   const surface = useGroundKeySurface(bodyName)
+  // A world's starting districts and buildings are assigned to their sites the first time anything needs to know where they are;
+  // the map is the thing that shows them, so opening it does that (the surface then redraws with its districts).
+  useEffect(() => {
+    ensureSeededFor(bodyName)
+  }, [bodyName])
 
   // Leaving the map ends any landing/spawn pick, and drops the selection.
   // Only once the view has really changed — React's dev StrictMode runs this
@@ -86,6 +96,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
       useGroundViewStore.getState().setMode({ kind: 'order' })
       useGroundViewStore.getState().selectUnits([])
       useGroundViewStore.getState().setHoverNode(null)
+      useLensStore.getState().arm(null)
     },
     [bodyName],
   )
@@ -112,6 +123,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <SurfaceGlobe surface={surface} />
           <SurfaceGrid />
           <FrontLines surface={surface} />
+          <LensLayers surface={surface} />
           <KeyNodeMarkers surface={surface} />
           <InstallationMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
@@ -129,6 +141,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <SurfaceGlobe surface={surface} />
           <SurfaceGrid />
           <FrontLines surface={surface} />
+          <LensLayers surface={surface} />
           <KeyNodeMarkers surface={surface} />
           <InstallationMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
@@ -144,6 +157,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
       <GroundPanel bodyName={bodyName} surface={surface} />
       <UnitCard bodyName={bodyName} surface={surface} />
       <HoverTooltip bodyName={bodyName} surface={surface} />
+      <LensHud />
     </div>
   )
 }
@@ -252,16 +266,25 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
       onPointerMove={(e) => {
         e.stopPropagation()
         const node = nearestNode(pointOf(e), 'fine')
-        if (useGroundViewStore.getState().hoverNode !== node) useGroundViewStore.getState().setHoverNode(node)
+        if (useGroundViewStore.getState().hoverNode !== node) {
+          useGroundViewStore.getState().setHoverNode(node)
+          // With a tool in hand the pointer previews what a click would do there.
+          const armed = useLensStore.getState().armed
+          if (armed) useLensStore.getState().setHover(lensHover(bodyName, node, armed))
+        }
       }}
       onPointerOut={() => useGroundViewStore.getState().setHoverNode(null)}
       onClick={(e) => {
         e.stopPropagation()
+        const armed = useLensStore.getState().armed
+        if (armed) return lensClick(bodyName, nearestNode(pointOf(e), 'fine'), armed)
         handleGroundClick(bodyName, pickNode(e))
       }}
       onContextMenu={(e) => {
         e.stopPropagation()
         e.nativeEvent.preventDefault()
+        const armed = useLensStore.getState().armed
+        if (armed) return lensRightClick(bodyName, nearestNode(pointOf(e), 'fine'), armed)
         orderSelectedUnitsTo(pickNode(e))
       }}
     >

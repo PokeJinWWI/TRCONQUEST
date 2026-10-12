@@ -113,10 +113,16 @@ export interface ConstructionOrder {
   // when the order is queued. Government orders are state-funded; private
   // (corporation) orders are funded from the company's cash.
   owner: BuildingOwner
+  // The development site the building will stand on (scene/locations.ts); absent on a
+  // district order and on orders made before sites existed.
+  siteId?: string
 }
 
 export interface Building {
   id: string
+  // The share (0..1) of its output that can reach a hub from the site it stands on (scene/infrastructureNet.ts),
+  // set by the main thread before each month. Absent = 1: nothing is in the way.
+  siteAccess?: number
   recipeId: string
   // The production method currently in use (see recipes.ts). Player-switchable
   // on owned worlds; changes inputs, outputs, and the worker mix.
@@ -165,6 +171,8 @@ export interface LaborMarket {
 // local market and labor market, but NO treasury or tax policy: those belong to
 // its owning country (the v1 mistake this restructure fixes).
 export interface World {
+  // Unrest from displaced people (state/unrestStore), set by the main thread before each month. Absent = none.
+  displacedUnrest?: number
   // The rendered body's name, e.g. 'Mars' / 'Lalande 21185 d'.
   id: string
   name: string

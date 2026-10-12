@@ -47,6 +47,17 @@ export interface EmpireUpdate {
   samples: Record<string, FiscalSample[]>
 }
 
+// The empires' economies as a save holds them. The seed (trade groups, which world
+// belongs to which empire) is deterministic and rebuilt by start(), so only the
+// evolving state is kept.
+export interface EmpireSave {
+  tick: number
+  countries: Country[]
+  worlds: World[]
+  corporations: Corporation[]
+  banks: Bank[]
+}
+
 export class EmpireSim {
   private economy: EmpireEconomy | null = null
   private state: { countries: Country[]; worlds: World[]; corporations: Corporation[]; banks: Bank[] } | null = null
@@ -96,6 +107,20 @@ export class EmpireSim {
       }
     }
     return { tick: this.tick, summaries, samples: out.samples }
+  }
+
+  // null when the empires are not running.
+  exportState(): EmpireSave | null {
+    if (!this.state) return null
+    return { tick: this.tick, ...this.state }
+  }
+
+  // Seeds (so trade groups and ownership are the deterministic ones), then puts the saved state in.
+  importState(save: EmpireSave): void {
+    this.stop()
+    this.start()
+    this.state = { countries: save.countries, worlds: save.worlds, corporations: save.corporations, banks: save.banks }
+    this.tick = save.tick
   }
 
   // One empire in full (null if it has no economy): for whatever observes it.

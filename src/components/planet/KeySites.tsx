@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DEFENSE_DEFS, MILITARY_KINDS, type DefenseKind } from '../../data/defenseData'
 import { RESOURCE_TYPES, type ResourceId } from '../../data/resourceData'
 import { ownerDisplay } from '../../data/countryRoster'
@@ -10,6 +10,9 @@ import { isActive, isMilitaryInstallation, withInstallationKeys } from '../../sc
 import { keyNameOf } from '../../scene/keyNames'
 import { KEY_BUILDING_ICON, keyBuildingsOf, type KeyBuilding } from '../../scene/keyBuildings'
 import { PlanetIcon } from './PlanetIcons'
+import { useCivicDetailStore, useCivicStore } from '../../state/civicStore'
+import { ensureSeeded } from '../../scene/seedPlacementOrders'
+import type { CivicBuilding } from '../../scene/civic'
 import { useGroundKeySurface } from '../../hooks/useGroundKeySurface'
 
 // The planet screen's key sites (both economy modes): the Civic group — the
@@ -34,30 +37,62 @@ function tooltip(k: KeyBuilding): string {
   return `${k.name}\n${k.description}\n${k.building ? 'Under construction.' : `Key node: ${k.place}${k.native ? ` ${k.native}` : ''} · held by ${holder}${k.captured ? ' (captured)' : ''}`}\n${k.role}\nTakes no district slot; can't be demolished.`
 }
 
-function KeyTile({ k }: { k: KeyBuilding }) {
+// The civic buildings (the Senate House, the landmarks, each city's municipal government building, a colony's station): REAL
+// buildings in the Core district. Seeded the first time the world is looked at (scene/seedPlacementOrders.ensureSeeded); click one
+// to open it. Spaceports are not here: they are ordinary Urban buildings.
+export function useCivicBuildings(bodyName: string): CivicBuilding[] {
+  const list = useCivicStore((s) => s.civic[bodyName])
+  useEffect(() => {
+    if (!list) ensureSeeded(bodyName)
+  }, [bodyName, list])
+  return list ?? []
+}
+
+function CivicTile({ bodyName, c, holder }: { bodyName: string; c: CivicBuilding; holder: { id?: string; captured: boolean } }) {
   return (
-    <div className={`pl-tile pl-key-tile${k.captured ? ' captured' : ''}${k.building ? ' queued' : ''}`} title={tooltip(k)}>
-      <PlanetIcon id={KEY_BUILDING_ICON[k.kind]} size={22} />
-      <span className="pl-tile-name">{k.name}</span>
-      {k.captured && <span className="pl-key-flag" style={{ background: ownerDisplay(k.holder!).color }} />}
-    </div>
+    <button type="button" className={`pl-tile pl-key-tile${holder.captured ? ' captured' : ''}`} title={`${c.name}\n${c.description}\nKey node: ${c.place}${c.native ? ` ${c.native}` : ''}\n${c.role}`} onClick={() => useCivicDetailStore.getState().openBuilding(bodyName, c.id)}>
+      <PlanetIcon id={KEY_BUILDING_ICON[c.kind]} size={22} />
+      <span className="pl-tile-name">{c.name}</span>
+      {holder.captured && holder.id && <span className="pl-key-flag" style={{ background: ownerDisplay(holder.id).color }} />}
+    </button>
   )
 }
 
-// The Civic group: one card, above the districts.
-export function CivicDistrict({ bodyName }: { bodyName: string }) {
-  const keys = useKeyBuildings(bodyName)
-  if (keys.length === 0) return null
-  const nodes = new Set(keys.filter((k) => !k.building).map((k) => k.node)).size
+function useCivicHolders(bodyName: string) {
+  const owner = useTerritoryStore((s) => s.bodyOwner[bodyName])
+  const holders = useTerritoryStore((s) => s.nodeHolders[bodyName])
+  return (c: CivicBuilding) => {
+    const holder = holders?.[c.node] ?? owner
+    return { id: holder, captured: !!holder && !!owner && holder !== owner }
+  }
+}
+
+// The tiles of the Core district's civic buildings, for the Core district's grid.
+export function CivicTiles({ bodyName }: { bodyName: string }) {
+  const list = useCivicBuildings(bodyName)
+  const holderOf = useCivicHolders(bodyName)
   return (
-    <div className="pl-district pl-district-civic">
-      <div className="pl-district-head" title="The buildings that are this world's key nodes in a ground war: hold them all to hold the world. They take no district slot and can't be demolished.">
+    <>
+      {list.map((c) => (
+        <CivicTile key={c.id} bodyName={bodyName} c={c} holder={holderOf(c)} />
+      ))}
+    </>
+  )
+}
+
+// Simple mode's Core card: the same civic buildings (government takes no district levels there, so the card is display-only).
+export function CoreCard({ bodyName }: { bodyName: string }) {
+  const list = useCivicBuildings(bodyName)
+  if (list.length === 0) return null
+  return (
+    <div className="pl-district pl-district-c-core">
+      <div className="pl-district-head" title="Government buildings: the seat of government, its landmarks and each city's municipal building. They take no slot, cost nothing to keep and cannot be demolished; the node they stand on is a key node in a ground war.">
         <PlanetIcon id="civic" size={20} />
-        <span className="pl-district-name">Civic — key sites</span>
-        <span className="pl-district-slots">{nodes} key node{nodes === 1 ? '' : 's'}</span>
+        <span className="pl-district-name">Core District</span>
+        <span className="pl-district-slots">{list.length} building{list.length === 1 ? '' : 's'}</span>
       </div>
       <div className="pl-grid">
-        {keys.map((k) => <KeyTile key={k.id} k={k} />)}
+        <CivicTiles bodyName={bodyName} />
       </div>
     </div>
   )

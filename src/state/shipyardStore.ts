@@ -107,7 +107,6 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
     if (shipClass.devOnly) return { ok: false, reason: `${shipClass.name} is a dev-only hull.` }
     const missingTech = techBlock(shipClass, useTechStore.getState().stateFor(countryId).researched)
     if (missingTech) return { ok: false, reason: `Needs ${missingTech} researched.` }
-    if (shipClass.role === 'colony' && !isAbstractEconomy()) return { ok: false, reason: 'Colonies need Simple economy mode for now.' }
     if (get().ordersFor(countryId).length >= MAX_QUEUED_BUILDS) return { ok: false, reason: 'The build queue is full.' }
 
     let cost: ResourceCost = {}

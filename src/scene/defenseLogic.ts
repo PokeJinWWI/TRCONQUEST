@@ -74,6 +74,19 @@ export function placeInstallation(surface: BodySurface, existing: Installation[]
   return best >= 0 ? best : null
 }
 
+// May an installation stand at `node`? The same ground rules `placeInstallation` follows, for a place the player chose: walkable
+// ground of the mainland that units can stand on, not on a key node, and not crowding another installation.
+export function judgeInstallationNode(surface: BodySurface, existing: Installation[], node: number): { ok: true } | { ok: false; reason: string } {
+  if (!Number.isInteger(node) || node < 0 || node >= surfaceMesh().count.fine) return { ok: false, reason: 'That is not a place on the map.' }
+  if (surface.landComponent[node] !== surface.mainland) return { ok: false, reason: 'Only ground on the main landmass can be built on.' }
+  if (!TERRAIN[terrainAt(surface, node)].paintable) return { ok: false, reason: 'Nothing can be built on that kind of ground.' }
+  if (surface.keySlots.some((k) => k.node === node)) return { ok: false, reason: 'A key site already stands there.' }
+  const spacing = cellsToRad(INSTALLATION_SPACING_CELLS)
+  const p = nodePoint(node)
+  if (existing.some((i) => i.bodyName === surface.bodyName && arc(nodePoint(i.node), p) < spacing)) return { ok: false, reason: 'Too close to another installation.' }
+  return { ok: true }
+}
+
 // The surface with the key nodes installations add: active fortresses (an
 // invader must hold them too, and the ground AI goes for them like any key
 // node) and a built spaceport (the world's spaceport key node — where its new

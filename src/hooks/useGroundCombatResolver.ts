@@ -1,3 +1,4 @@
+import { makeSupplyFn } from '../scene/groundSupply'
 import { useEffect } from 'react'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useArmyStore } from '../state/armyStore'
@@ -98,7 +99,7 @@ export function resolveGroundWar(simDays: number): void {
       return surface && installations.length > 0 ? withFortressKeys(surface, installations, simDays) : surface
     },
   }
-  const coarse = stepGroundWar({ ...world, armies: reaped, engagedUnitIds: engagedUnitIds(battlesBefore), installations }, from, simDays)
+  const coarse = stepGroundWar({ ...world, armies: reaped, engagedUnitIds: engagedUnitIds(battlesBefore), installations, supplyOf: makeSupplyFn() }, from, simDays)
   if (coarse.installations && coarse.installations !== installations) useDefenseStore.getState().setInstallations(coarse.installations)
   for (const gone of coarse.destroyedInstallations ?? []) {
     const owner = territory.bodyOwner[gone.bodyName]

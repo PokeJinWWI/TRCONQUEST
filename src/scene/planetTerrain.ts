@@ -36,7 +36,7 @@ import { fromLonLat } from './mapProjection'
 import { COUNTRIES, type FixedCity } from '../data/countryData'
 import { hasTopography, landValuesOf, realTerrain, reliefOf, topographyOf } from './bodyTopography'
 
-export const TERRAIN_IDS: TerrainId[] = ['ocean', 'plains', 'forest', 'desert', 'tundra', 'mountains', 'plateau', 'urban', 'rock', 'lava', 'cloud', 'aerostat']
+export const TERRAIN_IDS: TerrainId[] = ['ocean', 'plains', 'forest', 'desert', 'tundra', 'mountains', 'plateau', 'urban', 'rock', 'lava', 'cloud', 'aerostat', 'industrial', 'mining', 'farmland']
 const TERRAIN_INDEX = Object.fromEntries(TERRAIN_IDS.map((t, i) => [t, i])) as Record<TerrainId, number>
 
 // How settled a world is, which decides its key nodes:

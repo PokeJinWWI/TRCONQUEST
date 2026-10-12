@@ -1,6 +1,12 @@
 // Colonies and Influence, store side: founding a colony from a Colony Ship,
 // the seeded colonies, settlers and the monthly Influence. The rules are pure in
 // scene/colonyLogic.ts; hooks/useColonyResolver.ts promotes micro-colonies.
+import { decideConstructionNow, strengthenBySettlementNow } from './sovereignty'
+import { locationsOf } from './locations'
+import { arc, nodePoint } from './surfaceMesh'
+import { seedColonyWorld } from '../economy/colonySeed'
+import { useEconomyStore, worldByName } from '../state/economyStore'
+import { siteOwner, useLocationStore } from '../state/locationStore'
 import { confirmRiskyJump } from './jumpConfirm'
 import {
   COLONY_FOUNDING_DAYS,
@@ -91,7 +97,6 @@ export type ColonizeResult = { ok: true } | { ok: false; reason: string }
 // Whether this Colony Ship could found a colony on `bodyName` now.
 // `anywhere` skips "must be in orbit there" (for a menu that flies it there).
 export function canColonize(ship: ShipInstance, bodyName: string, opts: { anywhere?: boolean } = {}): ColonizeResult {
-  if (!isAbstractEconomy()) return { ok: false, reason: 'Colonies need Simple economy mode for now' }
   if (resolveShipClass(ship.classId)?.role !== 'colony') return { ok: false, reason: 'Only a Colony Ship can found a colony' }
   if (!opts.anywhere && orbitedBody(ship) !== bodyName) return { ok: false, reason: `The ship must be in orbit of ${bodyName}` }
   // The one survey rule (a nation knows the bodies of a system it owns a world in).
@@ -102,6 +107,9 @@ export function canColonize(ship: ShipInstance, bodyName: string, opts: { anywhe
   }
   const owner = useTerritoryStore.getState().bodyOwner[bodyName]
   if (owner) return { ok: false, reason: owner === ship.ownerId ? `You already hold ${bodyName}` : `${nameOf(owner)} already holds ${bodyName}` }
+  // Who may settle HERE is a question of jurisdiction at the place, not of who is nearest (scene/sovereignty.ts).
+  const rights = decideConstructionNow(ship.ownerId, { kind: 'body', id: bodyName }, 'colony')
+  if (!rights.allowed) return { ok: false, reason: rights.reason }
   const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
   if (!surface || surface.mainland < 0) return { ok: false, reason: `${bodyName} has no land to settle` }
   if (hostileWarshipsAt(ship.ownerId, bodyName, useShipStore.getState().ships, atWar).length > 0) return { ok: false, reason: 'Enemy warships hold the orbit' }
@@ -145,15 +153,20 @@ export function foundColony(shipId: string, bodyName: string, simDays: number): 
   const check = canColonize(ship, bodyName)
   if (!check.ok) return false
   const owner = ship.ownerId
+  const economy = colonyWorldFor(owner, bodyName, ship.settlers ?? 0)
+  if (!economy) return false
   // Inside someone else's borders: allowed, at a diplomatic cost (scene/encroachment.ts).
   const colonyStar = bodyStarId(bodyName)
   if (colonyStar) recordEncroachments(owner, colonyStar, 'colony', simDays, useStarbaseStore.getState().starbases)
   useTerritoryStore.getState().claimBody(bodyName, owner)
-  useAbstractEconomyStore.getState().addColonyWorld(bodyName, ship.settlers ?? 0, Math.min(landForBody(bodyName), MICRO_COLONY_LAND))
+  economy()
   const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
   const outpostNode = surface ? placeOutpostNode(surface) : null
+  // The colony is a PLACE: a settlement site on the body, established for its nation, with a
+  // settlement claim over the site and the ground around it (scene/sovereignty.ts).
+  const siteId = outpostNode !== null ? establishColonySite(owner, bodyName, outpostNode, simDays) : undefined
   if (outpostNode !== null) {
-    useColonyStore.getState().addColony({ bodyName, outpostNode, stage: 'micro', foundedSimDays: simDays, orbitSecureSinceSimDays: null })
+    useColonyStore.getState().addColony({ bodyName, outpostNode, stage: 'micro', foundedSimDays: simDays, orbitSecureSinceSimDays: null, ...(siteId ? { siteId } : {}) })
     useArmyStore.getState().addArmy({ ownerId: owner, kind: 'garrison', location: { kind: 'body', bodyName }, anchorNode: outpostNode })
   }
   useShipStore.getState().removeShip(shipId)
@@ -161,18 +174,47 @@ export function foundColony(shipId: string, bodyName: string, simDays: number): 
   return true
 }
 
+// How a colony's people enter the nation's economy, in whichever mode is running: null if they
+// cannot (Complex mode with no capital world to take its culture from); otherwise the call that
+// adds the world. The same founding in both modes (docs/territorial-design.md section 3).
+function colonyWorldFor(owner: string, bodyName: string, settlers: number): (() => void) | null {
+  if (isAbstractEconomy()) return () => useAbstractEconomyStore.getState().addColonyWorld(bodyName, settlers, Math.min(landForBody(bodyName), MICRO_COLONY_LAND))
+  const capital = getCountry(owner)?.capitalBodyName
+  const home = capital ? worldByName(useEconomyStore.getState().worlds, capital) : undefined
+  const world = home ? seedColonyWorld({ bodyName, ownerId: owner, settlers, home }) : null
+  return world ? () => useEconomyStore.getState().addWorld(world) : null
+}
+
+// The settlement site a new colony stands on: the free one nearest its outpost (the body's own
+// first one if the body has none near). Establishes it for the nation and files the settlement
+// claim; undefined for a body with no settlement site (which then has no claim either).
+function establishColonySite(owner: string, bodyName: string, outpostNode: number, simDays: number): string | undefined {
+  const free = locationsOf(bodyName).filter((l) => l.kind === 'settlement' && (!siteOwner(l.id) || siteOwner(l.id) === owner))
+  if (free.length === 0) return undefined
+  const here = nodePoint(outpostNode)
+  const site = [...free].sort((a, b) => arc(nodePoint(a.node!), here) - arc(nodePoint(b.node!), here) || a.id.localeCompare(b.id))[0]
+  if (!useLocationStore.getState().establish(site.id, owner, simDays)) return undefined
+  strengthenBySettlementNow(owner, site.id, simDays)
+  return site.id
+}
+
 // A Colony Ship just built takes its settlers from its capital's population
-// (Simple mode, which is where colonies exist).
+// (either mode: the same number of people leave the capital's pops).
 export function embarkSettlers(shipId: string, countryId: string): void {
   const capacity = resolveShipClass(useShipStore.getState().ships.find((s) => s.id === shipId)?.classId ?? '')?.settlerCapacity ?? 0
-  if (capacity <= 0 || !isAbstractEconomy()) return
+  if (capacity <= 0) return
   const capital = getCountry(countryId)?.capitalBodyName ?? COUNTRIES.find((c) => c.id === countryId)?.capitalBodyName
-  const world = capital ? useAbstractEconomyStore.getState().worlds[capital] : undefined
-  if (!capital || !world) return
-  const taken = Math.max(0, Math.min(capacity, world.population - SETTLER_SOURCE_FLOOR))
-  if (taken <= 0) return
-  useAbstractEconomyStore.getState().adjustPopulation(capital, -taken)
-  useShipStore.getState().setSettlers(shipId, taken)
+  if (!capital) return
+  let taken = 0
+  if (isAbstractEconomy()) {
+    const world = useAbstractEconomyStore.getState().worlds[capital]
+    if (!world) return
+    taken = Math.max(0, Math.min(capacity, world.population - SETTLER_SOURCE_FLOOR))
+    if (taken > 0) useAbstractEconomyStore.getState().adjustPopulation(capital, -taken)
+  } else {
+    taken = useEconomyStore.getState().takeSettlers(capital, capacity, SETTLER_SOURCE_FLOOR)
+  }
+  if (taken > 0) useShipStore.getState().setSettlers(shipId, taken)
 }
 
 // A Colony Ship placed by a cheat (the Debug Console, the Sandbox panel) comes with
@@ -283,4 +325,23 @@ export function sendToColonize(ship: ShipInstance, systemId: string, bodyName: s
     useShipStore.getState().setArrivalCommand(ship.id, { starId: systemId, bodyName, command: { kind: 'colonize', bodyName } })
     queueMoveOrder(ship, destination)
   })
+}
+
+// A game saved before colonies stood on sites (docs/territorial-design.md M13): every colony gets the settlement site
+// nearest its outpost, established for its owner, with its settlement claim. Body ownership is left exactly as it was
+// saved: it was recognized body-wide sovereignty before and stays so, and nothing is widened to a system.
+export function upgradeLegacyColonies(simDays: number): number {
+  let upgraded = 0
+  const { colonies, setColonies } = useColonyStore.getState()
+  const next = { ...colonies }
+  for (const [body, colony] of Object.entries(colonies)) {
+    const owner = useTerritoryStore.getState().bodyOwner[body]
+    if (colony.siteId || !owner) continue
+    const siteId = establishColonySite(owner, body, colony.outpostNode, simDays)
+    if (!siteId) continue
+    next[body] = { ...colony, siteId }
+    upgraded++
+  }
+  if (upgraded > 0) setColonies(next)
+  return upgraded
 }

@@ -1,8 +1,9 @@
+import { useStructureStore } from './structureStore'
 import { create } from 'zustand'
 import { DEFENSE_DEFS, isMilitaryKind, type DefenseKind } from '../data/defenseData'
 import { controllerOf } from '../scene/territory'
 import { groundSurface } from '../scene/groundLogic'
-import { holderOfInstallation, hostileBatteries, placeInstallation, shieldBlocksLanding, withInstallationKeys, type Installation } from '../scene/defenseLogic'
+import { holderOfInstallation, hostileBatteries, judgeInstallationNode, placeInstallation, shieldBlocksLanding, withInstallationKeys, type Installation } from '../scene/defenseLogic'
 import { militarySlotsOf, spaceportSitesOf, syncMilitarySlots } from './nationEconomy'
 import { withSpaceportKeys } from '../scene/spaceportSites'
 import { withOutpostKey } from '../scene/colonyLogic'
@@ -26,7 +27,11 @@ interface DefenseState {
   installations: Installation[]
   // Build one on a world the nation owns and holds: paid now from its
   // stockpile, ready after the kind's build time (an absolute deadline).
-  build: (countryId: string, bodyName: string, kind: DefenseKind, simDays: number) => DefenseResult
+  // `opts.node` is a place the player chose (checked by scene/defenseLogic.judgeInstallationNode); without one it stands as near
+  // the key node it guards as it can. `opts.name` names it.
+  build: (countryId: string, bodyName: string, kind: DefenseKind, simDays: number, opts?: { node?: number; name?: string }) => DefenseResult
+  // Names (or, with an empty name, un-names) an installation.
+  renameInstallation: (id: string, name: string) => void
   // Write back the ground war's / bombardment's result (integrity, removals).
   setInstallations: (installations: Installation[]) => void
 }
@@ -79,11 +84,15 @@ export function groundKeySurface(bodyName: string, owners = useTerritoryStore.ge
 // The terrain's key nodes plus the colony's planetary outpost and the
 // economy's spaceports (no installations yet).
 export function groundPortSurface(bodyName: string, owners = useTerritoryStore.getState().bodyOwner): BodySurface | null {
-  const terrain = groundSurface(bodyName, owners)
-  if (!terrain) return null
-  const surface = withOutpostKey(terrain, useColonyStore.getState().colonies[bodyName]?.outpostNode)
+  const surface = portBaseSurface(bodyName, owners)
+  if (!surface) return null
   const sites = spaceportSitesOf(bodyName)
-  return sites.length > 0 ? withSpaceportKeys(surface, sites) : surface
+  return sites.length > 0 ? withSpaceportKeys(surface, sites, useStructureStore.getState().ports[bodyName]) : surface
+}
+// The ground with the colony's outpost, before the economy's spaceports are added (what the auto-placed ones are placed against).
+export function portBaseSurface(bodyName: string, owners = useTerritoryStore.getState().bodyOwner): BodySurface | null {
+  const terrain = groundSurface(bodyName, owners)
+  return terrain ? withOutpostKey(terrain, useColonyStore.getState().colonies[bodyName]?.outpostNode) : null
 }
 // Kept for callers written before spaceport sites: the same surface.
 export const liveGroundSurface = groundKeySurface
@@ -112,13 +121,20 @@ export function canBuildDefense(countryId: string, bodyName: string, kind: Defen
 
 export const useDefenseStore = create<DefenseState>((set, get) => ({
   installations: [],
-  build: (countryId, bodyName, kind, simDays) => {
+  build: (countryId, bodyName, kind, simDays, opts) => {
     const installations = get().installations
     const check = canBuildDefense(countryId, bodyName, kind, installations)
     if (!check.ok) return check
     const surface = groundSurface(bodyName, useTerritoryStore.getState().bodyOwner)
     if (!surface) return { ok: false, reason: 'No ground to build on' }
-    const node = placeInstallation(surface, installations, kind)
+    let node: number | null
+    if (opts?.node !== undefined) {
+      // The key nodes of the world as the war sees it (ports included), so a chosen place cannot sit on one.
+      const keyed = groundKeySurface(bodyName) ?? surface
+      const judged = judgeInstallationNode(keyed, installations, opts.node)
+      if (!judged.ok) return judged
+      node = opts.node
+    } else node = placeInstallation(surface, installations, kind)
     if (node === null) return { ok: false, reason: 'No room left on the ground' }
     const def = DEFENSE_DEFS[kind]
     spendCost(countryId, def.cost)
@@ -131,10 +147,20 @@ export const useDefenseStore = create<DefenseState>((set, get) => ({
       integrity: def.integrity,
       builtBy: countryId,
       readySimDays: simDays + def.buildDays,
+      ...(opts?.name?.trim() ? { name: opts.name.trim().slice(0, 40) } : {}),
     }
     set({ installations: [...installations, inst] })
     return { ok: true }
   },
+  renameInstallation: (id, name) =>
+    set((s) => ({
+      installations: s.installations.map((i) => {
+        if (i.id !== id) return i
+        const { name: _drop, ...rest } = i
+        void _drop
+        return name.trim() ? { ...rest, name: name.trim().slice(0, 40) } : rest
+      }),
+    })),
   setInstallations: (installations) => set({ installations }),
 }))
 

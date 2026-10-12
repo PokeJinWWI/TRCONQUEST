@@ -84,6 +84,9 @@ export interface GroundWorld {
   // their holder's nearby units fight harder; units with no enemy unit in
   // range fire on enemy installations and destroy them. Omitted = none.
   installations?: Installation[]
+  // How well supplied a nation's units are at a node, 0..1 (scene/groundSupply.ts: the same freight network the economy
+  // uses): resting units recover their strength at this share of the normal rate. Omitted = fully supplied, as before.
+  supplyOf?: (countryId: string, bodyName: string, node: number) => number
 }
 
 export interface Occupation {
@@ -251,7 +254,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
         if (holderOf(body, node, owners, holders) !== army.ownerId) continue
         const list = mutable()
         const target = list.find((a) => a.id === army.id)!.units.find((u) => u.id === unit.id)!
-        target.strength = Math.min(target.maxStrength, target.strength + target.maxStrength * UNIT_REGEN_PER_DAY * days)
+        target.strength = Math.min(target.maxStrength, target.strength + target.maxStrength * UNIT_REGEN_PER_DAY * days * (world.supplyOf?.(army.ownerId, body, node) ?? 1))
       }
     }
   }
@@ -423,7 +426,7 @@ export function stepGroundWar(world: GroundWorld, fromStep: number, toSimDays: n
       if (engaged.has(u.id) || u.firingAtId || (u.path?.length ?? 0) > 0 || u.strength >= u.maxStrength) continue
       const node = nearestNode(u.position!, 'fine', u.nodeHint)
       if (holderOf(body, node, owners, holders) !== lu.army.ownerId) continue
-      u.strength = Math.min(u.maxStrength, u.strength + u.maxStrength * UNIT_REGEN_PER_DAY * DT)
+      u.strength = Math.min(u.maxStrength, u.strength + u.maxStrength * UNIT_REGEN_PER_DAY * DT * (world.supplyOf?.(lu.army.ownerId, body, node) ?? 1))
     }
   }
 }

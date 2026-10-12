@@ -140,18 +140,33 @@ function placeSites(surface: BodySurface, count: number): { node: number; outlie
 // the terrain's own spaceport is the first site; the rest are placed as above.
 // Each carries its operator (shown on the map; the node itself is held by
 // whichever nation's troops hold the ground, like any key node).
-export function withSpaceportKeys(surface: BodySurface, sites: SpaceportSite[]): BodySurface {
+export function withSpaceportKeys(surface: BodySurface, sites: SpaceportSite[], ports: readonly PinnedPort[] = []): BodySurface {
   if (sites.length === 0) return surface
-  const extra = extraSpaceportNodes(surface, sites.length)
   // Assign operators to the existing spaceport key slots in order (a curated world
-  // like Earth has several), then append auto-placed sites for any remaining ones.
+  // like Earth has several), then add the rest: the ports the player has pinned (their own node and, if renamed, name),
+  // and for any still without one the auto-placed sites.
   let si = 0
   const keySlots: KeySlot[] = surface.keySlots.map((k) =>
     k.kind === 'spaceport' && si < sites.length ? { ...k, operator: sites[si++].operatorName } : k,
   )
-  for (const e of extra) {
+  const need = sites.length - si
+  const pinned = ports.slice(0, Math.max(0, need))
+  const used = new Set([...surface.keySlots.map((k) => k.node), ...pinned.map((p) => p.node)])
+  const auto = need > pinned.length ? extraSpaceportNodes(surface, sites.length).filter((e) => !used.has(e.node)) : []
+  for (const p of pinned) {
+    const site = sites[si++]
+    if (site) keySlots.push({ node: p.node, kind: 'spaceport', operator: site.operatorName, site: p.outlier ? 'outlier' : 'extra', ...(p.name ? { name: p.name } : {}) })
+  }
+  for (const e of auto) {
     const site = sites[si++]
     if (site) keySlots.push({ node: e.node, kind: 'spaceport', operator: site.operatorName, site: e.outlier ? 'outlier' : 'extra' })
   }
   return { ...surface, keySlots }
+}
+
+// A spaceport the player has a say in: where it stands and, if renamed, what it is called (state/structureStore).
+export interface PinnedPort {
+  node: number
+  name?: string
+  outlier?: boolean
 }

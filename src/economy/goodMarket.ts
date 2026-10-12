@@ -5,7 +5,7 @@
 import { getMethod, RECIPES } from './recipes'
 import { SPECIES_TEMPLATES, NEED_TIERS } from './species'
 import type { GoodId } from './goods'
-import type { World, WorldReport } from './economyTypes'
+import type { BuildingOwner, World, WorldReport } from './economyTypes'
 
 export interface GoodFlowRow {
   worldId: string
@@ -15,6 +15,7 @@ export interface GoodFlowRow {
   label: string
   level: number
   perTick: number
+  owner: BuildingOwner
 }
 
 export interface GoodWorldPrice {
@@ -51,7 +52,7 @@ function buildingFlow(good: GoodId, worlds: readonly World[], pick: 'outputs' | 
       if (!entry) continue
       const perTick = entry.amount * b.level * (b.throughput ?? 1)
       if (perTick <= 0) continue
-      rows.push({ worldId: w.id, worldName: w.name, buildingId: b.id, recipeId: b.recipeId, label: RECIPES[b.recipeId]?.label ?? b.recipeId, level: b.level, perTick })
+      rows.push({ worldId: w.id, worldName: w.name, buildingId: b.id, recipeId: b.recipeId, label: RECIPES[b.recipeId]?.label ?? b.recipeId, level: b.level, perTick, owner: b.owner })
     }
   }
   return rows.sort((a, b) => b.perTick - a.perTick)

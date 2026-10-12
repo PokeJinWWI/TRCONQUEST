@@ -98,13 +98,14 @@ export const CONSTRUCTION_OUTPUT: Record<string, number> = {
 // The military district holds no economy buildings: it houses the nation's
 // planetary defenses (fortress, shield, battery — data/defenseData.ts), counted
 // through World.militarySlots.
-export type DistrictType = 'core' | 'urban' | 'industrial' | 'resource' | 'military'
-export const DISTRICT_TYPES: DistrictType[] = ['core', 'urban', 'industrial', 'resource', 'military']
+export type DistrictType = 'core' | 'urban' | 'industrial' | 'mining' | 'agricultural' | 'military'
+export const DISTRICT_TYPES: DistrictType[] = ['core', 'urban', 'industrial', 'mining', 'agricultural', 'military']
 export const DISTRICT_LABELS: Record<DistrictType, string> = {
   core: 'Core',
   urban: 'Urban',
   industrial: 'Industrial',
-  resource: 'Resource',
+  mining: 'Mining',
+  agricultural: 'Agricultural',
   military: 'Military',
 }
 const CATEGORY_DISTRICT: Record<BuildingCategory, DistrictType> = {
@@ -113,8 +114,8 @@ const CATEGORY_DISTRICT: Record<BuildingCategory, DistrictType> = {
   services: 'urban',
   industry: 'industrial',
   energy: 'industrial',
-  extraction: 'resource',
-  agriculture: 'resource',
+  extraction: 'mining',
+  agriculture: 'agricultural',
 }
 export function districtOfRecipe(recipeId: string): DistrictType {
   const cat = RECIPES[recipeId]?.category

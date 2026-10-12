@@ -1,3 +1,6 @@
+import { planDistrictLevel, planPlacement, recordLevel, recordPlacement } from '../scene/placementOrders'
+import { syncSiteAccess } from '../scene/infrastructureOrders'
+import { usePlacementStore } from './placementStore'
 import { create } from 'zustand'
 import { useDiplomacyStore } from './diplomacyStore'
 import { useTradePolicyStore, inSharedMarket } from './tradePolicyStore'
@@ -9,7 +12,7 @@ import { TRADE_HUB_INTERSTELLAR } from '../data/starbaseData'
 import { advanceEmpiresInline, onEmpireUpdate, runOffThread, startEmpires, stopEmpires } from './economyEngine'
 import type { EmpireSummary, EmpireUpdate } from '../economy/empireSim'
 import { HISTORY_LENGTH, MAX_CATCH_UP_TICKS, runEconomySteps, unemploymentOf, type EconomyStepInput, type EconomyStepOutput, type FiscalSample } from '../economy/economyStep'
-import { districtOrder, freeLandOfWorld } from '../economy/districts'
+import { districtOrder, freeLandOfWorld, withoutDistrictLevel } from '../economy/districts'
 import type { DistrictType } from '../economy/recipes'
 import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies, seedBanks } from '../economy/economySeed'
@@ -278,12 +281,29 @@ interface EconomyStore {
   // the world (see src/state/territoryStore.ts's cedeBody); the one hook the
   // diplomacy/war layer has into the economy. A no-op for an unknown world.
   setWorldOwner: (worldId: string, countryId: string) => void
+  // A world founded during the game (a colony, economy/colonySeed.ts). A no-op if one is already there.
+  addWorld: (world: World) => void
+  // Settlers leave a world: its pops shrink in proportion by up to `millions` (never below `floor`
+  // people in all). Returns how many left.
+  takeSettlers: (worldId: string, millions: number, floor: number) => number
+  // The land (district levels) a world can hold: a micro-colony growing into a planetary one.
+  setWorldLand: (worldId: string, land: number) => void
+  // Records the development site of a queued building the economy's own AI ordered (scene/placementOrders.placeUnplacedOrders).
+  setOrderSite: (worldId: string, orderId: string, siteId: string) => void
+  // Each world's buildings' share of output that reaches a hub, by world id then recipe id (scene/infrastructureOrders.syncSiteAccess).
+  // Recipes not named are cleared back to full.
+  setSiteAccess: (byWorld: Record<string, Record<string, number>>) => void
+  // Unrest from displaced people, per owning nation (scene/unrestSync); a world not named feels none.
+  setDisplacedUnrest: (byCountry: Record<string, number>) => void
   // Queue a building. `owner` decides who pays and who owns it: state (default,
   // government pool → treasury) or a corporation (private pool → its cash).
   // Refused if the target district on the world is full.
-  queueConstruction: (worldId: string, recipeId: string, owner?: BuildingOwner) => void
+  // `siteId` picks the development site it stands on (scene/placementOrders.ts); without one the best
+  // site the builder may use is chosen. An order no site can take is refused like any other.
+  queueConstruction: (worldId: string, recipeId: string, owner?: BuildingOwner, siteId?: string) => void
   // Develop one more level of a district (a state project; uses one unit of land).
-  queueDistrict: (worldId: string, district: DistrictType) => void
+  // `siteId` picks the site the level is developed at (scene/placementOrders.planDistrictLevel); without one the best open site is chosen.
+  queueDistrict: (worldId: string, district: DistrictType, siteId?: string) => void
   // Orbital bombardment (scene/bombardment.ts), keyed by world NAME (body):
   // devastation 0–1, and the share of population killed.
   setDevastation: (byBody: Record<string, number>) => void
@@ -335,7 +355,9 @@ interface EconomyStore {
   // upgrade, which is queued via queueConstruction). At level 1 the building is
   // demolished outright. Recovers a fraction of a level's build cost as salvage,
   // paid to the owner's pool (state → treasury, corporation → its cash).
-  downgradeBuilding: (worldId: string, buildingId: string) => void
+  downgradeBuilding: (worldId: string, buildingId: string, opts?: { noSalvage?: boolean }) => void
+  // Takes one level of a district away from a world (its slots too) when its buildings still fit. The caller has charged for it.
+  removeDistrictLevel: (worldId: string, district: DistrictType) => { ok: true } | { ok: false; reason: string }
   // --- Subsidies (a per-tick treasury → cash transfer; a real fiscal cost) ---
   // Set (or, at 0, clear) a standing per-tick subsidy paid to a corporation.
   setSubsidyForCorporation: (countryId: string, corporationId: string, amountPerTick: number) => void
@@ -442,6 +464,17 @@ export function cancelEconomyFlight(): void {
   flight.epoch += 1
   if (empiresOn) stopEmpires()
   empiresOn = false
+}
+
+// Whether the generated empires' simulation is running beside this game.
+export function empiresRunning(): boolean {
+  return empiresOn
+}
+
+// A loaded game whose empires were running: they are running again (their
+// simulation itself is put back through economyEngine.importEmpires).
+export function markEmpiresRunning(on: boolean): void {
+  empiresOn = on
 }
 
 // Whether the economy is working out a month right now (for tests and the UI).
@@ -669,6 +702,7 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
   advance: (ticks) => {
     const steps = Math.max(0, Math.min(MAX_CATCH_UP_TICKS, Math.floor(ticks)))
     if (steps === 0) return
+    syncSiteAccess()
     if (flight.active) {
       flight.pending = Math.min(MAX_CATCH_UP_TICKS, flight.pending + steps)
       return
@@ -686,6 +720,55 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
     set((state) => ({
       worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, ownerId: countryId } : w)),
     })),
+  addWorld: (world) => set((state) => (state.worlds.some((w) => w.id === world.id) ? state : { worlds: [...state.worlds, world] })),
+  takeSettlers: (worldId, millions, floor) => {
+    const world = get().worlds.find((w) => w.id === worldId)
+    if (!world) return 0
+    const total = world.pops.reduce((n, p) => n + p.populationSize, 0)
+    const taken = Math.max(0, Math.min(millions, total - floor))
+    if (taken <= 0) return 0
+    const keep = (total - taken) / total
+    set((state) => ({ worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, pops: w.pops.map((p) => ({ ...p, populationSize: p.populationSize * keep })) } : w)) }))
+    return taken
+  },
+  setDisplacedUnrest: (byCountry) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const want = Math.round((byCountry[w.ownerId] ?? 0) * 100) / 100
+        if ((w.displacedUnrest ?? 0) === want) return w
+        changed = true
+        const { displacedUnrest: _drop, ...rest } = w
+        void _drop
+        return want > 0 ? { ...rest, displacedUnrest: want } : (rest as typeof w)
+      })
+      return changed ? { worlds } : state
+    }),
+  setSiteAccess: (byWorld) =>
+    set((state) => {
+      let changed = false
+      const worlds = state.worlds.map((w) => {
+        const want = byWorld[w.id] ?? {}
+        let touched = false
+        const buildings = w.buildings.map((b) => {
+          const f = want[b.recipeId]
+          if ((b.siteAccess ?? undefined) === f) return b
+          touched = true
+          const { siteAccess: _drop, ...rest } = b
+          void _drop
+          return f === undefined ? (rest as typeof b) : { ...rest, siteAccess: f }
+        })
+        if (!touched) return w
+        changed = true
+        return { ...w, buildings }
+      })
+      return changed ? { worlds } : state
+    }),
+  setOrderSite: (worldId, orderId, siteId) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, constructionQueue: w.constructionQueue.map((o) => (o.id === orderId && !o.siteId ? { ...o, siteId } : o)) } : w)),
+    })),
+  setWorldLand: (worldId, land) => set((state) => ({ worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, land } : w)) })),
   setTaxRate: (countryId, rate) =>
     set((state) => ({
       countries: state.countries.map((c) => (c.id === countryId ? { ...c, taxRate: Math.max(0, Math.min(0.6, rate)) } : c)),
@@ -694,23 +777,29 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
     set((state) => ({
       countries: state.countries.map((c) => (c.id === countryId ? { ...c, welfarePerCapita: Math.max(0, Math.min(10, perCapita)) } : c)),
     })),
-  queueConstruction: (worldId, recipeId, owner = { kind: 'state' }) =>
+  queueConstruction: (worldId, recipeId, owner = { kind: 'state' }, siteId) => {
+    const target = get().worlds.find((w) => w.id === worldId)
+    // Corporate HQs are the companies' own (corporationAI builds/relocates them), never state-constructed.
+    if (!target || recipeId === 'corporateHq') return
+    const ref = { mode: 'complex' as const, id: recipeId }
+    const plan = planPlacement(target.ownerId, target.id, ref, siteId)
+    if (!plan.ok) return
+    const before = target.constructionQueue.length
     set((state) => ({
       worlds: state.worlds.map((w) => {
         if (w.id !== worldId) return w
-        // Corporate HQs are the companies' own (corporationAI builds/relocates them),
-        // never state-constructed.
-        if (recipeId === 'corporateHq') return w
         // Tech gate: a building requiring a tech (e.g. the space-elevator anchor)
         // can't be queued until the owning nation has researched it.
         const need = RECIPES[recipeId]?.requiresTech
         if (need && !useTechStore.getState().stateFor(w.ownerId).researched.has(need)) return w
         if (!canBuild(w, recipeId)) return w // district full — no room
         constructionCounter += 1
-        const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionWork(recipeId), progress: 0, owner }
+        const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionWork(recipeId), progress: 0, owner, ...(plan.site ? { siteId: plan.site.id } : {}) }
         return { ...w, constructionQueue: [...w.constructionQueue, order] }
       }),
-    })),
+    }))
+    if ((get().worlds.find((w) => w.id === worldId)?.constructionQueue.length ?? 0) > before) recordPlacement(plan, target.ownerId, ref)
+  },
   setDevastation: (byBody) =>
     set((state) => {
       let changed = false
@@ -753,20 +842,31 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
         return share > 0 ? { ...w, pops: w.pops.map((p) => ({ ...p, populationSize: p.populationSize * (1 - share) })) } : w
       }),
     })),
-  queueDistrict: (worldId, district) =>
+  queueDistrict: (worldId, district, siteId) => {
+    const target = get().worlds.find((w) => w.id === worldId)
+    if (!target || freeLandOfWorld(target) <= 0) return
+    const plan = planDistrictLevel(target.ownerId, target.id, district, siteId)
+    if (!plan.ok) return
     set((state) => ({
       worlds: state.worlds.map((w) => {
         if (w.id !== worldId || freeLandOfWorld(w) <= 0) return w
         constructionCounter += 1
-        return { ...w, constructionQueue: [...w.constructionQueue, districtOrder(`dis-${worldId}-${district}-${constructionCounter}`, district)] }
+        return { ...w, constructionQueue: [...w.constructionQueue, { ...districtOrder(`dis-${worldId}-${district}-${constructionCounter}`, district), ...(plan.site ? { siteId: plan.site.id } : {}) }] }
       }),
-    })),
-  cancelConstruction: (worldId, orderId) =>
+    }))
+    recordLevel(plan, target.ownerId, district)
+  },
+  cancelConstruction: (worldId, orderId) => {
+    // A cancelled building gives its place on the site back.
+    const order = get().worlds.find((w) => w.id === worldId)?.constructionQueue.find((o) => o.id === orderId)
+    if (order?.siteId && order.recipeId) usePlacementStore.getState().unplace(order.siteId, order.recipeId)
+    if (order?.siteId && order.district) usePlacementStore.getState().removeLevel(order.siteId, order.district)
     set((state) => ({
       worlds: state.worlds.map((w) =>
         w.id === worldId ? { ...w, constructionQueue: w.constructionQueue.filter((o) => o.id !== orderId) } : w,
       ),
-    })),
+    }))
+  },
   setProductionMethod: (worldId, buildingId, methodId) =>
     set((state) => ({
       worlds: state.worlds.map((w) =>
@@ -989,12 +1089,21 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
       return { countries, corporations, characters, worlds: syncCorporateHqs(worlds, corporations) }
     }),
 
-  downgradeBuilding: (worldId, buildingId) =>
+  removeDistrictLevel: (worldId, district) => {
+    const world = get().worlds.find((w) => w.id === worldId)
+    if (!world) return { ok: false, reason: 'No such world.' }
+    const result = withoutDistrictLevel(world, district)
+    if (!result.ok) return result
+    set((state) => ({ worlds: state.worlds.map((w) => (w.id === worldId ? result.world : w)) }))
+    return { ok: true }
+  },
+
+  downgradeBuilding: (worldId, buildingId, opts) =>
     set((state) => {
       const world = state.worlds.find((w) => w.id === worldId)
       const building = world?.buildings.find((b) => b.id === buildingId)
       if (!world || !building) return state
-      const salvage = BUILD_COST_PER_LEVEL * DOWNGRADE_SALVAGE
+      const salvage = opts?.noSalvage ? 0 : BUILD_COST_PER_LEVEL * DOWNGRADE_SALVAGE
       // Level 1 → demolished; otherwise drop a level (throughput carries over).
       const worlds = state.worlds.map((w) => {
         if (w.id !== worldId) return w

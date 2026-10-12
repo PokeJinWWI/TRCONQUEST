@@ -9,6 +9,7 @@ import type { SubjectType } from '../data/subjectData'
 // and the executor (executor.ts) carries them out through the same store
 // actions the player's UI uses, under the same rules.
 export type Intent =
+  | DevelopmentIntent
   | { kind: 'declare-war'; targetId: string }
   | { kind: 'propose-peace'; warId: string; terms: PeaceTerms }
   | { kind: 'adjust-opinion'; otherId: string; delta: number }
@@ -53,6 +54,15 @@ export type Intent =
   | { kind: 'declare-embargo'; targetId: string }
   // Escalate this empire's own skirmish to a limited war.
   | { kind: 'escalate-conflict'; warId: string }
+
+// --- Development (scene/aiDevelopment.ts): through the same rules as the player's orders ---
+export type DevelopmentIntent =
+  // Join a cut-off site to the nearest hub it can reach (a road, or a railway if its freight needs one).
+  | { kind: 'connect-site'; siteId: string }
+  // A defense platform in low orbit over a world an enemy fleet is leaning on.
+  | { kind: 'build-defense-platform'; bodyName: string }
+  // A second settlement on an overcrowded world.
+  | { kind: 'found-settlement'; siteId: string }
 
 export type Posture = 'peace' | 'buildup' | 'defensive' | 'war'
 

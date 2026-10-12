@@ -18,6 +18,7 @@ import { aiNextStop } from './jumpRules'
 import { batteryDenial, groundKeySurface, hostileDefenseCount, shieldedFor } from '../state/defenseStore'
 import type { AiSnapshot } from './blackboard'
 import { useColonyStore } from '../state/colonyStore'
+import { isolatedSitesOf, settlementOpeningsOf, threatenedBodiesOf } from '../scene/aiDevelopment'
 import { useInternationalOrgStore } from '../state/internationalOrgStore'
 import { useSubjectStore } from '../state/subjectStore'
 import { useTradePolicyStore } from '../state/tradePolicyStore'
@@ -43,6 +44,7 @@ export function captureSnapshot(simDays: number): AiSnapshot {
     starbases: useStarbaseStore.getState().starbases,
     colonies: useColonyStore.getState().colonies,
     simpleEconomy: usePlayerStore.getState().economyModel === 'abstract',
+    development: { isolatedSitesOf, threatenedBodiesOf: (id) => threatenedBodiesOf(id), settlementOpeningsOf },
     resourcesOf: (id) => useResourceStore.getState().stateFor(id).amounts,
     researchedOf: (id) => useTechStore.getState().stateFor(id).researched,
     buildQueueLengthOf: (id) => useShipyardStore.getState().ordersFor(id).length,

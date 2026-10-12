@@ -5,6 +5,7 @@
 // empire without Hyper Comms waits on its distant fleets like the player does.
 // Anything a rule refuses (unaffordable, orbit not clear, …) is simply
 // dropped — the agents will reassess next pass.
+import { buildDefensePlatform, connectSite, expandSettlement } from '../scene/aiDevelopment'
 import { aiMayJumpNow, aiNextStop } from './jumpRules'
 import { ownerDisplay } from '../data/countryRoster'
 import type { PeaceTerms } from '../data/diplomacyData'
@@ -207,6 +208,15 @@ export function executeIntents(countryId: string, intents: Intent[], simDays: nu
         queueFleetMoveOrder(fleetMembersOf(ship, ships), { kind: 'body', systemId: intent.systemId, bodyName: intent.bodyName })
         break
       }
+      case 'connect-site':
+        connectSite(countryId, intent.siteId)
+        break
+      case 'build-defense-platform':
+        buildDefensePlatform(countryId, intent.bodyName)
+        break
+      case 'found-settlement':
+        expandSettlement(countryId, intent.siteId)
+        break
       case 'found-org':
         useInternationalOrgStore.getState().founded(countryId, intent.presetId, intent.name, simDays)
         break

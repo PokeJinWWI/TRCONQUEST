@@ -25,7 +25,7 @@ export function BuildingDetailWindow() {
   const label = RECIPES[b.recipeId]?.label ?? b.recipeId
 
   return (
-    <DraggableWindow title={`${label} — ${world.name}`} memoryKey="building" anchor="right" onClose={close}>
+    <DraggableWindow title={`${label} — ${world.name}`} memoryKey="building" onClose={close}>
       <div className="econ-panel">
         <ComplexBuildingCard b={b} world={world} country={country} owned={!!playerId && world.ownerId === playerId} onClose={close} />
       </div>

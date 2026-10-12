@@ -25,8 +25,11 @@ import { DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { STARBASE_TIERS } from '../data/starbaseData'
 import { useDiplomacyStore, relationIn } from '../state/diplomacyStore'
+import { usePlacementStore } from '../state/placementStore'
 
 export function setUpNewGame(): void {
+  // A real game: each world's starting districts and buildings are assigned to its sites the first time that matters.
+  usePlacementStore.getState().setAutoSeed(true)
   const { ships } = useShipStore.getState()
   for (const country of COUNTRIES) {
     if (ships.some((s) => s.ownerId === country.id)) continue

@@ -106,6 +106,11 @@ export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
   }
   for (const slot of surface.keySlots) {
     if (!slot.site) continue
+    // A spaceport its owner has named keeps that name.
+    if (slot.name) {
+      out.set(slot.node, { name: slot.name, label: unique(slot.name) })
+      continue
+    }
     const region = slot.site === 'outlier' ? regionAt(surface.bodyName, slot.node) : null
     if (region) {
       out.set(slot.node, { name: null, label: unique(`${region} Launch Complex`) })
