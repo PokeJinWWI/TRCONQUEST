@@ -1,0 +1,368 @@
+- generic [ref=e2]:
+  - generic [ref=e40]:
+    - banner:
+      - generic [ref=e41]: "TERRA RELICTA: CONQUEST"
+      - generic [ref=e42]:
+        - button "Treasury $354.5M" [ref=e293]:
+          - generic [ref=e44]: Treasury
+          - generic [ref=e45]: $354.5M
+        - button "Balance +$10.7M/mo" [ref=e46]:
+          - generic [ref=e47]: Balance
+          - generic [ref=e48]: +$10.7M/mo
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - button "130 +2/mo" [ref=e294]:
+            - generic [ref=e54]: "130"
+            - generic [ref=e55]: +2/mo
+          - button "4 ±0/mo" [ref=e56]:
+            - generic [ref=e62]: "4"
+            - generic [ref=e63]: ±0/mo
+          - button "25 +1/mo" [ref=e295]:
+            - generic [ref=e67]: "25"
+            - generic [ref=e68]: +1/mo
+          - button "2 ±0/mo" [ref=e69]:
+            - generic [ref=e72]: "2"
+            - generic [ref=e73]: ±0/mo
+        - button "Tabs" [ref=e74]
+      - generic [ref=e75]:
+        - button "LOCK-ON ON" [ref=e76]
+        - navigation [ref=e77]:
+          - button "GALAXY" [ref=e78]
+          - generic [ref=e79]: ›
+          - button "INTERSTELLAR" [ref=e80]
+          - generic [ref=e81]: ›
+          - button "SYSTEM" [disabled] [ref=e82]
+    - generic [ref=e85]:
+      - generic: Sol
+      - generic: Mercury
+      - generic: Venus
+      - generic: Earth
+      - generic: Mars
+      - generic: Jupiter
+      - generic: Saturn
+      - generic: Uranus
+      - generic: Neptune
+      - generic: Ceres
+      - generic: Pluto
+      - generic: Haumea
+      - generic: Makemake
+      - generic: Eris
+      - generic:
+        - generic:
+          - generic:
+            - generic [ref=e133]: "5"
+            - generic [ref=e134]: 1st Fleet
+      - generic: Troop Transport 6
+      - generic: Troop Transport 12
+      - generic: Troop Transport 30
+      - generic:
+        - generic:
+          - generic:
+            - generic [ref=e146]: "5"
+            - generic [ref=e147]: 1st Fleet
+      - generic: Colony Ship 170
+      - generic:
+        - generic:
+          - generic:
+            - generic [ref=e159]: "5"
+            - generic [ref=e160]: 1st Fleet
+      - generic: Science Ship 163
+    - generic [ref=e164]:
+      - generic [ref=e165]:
+        - generic [ref=e166]: Imperial State of Mars
+        - button "‹ Back" [ref=e301]
+        - generic [ref=e167]:
+          - button "Situations" [ref=e168]
+          - button "Government" [ref=e169]
+          - button "Economy" [active] [ref=e170]
+          - button "Technology" [ref=e171]
+          - button "Society" [ref=e172]
+          - button "Diplomacy" [ref=e173]
+          - button "International Organizations" [ref=e174]
+          - button "Fleet Management" [ref=e175]
+          - button "Characters" [ref=e176]
+        - generic [ref=e177]:
+          - generic [ref=e178]: Quick buttons
+          - button "Shipyard" [ref=e179]
+          - button "+ Pin this panel" [ref=e302]
+      - button "Collapse navigation" [ref=e180]: ‹
+    - generic [ref=e303]:
+      - generic [ref=e304]:
+        - generic [ref=e305]: Economy
+        - generic [ref=e306]:
+          - button "Collapse" [ref=e307]: ▾
+          - button "Maximize" [ref=e308]: □
+          - button "Close" [ref=e309]: ×
+      - generic [ref=e311]:
+        - generic [ref=e312]:
+          - button "Macro" [ref=e313]
+          - button "Industry" [ref=e314]
+          - button "Social" [ref=e315]
+          - button "Trade" [ref=e316]
+        - generic [ref=e317]:
+          - generic [ref=e318]: Corporatist
+          - generic [ref=e319]: AAA
+        - generic [ref=e320]:
+          - button "INFLATION 1.76%" [ref=e321]:
+            - generic [ref=e322]: INFLATION
+            - generic [ref=e323]: 1.76%
+          - button "GDP $8.82B" [ref=e324]:
+            - generic [ref=e325]: GDP
+            - generic [ref=e326]: $8.82B
+          - button "DEBT / GDP 22.7%" [ref=e327]:
+            - generic [ref=e328]: DEBT / GDP
+            - generic [ref=e329]: 22.7%
+        - generic [ref=e330]:
+          - generic [ref=e331]:
+            - generic [ref=e332]: GDP
+            - generic [ref=e333]:
+              - button "6M" [ref=e334]
+              - button "1Y" [ref=e335]
+              - button "3Y" [ref=e336]
+          - img [ref=e337]:
+            - generic [ref=e338]: $8.60B
+            - generic [ref=e340]: $8.70B
+            - generic [ref=e342]: $8.80B
+            - generic [ref=e344]: Sep 00
+            - generic [ref=e346]: Oct
+            - generic [ref=e348]: Nov
+            - generic [ref=e350]: Dec
+            - generic [ref=e352]: Jan 01
+            - generic [ref=e354]: Feb
+            - generic [ref=e356]: Mar
+          - generic [ref=e360]:
+            - generic [ref=e361]: Nominal $8.82B
+            - generic [ref=e363]: Real $8.63B
+        - generic [ref=e365]:
+          - generic [ref=e366]:
+            - generic [ref=e367]: Real GDP
+            - generic [ref=e368]: $8.63B
+          - generic [ref=e369]:
+            - generic [ref=e370]: Real growth
+            - generic [ref=e371]: 1.54%
+          - generic [ref=e372]:
+            - generic [ref=e373]: Price level
+            - generic [ref=e374]: "1.024"
+          - generic [ref=e375]:
+            - generic [ref=e376]: Productivity
+            - generic [ref=e377]:
+              - text: "1.012"
+              - generic [ref=e378]: +1.0%/yr
+          - generic [ref=e379]:
+            - generic [ref=e380]: Debt ceiling
+            - generic [ref=e381]: 160% GDP
+        - generic [ref=e384]:
+          - generic [ref=e385]: Stability
+          - generic [ref=e386]: 58%
+        - generic [ref=e389]:
+          - generic [ref=e390]: Monetary stance
+          - generic [ref=e391]:
+            - button "Loose" [ref=e392]
+            - button "Neutral" [ref=e393]
+            - button "Tight" [ref=e394]
+        - generic [ref=e395]:
+          - generic [ref=e396]: Money creation
+          - generic [ref=e397]:
+            - slider "Money creation 0%" [ref=e398]: "0"
+            - generic [ref=e399]: 0%
+        - generic [ref=e400]:
+          - generic [ref=e401]: Yearly balance
+          - generic [ref=e402]: $128.9M (1.5% GDP)
+        - generic [ref=e403]:
+          - generic [ref=e404]:
+            - generic [ref=e405]: Expenditure $752.9M
+            - generic [ref=e406]:
+              - generic [ref=e407]: Military
+              - generic [ref=e408]: $210.5M
+            - generic [ref=e409]:
+              - generic [ref=e410]: Civil
+              - generic [ref=e411]: $238.1M
+            - generic [ref=e412]:
+              - generic [ref=e413]: Welfare
+              - generic [ref=e414]: $45.6M
+            - generic [ref=e415]:
+              - generic [ref=e416]: Debt servicing
+              - generic [ref=e417]: $100.0M
+            - generic [ref=e418]:
+              - generic [ref=e419]: Other
+              - generic [ref=e420]: $158.7M
+          - generic [ref=e421]:
+            - generic [ref=e422]: Revenue $881.8M
+            - generic [ref=e423]:
+              - generic [ref=e424]: Income tax
+              - generic [ref=e425]: $485.0M
+            - generic [ref=e426]:
+              - generic [ref=e427]: Business tax
+              - generic [ref=e428]: $176.4M
+            - generic [ref=e429]:
+              - generic [ref=e430]: Excise
+              - generic [ref=e431]: $176.4M
+            - generic [ref=e432]:
+              - generic [ref=e433]: Other
+              - generic [ref=e434]: $44.1M
+        - generic [ref=e435]:
+          - generic [ref=e436]:
+            - generic [ref=e437]: Treasury
+            - generic [ref=e438]: $354.5M
+          - generic [ref=e439]:
+            - generic [ref=e440]: Reserves
+            - generic [ref=e441]: $40.0M
+          - generic [ref=e442]:
+            - generic [ref=e443]: National debt
+            - generic [ref=e444]: $2.00B
+          - generic [ref=e445]:
+            - generic [ref=e446]: Trade / mo
+            - generic [ref=e447]: $0
+        - generic [ref=e448]:
+          - generic [ref=e449]: Reserves
+          - generic [ref=e450]:
+            - button "Invest" [ref=e451]
+            - button "Pay Debt" [ref=e452]
+        - generic [ref=e453]:
+          - generic [ref=e454]: War taxes
+          - checkbox "War taxes" [ref=e455]
+        - generic [ref=e456]: Production — 227 PU of factories
+        - table [ref=e457]:
+          - rowgroup [ref=e458]:
+            - row [ref=e459]:
+              - columnheader "Factory" [ref=e460]
+              - columnheader "Levels" [ref=e461]
+              - columnheader "Makes /mo" [ref=e462]
+          - rowgroup [ref=e463]:
+            - row [ref=e464]:
+              - cell "Civilian Factory" [ref=e465]
+              - cell "9" [ref=e466]
+              - cell "102.1 construction" [ref=e467]
+            - row [ref=e468]:
+              - cell "Alloy Foundry" [ref=e469]
+              - cell "3" [ref=e470]
+              - cell "51.5 alloys" [ref=e471]
+            - row [ref=e472]:
+              - cell "Consumer Goods Factory" [ref=e473]
+              - cell "6" [ref=e474]
+              - cell "37.3 consumer goods" [ref=e475]
+            - row [ref=e476]:
+              - cell "Electronics Plant" [ref=e477]
+              - cell "2" [ref=e478]
+              - cell "9.2 electronics" [ref=e479]
+        - generic [ref=e480]:
+          - generic [ref=e481]: Approval
+          - generic [ref=e482]: 58%
+        - generic [ref=e483]: Policy
+        - generic [ref=e484]:
+          - generic [ref=e485]: Tax rate
+          - generic [ref=e486]:
+            - slider "Tax rate 10%" [ref=e487]: "0.1"
+            - generic [ref=e488]: 10%
+        - generic [ref=e489]:
+          - generic [ref=e490]: Economy type
+          - generic [ref=e491]:
+            - button "Market" [ref=e492]
+            - button "Corporatist" [ref=e493]
+            - button "Planned" [ref=e494]
+        - generic [ref=e495]: Economic warning signs
+        - generic [ref=e496]:
+          - generic [ref=e497]: Negative real growth
+          - generic [ref=e498]: Inflation critical
+          - generic [ref=e499]: Extremely high deficit
+          - generic [ref=e500]: Critical debt
+          - generic [ref=e501]: Shortages
+          - generic [ref=e502]: Unrest
+          - generic [ref=e503]: Industry starved of inputs
+          - generic [ref=e504]: Bloated reserves
+          - generic [ref=e505]: Fiscal crisis
+    - generic [ref=e181]:
+      - button "Collapse outliner" [ref=e182]: ›
+      - generic [ref=e183]:
+        - generic [ref=e184]: Outliner
+        - textbox "Search…" [ref=e185]
+        - tablist [ref=e186]:
+          - tab "Territory" [selected] [ref=e187]
+          - tab "Fleet" [ref=e188]
+          - tab "Info" [ref=e189]
+        - generic [ref=e190]:
+          - button "Neighborhoods" [ref=e191]
+          - button "Stars" [ref=e192]
+          - button "Planets" [ref=e193]
+          - button "Moons" [ref=e194]
+          - button "Black Holes" [ref=e195]
+        - generic [ref=e196]:
+          - button "▾ Colonies" [expanded] [ref=e197]:
+            - generic [ref=e198]: ▾
+            - text: Colonies
+          - list [ref=e199]:
+            - listitem [ref=e200]:
+              - generic [ref=e202]: Luna
+            - listitem [ref=e203]:
+              - generic [ref=e205]: Mars
+            - listitem [ref=e206]:
+              - generic [ref=e208]: Phobos
+            - listitem [ref=e209]:
+              - generic [ref=e211]: Deimos
+        - generic [ref=e212]:
+          - button "▾ Starbases" [expanded] [ref=e213]:
+            - generic [ref=e214]: ▾
+            - text: Starbases
+          - generic [ref=e215]: No starbases built
+        - generic [ref=e216]:
+          - button "▾ Market" [expanded] [ref=e217]:
+            - generic [ref=e218]: ▾
+            - text: Market
+          - generic [ref=e219]: No market established
+        - generic [ref=e220]:
+          - button "▾ In View" [expanded] [ref=e221]:
+            - generic [ref=e222]: ▾
+            - text: In View
+          - list [ref=e223]:
+            - listitem [ref=e224]:
+              - generic [ref=e226]: Sol
+            - listitem [ref=e227]:
+              - generic [ref=e229]: Mercury
+            - listitem [ref=e230]:
+              - generic [ref=e232]: Venus
+            - listitem [ref=e233]:
+              - generic [ref=e235]: Earth
+            - listitem [ref=e236]:
+              - generic [ref=e238]: Mars
+            - listitem [ref=e239]:
+              - generic [ref=e241]: Jupiter
+            - listitem [ref=e242]:
+              - generic [ref=e244]: Saturn
+            - listitem [ref=e245]:
+              - generic [ref=e247]: Uranus
+            - listitem [ref=e248]:
+              - generic [ref=e250]: Neptune
+            - listitem [ref=e251]:
+              - generic [ref=e253]: Ceres
+            - listitem [ref=e254]:
+              - generic [ref=e256]: Pluto
+            - listitem [ref=e257]:
+              - generic [ref=e259]: Haumea
+            - listitem [ref=e260]:
+              - generic [ref=e262]: Makemake
+            - listitem [ref=e263]:
+              - generic [ref=e265]: Eris
+    - contentinfo:
+      - generic [ref=e267]:
+        - generic [ref=e268]: 3 APR 2601
+        - group "Time pace" [ref=e269]:
+          - button "STRAT" [pressed] [ref=e270]
+          - button "OPS" [ref=e271]
+          - button "TAC" [ref=e272]
+        - button "Slow down" [disabled] [ref=e273]: «
+        - button "Pause" [ref=e274]: ❚❚
+        - button "Speed up" [ref=e275]: »
+      - generic [ref=e282]:
+        - button "Buildings" [ref=e283]: ⚙
+        - button "Politics" [ref=e284]: ⚖
+        - button "Diplomacy" [ref=e285]: ⚑
+      - generic [ref=e286]:
+        - button "Map Modes" [ref=e288]
+        - generic [ref=e289]: Sol System
+    - generic:
+      - generic [ref=e290]: Earth founded a colony on Dione
+      - generic [ref=e291]: "Republic of Venus abandoned founding a colony on Dione: Earth already holds Dione"
+      - generic [ref=e292]: Kingdom of Lalande's colony on Lalande 21185 c became a planetary colony
+  - 'tooltip "Ctrl/Cmd-click: open in a new tab Government — How your nation is ruled: its branches, offices, laws and institutions."':
+    - generic: "Ctrl/Cmd-click: open in a new tab"
+    - generic: "Government — How your nation is ruled: its branches, offices, laws and institutions."

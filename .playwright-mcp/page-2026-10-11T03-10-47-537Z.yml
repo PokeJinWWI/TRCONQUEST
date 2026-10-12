@@ -1,0 +1,1780 @@
+- generic [ref=e40]:
+  - banner:
+    - generic [ref=e41]: "TERRA RELICTA: CONQUEST"
+    - generic [ref=e42]:
+      - button "Treasury $376.2M" [ref=e1252]:
+        - generic [ref=e44]: Treasury
+        - generic [ref=e45]: $376.2M
+      - button "Balance +$10.9M/mo" [ref=e1253]:
+        - generic [ref=e47]: Balance
+        - generic [ref=e48]: +$10.9M/mo
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - button "134 +2/mo" [ref=e1254]:
+          - generic [ref=e54]: "134"
+          - generic [ref=e55]: +2/mo
+        - button "4 ±0/mo" [ref=e56]:
+          - generic [ref=e62]: "4"
+          - generic [ref=e63]: ±0/mo
+        - button "27 +1/mo" [ref=e1255]:
+          - generic [ref=e67]: "27"
+          - generic [ref=e68]: +1/mo
+        - button "2 ±0/mo" [ref=e69]:
+          - generic [ref=e72]: "2"
+          - generic [ref=e73]: ±0/mo
+      - button "Tabs" [ref=e74]
+    - generic [ref=e75]:
+      - button "LOCK-ON ON" [ref=e76]
+      - navigation [ref=e77]:
+        - button "GALAXY" [ref=e78]
+        - generic [ref=e79]: ›
+        - button "INTERSTELLAR" [ref=e80]
+        - generic [ref=e81]: ›
+        - button "SYSTEM" [disabled] [ref=e82]
+  - generic [ref=e85]:
+    - generic: Sol
+    - generic: Mercury
+    - generic: Venus
+    - generic: Earth
+    - generic: Mars
+    - generic: Jupiter
+    - generic: Saturn
+    - generic: Uranus
+    - generic: Neptune
+    - generic: Ceres
+    - generic: Pluto
+    - generic: Haumea
+    - generic: Makemake
+    - generic: Eris
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e133]: "5"
+          - generic [ref=e134]: 1st Fleet
+    - generic: Troop Transport 6
+    - generic: Troop Transport 12
+    - generic: Troop Transport 30
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e146]: "5"
+          - generic [ref=e147]: 1st Fleet
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e159]: "5"
+          - generic [ref=e160]: 1st Fleet
+    - generic: Corvette 26
+    - generic: Corvette 10
+    - generic: Colony Ship 170
+    - generic: Science Ship 163
+  - generic [ref=e164]:
+    - generic [ref=e165]:
+      - generic [ref=e166]: Imperial State of Mars
+      - button "‹ Back" [ref=e301]
+      - generic [ref=e167]:
+        - button "Situations" [ref=e168]
+        - button "Government" [ref=e169]
+        - button "Economy" [ref=e170]
+        - button "Technology" [ref=e171]
+        - button "Society" [ref=e172]
+        - button "Diplomacy" [ref=e173]
+        - button "International Organizations" [ref=e174]
+        - button "Fleet Management" [ref=e175]
+        - button "Characters" [ref=e176]
+      - generic [ref=e177]:
+        - generic [ref=e178]: Quick buttons
+        - button "Shipyard" [ref=e179]
+        - button "+ Pin this panel" [ref=e302]
+    - button "Collapse navigation" [ref=e180]: ‹
+  - generic [ref=e303]:
+    - generic [ref=e304]:
+      - generic [ref=e305]: Economy
+      - generic [ref=e306]:
+        - button "Collapse" [ref=e307]: ▾
+        - button "Maximize" [ref=e308]: □
+        - button "Close" [ref=e309]: ×
+    - generic [ref=e311]:
+      - generic [ref=e312]:
+        - button "Macro" [ref=e313]
+        - button "Industry" [ref=e314]
+        - button "Social" [ref=e315]
+        - button "Trade" [ref=e316]
+      - generic [ref=e524]:
+        - generic [ref=e525]: Martian Sovereign (MSV)
+        - generic [ref=e526]: 1.001 E$
+      - generic [ref=e527]:
+        - generic [ref=e528]:
+          - generic [ref=e529]: Exchange rate (E$ per unit)
+          - generic [ref=e530]:
+            - button "6M" [ref=e531]
+            - button "1Y" [ref=e532]
+            - button "3Y" [ref=e533]
+        - img [ref=e534]:
+          - generic [ref=e1262]: "1.00"
+          - generic [ref=e1264]: "1.00"
+          - generic [ref=e543]: Nov 00
+          - generic [ref=e545]: Dec
+          - generic [ref=e547]: Jan 01
+          - generic [ref=e549]: Feb
+          - generic [ref=e551]: Mar
+          - generic [ref=e553]: Apr
+          - generic [ref=e555]: May
+        - generic [ref=e558]: MSV 1.00
+      - generic [ref=e561]:
+        - generic [ref=e562]:
+          - generic [ref=e563]: Fundamentals
+          - generic [ref=e564]: 1.005 ▲
+        - generic [ref=e565]:
+          - generic [ref=e566]: Imports / mo
+          - generic [ref=e567]: $0
+        - generic [ref=e568]:
+          - generic [ref=e569]: Exports / mo
+          - generic [ref=e570]: $0
+        - generic [ref=e571]:
+          - generic [ref=e572]: Trade balance
+          - generic [ref=e573]: $0/mo
+        - generic [ref=e574]:
+          - generic [ref=e575]: Spaceports
+          - generic [ref=e576]: 0 / 420 E$
+      - generic [ref=e577]: Trade with other nations
+      - generic [ref=e578]: Standing monthly orders, settled from the treasury. Imports come from nations at peace with you that can spare the good (their exports, or stock beyond six months of their own use); exports sell only to nations importing the good. A strong currency makes imports cheap and exports earn less. Positive imports, negative exports.
+      - table [ref=e579]:
+        - rowgroup [ref=e580]:
+          - row [ref=e581]:
+            - columnheader "Good" [ref=e582]
+            - columnheader "Stock" [ref=e583]
+            - columnheader "Buy / Sell" [ref=e584]
+            - columnheader "Order/mo" [ref=e585]
+            - columnheader "Filled" [ref=e586]
+        - rowgroup [ref=e587]:
+          - row [ref=e1266]:
+            - cell "Food" [ref=e589]
+            - cell "326" [ref=e1267]
+            - cell "1.65 / 1.35" [ref=e591]
+            - cell [ref=e592]:
+              - spinbutton [ref=e593]: "0"
+            - cell "—" [ref=e594]
+          - row [ref=e1268]:
+            - cell "Minerals" [ref=e596]
+            - cell "3,036" [ref=e1269]
+            - cell "0.49 / 0.40" [ref=e598]
+            - cell [ref=e599]:
+              - spinbutton [ref=e600]: "0"
+            - cell "—" [ref=e601]
+          - row [ref=e1270]:
+            - cell "Energy" [ref=e603]
+            - cell "2,761" [ref=e1271]
+            - cell "0.49 / 0.40" [ref=e605]
+            - cell [ref=e606]:
+              - spinbutton [ref=e607]: "0"
+            - cell "—" [ref=e608]
+          - row [ref=e1272]:
+            - cell "Alloys" [ref=e610]
+            - cell "1,001" [ref=e1273]
+            - cell "1.76 / 1.44" [ref=e612]
+            - cell [ref=e613]:
+              - spinbutton [ref=e614]: "0"
+            - cell "—" [ref=e615]
+          - row [ref=e1274]:
+            - cell "Electronics" [ref=e617]
+            - cell "94" [ref=e1275]
+            - cell "5.50 / 4.50" [ref=e619]
+            - cell [ref=e620]:
+              - spinbutton [ref=e621]: "0"
+            - cell "—" [ref=e622]
+          - row [ref=e1276]:
+            - cell "Consumer Goods" [ref=e624]
+            - cell "341" [ref=e1277]
+            - cell "4.18 / 3.42" [ref=e626]
+            - cell [ref=e627]:
+              - spinbutton [ref=e628]: "0"
+            - cell "—" [ref=e629]
+          - row [ref=e630]:
+            - cell "Spaceships" [ref=e631]
+            - cell "3" [ref=e632]
+            - cell "13.19 / 10.79" [ref=e633]
+            - cell [ref=e634]:
+              - spinbutton [ref=e635]: "0"
+            - cell "—" [ref=e636]
+          - row [ref=e1278]:
+            - cell "Rockets" [ref=e638]
+            - cell "54" [ref=e1279]
+            - cell "4.40 / 3.60" [ref=e640]
+            - cell [ref=e641]:
+              - spinbutton [ref=e642]: "0"
+            - cell "—" [ref=e643]
+          - row [ref=e1280]:
+            - cell "Exotic Matter" [ref=e645]
+            - cell "4" [ref=e646]
+            - cell "8.79 / 7.19" [ref=e1281]
+            - cell [ref=e648]:
+              - spinbutton [ref=e649]: "0"
+            - cell "—" [ref=e650]
+          - row [ref=e1282]:
+            - cell "Hyperium" [ref=e652]
+            - cell "27" [ref=e1283]
+            - cell "27.48 / 22.48" [ref=e1284]
+            - cell [ref=e655]:
+              - spinbutton [ref=e656]: "0"
+            - cell "—" [ref=e657]
+      - generic [ref=e658]: Nations
+      - table [ref=e659]:
+        - rowgroup [ref=e660]:
+          - row [ref=e661]:
+            - columnheader "Nation" [ref=e662]
+            - columnheader "Currency" [ref=e663]
+            - columnheader "GDP (E$)" [ref=e664]
+        - rowgroup [ref=e665]:
+          - row [ref=e1285]:
+            - cell "Imperial State of Mars" [ref=e667]
+            - cell "MSV 1.00" [ref=e668]
+            - cell "$8.87B" [ref=e1286]
+          - row [ref=e1287]:
+            - cell "Republic of Venus" [ref=e671]
+            - cell "VNC 1.16" [ref=e672]
+            - cell "$9.62B" [ref=e1288]
+          - row [ref=e1289]:
+            - cell "Orion Republic" [ref=e675]
+            - cell "ORM 0.93" [ref=e676]
+            - cell "$5.17B" [ref=e1290]
+          - row [ref=e678]:
+            - cell "Kingdom of Lalande" [ref=e679]
+            - cell "LLD 0.70" [ref=e680]
+            - cell "$2.90B" [ref=e681]
+          - row [ref=e1291]:
+            - cell "Zorya Compact" [ref=e1292]
+            - cell "ZCC 1.02" [ref=e1293]
+            - cell "$4.32B" [ref=e1294]
+          - row [ref=e1295]:
+            - cell "Myrr Concord" [ref=e1296]
+            - cell "MCC 1.02" [ref=e1297]
+            - cell "$6.23B" [ref=e1298]
+          - row [ref=e1299]:
+            - cell "Thessa Dominion" [ref=e1300]
+            - cell "TDC 1.01" [ref=e1301]
+            - cell "$7.12B" [ref=e1302]
+          - row [ref=e1303]:
+            - cell "Jorun Compact" [ref=e1304]
+            - cell "JCC 1.05" [ref=e1305]
+            - cell "$6.03B" [ref=e1306]
+          - row [ref=e1307]:
+            - cell "Qadir Directorate" [ref=e1308]
+            - cell "QDC 1.06" [ref=e1309]
+            - cell "$4.73B" [ref=e1310]
+          - row [ref=e1311]:
+            - cell "Pell League" [ref=e1312]
+            - cell "PLC 1.03" [ref=e1313]
+            - cell "$8.77B" [ref=e1314]
+          - row [ref=e1315]:
+            - cell "Xanth Compact" [ref=e1316]
+            - cell "XCC 1.03" [ref=e1317]
+            - cell "$8.87B" [ref=e1318]
+          - row [ref=e1319]:
+            - cell "Halcy Concord" [ref=e1320]
+            - cell "HCC 1.02" [ref=e1321]
+            - cell "$8.74B" [ref=e1322]
+          - row [ref=e1323]:
+            - cell "Sable Concord" [ref=e1324]
+            - cell "SCC 1.05" [ref=e1325]
+            - cell "$7.31B" [ref=e1326]
+          - row [ref=e1327]:
+            - cell "Lumen Hegemony" [ref=e1328]
+            - cell "LHC 1.04" [ref=e1329]
+            - cell "$7.56B" [ref=e1330]
+          - row [ref=e1331]:
+            - cell "Nadir Commonwealth" [ref=e1332]
+            - cell "NCC 1.03" [ref=e1333]
+            - cell "$5.10B" [ref=e1334]
+          - row [ref=e1335]:
+            - cell "Rhovan Commonwealth" [ref=e1336]
+            - cell "RCC 1.01" [ref=e1337]
+            - cell "$3.09B" [ref=e1338]
+          - row [ref=e1339]:
+            - cell "Varga Republic" [ref=e1340]
+            - cell "VRC 1.02" [ref=e1341]
+            - cell "$5.66B" [ref=e1342]
+          - row [ref=e1343]:
+            - cell "Dravik Union" [ref=e1344]
+            - cell "DUC 1.01" [ref=e1345]
+            - cell "$5.61B" [ref=e1346]
+          - row [ref=e1347]:
+            - cell "Ulm Commonwealth" [ref=e1348]
+            - cell "UCC 1.03" [ref=e1349]
+            - cell "$12.02B" [ref=e1350]
+          - row [ref=e1351]:
+            - cell "Ilmar Concord" [ref=e1352]
+            - cell "ICC 1.01" [ref=e1353]
+            - cell "$6.89B" [ref=e1354]
+          - row [ref=e1355]:
+            - cell "Cyra Sovereignty" [ref=e1356]
+            - cell "CSC 1.05" [ref=e1357]
+            - cell "$3.37B" [ref=e1358]
+          - row [ref=e1359]:
+            - cell "Eshtar League" [ref=e1360]
+            - cell "ELC 1.00" [ref=e1361]
+            - cell "$3.26B" [ref=e1362]
+          - row [ref=e1363]:
+            - cell "Zenth Compact" [ref=e1364]
+            - cell "ZCC 1.02" [ref=e1365]
+            - cell "$5.62B" [ref=e1366]
+          - row [ref=e1367]:
+            - cell "Aurel Union" [ref=e1368]
+            - cell "AUC 1.00" [ref=e1369]
+            - cell "$2.92B" [ref=e1370]
+  - generic [ref=e181]:
+    - button "Collapse outliner" [ref=e182]: ›
+    - generic [ref=e183]:
+      - generic [ref=e184]: Outliner
+      - textbox "Search…" [ref=e185]
+      - tablist [ref=e186]:
+        - tab "Territory" [selected] [ref=e187]
+        - tab "Fleet" [ref=e188]
+        - tab "Info" [ref=e189]
+      - generic [ref=e190]:
+        - button "Neighborhoods" [ref=e191]
+        - button "Stars" [ref=e192]
+        - button "Planets" [ref=e193]
+        - button "Moons" [ref=e194]
+        - button "Black Holes" [ref=e195]
+      - generic [ref=e196]:
+        - button "▾ Colonies" [expanded] [ref=e197]:
+          - generic [ref=e198]: ▾
+          - text: Colonies
+        - list [ref=e199]:
+          - listitem [ref=e200]:
+            - generic [ref=e202]: Luna
+          - listitem [ref=e203]:
+            - generic [ref=e205]: Mars
+          - listitem [ref=e206]:
+            - generic [ref=e208]: Phobos
+          - listitem [ref=e209]:
+            - generic [ref=e211]: Deimos
+      - generic [ref=e212]:
+        - button "▾ Starbases" [expanded] [ref=e213]:
+          - generic [ref=e214]: ▾
+          - text: Starbases
+        - generic [ref=e215]: No starbases built
+      - generic [ref=e216]:
+        - button "▾ Market" [expanded] [ref=e217]:
+          - generic [ref=e218]: ▾
+          - text: Market
+        - generic [ref=e219]: No market established
+      - generic [ref=e220]:
+        - button "▾ In View" [expanded] [ref=e221]:
+          - generic [ref=e222]: ▾
+          - text: In View
+        - list [ref=e223]:
+          - listitem [ref=e224]:
+            - generic [ref=e226]: Sol
+          - listitem [ref=e227]:
+            - generic [ref=e229]: Mercury
+          - listitem [ref=e230]:
+            - generic [ref=e232]: Venus
+          - listitem [ref=e233]:
+            - generic [ref=e235]: Earth
+          - listitem [ref=e236]:
+            - generic [ref=e238]: Mars
+          - listitem [ref=e239]:
+            - generic [ref=e241]: Jupiter
+          - listitem [ref=e242]:
+            - generic [ref=e244]: Saturn
+          - listitem [ref=e245]:
+            - generic [ref=e247]: Uranus
+          - listitem [ref=e248]:
+            - generic [ref=e250]: Neptune
+          - listitem [ref=e251]:
+            - generic [ref=e253]: Ceres
+          - listitem [ref=e254]:
+            - generic [ref=e256]: Pluto
+          - listitem [ref=e257]:
+            - generic [ref=e259]: Haumea
+          - listitem [ref=e260]:
+            - generic [ref=e262]: Makemake
+          - listitem [ref=e263]:
+            - generic [ref=e265]: Eris
+  - generic [ref=e690]:
+    - generic [ref=e691]:
+      - text: DEBUG CONSOLE
+      - generic [ref=e692]: DEV BUILD ONLY
+      - button "Close" [ref=e693]: ×
+    - generic [ref=e694]:
+      - generic [ref=e695]:
+        - generic [ref=e696]: Ship class
+        - combobox "Ship class" [ref=e697]:
+          - option "Swift Courier (dev-only) — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Star Jumper (dev-only) — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Hyperspace Scout — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)" [selected]
+          - option "Turing Scout — Hyperdrive (range and safety set by your Hyperdrive Mk, 7-day cooldown)"
+          - option "Troop Transport — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Science Ship — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Construction Ship — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Cargo Ship — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Colony Ship — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Corvette — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Frigate — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Destroyer — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Cruiser — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+          - option "Battleship — Hyperdrive (range and safety set by your Hyperdrive Mk, 27-day cooldown)"
+      - generic [ref=e698]:
+        - generic [ref=e699]: Cluster
+        - combobox "Cluster" [ref=e700]:
+          - option "Solar Neighborhood" [selected]
+          - option "Andromeda Deep"
+          - option "Andromeda Drift"
+          - option "Andromeda Expanse"
+          - option "Andromeda Reach"
+          - option "Andromeda Rim"
+          - option "Andromeda Verge"
+          - option "Apus Belt"
+          - option "Apus Deep"
+          - option "Apus Drift"
+          - option "Apus Expanse"
+          - option "Apus Marches"
+          - option "Apus Reach"
+          - option "Apus Rim"
+          - option "Apus Span"
+          - option "Apus Verge"
+          - option "Aquarius Cluster"
+          - option "Aquarius Deep"
+          - option "Aquarius Drift"
+          - option "Aquarius Expanse"
+          - option "Aquarius Reach"
+          - option "Aquarius Span"
+          - option "Aquarius Verge"
+          - option "Aquila Belt"
+          - option "Aquila Cluster"
+          - option "Aquila Drift"
+          - option "Aquila Expanse"
+          - option "Aquila Marches"
+          - option "Aquila Reach"
+          - option "Aquila Rim"
+          - option "Aquila Span"
+          - option "Ara Cluster"
+          - option "Ara Deep"
+          - option "Ara Drift"
+          - option "Ara Marches"
+          - option "Ara Reach"
+          - option "Ara Rim"
+          - option "Ara Verge"
+          - option "Aries Belt"
+          - option "Aries Cluster"
+          - option "Aries Deep"
+          - option "Aries Drift"
+          - option "Aries Expanse"
+          - option "Aries Marches"
+          - option "Aries Rim"
+          - option "Aries Span"
+          - option "Aries Verge"
+          - option "Auriga Belt"
+          - option "Auriga Deep"
+          - option "Auriga Drift"
+          - option "Auriga Marches"
+          - option "Auriga Span"
+          - option "Caelum Cluster"
+          - option "Caelum Deep"
+          - option "Caelum Expanse"
+          - option "Caelum Reach"
+          - option "Caelum Rim"
+          - option "Caelum Span"
+          - option "Caelum Verge"
+          - option "Cancer Deep"
+          - option "Cancer Reach"
+          - option "Cancer Rim"
+          - option "Cancer Span"
+          - option "Cancer Verge"
+          - option "Capricornus Belt"
+          - option "Capricornus Marches"
+          - option "Capricornus Rim"
+          - option "Capricornus Span"
+          - option "Capricornus Verge"
+          - option "Carina Belt"
+          - option "Carina Cluster"
+          - option "Carina Deep"
+          - option "Carina Drift"
+          - option "Carina Expanse"
+          - option "Carina Marches"
+          - option "Carina Rim"
+          - option "Carina Span"
+          - option "Cassiopeia Cluster"
+          - option "Cassiopeia Deep"
+          - option "Cassiopeia Expanse"
+          - option "Cassiopeia Marches"
+          - option "Cassiopeia Reach"
+          - option "Cassiopeia Rim"
+          - option "Centaurus Belt"
+          - option "Centaurus Deep"
+          - option "Centaurus Drift"
+          - option "Centaurus Expanse"
+          - option "Centaurus Marches"
+          - option "Centaurus Reach"
+          - option "Centaurus Span"
+          - option "Cepheus Belt"
+          - option "Cepheus Cluster"
+          - option "Cepheus Drift"
+          - option "Cepheus Expanse"
+          - option "Cepheus Marches"
+          - option "Cepheus Reach"
+          - option "Cepheus Verge"
+          - option "Cetus Belt"
+          - option "Cetus Deep"
+          - option "Cetus Expanse"
+          - option "Cetus Marches"
+          - option "Cetus Rim"
+          - option "Cetus Span"
+          - option "Cetus Verge"
+          - option "Chamaeleon Belt"
+          - option "Chamaeleon Cluster"
+          - option "Chamaeleon Deep"
+          - option "Chamaeleon Expanse"
+          - option "Chamaeleon Marches"
+          - option "Chamaeleon Verge"
+          - option "Columba Cluster"
+          - option "Columba Deep"
+          - option "Columba Expanse"
+          - option "Columba Reach"
+          - option "Columba Span"
+          - option "Corvus Belt"
+          - option "Corvus Cluster"
+          - option "Corvus Deep"
+          - option "Corvus Drift"
+          - option "Corvus Marches"
+          - option "Corvus Reach"
+          - option "Corvus Rim"
+          - option "Corvus Span"
+          - option "Corvus Verge"
+          - option "Cygnus Cluster"
+          - option "Cygnus Deep"
+          - option "Cygnus Drift"
+          - option "Cygnus Expanse"
+          - option "Cygnus Marches"
+          - option "Cygnus Reach"
+          - option "Cygnus Rim"
+          - option "Cygnus Span"
+          - option "Cygnus Verge"
+          - option "Draco Belt"
+          - option "Draco Cluster"
+          - option "Draco Drift"
+          - option "Draco Expanse"
+          - option "Draco Marches"
+          - option "Draco Rim"
+          - option "Draco Span"
+          - option "Draco Verge"
+          - option "Eridanus Belt"
+          - option "Eridanus Drift"
+          - option "Eridanus Expanse"
+          - option "Eridanus Reach"
+          - option "Eridanus Span"
+          - option "Eridanus Verge"
+          - option "Fornax Cluster"
+          - option "Fornax Deep"
+          - option "Fornax Drift"
+          - option "Fornax Reach"
+          - option "Fornax Span"
+          - option "Fornax Verge"
+          - option "Gemini Drift"
+          - option "Gemini Expanse"
+          - option "Gemini Marches"
+          - option "Gemini Reach"
+          - option "Gemini Rim"
+          - option "Gemini Span"
+          - option "Gemini Verge"
+          - option "Grus Drift"
+          - option "Grus Expanse"
+          - option "Grus Span"
+          - option "Horologium Cluster"
+          - option "Horologium Drift"
+          - option "Horologium Marches"
+          - option "Horologium Rim"
+          - option "Horologium Verge"
+          - option "Hydra Cluster"
+          - option "Hydra Drift"
+          - option "Hydra Expanse"
+          - option "Hydra Rim"
+          - option "Hydra Span"
+          - option "Indus Belt"
+          - option "Indus Cluster"
+          - option "Indus Drift"
+          - option "Indus Reach"
+          - option "Indus Rim"
+          - option "Leo Belt"
+          - option "Leo Cluster"
+          - option "Leo Deep"
+          - option "Leo Drift"
+          - option "Leo Expanse"
+          - option "Leo Reach"
+          - option "Leo Verge"
+          - option "Lepus Cluster"
+          - option "Lepus Drift"
+          - option "Lepus Marches"
+          - option "Lepus Reach"
+          - option "Lepus Span"
+          - option "Lepus Verge"
+          - option "Libra Expanse"
+          - option "Libra Reach"
+          - option "Libra Rim"
+          - option "Libra Span"
+          - option "Lupus Belt"
+          - option "Lupus Cluster"
+          - option "Lupus Deep"
+          - option "Lupus Drift"
+          - option "Lupus Reach"
+          - option "Lupus Rim"
+          - option "Lupus Span"
+          - option "Lupus Verge"
+          - option "Lyra Cluster"
+          - option "Lyra Marches"
+          - option "Lyra Rim"
+          - option "Lyra Verge"
+          - option "Monoceros Belt"
+          - option "Monoceros Expanse"
+          - option "Monoceros Marches"
+          - option "Monoceros Reach"
+          - option "Monoceros Rim"
+          - option "Monoceros Span"
+          - option "Octans Belt"
+          - option "Octans Cluster"
+          - option "Octans Drift"
+          - option "Octans Expanse"
+          - option "Octans Marches"
+          - option "Orion Belt"
+          - option "Orion Cluster"
+          - option "Orion Deep"
+          - option "Orion Marches"
+          - option "Orion Verge"
+          - option "Pavo Cluster"
+          - option "Pavo Deep"
+          - option "Pavo Expanse"
+          - option "Pavo Marches"
+          - option "Pavo Reach"
+          - option "Pavo Verge"
+          - option "Pegasus Belt"
+          - option "Pegasus Drift"
+          - option "Pegasus Expanse"
+          - option "Pegasus Marches"
+          - option "Pegasus Reach"
+          - option "Pegasus Rim"
+          - option "Pegasus Span"
+          - option "Pegasus Verge"
+          - option "Perseus Belt"
+          - option "Perseus Cluster"
+          - option "Perseus Deep"
+          - option "Perseus Drift"
+          - option "Perseus Rim"
+          - option "Perseus Span"
+          - option "Perseus Verge"
+          - option "Phoenix Cluster"
+          - option "Phoenix Deep"
+          - option "Phoenix Expanse"
+          - option "Phoenix Marches"
+          - option "Phoenix Rim"
+          - option "Phoenix Verge"
+          - option "Pictor Belt"
+          - option "Pictor Cluster"
+          - option "Pictor Deep"
+          - option "Pictor Drift"
+          - option "Pictor Expanse"
+          - option "Pictor Marches"
+          - option "Pictor Rim"
+          - option "Pictor Verge"
+          - option "Pisces Cluster"
+          - option "Pisces Drift"
+          - option "Pisces Marches"
+          - option "Pisces Reach"
+          - option "Pisces Rim"
+          - option "Pisces Verge"
+          - option "Reticulum Cluster"
+          - option "Reticulum Drift"
+          - option "Reticulum Marches"
+          - option "Reticulum Reach"
+          - option "Reticulum Rim"
+          - option "Reticulum Span"
+          - option "Reticulum Verge"
+          - option "Sagittarius Belt"
+          - option "Sagittarius Cluster"
+          - option "Sagittarius Deep"
+          - option "Sagittarius Drift"
+          - option "Sagittarius Expanse"
+          - option "Sagittarius Marches"
+          - option "Sagittarius Rim"
+          - option "Sagittarius Span"
+          - option "Scorpius Deep"
+          - option "Scorpius Expanse"
+          - option "Scorpius Marches"
+          - option "Scorpius Rim"
+          - option "Scorpius Span"
+          - option "Scorpius Verge"
+          - option "Sculptor Belt"
+          - option "Sculptor Deep"
+          - option "Sculptor Marches"
+          - option "Sculptor Reach"
+          - option "Sculptor Verge"
+          - option "Taurus Belt"
+          - option "Taurus Cluster"
+          - option "Taurus Deep"
+          - option "Taurus Drift"
+          - option "Taurus Expanse"
+          - option "Taurus Marches"
+          - option "Taurus Span"
+          - option "Taurus Verge"
+          - option "Tucana Cluster"
+          - option "Tucana Drift"
+          - option "Tucana Expanse"
+          - option "Tucana Rim"
+          - option "Tucana Verge"
+          - option "Vela Cluster"
+          - option "Vela Drift"
+          - option "Vela Expanse"
+          - option "Vela Marches"
+          - option "Vela Rim"
+          - option "Virgo Cluster"
+          - option "Virgo Deep"
+          - option "Virgo Expanse"
+          - option "Virgo Marches"
+          - option "Virgo Rim"
+          - option "Virgo Span"
+          - option "Virgo Verge"
+          - option "Volans Cluster"
+          - option "Volans Deep"
+          - option "Volans Drift"
+          - option "Volans Marches"
+          - option "Volans Rim"
+          - option "Volans Verge"
+      - generic [ref=e701]:
+        - generic [ref=e702]: System
+        - combobox "System" [ref=e703]:
+          - option "Sol" [selected]
+          - option "Alpha Centauri"
+          - option "Barnard's Star"
+          - option "Wolf 359"
+          - option "Lalande 21185"
+          - option "Sirius"
+          - option "Luyten 726-8"
+          - option "Ross 154"
+      - generic [ref=e704]:
+        - generic [ref=e705]: Spawn near
+        - combobox "Spawn near" [ref=e706]:
+          - option "Sol" [selected]
+          - option "Mercury"
+          - option "Venus"
+          - option "Earth"
+          - option "Mars"
+          - option "Jupiter"
+          - option "Saturn"
+          - option "Uranus"
+          - option "Neptune"
+          - option "Ceres"
+          - option "Pluto"
+          - option "Haumea"
+          - option "Makemake"
+          - option "Eris"
+          - option "At the star (open space)"
+          - option "Cluster entry point"
+      - generic [ref=e707]:
+        - generic [ref=e708]: Owner
+        - combobox "Owner" [ref=e709]:
+          - option "Your nation" [selected]
+          - option "Republic of Venus"
+          - option "Orion Republic"
+          - option "Kingdom of Lalande"
+          - option "Earth"
+          - option "Zorya Compact"
+          - option "Myrr Concord"
+          - option "Thessa Dominion"
+          - option "Jorun Compact"
+          - option "Qadir Directorate"
+          - option "Pell League"
+          - option "Xanth Compact"
+          - option "Halcy Concord"
+          - option "Sable Concord"
+          - option "Lumen Hegemony"
+          - option "Nadir Commonwealth"
+          - option "Rhovan Commonwealth"
+          - option "Varga Republic"
+          - option "Dravik Union"
+          - option "Ulm Commonwealth"
+          - option "Ilmar Concord"
+          - option "Cyra Sovereignty"
+          - option "Eshtar League"
+          - option "Zenth Compact"
+          - option "Aurel Union"
+          - option "Pirates (no nation)"
+          - option "Friendly Irregulars (no nation)"
+          - option "Neutral Traders (no nation)"
+      - button "Spawn Ship" [ref=e710]
+      - generic [ref=e712]:
+        - generic [ref=e713]: Army
+        - combobox "Army" [ref=e714]:
+          - option "Assault Army" [selected]
+          - option "Marine Army"
+          - option "Garrison"
+      - generic [ref=e715]:
+        - generic [ref=e716]: "On"
+        - combobox "On" [ref=e717]:
+          - option "Mercury" [selected]
+          - option "Venus"
+          - option "Earth"
+          - option "Luna"
+          - option "Mars"
+          - option "Phobos"
+          - option "Deimos"
+          - option "Jupiter"
+          - option "Io"
+          - option "Europa"
+          - option "Ganymede"
+          - option "Callisto"
+          - option "Saturn"
+          - option "Titan"
+          - option "Rhea"
+          - option "Iapetus"
+          - option "Dione"
+          - option "Uranus"
+          - option "Miranda"
+          - option "Ariel"
+          - option "Umbriel"
+          - option "Titania"
+          - option "Oberon"
+          - option "Neptune"
+          - option "Triton"
+          - option "Ceres"
+          - option "Pluto"
+          - option "Haumea"
+          - option "Makemake"
+          - option "Eris"
+      - generic [ref=e718]:
+        - generic [ref=e719]: Owner
+        - combobox "Owner" [ref=e720]:
+          - option "Your nation" [selected]
+          - option "Republic of Venus"
+          - option "Orion Republic"
+          - option "Kingdom of Lalande"
+          - option "Earth"
+          - option "Zorya Compact"
+          - option "Myrr Concord"
+          - option "Thessa Dominion"
+          - option "Jorun Compact"
+          - option "Qadir Directorate"
+          - option "Pell League"
+          - option "Xanth Compact"
+          - option "Halcy Concord"
+          - option "Sable Concord"
+          - option "Lumen Hegemony"
+          - option "Nadir Commonwealth"
+          - option "Rhovan Commonwealth"
+          - option "Varga Republic"
+          - option "Dravik Union"
+          - option "Ulm Commonwealth"
+          - option "Ilmar Concord"
+          - option "Cyra Sovereignty"
+          - option "Eshtar League"
+          - option "Zenth Compact"
+          - option "Aurel Union"
+          - option "Pirates (no nation)"
+          - option "Friendly Irregulars (no nation)"
+          - option "Neutral Traders (no nation)"
+      - generic [ref=e721]:
+        - generic [ref=e722]: Place
+        - combobox "Place" [ref=e723]:
+          - option "Auto (muster point, or a landing site)" [selected]
+          - option "Pick on the ground map"
+          - option "Aboard the selected transport"
+      - button "Spawn Army" [ref=e724]
+      - generic [ref=e726]:
+        - generic [ref=e727]: Scenario
+        - combobox "Scenario" [ref=e728]:
+          - option "Border Patrol" [selected]
+          - option "Corvette Raid"
+          - option "Gunboat's Gambit"
+          - option "Picket Line"
+          - option "Raider King's Escort"
+          - option "Dreadnought's Shadow"
+      - generic [ref=e729]: A lone raider corvette against a single cruiser. The cruiser wins on defaults every time (16/16 verified) — a straightforward class-advantage stomp with nothing to learn from the loss column.
+      - button "Load Scenario" [ref=e730]
+      - generic [ref=e731]:
+        - generic [ref=e732]: Army scenario
+        - combobox "Army scenario" [ref=e733]:
+          - option "Landing Party" [selected]
+          - option "Dunes Patrol"
+          - option "Split Command"
+          - option "Reserve in the Timber"
+          - option "Outnumbered on the Ice"
+          - option "Fall Back to the Woods"
+      - generic [ref=e734]: Two assault armies on open plains meet a marine army at 60% strength coming ashore. Left alone they win comfortably — verified with no orders at all.
+      - button "Load Army Scenario" [ref=e735]
+      - generic [ref=e737]:
+        - checkbox "Free Research (all tech costs 0)" [ref=e738]
+        - text: Free Research (all tech costs 0)
+      - generic [ref=e739]:
+        - checkbox "Observer mode (all empires, borders and hyperlanes)" [checked] [active] [ref=e740]
+        - text: Observer mode (all empires, borders and hyperlanes)
+      - generic [ref=e741]:
+        - generic [ref=e742]: Grant research
+        - combobox "Grant research" [ref=e743]:
+          - option "Physics" [selected]
+          - option "Society"
+          - option "Engineering"
+      - generic [ref=e744]:
+        - generic [ref=e745]: Amount
+        - spinbutton "Amount" [ref=e746]: "100"
+      - button "Grant Research" [ref=e747]
+      - generic [ref=e749]: "CHEAT: resources, influence, time, wars"
+      - generic [ref=e750]:
+        - generic [ref=e751]: "Cheat: add resource"
+        - 'combobox "Cheat: add resource" [ref=e752]':
+          - option "Energy"
+          - option "Minerals"
+          - option "Food"
+          - option "Consumer Goods"
+          - option "Alloys" [selected]
+          - option "Electronics"
+          - option "Exotic Matter"
+          - option "Hyperium"
+          - option "Spaceships"
+          - option "Rockets"
+          - option "Special"
+          - option "Influence"
+      - generic [ref=e753]:
+        - generic [ref=e754]: Amount
+        - spinbutton "Amount" [ref=e755]: "1000"
+      - button "Add Resource (cheat)" [ref=e756]
+      - generic [ref=e757]:
+        - generic [ref=e758]: "Cheat: influence"
+        - 'spinbutton "Cheat: influence" [ref=e759]': "100"
+      - button "Add Influence (cheat)" [ref=e760]
+      - generic [ref=e761]:
+        - generic [ref=e762]: "Cheat: jump time (days)"
+        - 'spinbutton "Cheat: jump time (days)" [ref=e763]': "30"
+      - button "Jump Time (cheat)" [ref=e764]
+      - generic [ref=e765]:
+        - generic [ref=e766]: "Cheat: end war"
+        - 'combobox "Cheat: end war" [disabled] [ref=e767]':
+          - option "No wars" [selected]
+      - button "End War (cheat)" [disabled] [ref=e768]
+      - button "End All Wars (cheat)" [disabled] [ref=e769]
+      - generic [ref=e771]:
+        - generic [ref=e772]:
+          - generic [ref=e773]: Corvette 1
+          - button "Remove Corvette 1" [ref=e774]: ×
+        - generic [ref=e775]:
+          - generic [ref=e776]: Corvette 2
+          - button "Remove Corvette 2" [ref=e777]: ×
+        - generic [ref=e778]:
+          - generic [ref=e779]: Corvette 3
+          - button "Remove Corvette 3" [ref=e780]: ×
+        - generic [ref=e781]:
+          - generic [ref=e782]: Corvette 4
+          - button "Remove Corvette 4" [ref=e783]: ×
+        - generic [ref=e784]:
+          - generic [ref=e785]: Corvette 5
+          - button "Remove Corvette 5" [ref=e786]: ×
+        - generic [ref=e787]:
+          - generic [ref=e788]: Troop Transport 6
+          - button "Remove Troop Transport 6" [ref=e789]: ×
+        - generic [ref=e790]:
+          - generic [ref=e791]: Corvette 7
+          - button "Remove Corvette 7" [ref=e792]: ×
+        - generic [ref=e793]:
+          - generic [ref=e794]: Corvette 8
+          - button "Remove Corvette 8" [ref=e795]: ×
+        - generic [ref=e796]:
+          - generic [ref=e797]: Corvette 9
+          - button "Remove Corvette 9" [ref=e798]: ×
+        - generic [ref=e799]:
+          - generic [ref=e800]: Corvette 10
+          - button "Remove Corvette 10" [ref=e801]: ×
+        - generic [ref=e802]:
+          - generic [ref=e803]: Corvette 11
+          - button "Remove Corvette 11" [ref=e804]: ×
+        - generic [ref=e805]:
+          - generic [ref=e806]: Troop Transport 12
+          - button "Remove Troop Transport 12" [ref=e807]: ×
+        - generic [ref=e808]:
+          - generic [ref=e809]: Corvette 13
+          - button "Remove Corvette 13" [ref=e810]: ×
+        - generic [ref=e811]:
+          - generic [ref=e812]: Corvette 14
+          - button "Remove Corvette 14" [ref=e813]: ×
+        - generic [ref=e814]:
+          - generic [ref=e815]: Corvette 15
+          - button "Remove Corvette 15" [ref=e816]: ×
+        - generic [ref=e817]:
+          - generic [ref=e818]: Corvette 16
+          - button "Remove Corvette 16" [ref=e819]: ×
+        - generic [ref=e820]:
+          - generic [ref=e821]: Corvette 17
+          - button "Remove Corvette 17" [ref=e822]: ×
+        - generic [ref=e823]:
+          - generic [ref=e824]: Troop Transport 18
+          - button "Remove Troop Transport 18" [ref=e825]: ×
+        - generic [ref=e826]:
+          - generic [ref=e827]: Corvette 19
+          - button "Remove Corvette 19" [ref=e828]: ×
+        - generic [ref=e829]:
+          - generic [ref=e830]: Corvette 20
+          - button "Remove Corvette 20" [ref=e831]: ×
+        - generic [ref=e832]:
+          - generic [ref=e833]: Corvette 21
+          - button "Remove Corvette 21" [ref=e834]: ×
+        - generic [ref=e835]:
+          - generic [ref=e836]: Corvette 22
+          - button "Remove Corvette 22" [ref=e837]: ×
+        - generic [ref=e838]:
+          - generic [ref=e839]: Corvette 23
+          - button "Remove Corvette 23" [ref=e840]: ×
+        - generic [ref=e841]:
+          - generic [ref=e842]: Troop Transport 24
+          - button "Remove Troop Transport 24" [ref=e843]: ×
+        - generic [ref=e844]:
+          - generic [ref=e845]: Corvette 25
+          - button "Remove Corvette 25" [ref=e846]: ×
+        - generic [ref=e847]:
+          - generic [ref=e848]: Corvette 26
+          - button "Remove Corvette 26" [ref=e849]: ×
+        - generic [ref=e850]:
+          - generic [ref=e851]: Corvette 27
+          - button "Remove Corvette 27" [ref=e852]: ×
+        - generic [ref=e853]:
+          - generic [ref=e854]: Corvette 28
+          - button "Remove Corvette 28" [ref=e855]: ×
+        - generic [ref=e856]:
+          - generic [ref=e857]: Corvette 29
+          - button "Remove Corvette 29" [ref=e858]: ×
+        - generic [ref=e859]:
+          - generic [ref=e860]: Troop Transport 30
+          - button "Remove Troop Transport 30" [ref=e861]: ×
+        - generic [ref=e862]:
+          - generic [ref=e863]: Corvette 31
+          - button "Remove Corvette 31" [ref=e864]: ×
+        - generic [ref=e865]:
+          - generic [ref=e866]: Corvette 32
+          - button "Remove Corvette 32" [ref=e867]: ×
+        - generic [ref=e868]:
+          - generic [ref=e869]: Corvette 33
+          - button "Remove Corvette 33" [ref=e870]: ×
+        - generic [ref=e871]:
+          - generic [ref=e872]: Corvette 34
+          - button "Remove Corvette 34" [ref=e873]: ×
+        - generic [ref=e874]:
+          - generic [ref=e875]: Corvette 35
+          - button "Remove Corvette 35" [ref=e876]: ×
+        - generic [ref=e877]:
+          - generic [ref=e878]: Troop Transport 36
+          - button "Remove Troop Transport 36" [ref=e879]: ×
+        - generic [ref=e880]:
+          - generic [ref=e881]: Corvette 37
+          - button "Remove Corvette 37" [ref=e882]: ×
+        - generic [ref=e883]:
+          - generic [ref=e884]: Corvette 38
+          - button "Remove Corvette 38" [ref=e885]: ×
+        - generic [ref=e886]:
+          - generic [ref=e887]: Corvette 39
+          - button "Remove Corvette 39" [ref=e888]: ×
+        - generic [ref=e889]:
+          - generic [ref=e890]: Corvette 40
+          - button "Remove Corvette 40" [ref=e891]: ×
+        - generic [ref=e892]:
+          - generic [ref=e893]: Corvette 41
+          - button "Remove Corvette 41" [ref=e894]: ×
+        - generic [ref=e895]:
+          - generic [ref=e896]: Troop Transport 42
+          - button "Remove Troop Transport 42" [ref=e897]: ×
+        - generic [ref=e898]:
+          - generic [ref=e899]: Corvette 43
+          - button "Remove Corvette 43" [ref=e900]: ×
+        - generic [ref=e901]:
+          - generic [ref=e902]: Corvette 44
+          - button "Remove Corvette 44" [ref=e903]: ×
+        - generic [ref=e904]:
+          - generic [ref=e905]: Corvette 45
+          - button "Remove Corvette 45" [ref=e906]: ×
+        - generic [ref=e907]:
+          - generic [ref=e908]: Corvette 46
+          - button "Remove Corvette 46" [ref=e909]: ×
+        - generic [ref=e910]:
+          - generic [ref=e911]: Corvette 47
+          - button "Remove Corvette 47" [ref=e912]: ×
+        - generic [ref=e913]:
+          - generic [ref=e914]: Troop Transport 48
+          - button "Remove Troop Transport 48" [ref=e915]: ×
+        - generic [ref=e916]:
+          - generic [ref=e917]: Corvette 49
+          - button "Remove Corvette 49" [ref=e918]: ×
+        - generic [ref=e919]:
+          - generic [ref=e920]: Corvette 50
+          - button "Remove Corvette 50" [ref=e921]: ×
+        - generic [ref=e922]:
+          - generic [ref=e923]: Corvette 51
+          - button "Remove Corvette 51" [ref=e924]: ×
+        - generic [ref=e925]:
+          - generic [ref=e926]: Corvette 52
+          - button "Remove Corvette 52" [ref=e927]: ×
+        - generic [ref=e928]:
+          - generic [ref=e929]: Corvette 53
+          - button "Remove Corvette 53" [ref=e930]: ×
+        - generic [ref=e931]:
+          - generic [ref=e932]: Troop Transport 54
+          - button "Remove Troop Transport 54" [ref=e933]: ×
+        - generic [ref=e934]:
+          - generic [ref=e935]: Corvette 55
+          - button "Remove Corvette 55" [ref=e936]: ×
+        - generic [ref=e937]:
+          - generic [ref=e938]: Corvette 56
+          - button "Remove Corvette 56" [ref=e939]: ×
+        - generic [ref=e940]:
+          - generic [ref=e941]: Corvette 57
+          - button "Remove Corvette 57" [ref=e942]: ×
+        - generic [ref=e943]:
+          - generic [ref=e944]: Corvette 58
+          - button "Remove Corvette 58" [ref=e945]: ×
+        - generic [ref=e946]:
+          - generic [ref=e947]: Corvette 59
+          - button "Remove Corvette 59" [ref=e948]: ×
+        - generic [ref=e949]:
+          - generic [ref=e950]: Troop Transport 60
+          - button "Remove Troop Transport 60" [ref=e951]: ×
+        - generic [ref=e952]:
+          - generic [ref=e953]: Corvette 61
+          - button "Remove Corvette 61" [ref=e954]: ×
+        - generic [ref=e955]:
+          - generic [ref=e956]: Corvette 62
+          - button "Remove Corvette 62" [ref=e957]: ×
+        - generic [ref=e958]:
+          - generic [ref=e959]: Corvette 63
+          - button "Remove Corvette 63" [ref=e960]: ×
+        - generic [ref=e961]:
+          - generic [ref=e962]: Corvette 64
+          - button "Remove Corvette 64" [ref=e963]: ×
+        - generic [ref=e964]:
+          - generic [ref=e965]: Corvette 65
+          - button "Remove Corvette 65" [ref=e966]: ×
+        - generic [ref=e967]:
+          - generic [ref=e968]: Troop Transport 66
+          - button "Remove Troop Transport 66" [ref=e969]: ×
+        - generic [ref=e970]:
+          - generic [ref=e971]: Corvette 67
+          - button "Remove Corvette 67" [ref=e972]: ×
+        - generic [ref=e973]:
+          - generic [ref=e974]: Corvette 68
+          - button "Remove Corvette 68" [ref=e975]: ×
+        - generic [ref=e976]:
+          - generic [ref=e977]: Corvette 69
+          - button "Remove Corvette 69" [ref=e978]: ×
+        - generic [ref=e979]:
+          - generic [ref=e980]: Corvette 70
+          - button "Remove Corvette 70" [ref=e981]: ×
+        - generic [ref=e982]:
+          - generic [ref=e983]: Corvette 71
+          - button "Remove Corvette 71" [ref=e984]: ×
+        - generic [ref=e985]:
+          - generic [ref=e986]: Troop Transport 72
+          - button "Remove Troop Transport 72" [ref=e987]: ×
+        - generic [ref=e988]:
+          - generic [ref=e989]: Corvette 73
+          - button "Remove Corvette 73" [ref=e990]: ×
+        - generic [ref=e991]:
+          - generic [ref=e992]: Corvette 74
+          - button "Remove Corvette 74" [ref=e993]: ×
+        - generic [ref=e994]:
+          - generic [ref=e995]: Corvette 75
+          - button "Remove Corvette 75" [ref=e996]: ×
+        - generic [ref=e997]:
+          - generic [ref=e998]: Corvette 76
+          - button "Remove Corvette 76" [ref=e999]: ×
+        - generic [ref=e1000]:
+          - generic [ref=e1001]: Corvette 77
+          - button "Remove Corvette 77" [ref=e1002]: ×
+        - generic [ref=e1003]:
+          - generic [ref=e1004]: Troop Transport 78
+          - button "Remove Troop Transport 78" [ref=e1005]: ×
+        - generic [ref=e1006]:
+          - generic [ref=e1007]: Corvette 79
+          - button "Remove Corvette 79" [ref=e1008]: ×
+        - generic [ref=e1009]:
+          - generic [ref=e1010]: Corvette 80
+          - button "Remove Corvette 80" [ref=e1011]: ×
+        - generic [ref=e1012]:
+          - generic [ref=e1013]: Corvette 81
+          - button "Remove Corvette 81" [ref=e1014]: ×
+        - generic [ref=e1015]:
+          - generic [ref=e1016]: Corvette 82
+          - button "Remove Corvette 82" [ref=e1017]: ×
+        - generic [ref=e1018]:
+          - generic [ref=e1019]: Corvette 83
+          - button "Remove Corvette 83" [ref=e1020]: ×
+        - generic [ref=e1021]:
+          - generic [ref=e1022]: Troop Transport 84
+          - button "Remove Troop Transport 84" [ref=e1023]: ×
+        - generic [ref=e1024]:
+          - generic [ref=e1025]: Corvette 85
+          - button "Remove Corvette 85" [ref=e1026]: ×
+        - generic [ref=e1027]:
+          - generic [ref=e1028]: Corvette 86
+          - button "Remove Corvette 86" [ref=e1029]: ×
+        - generic [ref=e1030]:
+          - generic [ref=e1031]: Corvette 87
+          - button "Remove Corvette 87" [ref=e1032]: ×
+        - generic [ref=e1033]:
+          - generic [ref=e1034]: Corvette 88
+          - button "Remove Corvette 88" [ref=e1035]: ×
+        - generic [ref=e1036]:
+          - generic [ref=e1037]: Corvette 89
+          - button "Remove Corvette 89" [ref=e1038]: ×
+        - generic [ref=e1039]:
+          - generic [ref=e1040]: Troop Transport 90
+          - button "Remove Troop Transport 90" [ref=e1041]: ×
+        - generic [ref=e1042]:
+          - generic [ref=e1043]: Corvette 91
+          - button "Remove Corvette 91" [ref=e1044]: ×
+        - generic [ref=e1045]:
+          - generic [ref=e1046]: Corvette 92
+          - button "Remove Corvette 92" [ref=e1047]: ×
+        - generic [ref=e1048]:
+          - generic [ref=e1049]: Corvette 93
+          - button "Remove Corvette 93" [ref=e1050]: ×
+        - generic [ref=e1051]:
+          - generic [ref=e1052]: Corvette 94
+          - button "Remove Corvette 94" [ref=e1053]: ×
+        - generic [ref=e1054]:
+          - generic [ref=e1055]: Corvette 95
+          - button "Remove Corvette 95" [ref=e1056]: ×
+        - generic [ref=e1057]:
+          - generic [ref=e1058]: Troop Transport 96
+          - button "Remove Troop Transport 96" [ref=e1059]: ×
+        - generic [ref=e1060]:
+          - generic [ref=e1061]: Corvette 97
+          - button "Remove Corvette 97" [ref=e1062]: ×
+        - generic [ref=e1063]:
+          - generic [ref=e1064]: Corvette 98
+          - button "Remove Corvette 98" [ref=e1065]: ×
+        - generic [ref=e1066]:
+          - generic [ref=e1067]: Corvette 99
+          - button "Remove Corvette 99" [ref=e1068]: ×
+        - generic [ref=e1069]:
+          - generic [ref=e1070]: Corvette 100
+          - button "Remove Corvette 100" [ref=e1071]: ×
+        - generic [ref=e1072]:
+          - generic [ref=e1073]: Corvette 101
+          - button "Remove Corvette 101" [ref=e1074]: ×
+        - generic [ref=e1075]:
+          - generic [ref=e1076]: Troop Transport 102
+          - button "Remove Troop Transport 102" [ref=e1077]: ×
+        - generic [ref=e1078]:
+          - generic [ref=e1079]: Corvette 103
+          - button "Remove Corvette 103" [ref=e1080]: ×
+        - generic [ref=e1081]:
+          - generic [ref=e1082]: Corvette 104
+          - button "Remove Corvette 104" [ref=e1083]: ×
+        - generic [ref=e1084]:
+          - generic [ref=e1085]: Corvette 105
+          - button "Remove Corvette 105" [ref=e1086]: ×
+        - generic [ref=e1087]:
+          - generic [ref=e1088]: Corvette 106
+          - button "Remove Corvette 106" [ref=e1089]: ×
+        - generic [ref=e1090]:
+          - generic [ref=e1091]: Corvette 107
+          - button "Remove Corvette 107" [ref=e1092]: ×
+        - generic [ref=e1093]:
+          - generic [ref=e1094]: Troop Transport 108
+          - button "Remove Troop Transport 108" [ref=e1095]: ×
+        - generic [ref=e1096]:
+          - generic [ref=e1097]: Corvette 109
+          - button "Remove Corvette 109" [ref=e1098]: ×
+        - generic [ref=e1099]:
+          - generic [ref=e1100]: Corvette 110
+          - button "Remove Corvette 110" [ref=e1101]: ×
+        - generic [ref=e1102]:
+          - generic [ref=e1103]: Corvette 111
+          - button "Remove Corvette 111" [ref=e1104]: ×
+        - generic [ref=e1105]:
+          - generic [ref=e1106]: Corvette 112
+          - button "Remove Corvette 112" [ref=e1107]: ×
+        - generic [ref=e1108]:
+          - generic [ref=e1109]: Corvette 113
+          - button "Remove Corvette 113" [ref=e1110]: ×
+        - generic [ref=e1111]:
+          - generic [ref=e1112]: Troop Transport 114
+          - button "Remove Troop Transport 114" [ref=e1113]: ×
+        - generic [ref=e1114]:
+          - generic [ref=e1115]: Corvette 115
+          - button "Remove Corvette 115" [ref=e1116]: ×
+        - generic [ref=e1117]:
+          - generic [ref=e1118]: Corvette 116
+          - button "Remove Corvette 116" [ref=e1119]: ×
+        - generic [ref=e1120]:
+          - generic [ref=e1121]: Corvette 117
+          - button "Remove Corvette 117" [ref=e1122]: ×
+        - generic [ref=e1123]:
+          - generic [ref=e1124]: Corvette 118
+          - button "Remove Corvette 118" [ref=e1125]: ×
+        - generic [ref=e1126]:
+          - generic [ref=e1127]: Corvette 119
+          - button "Remove Corvette 119" [ref=e1128]: ×
+        - generic [ref=e1129]:
+          - generic [ref=e1130]: Troop Transport 120
+          - button "Remove Troop Transport 120" [ref=e1131]: ×
+        - generic [ref=e1132]:
+          - generic [ref=e1133]: Corvette 121
+          - button "Remove Corvette 121" [ref=e1134]: ×
+        - generic [ref=e1135]:
+          - generic [ref=e1136]: Corvette 122
+          - button "Remove Corvette 122" [ref=e1137]: ×
+        - generic [ref=e1138]:
+          - generic [ref=e1139]: Corvette 123
+          - button "Remove Corvette 123" [ref=e1140]: ×
+        - generic [ref=e1141]:
+          - generic [ref=e1142]: Corvette 124
+          - button "Remove Corvette 124" [ref=e1143]: ×
+        - generic [ref=e1144]:
+          - generic [ref=e1145]: Corvette 125
+          - button "Remove Corvette 125" [ref=e1146]: ×
+        - generic [ref=e1147]:
+          - generic [ref=e1148]: Troop Transport 126
+          - button "Remove Troop Transport 126" [ref=e1149]: ×
+        - generic [ref=e1150]:
+          - generic [ref=e1151]: Corvette 127
+          - button "Remove Corvette 127" [ref=e1152]: ×
+        - generic [ref=e1153]:
+          - generic [ref=e1154]: Corvette 128
+          - button "Remove Corvette 128" [ref=e1155]: ×
+        - generic [ref=e1156]:
+          - generic [ref=e1157]: Corvette 129
+          - button "Remove Corvette 129" [ref=e1158]: ×
+        - generic [ref=e1159]:
+          - generic [ref=e1160]: Corvette 130
+          - button "Remove Corvette 130" [ref=e1161]: ×
+        - generic [ref=e1162]:
+          - generic [ref=e1163]: Corvette 131
+          - button "Remove Corvette 131" [ref=e1164]: ×
+        - generic [ref=e1165]:
+          - generic [ref=e1166]: Troop Transport 132
+          - button "Remove Troop Transport 132" [ref=e1167]: ×
+        - generic [ref=e1168]:
+          - generic [ref=e1169]: Corvette 133
+          - button "Remove Corvette 133" [ref=e1170]: ×
+        - generic [ref=e1171]:
+          - generic [ref=e1172]: Corvette 134
+          - button "Remove Corvette 134" [ref=e1173]: ×
+        - generic [ref=e1174]:
+          - generic [ref=e1175]: Corvette 135
+          - button "Remove Corvette 135" [ref=e1176]: ×
+        - generic [ref=e1177]:
+          - generic [ref=e1178]: Corvette 136
+          - button "Remove Corvette 136" [ref=e1179]: ×
+        - generic [ref=e1180]:
+          - generic [ref=e1181]: Corvette 137
+          - button "Remove Corvette 137" [ref=e1182]: ×
+        - generic [ref=e1183]:
+          - generic [ref=e1184]: Troop Transport 138
+          - button "Remove Troop Transport 138" [ref=e1185]: ×
+        - generic [ref=e1186]:
+          - generic [ref=e1187]: Corvette 139
+          - button "Remove Corvette 139" [ref=e1188]: ×
+        - generic [ref=e1189]:
+          - generic [ref=e1190]: Corvette 140
+          - button "Remove Corvette 140" [ref=e1191]: ×
+        - generic [ref=e1192]:
+          - generic [ref=e1193]: Corvette 141
+          - button "Remove Corvette 141" [ref=e1194]: ×
+        - generic [ref=e1195]:
+          - generic [ref=e1196]: Corvette 142
+          - button "Remove Corvette 142" [ref=e1197]: ×
+        - generic [ref=e1198]:
+          - generic [ref=e1199]: Corvette 143
+          - button "Remove Corvette 143" [ref=e1200]: ×
+        - generic [ref=e1201]:
+          - generic [ref=e1202]: Troop Transport 144
+          - button "Remove Troop Transport 144" [ref=e1203]: ×
+        - generic [ref=e1204]:
+          - generic [ref=e1205]: Corvette 145
+          - button "Remove Corvette 145" [ref=e1206]: ×
+        - generic [ref=e1207]:
+          - generic [ref=e1208]: Corvette 146
+          - button "Remove Corvette 146" [ref=e1209]: ×
+        - generic [ref=e1210]:
+          - generic [ref=e1211]: Corvette 147
+          - button "Remove Corvette 147" [ref=e1212]: ×
+        - generic [ref=e1213]:
+          - generic [ref=e1214]: Corvette 148
+          - button "Remove Corvette 148" [ref=e1215]: ×
+        - generic [ref=e1216]:
+          - generic [ref=e1217]: Corvette 149
+          - button "Remove Corvette 149" [ref=e1218]: ×
+        - generic [ref=e1219]:
+          - generic [ref=e1220]: Troop Transport 150
+          - button "Remove Troop Transport 150" [ref=e1221]: ×
+        - generic [ref=e1222]:
+          - generic [ref=e1223]: Science Ship 151
+          - button "Remove Science Ship 151" [ref=e1224]: ×
+        - generic [ref=e1225]:
+          - generic [ref=e1226]: Corvette 152
+          - button "Remove Corvette 152" [ref=e1227]: ×
+        - generic [ref=e1228]:
+          - generic [ref=e1229]: Corvette 154
+          - button "Remove Corvette 154" [ref=e1230]: ×
+        - generic [ref=e1231]:
+          - generic [ref=e1232]: Science Ship 155
+          - button "Remove Science Ship 155" [ref=e1233]: ×
+        - generic [ref=e1234]:
+          - generic [ref=e1235]: Corvette 156
+          - button "Remove Corvette 156" [ref=e1236]: ×
+        - generic [ref=e1237]:
+          - generic [ref=e1238]: Science Ship 157
+          - button "Remove Science Ship 157" [ref=e1239]: ×
+        - generic [ref=e1240]:
+          - generic [ref=e1241]: Corvette 158
+          - button "Remove Corvette 158" [ref=e1242]: ×
+        - generic [ref=e1243]:
+          - generic [ref=e1244]: Science Ship 163
+          - button "Remove Science Ship 163" [ref=e1245]: ×
+        - generic [ref=e1246]:
+          - generic [ref=e1247]: Colony Ship 170
+          - button "Remove Colony Ship 170" [ref=e1248]: ×
+        - generic [ref=e1371]:
+          - generic [ref=e1372]: Colony Ship 171
+          - button "Remove Colony Ship 171" [ref=e1373]: ×
+  - generic [ref=e1374]:
+    - generic [ref=e1375]:
+      - generic [ref=e1376]: "Observer: empires"
+      - generic [ref=e1377]:
+        - button "Collapse" [ref=e1378]: ▾
+        - button "Maximize" [ref=e1379]: □
+        - button "Close" [ref=e1380]: ×
+    - generic [ref=e1381]:
+      - generic [ref=e1382]: "20 empires. View only: nothing here changes the game or what you know. Economy figures appear in Complex mode."
+      - generic [ref=e1383]:
+        - generic [ref=e1384]:
+          - generic [ref=e1385]: Zorya Compact
+          - button "Go" [ref=e1386]
+        - generic [ref=e1387]:
+          - generic [ref=e1388]: Neighbourhood
+          - generic [ref=e1389]: Auriga Span
+        - generic [ref=e1390]:
+          - generic [ref=e1391]: Systems (3)
+          - generic [ref=e1392]: Auriga Span Epsilon, Auriga Span Zeta, Auriga Span Alpha
+        - generic [ref=e1393]:
+          - generic [ref=e1394]: Influence
+          - generic [ref=e1395]: "82"
+        - generic [ref=e1396]:
+          - generic [ref=e1397]: Tech
+          - generic [ref=e1398]: tier 5 (above humans) · 38 researched
+      - generic [ref=e1400]:
+        - generic [ref=e1401]:
+          - generic [ref=e1402]: Myrr Concord
+          - button "Go" [ref=e1403]
+        - generic [ref=e1404]:
+          - generic [ref=e1405]: Neighbourhood
+          - generic [ref=e1406]: Virgo Deep
+        - generic [ref=e1407]:
+          - generic [ref=e1408]: Systems (2)
+          - generic [ref=e1409]: Virgo Deep Zeta, Virgo Deep Alpha
+        - generic [ref=e1410]:
+          - generic [ref=e1411]: Influence
+          - generic [ref=e1412]: "590"
+        - generic [ref=e1413]:
+          - generic [ref=e1414]: Tech
+          - generic [ref=e1415]: tier 5 (above humans) · 37 researched
+      - generic [ref=e1417]:
+        - generic [ref=e1418]:
+          - generic [ref=e1419]: Thessa Dominion
+          - button "Go" [ref=e1420]
+        - generic [ref=e1421]:
+          - generic [ref=e1422]: Neighbourhood
+          - generic [ref=e1423]: Grus Drift
+        - generic [ref=e1424]:
+          - generic [ref=e1425]: Systems (3)
+          - generic [ref=e1426]: Grus Drift Alpha, Grus Drift Beta, Grus Drift Eta
+        - generic [ref=e1427]:
+          - generic [ref=e1428]: Influence
+          - generic [ref=e1429]: "804"
+        - generic [ref=e1430]:
+          - generic [ref=e1431]: Tech
+          - generic [ref=e1432]: tier 3 (above humans) · 22 researched
+      - generic [ref=e1434]:
+        - generic [ref=e1435]:
+          - generic [ref=e1436]: Jorun Compact
+          - button "Go" [ref=e1437]
+        - generic [ref=e1438]:
+          - generic [ref=e1439]: Neighbourhood
+          - generic [ref=e1440]: Lupus Belt
+        - generic [ref=e1441]:
+          - generic [ref=e1442]: Systems (3)
+          - generic [ref=e1443]: Lupus Belt Alpha, Lupus Belt Lambda, Lupus Belt Epsilon
+        - generic [ref=e1444]:
+          - generic [ref=e1445]: Influence
+          - generic [ref=e1446]: "134"
+        - generic [ref=e1447]:
+          - generic [ref=e1448]: Tech
+          - generic [ref=e1449]: tier 3 (above humans) · 22 researched
+      - generic [ref=e1451]:
+        - generic [ref=e1452]:
+          - generic [ref=e1453]: Qadir Directorate
+          - button "Go" [ref=e1454]
+        - generic [ref=e1455]:
+          - generic [ref=e1456]: Neighbourhood
+          - generic [ref=e1457]: Gemini Verge
+        - generic [ref=e1458]:
+          - generic [ref=e1459]: Systems (1)
+          - generic [ref=e1460]: Gemini Verge Epsilon
+        - generic [ref=e1461]:
+          - generic [ref=e1462]: Influence
+          - generic [ref=e1463]: "707"
+        - generic [ref=e1464]:
+          - generic [ref=e1465]: Tech
+          - generic [ref=e1466]: tier 5 (above humans) · 37 researched
+      - generic [ref=e1468]:
+        - generic [ref=e1469]:
+          - generic [ref=e1470]: Pell League
+          - button "Go" [ref=e1471]
+        - generic [ref=e1472]:
+          - generic [ref=e1473]: Neighbourhood
+          - generic [ref=e1474]: Cassiopeia Marches
+        - generic [ref=e1475]:
+          - generic [ref=e1476]: Systems (2)
+          - generic [ref=e1477]: Cassiopeia Marches Epsilon, Cassiopeia Marches Zeta
+        - generic [ref=e1478]:
+          - generic [ref=e1479]: Influence
+          - generic [ref=e1480]: "326"
+        - generic [ref=e1481]:
+          - generic [ref=e1482]: Tech
+          - generic [ref=e1483]: tier 5 (above humans) · 37 researched
+      - generic [ref=e1485]:
+        - generic [ref=e1486]:
+          - generic [ref=e1487]: Xanth Compact
+          - button "Go" [ref=e1488]
+        - generic [ref=e1489]:
+          - generic [ref=e1490]: Neighbourhood
+          - generic [ref=e1491]: Caelum Reach
+        - generic [ref=e1492]:
+          - generic [ref=e1493]: Systems (4)
+          - generic [ref=e1494]: Caelum Reach Iota, Caelum Reach Delta, Caelum Reach Eta, Caelum Reach Zeta
+        - generic [ref=e1495]:
+          - generic [ref=e1496]: Influence
+          - generic [ref=e1497]: "920"
+        - generic [ref=e1498]:
+          - generic [ref=e1499]: Tech
+          - generic [ref=e1500]: tier 5 (above humans) · 38 researched
+      - generic [ref=e1502]:
+        - generic [ref=e1503]:
+          - generic [ref=e1504]: Halcy Concord
+          - button "Go" [ref=e1505]
+        - generic [ref=e1506]:
+          - generic [ref=e1507]: Neighbourhood
+          - generic [ref=e1508]: Pegasus Belt
+        - generic [ref=e1509]:
+          - generic [ref=e1510]: Systems (3)
+          - generic [ref=e1511]: Pegasus Belt Epsilon, Pegasus Belt Eta, Pegasus Belt Beta
+        - generic [ref=e1512]:
+          - generic [ref=e1513]: Influence
+          - generic [ref=e1514]: "193"
+        - generic [ref=e1515]:
+          - generic [ref=e1516]: Tech
+          - generic [ref=e1517]: tier 5 (above humans) · 37 researched
+      - generic [ref=e1519]:
+        - generic [ref=e1520]:
+          - generic [ref=e1521]: Sable Concord
+          - button "Go" [ref=e1522]
+        - generic [ref=e1523]:
+          - generic [ref=e1524]: Neighbourhood
+          - generic [ref=e1525]: Horologium Marches
+        - generic [ref=e1526]:
+          - generic [ref=e1527]: Systems (3)
+          - generic [ref=e1528]: Horologium Marches Zeta, Horologium Marches Theta, Horologium Marches Beta
+        - generic [ref=e1529]:
+          - generic [ref=e1530]: Influence
+          - generic [ref=e1531]: "762"
+        - generic [ref=e1532]:
+          - generic [ref=e1533]: Tech
+          - generic [ref=e1534]: tier 1 (below humans) · 2 researched
+      - generic [ref=e1536]:
+        - generic [ref=e1537]:
+          - generic [ref=e1538]: Lumen Hegemony
+          - button "Go" [ref=e1539]
+        - generic [ref=e1540]:
+          - generic [ref=e1541]: Neighbourhood
+          - generic [ref=e1542]: Volans Cluster
+        - generic [ref=e1543]:
+          - generic [ref=e1544]: Systems (3)
+          - generic [ref=e1545]: Volans Cluster Zeta, Volans Cluster Epsilon, Volans Cluster Mu
+        - generic [ref=e1546]:
+          - generic [ref=e1547]: Influence
+          - generic [ref=e1548]: "11"
+        - generic [ref=e1549]:
+          - generic [ref=e1550]: Tech
+          - generic [ref=e1551]: tier 4 (above humans) · 31 researched
+      - generic [ref=e1553]:
+        - generic [ref=e1554]:
+          - generic [ref=e1555]: Nadir Commonwealth
+          - button "Go" [ref=e1556]
+        - generic [ref=e1557]:
+          - generic [ref=e1558]: Neighbourhood
+          - generic [ref=e1559]: Fornax Span
+        - generic [ref=e1560]:
+          - generic [ref=e1561]: Systems (3)
+          - generic [ref=e1562]: Fornax Span Kappa, Fornax Span Delta, Fornax Span Alpha
+        - generic [ref=e1563]:
+          - generic [ref=e1564]: Influence
+          - generic [ref=e1565]: "920"
+        - generic [ref=e1566]:
+          - generic [ref=e1567]: Tech
+          - generic [ref=e1568]: tier 2 (at humans) · 7 researched
+      - generic [ref=e1570]:
+        - generic [ref=e1571]:
+          - generic [ref=e1572]: Rhovan Commonwealth
+          - button "Go" [ref=e1573]
+        - generic [ref=e1574]:
+          - generic [ref=e1575]: Neighbourhood
+          - generic [ref=e1576]: Apus Span
+        - generic [ref=e1577]:
+          - generic [ref=e1578]: Systems (2)
+          - generic [ref=e1579]: Apus Span Beta, Apus Span Delta
+        - generic [ref=e1580]:
+          - generic [ref=e1581]: Influence
+          - generic [ref=e1582]: "196"
+        - generic [ref=e1583]:
+          - generic [ref=e1584]: Tech
+          - generic [ref=e1585]: tier 2 (at humans) · 7 researched
+      - generic [ref=e1587]:
+        - generic [ref=e1588]:
+          - generic [ref=e1589]: Varga Republic
+          - button "Go" [ref=e1590]
+        - generic [ref=e1591]:
+          - generic [ref=e1592]: Neighbourhood
+          - generic [ref=e1593]: Lupus Belt
+        - generic [ref=e1594]:
+          - generic [ref=e1595]: Systems (2)
+          - generic [ref=e1596]: Lupus Belt Theta, Lupus Belt Iota
+        - generic [ref=e1597]:
+          - generic [ref=e1598]: Influence
+          - generic [ref=e1599]: "709"
+        - generic [ref=e1600]:
+          - generic [ref=e1601]: Tech
+          - generic [ref=e1602]: tier 3 (above humans) · 22 researched
+      - generic [ref=e1604]:
+        - generic [ref=e1605]:
+          - generic [ref=e1606]: Dravik Union
+          - button "Go" [ref=e1607]
+        - generic [ref=e1608]:
+          - generic [ref=e1609]: Neighbourhood
+          - generic [ref=e1610]: Cassiopeia Deep
+        - generic [ref=e1611]:
+          - generic [ref=e1612]: Systems (4)
+          - generic [ref=e1613]: Cassiopeia Deep Zeta, Cassiopeia Deep Beta, Cassiopeia Deep Alpha, Cassiopeia Deep Epsilon
+        - generic [ref=e1614]:
+          - generic [ref=e1615]: Influence
+          - generic [ref=e1616]: "708"
+        - generic [ref=e1617]:
+          - generic [ref=e1618]: Tech
+          - generic [ref=e1619]: tier 5 (above humans) · 38 researched
+      - generic [ref=e1621]:
+        - generic [ref=e1622]:
+          - generic [ref=e1623]: Ulm Commonwealth
+          - button "Go" [ref=e1624]
+        - generic [ref=e1625]:
+          - generic [ref=e1626]: Neighbourhood
+          - generic [ref=e1627]: Cygnus Cluster
+        - generic [ref=e1628]:
+          - generic [ref=e1629]: Systems (4)
+          - generic [ref=e1630]: Cygnus Cluster Delta, Cygnus Cluster Beta, Cygnus Cluster Lambda, Cygnus Cluster Mu
+        - generic [ref=e1631]:
+          - generic [ref=e1632]: Influence
+          - generic [ref=e1633]: "742"
+        - generic [ref=e1634]:
+          - generic [ref=e1635]: Tech
+          - generic [ref=e1636]: tier 2 (at humans) · 7 researched
+      - generic [ref=e1638]:
+        - generic [ref=e1639]:
+          - generic [ref=e1640]: Ilmar Concord
+          - button "Go" [ref=e1641]
+        - generic [ref=e1642]:
+          - generic [ref=e1643]: Neighbourhood
+          - generic [ref=e1644]: Aquarius Verge
+        - generic [ref=e1645]:
+          - generic [ref=e1646]: Systems (4)
+          - generic [ref=e1647]: Aquarius Verge Epsilon, Aquarius Verge Delta, Aquarius Verge Alpha, Aquarius Verge Zeta
+        - generic [ref=e1648]:
+          - generic [ref=e1649]: Influence
+          - generic [ref=e1650]: "19"
+        - generic [ref=e1651]:
+          - generic [ref=e1652]: Tech
+          - generic [ref=e1653]: tier 5 (above humans) · 38 researched
+      - generic [ref=e1655]:
+        - generic [ref=e1656]:
+          - generic [ref=e1657]: Cyra Sovereignty
+          - button "Go" [ref=e1658]
+        - generic [ref=e1659]:
+          - generic [ref=e1660]: Neighbourhood
+          - generic [ref=e1661]: Taurus Deep
+        - generic [ref=e1662]:
+          - generic [ref=e1663]: Systems (4)
+          - generic [ref=e1664]: Taurus Deep Lambda, Taurus Deep Zeta, Taurus Deep Epsilon, Taurus Deep Beta
+        - generic [ref=e1665]:
+          - generic [ref=e1666]: Influence
+          - generic [ref=e1667]: "785"
+        - generic [ref=e1668]:
+          - generic [ref=e1669]: Tech
+          - generic [ref=e1670]: tier 4 (above humans) · 31 researched
+      - generic [ref=e1672]:
+        - generic [ref=e1673]:
+          - generic [ref=e1674]: Eshtar League
+          - button "Go" [ref=e1675]
+        - generic [ref=e1676]:
+          - generic [ref=e1677]: Neighbourhood
+          - generic [ref=e1678]: Aquarius Reach
+        - generic [ref=e1679]:
+          - generic [ref=e1680]: Systems (3)
+          - generic [ref=e1681]: Aquarius Reach Gamma, Aquarius Reach Epsilon, Aquarius Reach Eta
+        - generic [ref=e1682]:
+          - generic [ref=e1683]: Influence
+          - generic [ref=e1684]: "624"
+        - generic [ref=e1685]:
+          - generic [ref=e1686]: Tech
+          - generic [ref=e1687]: tier 4 (above humans) · 31 researched
+      - generic [ref=e1689]:
+        - generic [ref=e1690]:
+          - generic [ref=e1691]: Zenth Compact
+          - button "Go" [ref=e1692]
+        - generic [ref=e1693]:
+          - generic [ref=e1694]: Neighbourhood
+          - generic [ref=e1695]: Reticulum Cluster
+        - generic [ref=e1696]:
+          - generic [ref=e1697]: Systems (1)
+          - generic [ref=e1698]: Reticulum Cluster Eta
+        - generic [ref=e1699]:
+          - generic [ref=e1700]: Influence
+          - generic [ref=e1701]: "110"
+        - generic [ref=e1702]:
+          - generic [ref=e1703]: Tech
+          - generic [ref=e1704]: tier 3 (above humans) · 22 researched
+      - generic [ref=e1706]:
+        - generic [ref=e1707]:
+          - generic [ref=e1708]: Aurel Union
+          - button "Go" [ref=e1709]
+        - generic [ref=e1710]:
+          - generic [ref=e1711]: Neighbourhood
+          - generic [ref=e1712]: Andromeda Deep
+        - generic [ref=e1713]:
+          - generic [ref=e1714]: Systems (1)
+          - generic [ref=e1715]: Andromeda Deep Alpha
+        - generic [ref=e1716]:
+          - generic [ref=e1717]: Influence
+          - generic [ref=e1718]: "884"
+        - generic [ref=e1719]:
+          - generic [ref=e1720]: Tech
+          - generic [ref=e1721]: tier 2 (at humans) · 7 researched
+  - contentinfo:
+    - generic [ref=e267]:
+      - generic [ref=e268]: 16 JUN 2601
+      - group "Time pace" [ref=e269]:
+        - button "STRAT" [pressed] [ref=e270]
+        - button "OPS" [ref=e271]
+        - button "TAC" [ref=e272]
+      - button "Slow down" [disabled] [ref=e273]: «
+      - button "Pause" [ref=e274]: ❚❚
+      - button "Speed up" [ref=e275]: »
+    - generic [ref=e282]:
+      - button "Buildings" [ref=e283]: ⚙
+      - button "Politics" [ref=e284]: ⚖
+      - button "Diplomacy" [ref=e285]: ⚑
+    - generic [ref=e286]:
+      - button "Map Modes" [ref=e288]
+      - generic [ref=e289]: Sol System

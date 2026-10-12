@@ -1,0 +1,332 @@
+- generic [ref=e40]:
+  - banner:
+    - generic [ref=e41]: "TERRA RELICTA: CONQUEST"
+    - generic [ref=e42]:
+      - button "Treasury $365.3M" [ref=e514]:
+        - generic [ref=e44]: Treasury
+        - generic [ref=e45]: $365.3M
+      - button "Balance +$10.8M/mo" [ref=e515]:
+        - generic [ref=e47]: Balance
+        - generic [ref=e48]: +$10.8M/mo
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - button "132 +2/mo" [ref=e516]:
+          - generic [ref=e54]: "132"
+          - generic [ref=e55]: +2/mo
+        - button "4 ±0/mo" [ref=e56]:
+          - generic [ref=e62]: "4"
+          - generic [ref=e63]: ±0/mo
+        - button "26 +1/mo" [ref=e517]:
+          - generic [ref=e67]: "26"
+          - generic [ref=e68]: +1/mo
+        - button "2 ±0/mo" [ref=e69]:
+          - generic [ref=e72]: "2"
+          - generic [ref=e73]: ±0/mo
+      - button "Tabs" [ref=e74]
+    - generic [ref=e75]:
+      - button "LOCK-ON ON" [ref=e76]
+      - navigation [ref=e77]:
+        - button "GALAXY" [ref=e78]
+        - generic [ref=e79]: ›
+        - button "INTERSTELLAR" [ref=e80]
+        - generic [ref=e81]: ›
+        - button "SYSTEM" [disabled] [ref=e82]
+  - generic [ref=e85]:
+    - generic: Sol
+    - generic: Mercury
+    - generic: Venus
+    - generic: Earth
+    - generic: Mars
+    - generic: Jupiter
+    - generic: Saturn
+    - generic: Uranus
+    - generic: Neptune
+    - generic: Ceres
+    - generic: Pluto
+    - generic: Haumea
+    - generic: Makemake
+    - generic: Eris
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e133]: "5"
+          - generic [ref=e134]: 1st Fleet
+    - generic: Troop Transport 6
+    - generic: Troop Transport 12
+    - generic: Troop Transport 30
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e146]: "5"
+          - generic [ref=e147]: 1st Fleet
+    - generic: Colony Ship 169
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e159]: "5"
+          - generic [ref=e160]: 1st Fleet
+    - generic: Colony Ship 170
+  - generic [ref=e164]:
+    - generic [ref=e165]:
+      - generic [ref=e166]: Imperial State of Mars
+      - button "‹ Back" [ref=e301]
+      - generic [ref=e167]:
+        - button "Situations" [ref=e168]
+        - button "Government" [ref=e169]
+        - button "Economy" [ref=e170]
+        - button "Technology" [ref=e171]
+        - button "Society" [ref=e172]
+        - button "Diplomacy" [ref=e173]
+        - button "International Organizations" [ref=e174]
+        - button "Fleet Management" [ref=e175]
+        - button "Characters" [ref=e176]
+      - generic [ref=e177]:
+        - generic [ref=e178]: Quick buttons
+        - button "Shipyard" [ref=e179]
+        - button "+ Pin this panel" [ref=e302]
+    - button "Collapse navigation" [ref=e180]: ‹
+  - generic [ref=e303]:
+    - generic [ref=e304]:
+      - generic [ref=e305]: Economy
+      - generic [ref=e306]:
+        - button "Collapse" [ref=e307]: ▾
+        - button "Maximize" [ref=e308]: □
+        - button "Close" [ref=e309]: ×
+    - generic [ref=e311]:
+      - generic [ref=e312]:
+        - button "Macro" [ref=e313]
+        - button "Industry" [ref=e314]
+        - button "Social" [ref=e315]
+        - button "Trade" [active] [ref=e316]
+      - generic [ref=e524]:
+        - generic [ref=e525]: Martian Sovereign (MSV)
+        - generic [ref=e526]: 1.001 E$
+      - generic [ref=e527]:
+        - generic [ref=e528]:
+          - generic [ref=e529]: Exchange rate (E$ per unit)
+          - generic [ref=e530]:
+            - button "6M" [ref=e531]
+            - button "1Y" [ref=e532]
+            - button "3Y" [ref=e533]
+        - img [ref=e534]:
+          - generic [ref=e535]: "1.00"
+          - generic [ref=e537]: "1.00"
+          - generic [ref=e539]: "1.00"
+          - generic [ref=e541]: "1.00"
+          - generic [ref=e543]: Oct 00
+          - generic [ref=e545]: Nov
+          - generic [ref=e547]: Dec
+          - generic [ref=e549]: Jan 01
+          - generic [ref=e551]: Feb
+          - generic [ref=e553]: Mar
+          - generic [ref=e555]: Apr
+        - generic [ref=e558]: MSV 1.00
+      - generic [ref=e561]:
+        - generic [ref=e562]:
+          - generic [ref=e563]: Fundamentals
+          - generic [ref=e564]: 1.005 ▲
+        - generic [ref=e565]:
+          - generic [ref=e566]: Imports / mo
+          - generic [ref=e567]: $0
+        - generic [ref=e568]:
+          - generic [ref=e569]: Exports / mo
+          - generic [ref=e570]: $0
+        - generic [ref=e571]:
+          - generic [ref=e572]: Trade balance
+          - generic [ref=e573]: $0/mo
+        - generic [ref=e574]:
+          - generic [ref=e575]: Spaceports
+          - generic [ref=e576]: 0 / 420 E$
+      - generic [ref=e577]: Trade with other nations
+      - generic [ref=e578]: Standing monthly orders, settled from the treasury. Imports come from nations at peace with you that can spare the good (their exports, or stock beyond six months of their own use); exports sell only to nations importing the good. A strong currency makes imports cheap and exports earn less. Positive imports, negative exports.
+      - table [ref=e579]:
+        - rowgroup [ref=e580]:
+          - row [ref=e581]:
+            - columnheader "Good" [ref=e582]
+            - columnheader "Stock" [ref=e583]
+            - columnheader "Buy / Sell" [ref=e584]
+            - columnheader "Order/mo" [ref=e585]
+            - columnheader "Filled" [ref=e586]
+        - rowgroup [ref=e587]:
+          - row [ref=e588]:
+            - cell "Food" [ref=e589]
+            - cell "319" [ref=e590]
+            - cell "1.65 / 1.35" [ref=e591]
+            - cell [ref=e592]:
+              - spinbutton [ref=e593]: "0"
+            - cell "—" [ref=e594]
+          - row [ref=e595]:
+            - cell "Minerals" [ref=e596]
+            - cell "2,873" [ref=e597]
+            - cell "0.49 / 0.40" [ref=e598]
+            - cell [ref=e599]:
+              - spinbutton [ref=e600]: "0"
+            - cell "—" [ref=e601]
+          - row [ref=e602]:
+            - cell "Energy" [ref=e603]
+            - cell "2,632" [ref=e604]
+            - cell "0.49 / 0.40" [ref=e605]
+            - cell [ref=e606]:
+              - spinbutton [ref=e607]: "0"
+            - cell "—" [ref=e608]
+          - row [ref=e609]:
+            - cell "Alloys" [ref=e610]
+            - cell "965" [ref=e611]
+            - cell "1.76 / 1.44" [ref=e612]
+            - cell [ref=e613]:
+              - spinbutton [ref=e614]: "0"
+            - cell "—" [ref=e615]
+          - row [ref=e616]:
+            - cell "Electronics" [ref=e617]
+            - cell "92" [ref=e618]
+            - cell "5.50 / 4.50" [ref=e619]
+            - cell [ref=e620]:
+              - spinbutton [ref=e621]: "0"
+            - cell "—" [ref=e622]
+          - row [ref=e623]:
+            - cell "Consumer Goods" [ref=e624]
+            - cell "329" [ref=e625]
+            - cell "4.18 / 3.42" [ref=e626]
+            - cell [ref=e627]:
+              - spinbutton [ref=e628]: "0"
+            - cell "—" [ref=e629]
+          - row [ref=e630]:
+            - cell "Spaceships" [ref=e631]
+            - cell "3" [ref=e632]
+            - cell "13.19 / 10.79" [ref=e633]
+            - cell [ref=e634]:
+              - spinbutton [ref=e635]: "0"
+            - cell "—" [ref=e636]
+          - row [ref=e637]:
+            - cell "Rockets" [ref=e638]
+            - cell "52" [ref=e639]
+            - cell "4.40 / 3.60" [ref=e640]
+            - cell [ref=e641]:
+              - spinbutton [ref=e642]: "0"
+            - cell "—" [ref=e643]
+          - row [ref=e644]:
+            - cell "Exotic Matter" [ref=e645]
+            - cell "4" [ref=e646]
+            - cell "8.80 / 7.20" [ref=e647]
+            - cell [ref=e648]:
+              - spinbutton [ref=e649]: "0"
+            - cell "—" [ref=e650]
+          - row [ref=e651]:
+            - cell "Hyperium" [ref=e652]
+            - cell "26" [ref=e653]
+            - cell "27.48 / 22.49" [ref=e654]
+            - cell [ref=e655]:
+              - spinbutton [ref=e656]: "0"
+            - cell "—" [ref=e657]
+      - generic [ref=e658]: Nations
+      - table [ref=e659]:
+        - rowgroup [ref=e660]:
+          - row [ref=e661]:
+            - columnheader "Nation" [ref=e662]
+            - columnheader "Currency" [ref=e663]
+            - columnheader "GDP (E$)" [ref=e664]
+        - rowgroup [ref=e665]:
+          - row [ref=e666]:
+            - cell "Imperial State of Mars" [ref=e667]
+            - cell "MSV 1.00" [ref=e668]
+            - cell "$8.85B" [ref=e669]
+          - row [ref=e670]:
+            - cell "Republic of Venus" [ref=e671]
+            - cell "VNC 1.16" [ref=e672]
+            - cell "$9.56B" [ref=e673]
+          - row [ref=e674]:
+            - cell "Orion Republic" [ref=e675]
+            - cell "ORM 0.93" [ref=e676]
+            - cell "$5.15B" [ref=e677]
+          - row [ref=e678]:
+            - cell "Kingdom of Lalande" [ref=e679]
+            - cell "LLD 0.70" [ref=e680]
+            - cell "$2.90B" [ref=e681]
+  - generic [ref=e181]:
+    - button "Collapse outliner" [ref=e182]: ›
+    - generic [ref=e183]:
+      - generic [ref=e184]: Outliner
+      - textbox "Search…" [ref=e185]
+      - tablist [ref=e186]:
+        - tab "Territory" [selected] [ref=e187]
+        - tab "Fleet" [ref=e188]
+        - tab "Info" [ref=e189]
+      - generic [ref=e190]:
+        - button "Neighborhoods" [ref=e191]
+        - button "Stars" [ref=e192]
+        - button "Planets" [ref=e193]
+        - button "Moons" [ref=e194]
+        - button "Black Holes" [ref=e195]
+      - generic [ref=e196]:
+        - button "▾ Colonies" [expanded] [ref=e197]:
+          - generic [ref=e198]: ▾
+          - text: Colonies
+        - list [ref=e199]:
+          - listitem [ref=e200]:
+            - generic [ref=e202]: Luna
+          - listitem [ref=e203]:
+            - generic [ref=e205]: Mars
+          - listitem [ref=e206]:
+            - generic [ref=e208]: Phobos
+          - listitem [ref=e209]:
+            - generic [ref=e211]: Deimos
+      - generic [ref=e212]:
+        - button "▾ Starbases" [expanded] [ref=e213]:
+          - generic [ref=e214]: ▾
+          - text: Starbases
+        - generic [ref=e215]: No starbases built
+      - generic [ref=e216]:
+        - button "▾ Market" [expanded] [ref=e217]:
+          - generic [ref=e218]: ▾
+          - text: Market
+        - generic [ref=e219]: No market established
+      - generic [ref=e220]:
+        - button "▾ In View" [expanded] [ref=e221]:
+          - generic [ref=e222]: ▾
+          - text: In View
+        - list [ref=e223]:
+          - listitem [ref=e224]:
+            - generic [ref=e226]: Sol
+          - listitem [ref=e227]:
+            - generic [ref=e229]: Mercury
+          - listitem [ref=e230]:
+            - generic [ref=e232]: Venus
+          - listitem [ref=e233]:
+            - generic [ref=e235]: Earth
+          - listitem [ref=e236]:
+            - generic [ref=e238]: Mars
+          - listitem [ref=e239]:
+            - generic [ref=e241]: Jupiter
+          - listitem [ref=e242]:
+            - generic [ref=e244]: Saturn
+          - listitem [ref=e245]:
+            - generic [ref=e247]: Uranus
+          - listitem [ref=e248]:
+            - generic [ref=e250]: Neptune
+          - listitem [ref=e251]:
+            - generic [ref=e253]: Ceres
+          - listitem [ref=e254]:
+            - generic [ref=e256]: Pluto
+          - listitem [ref=e257]:
+            - generic [ref=e259]: Haumea
+          - listitem [ref=e260]:
+            - generic [ref=e262]: Makemake
+          - listitem [ref=e263]:
+            - generic [ref=e265]: Eris
+  - contentinfo:
+    - generic [ref=e267]:
+      - generic [ref=e268]: 28 APR 2601
+      - group "Time pace" [ref=e269]:
+        - button "STRAT" [pressed] [ref=e270]
+        - button "OPS" [ref=e271]
+        - button "TAC" [ref=e272]
+      - button "Slow down" [disabled] [ref=e273]: «
+      - button "Pause" [ref=e274]: ❚❚
+      - button "Speed up" [ref=e275]: »
+    - generic [ref=e282]:
+      - button "Buildings" [ref=e283]: ⚙
+      - button "Politics" [ref=e284]: ⚖
+      - button "Diplomacy" [ref=e285]: ⚑
+    - generic [ref=e286]:
+      - button "Map Modes" [ref=e288]
+      - generic [ref=e289]: Sol System

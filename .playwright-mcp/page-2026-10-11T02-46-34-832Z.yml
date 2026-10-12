@@ -1,0 +1,174 @@
+- generic [ref=e40]:
+  - banner:
+    - generic [ref=e41]: "TERRA RELICTA: CONQUEST"
+    - generic [ref=e42]:
+      - button "Treasury $219.8M" [ref=e43]:
+        - generic [ref=e44]: Treasury
+        - generic [ref=e45]: $219.8M
+      - button "Balance +$9.9M/mo" [ref=e46]:
+        - generic [ref=e47]: Balance
+        - generic [ref=e48]: +$9.9M/mo
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - button "104 +2/mo" [ref=e51]:
+          - generic [ref=e54]: "104"
+          - generic [ref=e55]: +2/mo
+        - button "4 ±0/mo" [ref=e56]:
+          - generic [ref=e62]: "4"
+          - generic [ref=e63]: ±0/mo
+        - button "12 +1/mo" [ref=e64]:
+          - generic [ref=e67]: "12"
+          - generic [ref=e68]: +1/mo
+        - button "2 ±0/mo" [ref=e69]:
+          - generic [ref=e72]: "2"
+          - generic [ref=e73]: ±0/mo
+      - button "Tabs" [ref=e74]
+    - generic [ref=e75]:
+      - button "LOCK-ON ON" [ref=e76]
+      - navigation [ref=e77]:
+        - button "GALAXY" [ref=e78]
+        - generic [ref=e79]: ›
+        - button "INTERSTELLAR" [ref=e80]
+        - generic [ref=e81]: ›
+        - button "SYSTEM" [disabled] [ref=e82]
+  - generic [ref=e85]:
+    - generic: Sol
+    - generic: Mercury
+    - generic: Venus
+    - generic: Earth
+    - generic: Mars
+    - generic: Jupiter
+    - generic: Saturn
+    - generic: Uranus
+    - generic: Neptune
+    - generic: Ceres
+    - generic: Pluto
+    - generic: Haumea
+    - generic: Makemake
+    - generic: Eris
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e133]: "5"
+          - generic [ref=e134]: 1st Fleet
+    - generic: Troop Transport 6
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e140]: "6"
+          - generic [ref=e141]: 1st Fleet
+    - generic: Troop Transport 12
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e147]: "6"
+          - generic [ref=e148]: 1st Fleet
+    - generic: Troop Transport 30
+    - generic: Colony Ship 159
+    - generic: Colony Ship 162
+    - generic: Science Ship 153
+  - generic [ref=e161]:
+    - generic [ref=e162]:
+      - generic [ref=e163]: Imperial State of Mars
+      - generic [ref=e164]:
+        - button "Situations" [ref=e165]
+        - button "Government" [ref=e166]
+        - button "Economy" [ref=e167]
+        - button "Technology" [ref=e168]
+        - button "Society" [ref=e169]
+        - button "Diplomacy" [ref=e170]
+        - button "International Organizations" [ref=e171]
+        - button "Fleet Management" [ref=e172]
+        - button "Characters" [ref=e173]
+      - generic [ref=e174]:
+        - generic [ref=e175]: Quick buttons
+        - button "Shipyard" [ref=e176]
+    - button "Collapse navigation" [ref=e177]: ‹
+  - generic [ref=e178]:
+    - button "Collapse outliner" [ref=e179]: ›
+    - generic [ref=e180]:
+      - generic [ref=e181]: Outliner
+      - textbox "Search…" [ref=e182]
+      - tablist [ref=e183]:
+        - tab "Territory" [selected] [ref=e184]
+        - tab "Fleet" [ref=e185]
+        - tab "Info" [ref=e186]
+      - generic [ref=e187]:
+        - button "Neighborhoods" [ref=e188]
+        - button "Stars" [ref=e189]
+        - button "Planets" [ref=e190]
+        - button "Moons" [ref=e191]
+        - button "Black Holes" [ref=e192]
+      - generic [ref=e193]:
+        - button "▾ Colonies" [expanded] [ref=e194]:
+          - generic [ref=e195]: ▾
+          - text: Colonies
+        - list [ref=e196]:
+          - listitem [ref=e197]:
+            - generic [ref=e199]: Luna
+          - listitem [ref=e200]:
+            - generic [ref=e202]: Mars
+          - listitem [ref=e203]:
+            - generic [ref=e205]: Phobos
+          - listitem [ref=e206]:
+            - generic [ref=e208]: Deimos
+      - generic [ref=e209]:
+        - button "▾ Starbases" [expanded] [ref=e210]:
+          - generic [ref=e211]: ▾
+          - text: Starbases
+        - generic [ref=e212]: No starbases built
+      - generic [ref=e213]:
+        - button "▾ Market" [expanded] [ref=e214]:
+          - generic [ref=e215]: ▾
+          - text: Market
+        - generic [ref=e216]: No market established
+      - generic [ref=e217]:
+        - button "▾ In View" [expanded] [ref=e218]:
+          - generic [ref=e219]: ▾
+          - text: In View
+        - list [ref=e220]:
+          - listitem [ref=e221]:
+            - generic [ref=e223]: Sol
+          - listitem [ref=e224]:
+            - generic [ref=e226]: Mercury
+          - listitem [ref=e227]:
+            - generic [ref=e229]: Venus
+          - listitem [ref=e230]:
+            - generic [ref=e232]: Earth
+          - listitem [ref=e233]:
+            - generic [ref=e235]: Mars
+          - listitem [ref=e236]:
+            - generic [ref=e238]: Jupiter
+          - listitem [ref=e239]:
+            - generic [ref=e241]: Saturn
+          - listitem [ref=e242]:
+            - generic [ref=e244]: Uranus
+          - listitem [ref=e245]:
+            - generic [ref=e247]: Neptune
+          - listitem [ref=e248]:
+            - generic [ref=e250]: Ceres
+          - listitem [ref=e251]:
+            - generic [ref=e253]: Pluto
+          - listitem [ref=e254]:
+            - generic [ref=e256]: Haumea
+          - listitem [ref=e257]:
+            - generic [ref=e259]: Makemake
+          - listitem [ref=e260]:
+            - generic [ref=e262]: Eris
+  - contentinfo:
+    - generic [ref=e264]:
+      - generic [ref=e265]: 3 MAR 2600
+      - group "Time pace" [ref=e266]:
+        - button "STRAT" [pressed] [ref=e267]
+        - button "OPS" [ref=e268]
+        - button "TAC" [ref=e269]
+      - button "Slow down" [disabled] [ref=e270]: «
+      - button "Pause" [ref=e271]: ❚❚
+      - button "Speed up" [ref=e272]: »
+    - generic [ref=e279]:
+      - button "Buildings" [ref=e280]: ⚙
+      - button "Politics" [ref=e281]: ⚖
+      - button "Diplomacy" [ref=e282]: ⚑
+    - generic [ref=e283]:
+      - button "Map Modes" [ref=e285]
+      - generic [ref=e286]: Sol System
