@@ -19,6 +19,7 @@ import { DiplomacyToast } from './components/DiplomacyPanel'
 import { StarbasePanel } from './components/StarbasePanel'
 import { GoodDetailPanel } from './components/GoodDetailPanel'
 import { BuildingDetailWindow } from './components/BuildingDetailWindow'
+import { CivicBuildingWindow } from './components/CivicBuildingWindow'
 import { TimeControls } from './components/TimeControls'
 import { MapModesButton } from './components/MapModesButton'
 import { useGameClock } from './hooks/useGameClock'
@@ -38,6 +39,7 @@ import { useBattleTracker } from './hooks/useBattleTracker'
 import { useShipyardResolver } from './hooks/useShipyardResolver'
 import { useShipDeconstructionResolver } from './hooks/useShipDeconstructionResolver'
 import { useColonyResolver } from './hooks/useColonyResolver'
+import { useInfrastructureResolver } from './hooks/useInfrastructureResolver'
 import { useAutomationResolver } from './hooks/useAutomationResolver'
 import { useStrategicResources } from './hooks/useStrategicResources'
 import { useMaterialDiscovery } from './hooks/useMaterialDiscovery'
@@ -122,6 +124,7 @@ function App() {
   useShipyardResolver()
   useShipDeconstructionResolver()
   useColonyResolver()
+  useInfrastructureResolver()
   useAutomationResolver()
   useStrategicResources()
   useMaterialDiscovery()
@@ -186,6 +189,7 @@ function App() {
       <StarbasePanel />
       <GoodDetailPanel />
       <BuildingDetailWindow />
+      <CivicBuildingWindow />
     </div>
   )
 }

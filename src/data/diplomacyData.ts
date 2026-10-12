@@ -71,6 +71,8 @@ export type DiplomacyEventKind =
   | 'starbase-finished'
   // A Starbase or colony built inside someone else's borders (scene/encroachment.ts).
   | 'encroachment'
+  // Someone built in ground another country governs or claims, with no right to (scene/territorialIncidents.ts).
+  | 'territorial-incident'
   | 'tech-researched'
   | 'ship-attacked'
   // An order the ship could not carry out, and why (a hyperdrive jump out of range).
@@ -146,6 +148,8 @@ export const OPINION_ON_WAR_DECLARED = -60
 export const OPINION_ON_PEACE = 15
 // A Starbase or colony built inside another nation's borders (scene/encroachment.ts).
 export const OPINION_ON_ENCROACHMENT = -20
+// Building in ground another country governs or claims, with no agreement (a contested construction).
+export const OPINION_ON_DISPUTED_BUILD = -10
 
 // How many diplomacy events the log keeps.
 export const MAX_DIPLOMACY_EVENTS = 60

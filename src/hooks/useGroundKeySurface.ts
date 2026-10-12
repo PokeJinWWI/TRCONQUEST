@@ -5,6 +5,10 @@ import { useGameTimeStore } from '../state/gameTimeStore'
 import { useEconomyStore } from '../state/economyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { useColonyStore } from '../state/colonyStore'
+import { useLocationStore } from '../state/locationStore'
+import { usePlacementStore } from '../state/placementStore'
+import { useStructureStore } from '../state/structureStore'
+import { useZoneStore } from '../state/zoneStore'
 import { isActive, withInstallationKeys } from '../scene/defenseLogic'
 import type { BodySurface } from '../scene/planetTerrain'
 
@@ -19,6 +23,15 @@ export function useGroundKeySurface(bodyName: string, withInstallations = true):
   const simpleWorld = useAbstractEconomyStore((s) => s.worlds[bodyName])
   const installations = useDefenseStore((s) => s.installations)
   const outpostNode = useColonyStore((s) => s.colonies[bodyName]?.outpostNode)
+  // What the districts drawn on the ground depend on (scene/footprintState) and the ports the player placed.
+  const placed = usePlacementStore((s) => s.placed)
+  const levels = usePlacementStore((s) => s.levels)
+  const seeded = usePlacementStore((s) => s.seeded[bodyName])
+  const zones = useZoneStore((s) => s.zones)
+  const reserves = useZoneStore((s) => s.reserves)
+  const custom = useLocationStore((s) => s.custom)
+  const established = useLocationStore((s) => s.established)
+  const ports = useStructureStore((s) => s.ports[bodyName])
   const activeKey = useGameTimeStore((t) =>
     installations
       .filter((i) => i.bodyName === bodyName && isActive(i, t.simDays))
@@ -29,5 +42,5 @@ export function useGroundKeySurface(bodyName: string, withInstallations = true):
     const surface = groundPortSurface(bodyName, owners)
     if (!surface || !withInstallations || installations.length === 0) return surface
     return withInstallationKeys(surface, installations, useGameTimeStore.getState().simDays)
-  }, [bodyName, owners, complexWorlds, simpleWorld, installations, activeKey, withInstallations, outpostNode])
+  }, [bodyName, owners, complexWorlds, simpleWorld, installations, activeKey, withInstallations, outpostNode, placed, levels, seeded, zones, reserves, custom, established, ports])
 }

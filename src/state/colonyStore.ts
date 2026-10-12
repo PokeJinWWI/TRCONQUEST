@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-// A nation's colony on a body (version 1: one per body, covering all of it).
+// A nation's colony on a body (version 1: one per body; it stands on a settlement site, `siteId`).
 // Its owner is the body's owner (territoryStore.bodyOwner), never stored here,
 // so a treaty that cedes the body cedes the colony with it. Rules in
 // scene/colonies.ts; stepped by hooks/useColonyResolver.ts.
@@ -15,6 +15,8 @@ export interface Colony {
   // Since when the owner's patrol ships have held the orbit uncontested, or
   // null while they don't.
   orbitSecureSinceSimDays: number | null
+  // The development site (scene/locations.ts) the colony stands on, when its body has one.
+  siteId?: string
 }
 
 interface ColonyState {

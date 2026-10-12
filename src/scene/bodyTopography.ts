@@ -11,8 +11,8 @@
 //            (earthTerrain.earthBiome). Venus's and Mars's land has no climate
 //            data, so it is simple and stated: the highest or most rugged 12%
 //            is mountains, near the poles (|lat| > 62°) tundra, coasts green
-//            (forest within a cell of the sea, below 55°), far inland dry
-//            (desert 3+ cells from the sea, below 40°), plains otherwise.
+//            (forest within a cell of the sea, below 55°), plains otherwise
+//            (both worlds are terraformed green: no desert).
 //   airless  bare rock; the most rugged 10% and highest 3% of the ground (and
 //            named montes) is mountains; low, smooth ground (the lowest 35%
 //            and smoothest 40%) is plains — the Moon's maria, Mercury's
@@ -217,9 +217,8 @@ export function realTerrain(t: Topography): (TerrainId | null)[] {
         if ((t.elev && t.elev[i] >= highElev) || rugged) return 'mountains'
         if (Math.abs(lat) > 62) return 'tundra'
         if (seaDist[i] <= 1 && Math.abs(lat) < 55) return 'forest'
-        // Mars is terraformed green to the horizon — no deserts; its dry interior
-        // reads as plains. Venus keeps the dry-interior desert band.
-        if (seaDist[i] >= 3 && Math.abs(lat) < 40) return t.bodyName === 'Mars' ? 'plains' : 'desert'
+        // Mars and Venus are terraformed green to the horizon: no deserts, the dry
+        // interior reads as plains.
         return 'plains'
       }
       case 'airless':

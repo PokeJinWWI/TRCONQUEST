@@ -126,6 +126,11 @@ export function registerCountry(country: Country): void {
   dynamicCountryIds.add(country.id)
 }
 
+// The runtime-carved nations, for a save (state/saveGame): restored with registerCountry.
+export function dynamicCountries(): Country[] {
+  return COUNTRIES.filter((c) => dynamicCountryIds.has(c.id))
+}
+
 export function resetDynamicCountries(): void {
   for (const id of dynamicCountryIds) {
     const idx = COUNTRIES.findIndex((c) => c.id === id)

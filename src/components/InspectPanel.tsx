@@ -17,6 +17,11 @@ import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { OwnerNote, SimpleDistrictsTab, SimplePopulationTab, SimpleWorldSummary } from './planet/SimplePlanetTabs'
 import { ComplexDistrictsTab, ComplexWorldSummary } from './planet/ComplexPlanetTabs'
 import { DefenseTab } from './planet/DefenseTab'
+import { DevelopmentTab } from './planet/DevelopmentTab'
+import { TerritoryTab } from './planet/TerritoryTab'
+import { SystemTerritoryRows } from './planet/SystemTerritoryRows'
+import { AreaView } from './planet/AreaView'
+import { usePlanetViewStore } from '../state/planetViewStore'
 import { useColonyStore } from '../state/colonyStore'
 import { COLONY_FOUNDING_DAYS, COLONY_PATROL_DAYS } from '../data/colonyData'
 import { canColonize, colonizeFromPlanet } from '../scene/colonies'
@@ -51,13 +56,15 @@ const KIND_LABEL: Record<InspectableBody['kind'], string> = {
 // The planet screen (Stellaris-style) for planets and moons: Summary, Districts
 // & Buildings, Population, Armies — plus Complex mode's per-world Market and
 // Politics. Stars keep the plain single-pane readout.
-type InspectTab = 'summary' | 'districts' | 'population' | 'armies' | 'defense' | 'market' | 'politics'
+type InspectTab = 'summary' | 'districts' | 'population' | 'armies' | 'defense' | 'territory' | 'development' | 'market' | 'politics'
 const TAB_LABELS: Record<InspectTab, string> = {
   summary: 'Summary',
   districts: 'Districts & Buildings',
   population: 'Population',
   armies: 'Armies',
   defense: 'Defense',
+  territory: 'Territory',
+  development: 'Development',
   market: 'Market',
   politics: 'Politics',
 }
@@ -67,6 +74,8 @@ const TAB_TIPS: Record<InspectTab, string> = {
   population: 'Who lives here and what they do',
   armies: 'Ground forces on this world',
   defense: 'Planetary defenses — fortresses, shield generators, defense batteries — and the orbit',
+  territory: 'Who governs, who holds it by force, who owns what stands here, claims, agreements, and the orbit: each on its own row',
+  development: 'Sites for settlements, mines, factories and ports; what stands on them; routes; how cities grow',
   market: 'This world’s goods market (Complex mode)',
   politics: 'This world’s politics (Complex mode)',
 }
@@ -101,12 +110,11 @@ function ColonyRow({ bodyName }: { bodyName: string }) {
 function ColonizeRows({ bodyName }: { bodyName: string }) {
   const [message, setMessage] = useState<string | null>(null)
   const owner = useTerritoryStore((s) => s.bodyOwner[bodyName])
-  const simple = usePlayerStore((s) => s.economyModel === 'abstract')
   const playerId = usePlayerStore((s) => s.selectedCountryId)
   const ships = useShipStore((s) => s.ships)
   // Re-check when what the rules read changes.
   useSurveyStore((s) => (playerId ? s.discovered[playerId] : undefined))
-  if (!simple || !playerId || owner || bodyName === 'Sol') return null
+  if (!playerId || owner || bodyName === 'Sol') return null
   const owners = useTerritoryStore.getState().bodyOwner
   if ((groundSurface(bodyName, owners)?.mainland ?? -1) < 0) return null
   const mine = ships.filter((s) => s.ownerId === playerId && resolveShipClass(s.classId)?.role === 'colony')
@@ -170,7 +178,7 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
       </div>
       {owner && (
         <div className="inspect-row">
-          <span className="inspect-label">Owner</span>
+          <span className="inspect-label" title="The recognized sovereign of this world. Who holds it by force, who owns what stands on it and who holds its orbit are on the Territory tab.">Sovereign</span>
           <span className="inspect-value" style={{ color: owner.color }}>
             {owner.name}
           </span>
@@ -308,11 +316,16 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   const simple = usePlayerStore((s) => s.economyModel === 'abstract')
   const playerId = usePlayerStore((s) => s.selectedCountryId)
   const simpleWorld = useAbstractEconomyStore((s) => !!s.worlds[body.name])
+  // The territory and its sites are shown once the world is surveyed (or is yours): a body's details are intel.
+  const surveyed = usePlayerBodySurveyed(body.name)
+  const districtsView = usePlanetViewStore((s) => s.view)
+  const setDistrictsView = usePlanetViewStore((s) => s.setView)
 
   if (body.kind === 'star') {
     return (
       <DraggableWindow title={body.name} memoryKey="planet" onClose={onClose}>
         <OverviewRows body={body} action={action} />
+        <SystemTerritoryRows starName={body.name} />
       </DraggableWindow>
     )
   }
@@ -320,7 +333,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   // world with an economy adds Districts & Buildings and Population; Complex
   // mode keeps its per-world Market and Politics.
   const hasEconomy = simple ? simpleWorld : !!world
-  const tabs: InspectTab[] = ['summary', ...(hasEconomy ? (['districts', 'population'] as InspectTab[]) : []), 'armies', 'defense', ...(!simple && world ? (['market', 'politics'] as InspectTab[]) : [])]
+  const tabs: InspectTab[] = ['summary', ...(hasEconomy ? (['districts', 'population'] as InspectTab[]) : []), 'armies', 'defense', ...(surveyed ? (['territory', 'development'] as InspectTab[]) : []), ...(!simple && world ? (['market', 'politics'] as InspectTab[]) : [])]
   const current = tabs.includes(tab) ? tab : 'summary'
 
   return (
@@ -342,13 +355,25 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
       )}
       {current === 'districts' && (
         <>
+          <div className="nav-subtabs pl-subtabs" title="The same buildings two ways: the master list by district, or each settlement and site with what stands on it">
+            <button type="button" className={`nav-subtab${districtsView === 'building' ? ' active' : ''}`} onClick={() => setDistrictsView('building')}>By building</button>
+            <button type="button" className={`nav-subtab${districtsView === 'area' ? ' active' : ''}`} onClick={() => setDistrictsView('area')}>By area</button>
+          </div>
           {simple && <OwnerNote bodyName={body.name} countryId={playerId} />}
-          {simple ? <SimpleDistrictsTab countryId={playerId} bodyName={body.name} /> : world && <ComplexDistrictsTab playerId={playerId} world={world} country={country} />}
+          {districtsView === 'area' ? (
+            <AreaView bodyName={body.name} playerId={playerId} />
+          ) : simple ? (
+            <SimpleDistrictsTab countryId={playerId} bodyName={body.name} />
+          ) : (
+            world && <ComplexDistrictsTab playerId={playerId} world={world} country={country} />
+          )}
         </>
       )}
       {current === 'population' && (simple ? <SimplePopulationTab bodyName={body.name} /> : <PopsPanel worldName={body.name} world={world} />)}
       {current === 'armies' && <BodyArmies bodyName={body.name} />}
       {current === 'defense' && <DefenseTab bodyName={body.name} playerId={playerId} />}
+      {current === 'territory' && <TerritoryTab bodyName={body.name} />}
+      {current === 'development' && <DevelopmentTab bodyName={body.name} />}
       {current === 'market' && <EconomyPanel subcategory="Market" worldName={body.name} world={world} country={country} />}
       {current === 'politics' && <PoliticsPanel worldName={body.name} world={world} />}
     </DraggableWindow>

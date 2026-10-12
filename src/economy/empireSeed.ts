@@ -120,9 +120,11 @@ export function worldPlanetsOf(empire: Pick<GalaxyEmpire, 'ownedStarIds'>): Plan
     .map(({ planet }) => planet)
 }
 
-function worldSpecFor(empire: GalaxyEmpire, planet: PlanetData, home: boolean, operatorId: string): WorldSpec {
-  const scaled = Math.round((HOME_POPULATION[planet.planetClass] ?? 0) * sizeFactor(planet.radiusKm) * (home ? 1 : COLONY_SHARE))
-  const population = home ? Math.max(HOME_MIN_POPULATION, scaled) : Math.max(MIN_POPULATION, scaled)
+// The buildings a world of `population` million people on a `planetClass` body runs: what its
+// ground holds, power, food, services, construction and light industry as far as the job
+// budget goes (shared by the empires' worlds and by the colonies a nation founds,
+// economy/colonySeed.ts).
+export function kitFor(planetClass: PlanetClass, population: number, home: boolean): BuildingSpec[] {
   const desired = (perThousand: number) => Math.max(1, Math.round((perThousand * population) / 1000))
   let budget = population * (home ? JOB_BUDGET.home : JOB_BUDGET.colony)
   const buildings: BuildingSpec[] = []
@@ -139,12 +141,19 @@ function worldSpecFor(empire: GalaxyEmpire, planet: PlanetData, home: boolean, o
   }
   // What the ground holds comes first (so it, not the base kit, sets the mix),
   // then power and food, then the rest of the kit as far as the people go.
-  const ground = EXTRACTION_BY_CLASS[planet.planetClass] ?? []
+  const ground = EXTRACTION_BY_CLASS[planetClass] ?? []
   ground.slice(0, 2).forEach((recipe, i) => add(recipe, desired(i === 0 ? 1.5 : 0.8), 'worker'))
   for (const k of BASE_KIT.slice(0, 2)) add(k.recipe, desired(k.perThousand))
   ground.slice(2).forEach((recipe) => add(recipe, desired(0.8), 'worker'))
   if (home) for (const k of HOME_KIT) add(k.recipe, desired(k.perThousand))
   for (const k of BASE_KIT.slice(2)) add(k.recipe, desired(k.perThousand))
+  return buildings
+}
+
+function worldSpecFor(empire: GalaxyEmpire, planet: PlanetData, home: boolean, operatorId: string): WorldSpec {
+  const scaled = Math.round((HOME_POPULATION[planet.planetClass] ?? 0) * sizeFactor(planet.radiusKm) * (home ? 1 : COLONY_SHARE))
+  const population = home ? Math.max(HOME_MIN_POPULATION, scaled) : Math.max(MIN_POPULATION, scaled)
+  const buildings = kitFor(planet.planetClass, population, home)
   if (home) buildings.push({ recipe: 'corporateHq', level: 1, owner: operatorId })
   const faith = FAITHS[hash(empire.id) % FAITHS.length]
   const religions: ReligionMix = faith === 'non-affiliated' ? [{ religion: 'non-affiliated', share: 1 }] : [{ religion: faith, share: 0.6 }, { religion: 'non-affiliated', share: 0.4 }]

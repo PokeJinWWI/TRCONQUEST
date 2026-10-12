@@ -1,4 +1,5 @@
 import { KEY_HOLD_BONUS, KEY_KIND_LABEL, KEY_ROLE, keyNameOf } from '../scene/keyNames'
+import { useState } from 'react'
 import { regionAt } from '../scene/bodyTopography'
 import { ARMY_KINDS } from '../data/armyData'
 import { TERRAIN, UNIT_TYPES, type TerrainId } from '../data/groundData'
@@ -18,6 +19,9 @@ import { usePlayerStore } from '../state/playerStore'
 import { atWar } from '../state/diplomacyStore'
 import { relationColorOf, useRelationKey } from '../state/shipRelations'
 import { DraggableWindow } from './DraggableWindow'
+import { useDefenseStore } from '../state/defenseStore'
+import { portAt, renamePort } from '../scene/portStructures'
+import { useStructureStore } from '../state/structureStore'
 
 // The planetary map's panels: the roster/controls window (left) and the
 // selected units' capability card (right), plus the click handlers the globe
@@ -100,6 +104,7 @@ function bodyArmies(bodyName: string): Army[] {
 export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: BodySurface }) {
   useBodyArmiesKey(bodyName)
   const density = useGroundViewStore((s) => s.density)
+  const zoningMode = useGroundViewStore((s) => s.zoningMode)
   const mode = useGroundViewStore((s) => s.mode)
   const notice = useGroundViewStore((s) => s.notice)
   const selectedIds = useGroundViewStore((s) => s.selectedUnitIds)
@@ -109,6 +114,11 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
   const player = usePlayerStore((s) => s.selectedCountryId)
   const view = useGroundViewStore.getState()
   const armies = bodyArmies(bodyName)
+  // Renaming a spaceport or an installation of your own (the pencil beside it in the list).
+  const [renaming, setRenaming] = useState<number | null>(null)
+  const [draft, setDraft] = useState('')
+  useStructureStore((s) => s.ports[bodyName])
+  const installations = useDefenseStore((s) => s.installations)
 
   const owner = owners[bodyName]
   const controller = controllerOf(bodyName, owners, controllers)
@@ -135,18 +145,62 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
           {keyHolders.map((k) => {
             const kn = keyNameOf(surface, k)
             const region = regionAt(bodyName, k.node)
+            // What can be renamed: a spaceport the economy runs (recorded as a structure) or a defence installation, on a world you own.
+            const port = k.kind === 'spaceport' && k.site ? portAt(bodyName, k.node) : undefined
+            const installation = k.kind === 'fortress' || (k.kind === 'spaceport' && !k.site) ? installations.find((i) => i.bodyName === bodyName && i.node === k.node) : undefined
+            const mine = owner === player && !!player
+            const canRename = mine && (!!port || !!installation)
+            if (renaming === k.node) {
+              const commit = () => {
+                if (port) renamePort(bodyName, port.id, draft)
+                else if (installation) useDefenseStore.getState().renameInstallation(installation.id, draft)
+                setRenaming(null)
+              }
+              return (
+                <div key={k.node} className="ground-key-wrap">
+                  <input
+                    className="ground-key-name-input"
+                    autoFocus
+                    value={draft}
+                    maxLength={40}
+                    placeholder={kn.label}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commit()
+                      if (e.key === 'Escape') setRenaming(null)
+                      e.stopPropagation()
+                    }}
+                  />
+                  <button type="button" className="ground-key-rename" onClick={commit} title="Save the name (empty goes back to the map's own)">✓</button>
+                </div>
+              )
+            }
             return (
-              <button
-                key={k.node}
-                type="button"
-                className="ground-key-row"
-                onClick={() => useGroundViewStore.getState().focusNode(k.node)}
-                title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''}${k.operator ? `\nRun by ${k.operator}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
-              >
-                <span className="ground-key-row-name">{kn.name ?? kn.label}{kn.native ? <span className="abs-dim"> {kn.native}</span> : null}</span>
-                <span className="abs-dim">{[kn.name ? KEY_KIND_LABEL[k.kind] : '', region ?? '', k.operator ? `run by ${k.operator}` : ''].filter(Boolean).join(' · ')}</span>
-                <span className="ground-key-row-holder" style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined }}>{k.holder ? ownerDisplay(k.holder).name : 'nobody'}</span>
-              </button>
+              <div key={k.node} className="ground-key-wrap">
+                <button
+                  type="button"
+                  className="ground-key-row"
+                  onClick={() => useGroundViewStore.getState().focusNode(k.node)}
+                  title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''}${k.operator ? `\nRun by ${k.operator}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
+                >
+                  <span className="ground-key-row-name">{kn.name ?? kn.label}{kn.native ? <span className="abs-dim"> {kn.native}</span> : null}</span>
+                  <span className="abs-dim">{[kn.name ? KEY_KIND_LABEL[k.kind] : '', region ?? '', k.operator ? `run by ${k.operator}` : ''].filter(Boolean).join(' · ')}</span>
+                  <span className="ground-key-row-holder" style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined }}>{k.holder ? ownerDisplay(k.holder).name : 'nobody'}</span>
+                </button>
+                {canRename && (
+                  <button
+                    type="button"
+                    className="ground-key-rename"
+                    title="Name it"
+                    onClick={() => {
+                      setDraft(port?.name ?? installation?.name ?? '')
+                      setRenaming(k.node)
+                    }}
+                  >
+                    ✎
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>
@@ -154,6 +208,25 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
       <div className="ship-panel-hint">
         To take this world: hold every key node, with no enemy on any of them — move units onto them (within ¾ of a map cell). Your units on a node you hold defend 25% better; new armies raised here muster at the spaceport.
       </div>
+
+      <div className="inspect-row">
+        <span className="inspect-label">Map mode</span>
+        <span className="inspect-value combat-density-row">
+          <button
+            type="button"
+            className={`combat-density-btn${zoningMode ? ' active' : ''}`}
+            onClick={() => view.setZoningMode(!zoningMode)}
+            title="Zoning: every district's zone as a tinted area with a border, the ground it has actually built over outlined in white inside it, nature reserves in green."
+          >
+            Zoning
+          </button>
+        </span>
+      </div>
+      {zoningMode && (
+        <div className="ship-panel-hint">
+          Tinted area with a coloured border: the ground a district may grow into (its zone). White outline: what it has built over. Green: nature reserve. Pick up the Draw a zone tool in the ⚙ panel to redraw one.
+        </div>
+      )}
 
       <div className="inspect-row">
         <span className="inspect-label">Grid</span>

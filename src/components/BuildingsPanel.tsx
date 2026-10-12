@@ -1,3 +1,4 @@
+import { SiteChooser } from './planet/SiteChooser'
 import { Fragment, useMemo, useState } from 'react'
 import { RECIPES, getMethod, BUREAUCRACY_OUTPUT, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
 import { GOODS } from '../economy/goods'
@@ -323,6 +324,8 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const releaseProductionMethod = useEconomyStore((s) => s.releaseProductionMethod)
   const corporations = useEconomyStore((s) => s.corporations)
   const [detailId, setDetailId] = useState<string | null>(null)
+  // The "where?" step for a new building.
+  const [choosing, setChoosing] = useState<string | null>(null)
 
   const groups = subtab ? TAB_GROUPS[subtab] ?? null : null
   const rows = useMemo(() => {
@@ -570,6 +573,16 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
           <div className="econ-subtitle" style={{ marginTop: 8 }}>
             Build (state-owned — construction consumes materials, paid by the treasury)
           </div>
+          {choosing && countryId && (
+            <SiteChooser
+              request={{ bodyName: world.name, builderId: countryId, title: RECIPES[choosing]?.label ?? choosing, ref: { mode: 'complex' as const, id: choosing } }}
+              onCancel={() => setChoosing(null)}
+              onChoose={(siteId) => {
+                queueConstruction(world.id, choosing, { kind: 'state' }, siteId)
+                setChoosing(null)
+              }}
+            />
+          )}
           {buildGroups.map(({ group, items }) => (
             <div className="econ-build-group" key={group}>
               {showBuildHeaders && <div className="econ-build-group-label">{BUILDING_GROUP_LABELS[group]}</div>}
@@ -581,7 +594,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                       key={r.id}
                       type="button"
                       className="econ-build-btn"
-                      onClick={() => queueConstruction(world.id, r.id)}
+                      onClick={() => setChoosing(r.id)}
                       disabled={!room}
                       title={!room ? `${DISTRICT_LABELS[districtOfRecipe(r.id)]} district is full` : `Queue a ${r.label} in the ${DISTRICT_LABELS[districtOfRecipe(r.id)]} district — about ${fmt(estimateConstructionCost(r.id, world.market.prices))} of materials, built over time`}
                     >

@@ -4,7 +4,7 @@ import { useGameTimeStore } from './gameTimeStore'
 // The Escape menu (components/EscapeMenu.tsx). Opening it pauses the game; on
 // closing, the game resumes only if the menu is what paused it — a game the
 // player had already paused stays paused.
-export type MenuView = 'main' | 'settings' | 'quit'
+export type MenuView = 'main' | 'settings' | 'saves' | 'quit'
 
 interface MenuState {
   open: boolean

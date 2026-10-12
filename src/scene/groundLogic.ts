@@ -3,6 +3,7 @@
 // landing may be made, and where units stand. Pure except for
 // settlementTierOf, which reads the static country list and the economy's
 // world list (the same kind of read liveBodyValue does).
+import { withFootprints } from './footprintState'
 import { COUNTRIES } from '../data/countryData'
 import {
   DROP_EXCLUSION_CELLS,
@@ -38,7 +39,9 @@ export function settlementTierOf(bodyName: string, owners: OwnerMap): Settlement
 // star).
 export function groundSurface(bodyName: string, owners: OwnerMap): BodySurface | null {
   if (!bodyGroundInfoAny(bodyName)) return null
-  return surfaceOf(bodyName, settlementTierOf(bodyName, owners))
+  // A seeded world also shows its districts: the ground under a developed site is urban / industrial / mining / farmland
+  // (scene/footprintState.ts). Anything else is the terrain the generator made.
+  return withFootprints(surfaceOf(bodyName, settlementTierOf(bodyName, owners)))
 }
 
 // --- Scale -------------------------------------------------------------------

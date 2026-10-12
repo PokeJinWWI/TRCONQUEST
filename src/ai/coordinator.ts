@@ -5,6 +5,7 @@
 //   Diplomat    opinion of neighbours; seeking peace (diplomat.ts)
 //   Strategist  posture; declaring war (strategist.ts)
 //   Expander    research, survey and claiming systems with Starbases (expander.ts)
+//   Developer   routes, orbital defense and settlements it already has (developer.ts)
 //   Shipwright  ships, transports and armies to build (shipwright.ts)
 //   Admiral     where the navy goes: defend, attack, return home (admiral.ts)
 //   Marshal     loading transports and invading (marshal.ts)
@@ -23,6 +24,7 @@ import { expander } from './expander'
 import { shipwright } from './shipwright'
 import { admiral } from './admiral'
 import { marshal } from './marshal'
+import { developer } from './developer'
 import type { AgentOutput, AiMemory, Intent } from './types'
 
 export interface PlanResult {
@@ -42,6 +44,7 @@ export function planEmpire(countryId: string, snap: AiSnapshot, initialMemory: A
   absorb(diplomat(bb, snap, memory))
   absorb(strategist(bb, snap))
   absorb(expander(bb, snap, memory))
+  absorb(developer(bb, snap))
   absorb(shipwright(bb, snap, memory))
   absorb(admiral(bb, snap, memory))
   absorb(marshal(bb, snap, memory))

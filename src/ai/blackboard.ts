@@ -28,6 +28,13 @@ export interface CountryInfo {
 
 // Everything the AI reads, captured at one instant. Plain data (plus a couple
 // of lookups), so a test can hand-build one.
+// What the AI can see of its development (scene/aiDevelopment.ts reads the live game; an agent only asks).
+export interface DevelopmentView {
+  isolatedSitesOf: (countryId: string) => { bodyName: string; siteId: string; access: number; demand: number }[]
+  threatenedBodiesOf: (countryId: string) => string[]
+  settlementOpeningsOf: (countryId: string) => string[]
+}
+
 export interface AiSnapshot {
   simDays: number
   playerCountryId: string | null
@@ -50,6 +57,8 @@ export interface AiSnapshot {
   // Optional: absent = none.
   colonies?: Record<string, Colony>
   simpleEconomy?: boolean
+  // Sites, routes, orbits and settlements. Optional: absent = the empire has none to look after.
+  development?: DevelopmentView
   resourcesOf: (countryId: string) => Record<ResourceId, number>
   researchedOf: (countryId: string) => Set<string>
   buildQueueLengthOf: (countryId: string) => number

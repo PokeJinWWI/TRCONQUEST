@@ -1,3 +1,4 @@
+import { claimSystemForStarbase, decideConstructionNow } from '../scene/sovereignty'
 import { create } from 'zustand'
 import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INTEGRITY, STARBASE_MODULES, STARBASE_TIERS, STARBASE_TIER_ORDER, type StarbaseModuleType } from '../data/starbaseData'
 import { useResourceStore } from './resourceStore'
@@ -84,6 +85,9 @@ export function canBuildStarbase(countryId: string, starId: string, starbases: S
   if (!isFullySurveyed(useSurveyStore.getState().discovered[countryId], countryId, starId, useTerritoryStore.getState().bodyOwner)) {
     return { ok: false, reason: 'The system is not fully surveyed' }
   }
+  // A system's sovereign (a recognized system claim; owning a Starbase never makes one) may refuse.
+  const rights = decideConstructionNow(countryId, { kind: 'system', id: starId }, 'starbase')
+  if (!rights.allowed) return { ok: false, reason: rights.reason }
   const here = starbasesAt(starId, starbases)
   if (here.some((sb) => sb.ownerId === countryId)) return { ok: false, reason: 'Already have a Starbase here' }
   // A nation doesn't build a Starbase to contest ground it's already at war
@@ -124,6 +128,8 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
       modules: [],
     }
     set({ starbases: [...starbases, sb] })
+    // A foothold, not a title: the builder files a provisional claim on the system.
+    claimSystemForStarbase(countryId, starId, simDays)
     // The player is told when one of theirs begins (fog: never another nation's).
     if (usePlayerStore.getState().selectedCountryId === countryId) {
       useDiplomacyStore.getState().pushEvent('starbase-started', [countryId], starbaseStartedText(ownerDisplay(countryId).name, findStar(starId)?.name ?? starId, formatDate(simDaysToDate(sb.readySimDays))), simDays, { starId })

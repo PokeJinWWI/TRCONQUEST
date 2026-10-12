@@ -33,6 +33,7 @@
 // Pure and headless (no store/DOM). The store (state/abstractEconomyStore.ts)
 // holds the states, syncs the stockpile and advances it monthly.
 
+import { UNREST_HAPPINESS_CAP, UNREST_HAPPINESS_PER_POINT } from '../data/demolitionData'
 import {
   ACADEMIC_TO_INDUSTRIAL,
   CLUSTER_MAX,
@@ -106,6 +107,9 @@ export interface ConstructionOrder {
   building?: SimpleBuildingId
   district?: SimpleDistrictId
   progress: number // construction points put in so far
+  // The development site the building stands on (scene/locations.ts); absent on a district
+  // order and on orders made before sites existed.
+  siteId?: string
 }
 
 // A building or district level being deconstructed: a bar that runs backwards.
@@ -133,6 +137,9 @@ export type TradeOrders = Partial<Record<SimpleGood, number>>
 
 export interface AbstractEconomyState {
   countryId: string
+  // The share (0..1) of a building kind's output that reaches a hub, for buildings placed on sites that
+  // are cut off or congested (scene/infrastructureNet.ts); set by the main thread. Absent = full.
+  buildingAccess?: Partial<Record<SimpleBuildingId, number>>
   population: number // total over the nation's worlds, as of the last tick (display/AI)
   gdp: number // nominal annual GDP, as of the last tick
   realGdp: number // annual GDP at base prices, as of the last tick
@@ -148,6 +155,8 @@ export interface AbstractEconomyState {
   economyType: EconomyType
   moneyCreation: number // 0..1 share of a deficit printed rather than borrowed
   warTaxes: boolean
+  // Unrest from displaced people (state/unrestStore), set by the main thread before each month. Absent = none.
+  displacedUnrest?: number
   welfare: number // 0..1 welfare spending level — costs budget, buys stability and growth
   monetaryStance?: MonetaryStance // default neutral
   // Productivity: output per worker, 1 at game start. Everything buildings and
@@ -580,7 +589,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
   const runOf = (b: SimpleBuildingId) => {
     let run = 1
     for (const g of Object.keys(SIMPLE_BUILDING_DEFS[b].upkeep) as SimpleGood[]) run = Math.min(run, goodSat[g])
-    return run
+    return run * (s.buildingAccess?.[b] ?? 1)
   }
   for (let round = 0; round < 5; round++) {
     const supply = emptyStockpile()
@@ -728,6 +737,7 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     add('Amenities', amenitiesHappiness(amenitiesRatio))
     add('Inflation', -Math.min(0.3, Math.max(0, s.inflation) * INFLATION_HAPPINESS))
     if (s.warTaxes) add('War taxes', -WAR_TAX_HAPPINESS)
+    if (s.displacedUnrest) add('Displaced people', -Math.min(UNREST_HAPPINESS_CAP, s.displacedUnrest * UNREST_HAPPINESS_PER_POINT))
     const happiness = clamp(0.5 + parts.reduce((n, p) => n + p.value, 0), 0, 1)
     strata[st] = { population: stratumPop[st], happiness, parts }
     approvalSum += stratumPop[st] * happiness

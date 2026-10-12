@@ -5,104 +5,14 @@
 // player's display settings are the one thing kept — they're preferences, not
 // game state.
 import { resetFightPace } from '../hooks/fightPace'
-import { useAiStore } from '../ai/aiStore'
-import { useArmyStore } from '../state/armyStore'
-import { useBattleStore } from '../state/battleStore'
-import { useCombatStore } from '../state/combatStore'
-import { useConfirmStore } from '../state/confirmStore'
-import { useDebugConsoleStore } from '../state/debugConsoleStore'
-import { useDiplomacyStore } from '../state/diplomacyStore'
-import { useSubjectStore } from '../state/subjectStore'
-import { useInternationalOrgStore } from '../state/internationalOrgStore'
-import { useTradePolicyStore } from '../state/tradePolicyStore'
-import { useTreatyStore } from '../state/treatyStore'
 import { resetDynamicCountries } from '../data/countryData'
-import { useObserverStore } from '../state/observerStore'
-import { cancelEconomyFlight, useEconomyStore } from '../state/economyStore'
-import { useFleetStore } from '../state/fleetStore'
-import { useGameTimeStore } from '../state/gameTimeStore'
-import { useGroundViewStore } from '../state/groundViewStore'
-import { useHyperlaneStore } from '../state/hyperlaneStore'
-import { useMapModeStore } from '../state/mapModeStore'
-import { usePlayerStore } from '../state/playerStore'
-import { useResourceStore } from '../state/resourceStore'
-import { useShipDesignStore } from '../state/shipDesignStore'
-import { useShipStore } from '../state/shipStore'
-import { useSurveyStore } from '../state/surveyStore'
-import { useClusterVisitStore } from '../state/clusterVisitStore'
-import { useStarbaseStore } from '../state/starbaseStore'
-import { useStarbasePanelStore } from '../state/starbasePanelStore'
-import { useShipyardStore } from '../state/shipyardStore'
-import { useShipDeconstructionStore } from '../state/shipDeconstructionStore'
-import { useTechStore } from '../state/techStore'
-import { useTerrainStore } from '../state/terrainStore'
-import { useTerritoryStore } from '../state/territoryStore'
-import { useViewStore } from '../state/viewStore'
-import { useWorkspaceStore } from '../state/workspaceStore'
-import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
-import { useDefenseStore } from '../state/defenseStore'
-import { useBombardmentStore } from '../state/bombardmentStore'
-import { useHoldingsStore } from '../state/holdingsStore'
-import { useWindowLayoutStore } from '../state/windowLayoutStore'
-import { usePlanetViewStore } from '../state/planetViewStore'
-import { useColonyStore } from '../state/colonyStore'
-import { useDepositStore } from '../state/depositStore'
-import { useMaterialStore } from '../state/materialStore'
-
-// Every store that holds game (or session) state. Not settingsStore.
-interface Resettable {
-  setState: (state: never, replace: true) => void
-  getInitialState: () => unknown
-}
-const GAME_STORES: Resettable[] = [
-  useObserverStore,
-  useAbstractEconomyStore,
-  useColonyStore,
-  useDepositStore,
-  useMaterialStore,
-  useDefenseStore,
-  useBombardmentStore,
-  useHoldingsStore,
-  useWindowLayoutStore,
-  usePlanetViewStore,
-  useAiStore,
-  useSurveyStore,
-  useClusterVisitStore,
-  useStarbaseStore,
-  useStarbasePanelStore,
-  useArmyStore,
-  useBattleStore,
-  useCombatStore,
-  useConfirmStore,
-  useDebugConsoleStore,
-  useDiplomacyStore,
-  useSubjectStore,
-  useInternationalOrgStore,
-  useTradePolicyStore,
-  useTreatyStore,
-  useEconomyStore,
-  useFleetStore,
-  useGameTimeStore,
-  useGroundViewStore,
-  useHyperlaneStore,
-  useMapModeStore,
-  useResourceStore,
-  useShipDesignStore,
-  useShipStore,
-  useShipyardStore,
-  useShipDeconstructionStore,
-  useTechStore,
-  useTerrainStore,
-  useTerritoryStore,
-  useViewStore,
-  useWorkspaceStore,
-  usePlayerStore,
-] as unknown as Resettable[]
+import { cancelEconomyFlight } from '../state/economyStore'
+import { STORE_REGISTRY } from '../state/gameStores'
 
 export function resetGame(): void {
   // An economy month still being worked out belongs to the old game.
   cancelEconomyFlight()
-  for (const store of GAME_STORES) store.setState(store.getInitialState() as never, true)
+  for (const { store } of STORE_REGISTRY) store.setState(store.getInitialState() as never, true)
   resetFightPace()
   resetDynamicCountries()
 }

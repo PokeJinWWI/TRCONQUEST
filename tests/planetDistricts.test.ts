@@ -225,7 +225,7 @@ console.log('\n=== 5. Complex mode: districts that house buildings ===')
   check('...and leaves the queue', !after.constructionQueue.some((o) => o.district))
   const full = { ...mars, land: D.districtLevelsTotal(mars) }
   check('no free land, no district', D.freeLandOfWorld(full) === 0)
-  check('a world without districts reads as enough to cover its capacity', D.districtLevels({ districtCapacity: { core: 9, urban: 8, industrial: 17, resource: 0 } }).industrial === 3)
+  check('a world without districts reads as enough to cover its capacity', D.districtLevels({ districtCapacity: { core: 9, urban: 8, industrial: 17, mining: 0, agricultural: 0 } }).industrial === 3)
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

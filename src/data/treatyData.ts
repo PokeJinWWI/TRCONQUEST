@@ -22,6 +22,19 @@ export type ArticleKind =
   | 'transfer-subject'
   | 'ship-transfer'
   | 'join-power-bloc'
+  // Territorial agreements (docs/territorial-design.md M9): each has a scope, parties and a defined effect.
+  | 'construction-right'
+  | 'access-right'
+  | 'territorial-recognition'
+  | 'territorial-transfer'
+  | 'demilitarized-zone'
+
+// A place a territorial article applies to (the same shape as scene/claims.Scope).
+export interface TreatyScope {
+  kind: 'system' | 'body' | 'region' | 'location' | 'orbit'
+  id: string
+}
+export type AccessKind = 'transit' | 'dock' | 'basing'
 
 // Mutual articles apply the same to both of the treaty's two nations, so they
 // carry no direction. Directional articles name which of the treaty's two
@@ -69,9 +82,23 @@ export type TreatyArticle =
   // ONE-TIME: joiningId joins leaderId's international organization (orgId,
   // which leaderId must lead) the moment this treaty is signed.
   | { kind: 'join-power-bloc'; orgId: string; leaderId: string; joiningId: string }
+  // ONGOING: sourceId (who governs the scope) lets targetId settle and build there, under its jurisdiction
+  // (a construction permission, a settlement right or a resource concession). It ends with the treaty; what
+  // targetId built stays targetId's.
+  | { kind: 'construction-right'; sourceId: string; targetId: string; scope: TreatyScope }
+  // ONGOING: sourceId lets targetId transit, dock at, or base forces in the scope.
+  | { kind: 'access-right'; sourceId: string; targetId: string; scope: TreatyScope; access: AccessKind }
+  // ONE-TIME: sourceId recognizes targetId's claim on the scope; a rival claim of sourceId's own is withdrawn
+  // and targetId's claim becomes recognized.
+  | { kind: 'territorial-recognition'; sourceId: string; targetId: string; scope: TreatyScope }
+  // ONE-TIME: fromId, who governs the scope, transfers its sovereignty to toId. Assets, settlements and
+  // people stay where they are.
+  | { kind: 'territorial-transfer'; fromId: string; toId: string; scope: TreatyScope }
+  // ONGOING, mutual: neither side builds military assets (defense platforms, fortresses) in the scope.
+  | { kind: 'demilitarized-zone'; scope: TreatyScope }
 
 export function isInstantArticle(kind: ArticleKind): boolean {
-  return kind === 'transfer-subject' || kind === 'ship-transfer' || kind === 'join-power-bloc'
+  return kind === 'transfer-subject' || kind === 'ship-transfer' || kind === 'join-power-bloc' || kind === 'territorial-recognition' || kind === 'territorial-transfer'
 }
 
 // A treaty's chosen binding period, in years — Victoria 3's own five options.
@@ -158,6 +185,24 @@ export function articleCostFor(article: TreatyArticle, forId: string): number {
       if (forId === article.leaderId) return JOIN_BLOC_LEADER_COST
       if (forId === article.joiningId) return JOIN_BLOC_JOINER_COST
       return 0
+    case 'construction-right':
+      if (forId === article.targetId) return CONSTRUCTION_RIGHT_RECEIVE_COST
+      if (forId === article.sourceId) return CONSTRUCTION_RIGHT_GRANT_COST
+      return 0
+    case 'access-right':
+      if (forId === article.targetId) return ACCESS_RIGHT_COST[article.access].receive
+      if (forId === article.sourceId) return ACCESS_RIGHT_COST[article.access].grant
+      return 0
+    case 'territorial-recognition':
+      if (forId === article.targetId) return RECOGNITION_RECEIVE_COST
+      if (forId === article.sourceId) return RECOGNITION_GRANT_COST
+      return 0
+    case 'territorial-transfer':
+      if (forId === article.toId) return TERRITORY_TRANSFER_RECEIVE_COST
+      if (forId === article.fromId) return TERRITORY_TRANSFER_GIVE_COST
+      return 0
+    case 'demilitarized-zone':
+      return DEMILITARIZED_ZONE_COST
   }
 }
 
@@ -196,6 +241,20 @@ const SHIP_TRANSFER_RECEIVE_COST = -30
 const SHIP_TRANSFER_GIVE_COST = 10
 const JOIN_BLOC_LEADER_COST = -40
 const JOIN_BLOC_JOINER_COST = 30
+const CONSTRUCTION_RIGHT_RECEIVE_COST = -30
+const CONSTRUCTION_RIGHT_GRANT_COST = 15
+const ACCESS_RIGHT_COST: Record<AccessKind, { receive: number; grant: number }> = {
+  transit: { receive: -10, grant: 5 },
+  dock: { receive: -20, grant: 10 },
+  basing: { receive: -30, grant: 25 },
+}
+const RECOGNITION_RECEIVE_COST = -30
+// Recognizing a rival's claim is a real concession: about what ceding a port is.
+const RECOGNITION_GRANT_COST = 25
+const TERRITORY_TRANSFER_RECEIVE_COST = -60
+// Handing over sovereignty is the biggest ask of all.
+const TERRITORY_TRANSFER_GIVE_COST = 60
+const DEMILITARIZED_ZONE_COST = 10
 
 // Opinion hit to the OTHER side when you cancel a still-binding treaty you
 // hold with them (see data/treatyData.isBinding) — free once it's expired.
@@ -216,6 +275,11 @@ export const ARTICLE_LABELS: Record<ArticleKind, string> = {
   'transfer-subject': 'Transfer Subject',
   'ship-transfer': 'Ship Transfer',
   'join-power-bloc': 'Join International Organization',
+  'construction-right': 'Construction Right',
+  'access-right': 'Access Right',
+  'territorial-recognition': 'Territorial Recognition',
+  'territorial-transfer': 'Territorial Transfer',
+  'demilitarized-zone': 'Demilitarized Zone',
 }
 
 // A short human-readable line for one article, from `viewerId`'s point of
@@ -240,6 +304,16 @@ export function describeArticle(article: TreatyArticle, viewerId: string, nameOf
       return article.fromId === viewerId ? `Transferred a ship to ${nameOf(article.toId)}` : `Received a ship from ${nameOf(article.fromId)}`
     case 'join-power-bloc':
       return article.joiningId === viewerId ? `Joined ${nameOf(article.leaderId)}'s organization` : `${nameOf(article.joiningId)} joined your organization`
+    case 'construction-right':
+      return article.sourceId === viewerId ? `Allowed ${nameOf(article.targetId)} to build in ${article.scope.id}` : `Right to build in ${article.scope.id}, from ${nameOf(article.sourceId)}`
+    case 'access-right':
+      return article.sourceId === viewerId ? `Granted ${nameOf(article.targetId)} ${article.access} rights at ${article.scope.id}` : `${article.access[0].toUpperCase()}${article.access.slice(1)} rights at ${article.scope.id}, from ${nameOf(article.sourceId)}`
+    case 'territorial-recognition':
+      return article.sourceId === viewerId ? `Recognized ${nameOf(article.targetId)}'s claim on ${article.scope.id}` : `${nameOf(article.sourceId)} recognized our claim on ${article.scope.id}`
+    case 'territorial-transfer':
+      return article.fromId === viewerId ? `Transferred ${article.scope.id} to ${nameOf(article.toId)}` : `Received ${article.scope.id} from ${nameOf(article.fromId)}`
+    case 'demilitarized-zone':
+      return `${article.scope.id} demilitarized`
     default:
       return ARTICLE_LABELS[article.kind]
   }

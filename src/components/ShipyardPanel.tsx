@@ -140,8 +140,7 @@ export function ShipyardPanel() {
 
   const sections = useMemo(() => {
     const all = [
-      // Colonies exist in Simple mode only (scene/colonies.ts).
-      ...GROUPS.map((g) => ({ ...g, classes: shipyardRows(PLAYER_SHIP_CLASSES.filter((c) => g.roles.includes(c.role) && (c.role !== 'colony' || isAbstractEconomy())), researched, resolveShipClass) })),
+      ...GROUPS.map((g) => ({ ...g, classes: shipyardRows(PLAYER_SHIP_CLASSES.filter((c) => g.roles.includes(c.role) && true), researched, resolveShipClass) })),
       { ...DESIGNS_GROUP, roles: [] as ShipClass['role'][], classes: shipyardRows(designClasses, researched, resolveShipClass) },
     ]
     return all.filter((g) => g.classes.length > 0)

@@ -19,7 +19,8 @@ import type { Building, BuildingOwner, ConstructionOrder, Country, World } from 
 import { PlanetIcon } from './PlanetIcons'
 import { usePlanetViewStore } from '../../state/planetViewStore'
 import { useBuildingDetailStore } from '../../state/buildingDetailStore'
-import { CivicDistrict, MilitaryTiles } from './KeySites'
+import { CivicTiles, MilitaryTiles } from './KeySites'
+import { SiteChooser } from './SiteChooser'
 import { groupsOf } from './grouping'
 import { ForeignHoldingsRow } from './ForeignHoldings'
 import { BuildingsPanel } from '../BuildingsPanel'
@@ -31,7 +32,7 @@ import { BuildingsPanel } from '../BuildingsPanel'
 // below as "Manage buildings".
 
 const pct = (n: number, d = 0) => `${(n * 100).toFixed(d)}%`
-const DISTRICT_ICON: Record<DistrictType, string> = { core: 'core', urban: 'urban', industrial: 'industrial', resource: 'resource', military: 'military' }
+const DISTRICT_ICON: Record<DistrictType, string> = { core: 'core', urban: 'urban', industrial: 'industrial', mining: 'mining', agricultural: 'agricultural', military: 'military' }
 
 function ownerLabel(owner: BuildingOwner, corpName: (id: string) => string): string {
   return owner.kind === 'state' ? 'State' : owner.kind === 'worker' ? 'Co-op' : corpName(owner.corporationId)
@@ -109,9 +110,10 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
   const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
   const controller = useTerritoryStore((s) => s.bodyController[world.name] ?? s.bodyOwner[world.name])
   const [picking, setPicking] = useState<DistrictType | null>(null)
-  const [funder, setFunder] = useState('state')
   const [manage, setManage] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The "where?" step: a building or a district level waiting for its site.
+  const [choosing, setChoosing] = useState<{ recipeId?: string; district?: DistrictType } | null>(null)
   const grouped = usePlanetViewStore((s) => s.groupBuildings)
   const setGrouped = usePlanetViewStore((s) => s.setGroupBuildings)
   // Clicking a building opens it in its own floating window (BuildingDetailWindow)
@@ -125,8 +127,8 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
 
   const canBuildHere = !!playerId && world.ownerId === playerId && controller === playerId
   const corpName = (id: string) => corporations.find((c) => c.id === id)?.name ?? 'Company'
-  const myCorps = corporations.filter((c) => c.countryId === world.ownerId)
-  const owner: BuildingOwner = funder === 'state' ? { kind: 'state' } : { kind: 'corporation', corporationId: funder }
+  // The government spends only the government's money: a player order is always state-owned and paid from the treasury.
+  const owner: BuildingOwner = { kind: 'state' }
   const usage = districtUsage(world)
   const levels = districtLevels(world)
   const levelsByDistrict = buildingLevelsByDistrict(world)
@@ -141,19 +143,18 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
           <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> Group identical
         </label>
       </div>
-      {canBuildHere && (
-        <div className="econ-econsystem pl-funder">
-          <span>Build as:</span>
-          <select className="econ-method-select" value={funder} onChange={(e) => setFunder(e.target.value)} title="Who owns and pays for new buildings">
-            <option value="state">Government (treasury)</option>
-            {myCorps.map((c) => (
-              <option key={c.id} value={c.id}>{c.name} (investment pool)</option>
-            ))}
-          </select>
-        </div>
-      )}
 
-      <CivicDistrict bodyName={world.name} />
+      {choosing && playerId && (
+        <SiteChooser
+          request={{ bodyName: world.name, builderId: playerId, title: choosing.recipeId ? RECIPES[choosing.recipeId]?.label ?? choosing.recipeId : `${DISTRICT_LABELS[choosing.district!]} district level`, ...(choosing.recipeId ? { ref: { mode: 'complex' as const, id: choosing.recipeId } } : { district: choosing.district }) }}
+          onCancel={() => setChoosing(null)}
+          onChoose={(siteId) => {
+            if (choosing.recipeId) queueConstruction(world.id, choosing.recipeId, owner, siteId)
+            else queueDistrict(world.id, choosing.district!, siteId)
+            setChoosing(null)
+          }}
+        />
+      )}
 
       {DISTRICT_TYPES.map((d) => {
         const bonus = districtBonus(world, d, levelsByDistrict)
@@ -175,7 +176,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
                 </span>
               )}
               {canBuildHere && (
-                <button type="button" className="pl-develop" disabled={land <= 0} title={`Develop another level: +${SLOTS_PER_DISTRICT_LEVEL} slots · ${DISTRICT_CONSTRUCTION_WORK} construction points (state) · uses 1 land`} onClick={() => queueDistrict(world.id, d)}>
+                <button type="button" className="pl-develop" disabled={land <= 0} title={`Develop another level: +${SLOTS_PER_DISTRICT_LEVEL} slots · ${DISTRICT_CONSTRUCTION_WORK} construction points (state) · uses 1 land`} onClick={() => setChoosing({ district: d })}>
                   + Level
                 </button>
               )}
@@ -184,6 +185,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
               <MilitaryTiles bodyName={world.name} playerId={playerId} canBuild={canBuildHere} slots={cap} grouped />
             ) : (
             <div className="pl-grid">
+              {d === 'core' && <CivicTiles bodyName={world.name} />}
               {grouped
                 ? groupsOf(inDistrict).map((g) => {
                     const on = g.some((b) => b.id === selectedId)
@@ -233,7 +235,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
                   return (
                     <button key={r.id} type="button" className="pl-pick" disabled={!room}
                       title={`${r.label} — about ${formatIED(estimateConstructionCost(r.id, world.market.prices), ownerRate)} of materials`}
-                      onClick={() => { queueConstruction(world.id, r.id, owner); setPicking(null) }}>
+                      onClick={() => { setChoosing({ recipeId: r.id }); setPicking(null) }}>
                       <PlanetIcon id={buildingGroup(r.id)} size={16} />
                       <span>{r.label}</span>
                     </button>

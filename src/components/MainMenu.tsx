@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { SaveSlots } from './SaveSlots'
 import { COUNTRIES } from '../data/countryData'
 import { STARS } from '../data/starData'
 import { usePlayerStore } from '../state/playerStore'
@@ -11,6 +13,7 @@ import { SANDBOX_PLAYER } from '../data/countryRoster'
 // already at that country's own capital system/body instead of always at
 // Sol.
 export function MainMenu() {
+  const [loading, setLoading] = useState(false)
   const selectCountry = usePlayerStore((s) => s.selectCountry)
   const economyModel = usePlayerStore((s) => s.economyModel)
   const setEconomyModel = usePlayerStore((s) => s.setEconomyModel)
@@ -50,6 +53,11 @@ export function MainMenu() {
           <span className="main-menu-econ-desc">Simpler and more macro. Lots of stuff was stripped away here, and it makes the game more clear-cut.</span>
         </button>
       </div>
+
+      <button type="button" className="confirm-btn" onClick={() => setLoading((v) => !v)}>
+        {loading ? 'Hide saved games' : 'Load a saved game'}
+      </button>
+      {loading && <SaveSlots canSave={false} onLoaded={() => setLoading(false)} />}
 
       <div className="main-menu-subtitle">Choose your nation</div>
       <div className="main-menu-countries">

@@ -108,7 +108,7 @@ console.log('\n=== 3. When a Colony Ship can found a colony ===')
     return r.ok ? 'ok' : r.reason
   }
   usePlayerStore.setState({ economyModel: 'complex' })
-  check('not in Complex mode', /Simple economy mode/.test(reason()), reason())
+  check('Complex mode is no longer refused (colonies are the same in both modes: tests/colonyUnified.test.ts)', !/Simple economy mode/.test(reason()), reason())
   usePlayerStore.setState({ economyModel: 'abstract' })
   // A world of a system the nation holds nothing in needs a survey; one of its own system (Titan,
   // for Mars) is already known (the one survey rule: tests/colonySurvey.test.ts).

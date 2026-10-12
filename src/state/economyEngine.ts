@@ -10,7 +10,7 @@
 // runs in-process (`advanceEmpiresInline`). One request at a time: the store
 // queues the rest (economyStore.advance).
 import type { EconomyStepInput, EconomyStepOutput } from '../economy/economyStep'
-import { EmpireSim, type EmpireSnapshot, type EmpireUpdate } from '../economy/empireSim'
+import { EmpireSim, type EmpireSave, type EmpireSnapshot, type EmpireUpdate } from '../economy/empireSim'
 import type { WorkerRequest } from '../economy/economyWorker'
 
 interface Pending {
@@ -124,5 +124,30 @@ export function requestEmpireSnapshot(empireId: string): Promise<EmpireSnapshot 
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve: resolve as Pending['resolve'], reject })
     post({ type: 'snapshot', id, empireId })
+  })
+}
+
+// The empires' whole simulation for a save (null if they are not running). Wherever
+// they live: the worker, or in-process where there is none.
+export function exportEmpires(): Promise<EmpireSave | null> {
+  if (!workerAvailable() || runner || inlineEmpires.running) return Promise.resolve(inlineEmpires.exportState())
+  if (!worker) return Promise.resolve(null)
+  const id = ++nextId
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve: resolve as Pending['resolve'], reject })
+    post({ type: 'export-empires', id })
+  })
+}
+
+// Puts a saved empire simulation back, where the live one would run.
+export function importEmpires(save: EmpireSave): Promise<void> {
+  if (!workerAvailable() || runner) {
+    inlineEmpires.importState(save)
+    return Promise.resolve()
+  }
+  const id = ++nextId
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve: (() => resolve()) as Pending['resolve'], reject })
+    post({ type: 'import-empires', id, save })
   })
 }

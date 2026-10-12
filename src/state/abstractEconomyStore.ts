@@ -1,3 +1,6 @@
+import { planDistrictLevel, planPlacement, recordLevel, recordPlacement } from '../scene/placementOrders'
+import { syncSiteAccess } from '../scene/infrastructureOrders'
+import { usePlacementStore } from './placementStore'
 import { create } from 'zustand'
 import {
   tickAbstractEconomy,
@@ -208,9 +211,9 @@ interface AbstractEconomyStore {
   setTrade: (countryId: string, good: SimpleGood, perMonth: number) => void
   invest: (countryId: string, amount: number) => void
   payDebt: (countryId: string, amount: number) => void
-  queueBuilding: (countryId: string, bodyName: string, building: SimpleBuildingId) => QueueResult
+  queueBuilding: (countryId: string, bodyName: string, building: SimpleBuildingId, siteId?: string) => QueueResult
   // Develop one more level of a district (uses a unit of the world's land).
-  queueDistrict: (countryId: string, bodyName: string, district: SimpleDistrictId) => QueueResult
+  queueDistrict: (countryId: string, bodyName: string, district: SimpleDistrictId, siteId?: string) => QueueResult
   cancelOrder: (countryId: string, orderId: number) => void
   // Tear down one level of a building (no refund; frees its slot at once).
   demolish: (countryId: string, bodyName: string, building: SimpleBuildingId) => QueueResult
@@ -227,6 +230,12 @@ interface AbstractEconomyStore {
   addColonyWorld: (bodyName: string, population: number, land: number) => void
   adjustPopulation: (bodyName: string, delta: number) => void
   setLand: (bodyName: string, land: number) => void
+  // Records the development site of a queued building the economy's own AI ordered (scene/placementOrders.placeUnplacedOrders).
+  setOrderSite: (countryId: string, orderId: number, siteId: string) => void
+  // The share of each building kind's output that reaches a hub (scene/infrastructureOrders.syncSiteAccess); {} clears.
+  setBuildingAccess: (countryId: string, access: Partial<Record<SimpleBuildingId, number>>) => void
+  // Unrest from displaced people, per nation (scene/unrestSync); 0 clears.
+  setDisplacedUnrest: (byCountry: Record<string, number>) => void
   // Foreign buildings (scene/holdings.ts): urban slots taken, per body, and
   // money in/out of a nation's treasury.
   setForeignSlots: (byBody: Record<string, number>) => void
@@ -252,6 +261,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
   advance: (ticks, steer, territory) => {
     const steps = Math.max(0, Math.min(MAX_CATCH_UP_TICKS, Math.floor(ticks)))
     if (steps === 0) return
+    syncSiteAccess()
     const { owners, controllers } = territory ?? { owners: useTerritoryStore.getState().bodyOwner, controllers: useTerritoryStore.getState().bodyController }
     const store = get()
     const byCountry = { ...store.byCountry }
@@ -371,7 +381,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
       }),
     ),
 
-  queueBuilding: (countryId, bodyName, building) => {
+  queueBuilding: (countryId, bodyName, building, siteId) => {
     const store = get()
     const c = store.byCountry[countryId]
     const w = store.worlds[bodyName]
@@ -384,10 +394,14 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     if (gate) return { ok: false, reason: gate }
     const d = DISTRICT_OF_BUILDING[building]
     if (takesSlot(building) && freeSlots(w, c.queue, d) <= 0) return { ok: false, reason: `No free slot in ${bodyName}'s ${SIMPLE_DISTRICT_DEFS[d].name}, now or once its queued levels are built. Develop the district (queue a level) first.` }
-    set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, building, progress: 0 }], nextOrderId: cur.nextOrderId + 1 })))
+    // Where it stands: a development site of the right kind, which the builder may build on.
+    const plan = planPlacement(countryId, bodyName, { mode: 'simple', id: building }, siteId)
+    if (!plan.ok) return { ok: false, reason: plan.reason }
+    set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, building, progress: 0, ...(plan.site ? { siteId: plan.site.id } : {}) }], nextOrderId: cur.nextOrderId + 1 })))
+    recordPlacement(plan, countryId, { mode: 'simple', id: building })
     return { ok: true }
   },
-  queueDistrict: (countryId, bodyName, district) => {
+  queueDistrict: (countryId, bodyName, district, siteId) => {
     const store = get()
     const c = store.byCountry[countryId]
     const w = store.worlds[bodyName]
@@ -397,7 +411,11 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     if (controllerOf(bodyName, bodyOwner, bodyController) !== countryId) return { ok: false, reason: `${bodyName} is occupied.` }
     if (!SIMPLE_DISTRICT_DEFS[district]) return { ok: false, reason: 'Unknown district.' }
     if (freeLand(w, c.queue) <= 0) return { ok: false, reason: `${bodyName} has no land left for another district level.` }
-    set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, district, progress: 0 }], nextOrderId: cur.nextOrderId + 1 })))
+    // Where the level is developed: a development site of a kind this district stands on, which the builder may use.
+    const plan = planDistrictLevel(countryId, bodyName, district, siteId)
+    if (!plan.ok) return { ok: false, reason: plan.reason }
+    set((s) => patch(s, countryId, (cur) => ({ ...cur, queue: [...cur.queue, { id: cur.nextOrderId, bodyName, district, progress: 0, ...(plan.site ? { siteId: plan.site.id } : {}) }], nextOrderId: cur.nextOrderId + 1 })))
+    recordLevel(plan, countryId, district)
     return { ok: true }
   },
   setDevastation: (byBody) =>
@@ -453,14 +471,43 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
       const w = s.worlds[bodyName]
       return w ? { worlds: { ...s.worlds, [bodyName]: { ...w, population: Math.max(0, w.population + delta) } } } : s
     }),
+  setBuildingAccess: (countryId, access) =>
+    set((s) => {
+      const c = s.byCountry[countryId]
+      if (!c || JSON.stringify(c.buildingAccess ?? {}) === JSON.stringify(access)) return s
+      const { buildingAccess: _drop, ...rest } = c
+      void _drop
+      return { byCountry: { ...s.byCountry, [countryId]: Object.keys(access).length > 0 ? { ...rest, buildingAccess: access } : (rest as typeof c) } }
+    }),
+  setDisplacedUnrest: (byCountry) =>
+    set((s) => {
+      let changed = false
+      const next = { ...s.byCountry }
+      for (const [id, c] of Object.entries(s.byCountry)) {
+        const want = Math.round((byCountry[id] ?? 0) * 100) / 100
+        if ((c.displacedUnrest ?? 0) === want) continue
+        changed = true
+        const { displacedUnrest: _drop, ...rest } = c
+        void _drop
+        next[id] = want > 0 ? { ...rest, displacedUnrest: want } : (rest as typeof c)
+      }
+      return changed ? { byCountry: next } : s
+    }),
+  setOrderSite: (countryId, orderId, siteId) =>
+    set((s) => patch(s, countryId, (c) => ({ ...c, queue: c.queue.map((o) => (o.id === orderId && !o.siteId ? { ...o, siteId } : o)) }))),
   setLand: (bodyName, land) =>
     set((s) => {
       const w = s.worlds[bodyName]
       return w ? { worlds: { ...s.worlds, [bodyName]: { ...w, land } } } : s
     }),
   // Stops a construction order or a deconstruction (the building stays, progress is lost).
-  cancelOrder: (countryId, orderId) =>
-    set((s) => patch(s, countryId, (c) => ({ ...c, queue: c.queue.filter((o) => o.id !== orderId), teardowns: (c.teardowns ?? []).filter((t) => t.id !== orderId) }))),
+  cancelOrder: (countryId, orderId) => {
+    // A cancelled building gives its place on the site back.
+    const order = get().byCountry[countryId]?.queue.find((o) => o.id === orderId)
+    if (order?.siteId && order.building) usePlacementStore.getState().unplace(order.siteId, order.building)
+    if (order?.siteId && order.district) usePlacementStore.getState().removeLevel(order.siteId, order.district)
+    set((s) => patch(s, countryId, (c) => ({ ...c, queue: c.queue.filter((o) => o.id !== orderId), teardowns: (c.teardowns ?? []).filter((t) => t.id !== orderId) })))
+  },
   queueDemolish: (countryId, bodyName, building) => {
     const store = get()
     const c = store.byCountry[countryId]

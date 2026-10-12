@@ -418,7 +418,8 @@ function buildWorld(rawSpec: WorldSpec, calibration?: WorldCalibration): World {
       core: Math.max(12, Math.round(spec.population / 400), usedBy(spec, 'core')),
       urban: Math.max(10, Math.round(spec.population / 250), usedBy(spec, 'urban')),
       industrial: Math.max(16, Math.round(spec.population / 72), usedBy(spec, 'industrial')),
-      resource: Math.max(12, Math.round(spec.population / 130), usedBy(spec, 'resource')),
+      mining: Math.max(6, Math.round(spec.population / 260), usedBy(spec, 'mining')),
+      agricultural: Math.max(6, Math.round(spec.population / 260), usedBy(spec, 'agricultural')),
       // A capital starts with one military level: its starting fortress and battery.
       military: seed.nations.some((c) => c.capitalBodyName === spec.id) ? 1 : 0,
     }),
@@ -1366,6 +1367,37 @@ export function seedNationWorlds(
   try {
     balanced = balancedSpecs(withSupplyChains(rawSpecs.map(withTransport)))
     return withAdministration(rawSpecs.map((spec) => buildWorld(spec, opts.calibration?.[spec.id])))
+  } finally {
+    seed = previous
+  }
+}
+
+// One world seeded on its own, for a world founded DURING a game (a colony, economy/colonySeed.ts):
+// the same world-building step the nations' worlds go through, but with no supply-chain
+// completion, no balancing and no administration pass, because it joins a running economy
+// whose other worlds already do those jobs. Pure: ids come from per-call counters (a pop's and
+// a building's id carry the world's id, so they cannot clash with another world's).
+export function seedStandaloneWorld(nations: SeedNation[], spec: WorldSpec, opts: { landOf: (bodyName: string) => number }): World {
+  const previous = seed
+  let pops = 0
+  let buildings = 0
+  seed = {
+    nations,
+    stateCorps: () => new Set<string>(),
+    decreesOf: () => 0,
+    landOf: opts.landOf,
+    balanced: () => new Map<string, BuildingSpec[]>(),
+    nextPopId: () => ++pops,
+    nextBuildingId: () => ++buildings,
+  }
+  try {
+    const full = withTransport(spec)
+    const world = buildWorld(full)
+    // A new world's districts hold what it actually runs (the nations' worlds are sized with room
+    // to grow into): a colony starts small and its land limit is the body's own.
+    const needed = {} as Record<DistrictType, number>
+    for (const d of DISTRICT_TYPES) needed[d] = usedBy(full, d)
+    return { ...world, ...seedDistricts(full.id, needed) }
   } finally {
     seed = previous
   }

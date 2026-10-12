@@ -38,7 +38,9 @@ console.log('\n=== 1. The home nations\' seed is stable ===')
   // the water producers were right-sized (smaller plants, better demand fit); and
   // again when exoticMatter + hyperium goods were added (every market now prices
   // them — no new seeded buildings, so `countries` is unchanged).
-  check('worlds', hash(seedWorlds()) === '6263ee8d4000bf89')
+  // Rehashed once more when the Complex resource district was split into mining and agricultural districts (their capacities seeded apart; the economy's
+  // numbers do not move: the two share one ecosystem bonus).
+  check('worlds', hash(seedWorlds()) === '32fa2eb186b034c1')
   check('countries', hash(seedCountries()) === '4c74ab14d2187147')
   check('corporations', hash(seedCorporations()) === 'c4949843a4c08459')
   check('banks', hash(seedBanks()) === '7bccfcac62561d47')

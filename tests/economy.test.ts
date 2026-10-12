@@ -344,7 +344,7 @@ console.log('\n=== 17. Districts + private (corporation-funded) construction ===
   const usage = districtUsage(mars)
   check('every district has finite capacity', DISTRICT_TYPES.every((d) => mars.districtCapacity[d] > 0))
   check('seed fits within district capacity', DISTRICT_TYPES.every((d) => usage[d] <= mars.districtCapacity[d]))
-  check('a mine goes in the resource district', districtOfRecipe('ironMine') === 'resource' && districtOfRecipe('governmentOffice') === 'core')
+  check('a mine goes in the mining district, a farm in the agricultural one', districtOfRecipe('ironMine') === 'mining' && districtOfRecipe('wheatFarm') === 'agricultural' && districtOfRecipe('governmentOffice') === 'core')
 
   // A corporation funds its own NEW building (a school — MRA owns none) from its
   // cash; it completes owned by the corp. Compared against a control run with no

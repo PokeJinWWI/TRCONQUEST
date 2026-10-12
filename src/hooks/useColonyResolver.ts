@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ownerDisplay } from '../data/countryRoster'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { useArmyStore } from '../state/armyStore'
+import { useEconomyStore, worldByName } from '../state/economyStore'
 import { useColonyStore } from '../state/colonyStore'
 import { atWar, useDiplomacyStore } from '../state/diplomacyStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -34,9 +35,12 @@ export function resolveColonies(simDays: number): void {
   )
   if (step.colonies !== colonies) setColonies(step.colonies)
   for (const body of step.promoted) {
+    // The land limit lifts in whichever economy runs the colony.
     const economy = useAbstractEconomyStore.getState()
     const world = economy.worlds[body]
     if (world) economy.setLand(body, Math.max(world.land ?? 0, landForBody(body)))
+    const complex = worldByName(useEconomyStore.getState().worlds, body)
+    if (complex) useEconomyStore.getState().setWorldLand(body, Math.max(complex.land ?? 0, landForBody(body)))
     const owner = bodyOwner[body]
     if (owner) useDiplomacyStore.getState().pushEvent('colony-promoted', [owner], `${ownerDisplay(owner).name}'s colony on ${body} became a planetary colony`, simDays, { bodyName: body })
   }

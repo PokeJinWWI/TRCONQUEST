@@ -10,13 +10,15 @@
 // All the logic is economyStep.runEconomySteps and empireSim.EmpireSim; this file
 // only moves messages, so the worker and the synchronous fallback cannot differ.
 import { runEconomySteps, type EconomyStepInput } from './economyStep'
-import { EmpireSim } from './empireSim'
+import { EmpireSim, type EmpireSave } from './empireSim'
 
 export type WorkerRequest =
   | { type: 'advance'; id: number; input: EconomyStepInput; empireSteps: number }
   | { type: 'empires-start' }
   | { type: 'empires-stop' }
   | { type: 'snapshot'; id: number; empireId: string }
+  | { type: 'export-empires'; id: number }
+  | { type: 'import-empires'; id: number; save: EmpireSave }
 
 const scope = self as unknown as {
   onmessage: ((e: { data: WorkerRequest }) => void) | null
@@ -33,7 +35,11 @@ scope.onmessage = (e) => {
       if (update) scope.postMessage({ type: 'empires', update })
     } else if (req.type === 'empires-start') empires.start()
     else if (req.type === 'empires-stop') empires.stop()
-    else if (req.type === 'snapshot') scope.postMessage({ type: 'snapshot', id: req.id, snapshot: empires.snapshot(req.empireId) })
+    else if (req.type === 'export-empires') scope.postMessage({ type: 'snapshot', id: req.id, snapshot: empires.exportState() })
+    else if (req.type === 'import-empires') {
+      empires.importState(req.save)
+      scope.postMessage({ type: 'snapshot', id: req.id, snapshot: null })
+    } else if (req.type === 'snapshot') scope.postMessage({ type: 'snapshot', id: req.id, snapshot: empires.snapshot(req.empireId) })
   } catch (error) {
     scope.postMessage({ type: 'error', id: 'id' in req ? req.id : -1, error: error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error) })
   }
