@@ -44,7 +44,7 @@ export function StarbasePanel() {
   }
 
   return (
-    <DraggableWindow title={`${star?.name ?? sb.starId} — ${tierDef.label}`} memoryKey="starbase" anchor="right" onClose={() => useStarbasePanelStore.getState().close()}>
+    <DraggableWindow title={`${star?.name ?? sb.starId} — ${tierDef.label}`} memoryKey="starbase" onClose={() => useStarbasePanelStore.getState().close()}>
       <div className="dip-list">
         <div className="dip-card">
           <div className="dip-card-head">

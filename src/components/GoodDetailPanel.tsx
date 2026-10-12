@@ -9,6 +9,7 @@ import { goodMarketSummary } from '../economy/goodMarket'
 import { formatIEDPrice } from '../economy/format'
 import { TimeChart } from './TimeChart'
 import { useMemo } from 'react'
+import type { BuildingOwner } from '../economy/economyTypes'
 
 // Vic3-style market view of one good: its price (over time and by planet), who
 // produces it, who consumes it, and this nation's trade policy on it. Opened by
@@ -22,6 +23,7 @@ export function GoodDetailPanel() {
   const worlds = useEconomyStore((s) => s.worlds)
   const reports = useEconomyStore((s) => s.worldReports)
   const countries = useEconomyStore((s) => s.countries)
+  const corporations = useEconomyStore((s) => s.corporations)
   const tick = useEconomyStore((s) => s.tick)
   const priceHistory = useEconomyStore((s) => (good ? s.goodPriceHistory[good] : undefined))
   const policies = useTradePolicyStore((s) => s.policies)
@@ -39,6 +41,8 @@ export function GoodDetailPanel() {
   const tariff = policy?.tariffs[good] ?? 0
   const impSub = policy?.importSubventions[good] ?? 0
   const expSub = policy?.exportSubventions[good] ?? 0
+  const ownerOf = (o: BuildingOwner) =>
+    o.kind === 'worker' ? 'Co-op' : o.kind === 'corporation' ? (corporations.find((c) => c.id === o.corporationId)?.name ?? 'Company') : 'State'
   const pct = (x: number) => `${Math.round(x * 100)}%`
 
   const PolicyRow = ({ label, value, set, tip }: { label: string; value: number; set: (v: number) => void; tip: string }) => (
@@ -53,7 +57,7 @@ export function GoodDetailPanel() {
   )
 
   return (
-    <DraggableWindow title={`${def.label}`} memoryKey="good" anchor="right" onClose={close}>
+    <DraggableWindow title={`${def.label}`} memoryKey="good" onClose={close}>
       <div className="econ-panel good-detail">
         {!complex ? (
           <div className="nav-placeholder">The good market view is available in Complex mode.</div>
@@ -94,9 +98,9 @@ export function GoodDetailPanel() {
               <div className="bld-detail-none">No buildings of yours make this.</div>
             ) : (
               summary.producers.map((r, i) => (
-                <button type="button" className="good-flow-row good-flow-link" key={`p${i}`} onClick={() => useBuildingDetailStore.getState().openBuilding(r.worldId, r.buildingId)} title={`Open ${r.label} on ${r.worldName}`}>
+                <button type="button" className="good-flow-row good-flow-link" key={`p${i}`} onClick={() => useBuildingDetailStore.getState().openBuilding(r.worldId, r.buildingId)} title={`Open ${r.label} on ${r.worldName} (owner: ${ownerOf(r.owner)})`}>
                   <span className="good-flow-name">{r.label} <span className="abs-dim">L{r.level}</span></span>
-                  <span className="good-flow-where abs-dim">{r.worldName}</span>
+                  <span className="good-flow-where abs-dim">{ownerOf(r.owner)} · {r.worldName}</span>
                   <span className="good-flow-amt econ-pos">+{r.perTick.toFixed(0)}</span>
                 </button>
               ))
@@ -107,9 +111,9 @@ export function GoodDetailPanel() {
               <div className="bld-detail-none">No buildings of yours use this as an input.</div>
             ) : (
               summary.consumers.map((r, i) => (
-                <button type="button" className="good-flow-row good-flow-link" key={`c${i}`} onClick={() => useBuildingDetailStore.getState().openBuilding(r.worldId, r.buildingId)} title={`Open ${r.label} on ${r.worldName}`}>
+                <button type="button" className="good-flow-row good-flow-link" key={`c${i}`} onClick={() => useBuildingDetailStore.getState().openBuilding(r.worldId, r.buildingId)} title={`Open ${r.label} on ${r.worldName} (owner: ${ownerOf(r.owner)})`}>
                   <span className="good-flow-name">{r.label} <span className="abs-dim">L{r.level}</span></span>
-                  <span className="good-flow-where abs-dim">{r.worldName}</span>
+                  <span className="good-flow-where abs-dim">{ownerOf(r.owner)} · {r.worldName}</span>
                   <span className="good-flow-amt econ-neg">−{r.perTick.toFixed(0)}</span>
                 </button>
               ))

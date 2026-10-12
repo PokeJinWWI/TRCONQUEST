@@ -294,7 +294,7 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
   if (selected.length > 1) {
     const slowest = Math.min(...selected.filter((s) => !UNIT_TYPES[s.unit.type].holdsPosition).map((s) => openSpeed(s.unit)))
     return (
-      <DraggableWindow title={`${selected.length} units selected`} memoryKey="units" anchor="right" maximizable={false} onClose={() => useGroundViewStore.getState().selectUnits([])}>
+      <DraggableWindow title={`${selected.length} units selected`} memoryKey="units" maximizable={false} onClose={() => useGroundViewStore.getState().selectUnits([])}>
         <table className="ground-unit-table">
           <thead>
             <tr>
@@ -332,7 +332,7 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
   const here = node !== null ? TERRAIN[TERRAIN_IDS[surface.terrain[node]]] : null
   const mods = modsFor(unit.type)
   return (
-    <DraggableWindow title={spec.name} memoryKey="unit" anchor="right" maximizable={false} onClose={() => useGroundViewStore.getState().selectUnits([])}>
+    <DraggableWindow title={spec.name} memoryKey="unit" maximizable={false} onClose={() => useGroundViewStore.getState().selectUnits([])}>
       <div className="inspect-row">
         <span className="inspect-label">Army</span>
         <span className="inspect-value" style={{ color: relationColorOf(army.ownerId) }}>
