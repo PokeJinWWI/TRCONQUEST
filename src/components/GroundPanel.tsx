@@ -102,6 +102,7 @@ function bodyArmies(bodyName: string): Army[] {
 // --- The roster/controls window ----------------------------------------------
 
 export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: BodySurface }) {
+  const showCities = useGroundViewStore((s) => s.showCities)
   useBodyArmiesKey(bodyName)
   const density = useGroundViewStore((s) => s.density)
   const zoningMode = useGroundViewStore((s) => s.zoningMode)
@@ -136,6 +137,10 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
           {owner && controller && owner !== controller ? ` (owner ${ownerDisplay(owner).name})` : ''}
         </span>
       </div>
+      <label className="inspect-row" title="Draw a circle and name for every city on the map. Off: only the capital, spaceports and other key places are marked.">
+        <span className="inspect-label">Show all city circles</span>
+        <input type="checkbox" checked={showCities} onChange={(e) => useGroundViewStore.getState().setShowCities(e.target.checked)} />
+      </label>
       <div className="inspect-row">
         <span className="inspect-label">Key nodes</span>
         <span className="inspect-value">{keyHolders.length === 0 ? 'None' : `${keyHolders.length}`}</span>

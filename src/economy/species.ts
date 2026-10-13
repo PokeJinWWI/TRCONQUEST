@@ -54,6 +54,9 @@ export const BASELINE_ORGANIC: SpeciesTemplate = {
       { id: 'protein', label: 'Protein', base: 0.22, goods: [{ good: 'meat', weight: 1 }, { good: 'fish', weight: 1 }] },
       // Drinking water — the one thing every pop needs. Cheap, inelastic.
       { id: 'water', label: 'Water', base: 0.08, goods: [{ good: 'water', weight: 1 }] },
+      // Air, water recycling and pressure housing. Sized per world: base x (1 - habitability), so none on a kind world
+      // (economy/habitability.ts).
+      { id: 'life-support', label: 'Life Support', base: 0.12, goods: [{ good: 'electricity', weight: 2 }, { good: 'water', weight: 1 }, { good: 'concrete', weight: 1 }] },
     ],
     everyday: [
       { id: 'clothing', label: 'Clothing', base: 0.12, goods: [{ good: 'textiles', weight: 1 }] },
@@ -94,6 +97,7 @@ export const TIDALIAN: SpeciesTemplate = {
       { id: 'protein', label: 'Protein', base: 0.26, goods: [{ good: 'fish', weight: 3 }, { good: 'meat', weight: 1 }] },
       // Aquatic pops still need fresh (drinking/habitat) water.
       { id: 'water', label: 'Water', base: 0.09, goods: [{ good: 'water', weight: 1 }] },
+      { id: 'life-support', label: 'Life Support', base: 0.12, goods: [{ good: 'electricity', weight: 2 }, { good: 'water', weight: 1 }, { good: 'concrete', weight: 1 }] },
     ],
     everyday: [
       { id: 'clothing', label: 'Clothing', base: 0.12, goods: [{ good: 'textiles', weight: 1 }] },

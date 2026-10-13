@@ -17,13 +17,16 @@ import { spawnOwnedShip, seedMilitaryStockpile } from './shipyardLogic'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { seedColonies } from './colonies'
 import { groundSurface, musterNode } from './groundLogic'
+import { RING_ANCHORS } from '../data/earthEconomicGeography'
+import { seedRuralStructures } from './ruralOrders'
 import { placeInstallation } from './defenseLogic'
 import { resyncMilitarySlots, useDefenseStore } from '../state/defenseStore'
 import { LANDMARKS } from '../data/landmarks'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
 import { useStarbaseStore } from '../state/starbaseStore'
-import { STARBASE_TIERS } from '../data/starbaseData'
+import { RING_OF_HEAVEN_MODULES } from '../data/starbaseData'
+import { starbaseMaxIntegrity } from './starbaseLogic'
 import { useDiplomacyStore, relationIn } from '../state/diplomacyStore'
 import { usePlacementStore } from '../state/placementStore'
 
@@ -44,6 +47,7 @@ export function setUpNewGame(): void {
   seedStartingDefenses()
   seedColonies(useGameTimeStore.getState().simDays)
   seedRingOfHeaven()
+  seedRuralStructures('Earth', 'earth', 'spaceElevatorAnchor', RING_ANCHORS)
   seedStartingRelations()
   // Complex mode runs the generated empires' economies too (economy/empireSeed.ts),
   // and the military shipyard draws real goods from the capital stockpile, so each
@@ -64,20 +68,25 @@ function seedStartingRelations(): void {
   }
 }
 
-// Earth begins with the "Ring of Heaven": a pre-built orbital-ring Starbase over
-// its home system, a relic of the old empire's power — a shipyard and heavy
-// defences, already operational. Guarded so a reset/re-setup doesn't duplicate it.
+// Earth begins with the "Ring of Heaven": a pre-built orbital ring circling Earth over its equator, a relic of the old empire's power. A
+// shipyard, guns and missiles, a trade hub, solar arrays and three space-elevator tethers, all working from day 0 (tests/stations.test.ts).
+// Guarded so a reset/re-setup doesn't duplicate it.
 function seedRingOfHeaven(): void {
   const starbases = useStarbaseStore.getState().starbases
   if (starbases.some((sb) => sb.ownerId === 'earth')) return
   useStarbaseStore.getState().addStarbase({
     starId: 'sol',
+    zone: 'Earth~low',
+    name: 'Ring of Heaven',
     ownerId: 'earth',
-    integrity: STARBASE_TIERS['orbital-ring'].integrity,
+    integrity: 9999,
     readySimDays: 0,
     tier: 'orbital-ring',
-    modules: ['shipyard', 'defense-battery', 'trade-hub'],
+    modules: RING_OF_HEAVEN_MODULES,
   })
+  // Full hit points for the modules it carries.
+  const ring = useStarbaseStore.getState().starbases.find((sb) => sb.zone === 'Earth~low')
+  if (ring) useStarbaseStore.setState((st) => ({ starbases: st.starbases.map((sb) => (sb.id === ring.id ? { ...sb, integrity: starbaseMaxIntegrity(sb) } : sb)) }))
 }
 
 // The starting warships sail as one fleet: as separate fleets, "attack

@@ -20,7 +20,24 @@ export interface PortStructure {
   outlier?: boolean
 }
 
+// A building that stands on a ground node of its own, outside any development site (economy Recipe.placement 'rural': the space-elevator
+// anchor). The economy counts it as an ordinary building; this says WHERE. Inside a settlement's footprint it counts as part of that
+// settlement (scene/ruralStructures.ruralSiteFor), but the node, owner and state never change when a settlement grows over it.
+export interface RuralStructure {
+  id: string
+  recipeId: string
+  node: number
+  ownerId: string
+  name?: string
+  // Placed at the start of a game, not ordered by the player.
+  seeded?: boolean
+}
+
 interface StructureStore {
+  rural: Record<string, RuralStructure[]>
+  setRural: (bodyName: string, list: RuralStructure[]) => void
+  addRural: (bodyName: string, s: RuralStructure) => void
+  renameRural: (bodyName: string, id: string, name: string | undefined) => void
   ports: Record<string, PortStructure[]>
   setPorts: (bodyName: string, ports: PortStructure[]) => void
   addPort: (bodyName: string, port: PortStructure) => void
@@ -29,6 +46,11 @@ interface StructureStore {
 }
 
 export const useStructureStore = create<StructureStore>((set) => ({
+  rural: {},
+  setRural: (bodyName, list) => set((s) => ({ rural: { ...s.rural, [bodyName]: list } })),
+  addRural: (bodyName, r) => set((s) => ({ rural: { ...s.rural, [bodyName]: [...(s.rural[bodyName] ?? []), r] } })),
+  renameRural: (bodyName, id, name) =>
+    set((s) => ({ rural: { ...s.rural, [bodyName]: (s.rural[bodyName] ?? []).map((r) => (r.id === id ? { ...r, name: name?.trim() ? name.trim().slice(0, 40) : undefined } : r)) } })),
   ports: {},
   setPorts: (bodyName, ports) => set((s) => ({ ports: { ...s.ports, [bodyName]: ports } })),
   addPort: (bodyName, port) => set((s) => ({ ports: { ...s.ports, [bodyName]: [...(s.ports[bodyName] ?? []), port] } })),

@@ -1,3 +1,4 @@
+import { ruralKeySlots } from '../scene/ruralStructures'
 import { useStructureStore } from './structureStore'
 import { create } from 'zustand'
 import { DEFENSE_DEFS, isMilitaryKind, type DefenseKind } from '../data/defenseData'
@@ -7,6 +8,7 @@ import { holderOfInstallation, hostileBatteries, judgeInstallationNode, placeIns
 import { militarySlotsOf, spaceportSitesOf, syncMilitarySlots } from './nationEconomy'
 import { withSpaceportKeys } from '../scene/spaceportSites'
 import { withOutpostKey } from '../scene/colonyLogic'
+import { withAreaKeys } from '../scene/footprintState'
 import { useColonyStore } from './colonyStore'
 import type { BodySurface } from '../scene/planetTerrain'
 import { atWar } from './diplomacyStore'
@@ -87,7 +89,14 @@ export function groundPortSurface(bodyName: string, owners = useTerritoryStore.g
   const surface = portBaseSurface(bodyName, owners)
   if (!surface) return null
   const sites = spaceportSitesOf(bodyName)
-  return sites.length > 0 ? withSpaceportKeys(surface, sites, useStructureStore.getState().ports[bodyName]) : surface
+  const withPorts = sites.length > 0 ? withSpaceportKeys(surface, sites, useStructureStore.getState().ports[bodyName]) : surface
+  // Rural structures on land (space-elevator anchors) are key nodes too; a platform at sea is not.
+  const rural = useStructureStore.getState().rural[bodyName]
+  const extra = rural && rural.length > 0 ? ruralKeySlots(withPorts, rural) : []
+  const withRural = extra.length > 0 ? { ...withPorts, keySlots: [...withPorts.keySlots, ...extra] } : withPorts
+  // Every urban area is a key node too (scene/footprintState.withAreaKeys), added last so it moves nothing above.
+  const drawn = groundSurface(bodyName, owners)
+  return drawn ? withAreaKeys(drawn, withRural) : withRural
 }
 // The ground with the colony's outpost, before the economy's spaceports are added (what the auto-placed ones are placed against).
 export function portBaseSurface(bodyName: string, owners = useTerritoryStore.getState().bodyOwner): BodySurface | null {

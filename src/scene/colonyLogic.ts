@@ -55,8 +55,10 @@ export function placeOutpostNode(surface: BodySurface): number | null {
 
 // The surface with the colony's planetary outpost as a key node (unless a key
 // node already stands there).
+// A settled world (one with a capital or a city) has no outpost: its cities are its key nodes, and a colony that grows into a
+// city leaves its outpost behind.
 export function withOutpostKey(surface: BodySurface, outpostNode: number | undefined): BodySurface {
-  if (outpostNode === undefined || surface.keySlots.some((k) => k.node === outpostNode)) return surface
+  if (outpostNode === undefined || surface.keySlots.some((k) => k.node === outpostNode || k.kind === 'capital' || k.kind === 'city')) return surface
   return { ...surface, keySlots: [...surface.keySlots, { node: outpostNode, kind: 'outpost' }] }
 }
 

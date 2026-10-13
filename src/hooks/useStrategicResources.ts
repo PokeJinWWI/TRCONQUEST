@@ -6,6 +6,7 @@ import { SIM_DAYS_PER_INCOME_TICK } from '../data/shipyardData'
 import { applyStrategicIncome, seedSimplisticStock, seedStrategicResources } from '../scene/shipyardLogic'
 import { applyInfluenceIncome, seedInfluence } from '../scene/colonies'
 import { applyExtraction } from '../scene/extraction'
+import { applyStationMonth } from '../scene/stationYields'
 
 // Feeds EVERY nation's strategic stockpile (alloys, exotic matter,
 // hyperium…) with the PLACEHOLDER supply in data/shipyardData.ts: a starting
@@ -52,7 +53,10 @@ export function useStrategicResources() {
       // plants, drawn from the capital stockpile by ships and research) — ONE count
       // each, in the economy — so the deposit/synthesis strategic system is off.
       if (!complex) {
-        for (const country of COUNTRIES) applyExtraction(country.id, ticks)
+        for (const country of COUNTRIES) {
+          applyExtraction(country.id, ticks)
+          applyStationMonth(country.id, ticks)
+        }
         // Simple mode's civilian goods come from that economy's buildings
         // (see useEconomyTick), not this flat placeholder, so stop here.
         return

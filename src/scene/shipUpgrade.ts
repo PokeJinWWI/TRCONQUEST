@@ -15,7 +15,7 @@ import type { ShipInstance } from '../state/shipStore'
 import { orbitedBody } from './armyLogic'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useStarbaseStore } from '../state/starbaseStore'
-import { isStarbaseActive, starbaseModulesOf } from './starbaseLogic'
+import { isStarbaseActive, onlineModulesOf } from './starbaseLogic'
 import { restingStarId, systemOfShip } from './surveyLogic'
 import { lightYearsBetween } from './colonyLogic'
 import { bestLevelClass, missingResources, techBlock, type ResearchedSet } from './shipyardLogic'
@@ -76,8 +76,12 @@ export function yardSites(ownerId: string, simDays: number): YardSite[] {
   const country = getCountry(ownerId)
   if (country) sites.push({ starId: country.capitalStarId, bodyName: country.capitalBodyName })
   for (const sb of useStarbaseStore.getState().starbases) {
-    if (sb.ownerId !== ownerId || !isStarbaseActive(sb, simDays) || !starbaseModulesOf(sb).includes('shipyard')) continue
-    if (!sites.some((x) => x.starId === sb.starId && !x.bodyName)) sites.push({ starId: sb.starId })
+    if (sb.ownerId !== ownerId || !isStarbaseActive(sb, simDays) || !onlineModulesOf(sb).includes('shipyard')) continue
+    // A station circling a world is served in orbit of that world; one at a star, at the star.
+    if (sb.zone) {
+      const body = sb.zone.slice(0, sb.zone.lastIndexOf('~'))
+      if (!sites.some((x) => x.bodyName === body)) sites.push({ starId: sb.starId, bodyName: body })
+    } else if (!sites.some((x) => x.starId === sb.starId && !x.bodyName)) sites.push({ starId: sb.starId })
   }
   return sites
 }
@@ -87,6 +91,8 @@ export function yardSites(ownerId: string, simDays: number): YardSite[] {
 export function atShipyard(ship: Pick<ShipInstance, 'location' | 'ownerId' | 'order'>): boolean {
   const capital = getCountry(ship.ownerId)?.capitalBodyName
   if (capital && orbitedBody(ship) === capital) return true
+  const orbited = orbitedBody(ship)
+  if (orbited && yardSites(ship.ownerId, useGameTimeStore.getState().simDays).some((x) => x.bodyName === orbited)) return true
   const star = restingStarId(ship)
   return !!star && yardSites(ship.ownerId, useGameTimeStore.getState().simDays).some((x) => !x.bodyName && x.starId === star)
 }

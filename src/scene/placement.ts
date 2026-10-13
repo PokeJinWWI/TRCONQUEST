@@ -7,6 +7,7 @@
 // What a site records is WHERE a building stands; HOW MANY exist stays with the economies
 // (Simple `WorldState.buildings`, Complex `World.buildings`). Buildings seeded at the start,
 // and any built before placement existed, are simply unplaced: nothing invents a site for them.
+import { SLOT_FREE_RECIPES } from '../economy/economyTick'
 import { DEPLETABLE_GOODS } from '../economy/economyTick'
 import { getMethod } from '../economy/recipes'
 import { SIMPLE_BUILDING_DEFS, takesSlot, type SimpleBuildingId } from '../data/simplisticEconomyData'
@@ -36,10 +37,11 @@ export function siteKindOf(ref: BuildingRef): LocationKind {
 }
 
 // The kinds of site a building may stand on, best first: a port, a road network or a railway belongs on infrastructure ground
-// but can also stand in a city (a city spaceport), where the Urban district's slots are.
+// but can also stand in a city (a city spaceport), where the Urban district's slots are; a factory goes on industrial ground first
+// and otherwise in a city's industrial share.
 export function siteKindsFor(ref: BuildingRef): LocationKind[] {
   const primary = siteKindOf(ref)
-  return primary === 'infrastructure' ? ['infrastructure', 'settlement'] : [primary]
+  return primary === 'infrastructure' || primary === 'industrial' ? [primary, 'settlement'] : [primary]
 }
 
 // What an extractor draws from the ground: the finite goods a Complex recipe outputs, or 'any'
@@ -55,7 +57,7 @@ export function extractsFrom(ref: BuildingRef): SiteGood[] | 'any' | null {
 
 // Slots a site holds, and what one building uses of them.
 export const slotsOfSite = (site: DevLocation): number => site.capacity * SITE_SLOTS_PER_CAPACITY
-export const slotsUsedBy = (ref: BuildingRef): number => (ref.mode === 'simple' && !takesSlot(ref.id as SimpleBuildingId) ? 0 : 1)
+export const slotsUsedBy = (ref: BuildingRef): number => ((ref.mode === 'simple' && !takesSlot(ref.id as SimpleBuildingId)) || (ref.mode === 'complex' && SLOT_FREE_RECIPES.has(ref.id)) ? 0 : 1)
 
 // Can this building physically go on this site? `used` is the slots already taken. Without `developed`, the site's own
 // capacity is the room (a body whose starting buildings have not been assigned to sites: scene/seedPlacement). With it,

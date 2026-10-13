@@ -19,6 +19,7 @@ import { ShipPanel } from './ShipPanel'
 import { DeepSpaceClickPlane } from './DeepSpaceClickPlane'
 import { getPlanetsForStar, UNITS_PER_AU, type PlanetData } from './planetData'
 import { getMoonsForPlanet } from './moonData'
+import { StarStationMarkers } from './StationMarkers'
 import { getAsteroidBeltsForStar } from '../data/asteroidBeltData'
 import { getSystemStars } from '../data/starData'
 import { mapModeColorsFor } from './mapModeColor'
@@ -365,6 +366,7 @@ export function SolarSystemScene() {
             position={star.position}
           />
         ))}
+        {systemStars[0] && <StarStationMarkers starId={selectedStarId} position={systemStars[0].position} />}
         {PLANETS.map((planet) => (
           <Planet
             key={planet.name}

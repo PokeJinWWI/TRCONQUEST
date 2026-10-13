@@ -20,6 +20,11 @@
 import {
   AGRICULTURAL_PER_DISTRICT,
   AGRICULTURAL_SUITABILITY,
+  EXTRA_SETTLEMENTS_PER_DISTRICT,
+  MAX_SETTLEMENT_SITES,
+  WATER_PROXIMITY_CELLS,
+  ANCHOR_MIN_SEPARATION_CELLS,
+  ANCHOR_SNAP_CELLS,
   BELT_RESOURCES,
   BELT_SITES,
   CLASS_PROFILE,
@@ -49,6 +54,10 @@ import { surfaceOf, bodyGroundInfoAny, terrainAt, type BodySurface, type Settlem
 import { seedBodyOwners } from './territory'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
 import { NO_ZONE_CAPS, customSitesOf, zoneCapacitiesOf } from './customSites'
+import { keyNamesOf, settlementNamePool } from './keyNames'
+import { regionAt } from './bodyTopography'
+import { EARTH_ANCHORS } from '../data/earthEconomicGeography'
+import { fromLonLat } from './mapProjection'
 
 export interface DevLocation {
   id: string
@@ -121,12 +130,16 @@ function generate(bodyName: string): DevLocation[] {
 
   const terrainOf = (node: number): TerrainId => terrainAt(wild, node)
   const isGround = (node: number) => wild.landComponent[node] >= 0 && TERRAIN[terrainOf(node)].passable === 'all'
+  // Earth's sea stands 70 m up (the map's coast mask keeps low inland basins as land): what it builds on must be above that sea.
+  const dry = (node: number) => bodyName !== 'Earth' || !wild.reliefM || wild.reliefM[node] > 0
   const land: number[] = []
-  for (let i = 0; i < n; i++) if (isGround(i)) land.push(i)
+  for (let i = 0; i < n; i++) if (isGround(i) && dry(i)) land.push(i)
   const coastal = (node: number) => mesh.neighbors.fine[node].some((j) => wild.landComponent[j] < 0 && terrainOf(j) === 'ocean')
 
   const taken: number[] = []
-  const free = (node: number) => taken.every((t) => arc(nodePoint(node), nodePoint(t)) >= minSep)
+  // Earth's hand-placed sites sit closer together than a random draw would allow (a fine cell is ~4 degrees there).
+  const sep = bodyName === 'Earth' ? ANCHOR_MIN_SEPARATION_CELLS * mesh.fineSpacingRad : minSep
+  const free = (node: number) => taken.every((t) => arc(nodePoint(node), nodePoint(t)) >= sep)
 
   // Draws up to `count` sites: a random ground node is accepted with its weight as
   // the probability and if it keeps its distance from every site already placed.
@@ -155,6 +168,32 @@ function generate(bodyName: string): DevLocation[] {
     sites.push({ id: `${bodyName}#${kind}-${index}`, bodyName, kind, tags: all, node, terrain, suitability: Math.round(suitability * 100) / 100, capacity, ...rest })
   }
 
+  // Snaps each anchor to the nearest free ground node (within a few cells: a spot the sea took is skipped) and adds it, in file order.
+  const placeAnchors = () => {
+    const reach = ANCHOR_SNAP_CELLS * mesh.fineSpacingRad
+    const apartSame = ANCHOR_MIN_SEPARATION_CELLS * mesh.fineSpacingRad
+    const apartOther = 0.9 * mesh.fineSpacingRad
+    for (const a of EARTH_ANCHORS) {
+      const at = fromLonLat((a.at[0] * Math.PI) / 180, (a.at[1] * Math.PI) / 180)
+      let best = -1
+      let bestD = Infinity
+      for (const node of land) {
+        const d = arc(nodePoint(node), at)
+        if (d < bestD && d <= reach && sites.every((t) => t.node === null || arc(nodePoint(node), nodePoint(t.node)) >= (t.kind === a.kind ? apartSame : apartOther))) {
+          best = node
+          bestD = d
+        }
+      }
+      if (best < 0) continue
+      taken.push(best)
+      if (a.kind === 'resource') add('resource', best, a.weight ?? 0.7, Math.round(1 + 2 * (a.weight ?? 0.7)), { good: a.good, weight: a.weight ?? 0.7, name: a.name })
+      else {
+        const suit = a.kind === 'settlement' ? Math.min(1, SETTLEMENT_SUITABILITY[terrainOf(best)] + (coastal(best) ? 0.1 : 0)) : a.kind === 'industrial' ? INDUSTRIAL_SUITABILITY[terrainOf(best)] : AGRICULTURAL_SUITABILITY[terrainOf(best)]
+        add(a.kind, best, Math.max(0.3, suit), capacityOf(Math.max(0.3, suit)), { name: a.name })
+      }
+    }
+  }
+
   // 1. The ground map's own cities and spaceports on an inhabited body.
   const tier = tierOf(bodyName)
   let fixedSpaceport = false
@@ -180,10 +219,15 @@ function generate(bodyName: string): DevLocation[] {
     if (node !== undefined) add('resource', node, 1, 2, { tags: [tag], material, weight: 1 })
   }
 
+  // Earth is hand-placed (data/earthEconomicGeography.ts): its settlements, farmland, mines and industry stand where the setting
+  // puts them, not at random. Every other body is drawn from its own stream.
+  const anchored = bodyName === 'Earth'
+  if (anchored) placeAnchors()
+
   // 3. Settlements.
   const rng = rngFor(`loc:${bodyName}`)
   const wantSettlements = Math.min(MAX_SITES_PER_KIND, Math.round((1 + districts * SETTLEMENTS_PER_DISTRICT) * profile.settlement)) - sites.filter((s) => s.kind === 'settlement').length
-  if (profile.settlement > 0) {
+  if (profile.settlement > 0 && !anchored) {
     for (const node of sample(rng, Math.max(0, wantSettlements), (nd) => SETTLEMENT_SUITABILITY[terrainOf(nd)] + (coastal(nd) ? 0.1 : 0))) {
       const suit = Math.min(1, SETTLEMENT_SUITABILITY[terrainOf(node)] + (coastal(node) ? 0.1 : 0))
       add('settlement', node, suit, capacityOf(suit))
@@ -191,7 +235,7 @@ function generate(bodyName: string): DevLocation[] {
   }
 
   // 4. Industry.
-  if (profile.industrial > 0) {
+  if (profile.industrial > 0 && !anchored) {
     const want = Math.min(MAX_SITES_PER_KIND, Math.round(districts * INDUSTRIAL_PER_DISTRICT * profile.industrial))
     for (const node of sample(rng, want, (nd) => INDUSTRIAL_SUITABILITY[terrainOf(nd)])) {
       const suit = INDUSTRIAL_SUITABILITY[terrainOf(node)]
@@ -200,7 +244,7 @@ function generate(bodyName: string): DevLocation[] {
   }
 
   // 5. Natural resources, by what the ground is made of.
-  if (profile.resource > 0) {
+  if (profile.resource > 0 && !anchored) {
     const want = Math.min(MAX_SITES_PER_KIND, Math.max(1, Math.round(districts * RESOURCES_PER_DISTRICT * profile.resource)))
     for (const node of sample(rng, want, (nd) => (TERRAIN_RESOURCES[terrainOf(nd)] ? 0.9 : 0))) {
       const good = weighted(rng, TERRAIN_RESOURCES[terrainOf(node)]!)
@@ -229,7 +273,7 @@ function generate(bodyName: string): DevLocation[] {
     }
   }
   // 8. Farmland. Last, from a stream of its own, so none of the ids above depends on it.
-  if (profile.agricultural > 0) {
+  if (profile.agricultural > 0 && !anchored) {
     const agriRng = rngFor(`loc-agri:${bodyName}`)
     const want = Math.min(MAX_SITES_PER_KIND, Math.max(1, Math.round(districts * AGRICULTURAL_PER_DISTRICT * profile.agricultural)))
     for (const node of sample(agriRng, want, (nd) => AGRICULTURAL_SUITABILITY[terrainOf(nd)])) {
@@ -237,7 +281,118 @@ function generate(bodyName: string): DevLocation[] {
       add('agricultural', node, suit, capacityOf(suit))
     }
   }
+  // 9. More places to live. Last, from a stream of its own, so no id above moved.
+  if (profile.settlement > 0 && !anchored) {
+    const target = Math.min(MAX_SETTLEMENT_SITES, Math.round((1 + districts * (SETTLEMENTS_PER_DISTRICT + EXTRA_SETTLEMENTS_PER_DISTRICT)) * profile.settlement))
+    const extra = target - sites.filter((s) => s.kind === 'settlement').length
+    if (extra > 0) {
+      const nearWater = nodesNearWater(mesh.neighbors.fine, n, coastal, isGround, WATER_PROXIMITY_CELLS)
+      const settleRng = rngFor(`loc-settle:${bodyName}`)
+      for (const node of sample(settleRng, extra, (nd) => (SETTLEMENT_SUITABILITY[terrainOf(nd)] + (coastal(nd) ? 0.1 : 0)) * (nearWater === null || nearWater.has(nd) ? 1 : 0.5))) {
+        const suit = Math.min(1, SETTLEMENT_SUITABILITY[terrainOf(node)] + (coastal(node) ? 0.1 : 0))
+        add('settlement', node, suit, capacityOf(suit))
+      }
+    }
+  }
+  nameSites(bodyName, sites, tier !== 'wild' ? surfaceOf(bodyName, tier) : null)
   return sites
+}
+
+// The land nodes within `radius` cells of the sea, or null when the body has none (every land node counts then).
+function nodesNearWater(neighbors: readonly ArrayLike<number>[], count: number, coastal: (node: number) => boolean, isGround: (node: number) => boolean, radius: number): Set<number> | null {
+  let frontier: number[] = []
+  for (let i = 0; i < count; i++) if (isGround(i) && coastal(i)) frontier.push(i)
+  if (frontier.length === 0) return null
+  const seen = new Set<number>(frontier)
+  for (let r = 0; r < radius; r++) {
+    const next: number[] = []
+    for (const a of frontier) for (let k = 0; k < neighbors[a].length; k++) { const b = neighbors[a][k]; if (!seen.has(b)) { seen.add(b); next.push(b) } }
+    frontier = next
+  }
+  return seen
+}
+
+// ---- names ----------------------------------------------------------------------
+
+const ROMAN_SUFFIX = ['', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X']
+const SYLLABLES = ['ka', 'ro', 'ven', 'tal', 'mi', 'sor', 'an', 'del', 'ith', 'ur', 'ba', 'lo', 'ne', 'ky', 'ar', 'is', 'om', 'ta', 'ri', 'sen']
+
+const GOOD_PLACE: Record<SiteGood, string> = {
+  ironOre: 'Iron Mines', coal: 'Coal Mines', oil: 'Oil Fields', rareMetals: 'Rare Metal Mines', sulfur: 'Sulfur Works',
+  hardwood: 'Hardwood Forest', timber: 'Timber Forest', phosphate: 'Phosphate Mines',
+}
+
+function coinedName(rng: () => number): string {
+  const parts = 2 + Math.floor(rng() * 2)
+  let out = ''
+  for (let i = 0; i < parts; i++) out += SYLLABLES[Math.floor(rng() * SYLLABLES.length)]
+  return out[0].toUpperCase() + out.slice(1)
+}
+
+// Gives every site a name at generation time (ids are untouched). Settlements: the ground map's own names for fixed ones, then
+// the founding nation's list, then coined names; everything else is named for the region or the nearest settlement it lies by.
+function nameSites(bodyName: string, sites: DevLocation[], tiered: BodySurface | null): void {
+  const used = new Set<string>()
+  const unique = (base: string): string => {
+    for (let n = 0; ; n++) {
+      const candidate = n < ROMAN_SUFFIX.length ? base + ROMAN_SUFFIX[n] : `${base} ${n + 1}`
+      if (!used.has(candidate)) {
+        used.add(candidate)
+        return candidate
+      }
+    }
+  }
+  const keyNames = tiered ? keyNamesOf(tiered) : null
+  // Fixed sites keep the key node's name; claim them first so no free settlement repeats one.
+  const fixedName = new Map<string, string>()
+  for (const s of sites) {
+    if (!s.fixed || s.node === null) continue
+    const k = keyNames?.get(s.node)
+    const base = s.name ?? k?.name ?? k?.label
+    if (base) fixedName.set(s.id, unique(base))
+  }
+  const { pool, start } = settlementNamePool(bodyName)
+  const rng = rngFor(`locname:${bodyName}`)
+  let next = 0
+  const freeSettlementName = (): string => {
+    while (next < pool.length) {
+      const c = pool[(start + next++) % pool.length]
+      if (!used.has(c.name)) return unique(c.name)
+    }
+    return unique(coinedName(rng))
+  }
+  const settlements: DevLocation[] = []
+  for (const s of sites) {
+    if (s.kind !== 'settlement') continue
+    const fixed = fixedName.get(s.id)
+    s.name = fixed ?? (s.name ? unique(s.name) : freeSettlementName())
+    settlements.push(s)
+  }
+  const nearest = (node: number): string | null => {
+    let best: DevLocation | null = null
+    let bestD = Infinity
+    for (const t of settlements) {
+      if (t.node === null) continue
+      const d = arc(nodePoint(node), nodePoint(t.node))
+      if (d < bestD) { best = t; bestD = d }
+    }
+    return best?.name ?? null
+  }
+  for (const s of sites) {
+    if (s.kind === 'settlement') continue
+    if (fixedName.has(s.id)) { s.name = fixedName.get(s.id); continue }
+    if (s.name) { s.name = unique(s.name); continue }
+    const place = (s.node !== null ? regionAt(bodyName, s.node) ?? nearest(s.node) : null) ?? bodyName
+    switch (s.kind) {
+      case 'resource':
+        s.name = unique(`${place} ${s.material === 'hyperium' ? 'Hyperium Deposit' : s.material === 'exoticMatter' ? 'Exotic Matter Deposit' : s.good ? GOOD_PLACE[s.good] : 'Deposit'}`)
+        break
+      case 'industrial': s.name = unique(`${place} Industrial Zone`); break
+      case 'agricultural': s.name = unique(`${place} Farmlands`); break
+      case 'infrastructure': s.name = unique(`${place} Spaceport`); break
+      case 'strategic': s.name = unique(s.tags.includes('high-ground') ? `${place} Heights` : `${place} Watch`); break
+    }
+  }
 }
 
 // ---- public API ---------------------------------------------------------------
@@ -291,7 +446,7 @@ export function beltLocations(beltName: string): readonly DevLocation[] {
   for (let i = 0; i < BELT_SITES; i++) {
     const good = weighted<SiteGood>(rng, BELT_RESOURCES)!
     const weight = Math.round((0.3 + 0.7 * rng()) * 100) / 100
-    sites.push({ id: `${beltName}#resource-${i}`, bodyName: beltName, kind: 'resource', tags: ['belt'], node: null, terrain: null, suitability: weight, capacity: Math.round(1 + 2 * weight), good, weight })
+    sites.push({ id: `${beltName}#resource-${i}`, bodyName: beltName, name: `${beltName} ${GOOD_PLACE[good].replace(/ (Forest)$/, ' Camp')} ${ROMAN_SUFFIX[i] || i + 1}`.replace('  ', ' ').trim(), kind: 'resource', tags: ['belt'], node: null, terrain: null, suitability: weight, capacity: Math.round(1 + 2 * weight), good, weight })
   }
   const frozen = Object.freeze(sites)
   cache.set(`belt:${beltName}`, frozen)

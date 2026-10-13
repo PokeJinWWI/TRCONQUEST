@@ -7,6 +7,9 @@ import type { ResourceCost } from './shipyardData'
 
 export type DefenseKind = 'fortress' | 'shieldGenerator' | 'defenseBattery' | 'spaceport'
 export const DEFENSE_KINDS: DefenseKind[] = ['fortress', 'shieldGenerator', 'defenseBattery', 'spaceport']
+// What a player can order as a defence. A spaceport is an ordinary economy building (placed with the build lens or the
+// construction panel), so the old spaceport INSTALLATION is no longer offered; ones already built keep working.
+export const BUILDABLE_DEFENSE_KINDS: DefenseKind[] = DEFENSE_KINDS.filter((k) => k !== 'spaceport')
 // The kinds that stand in a world's Military district (one slot each); a
 // spaceport is civic — it becomes the world's spaceport key node instead.
 export const MILITARY_KINDS: DefenseKind[] = ['fortress', 'shieldGenerator', 'defenseBattery']

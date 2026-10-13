@@ -28,6 +28,8 @@ export type ArticleKind =
   | 'territorial-recognition'
   | 'territorial-transfer'
   | 'demilitarized-zone'
+  // People may move between the two nations (economy/migration.ts), whatever their migration laws.
+  | 'migration'
 
 // A place a territorial article applies to (the same shape as scene/claims.Scope).
 export interface TreatyScope {
@@ -85,6 +87,9 @@ export type TreatyArticle =
   // ONGOING: sourceId (who governs the scope) lets targetId settle and build there, under its jurisdiction
   // (a construction permission, a settlement right or a resource concession). It ends with the treaty; what
   // targetId built stays targetId's.
+  // ONGOING: people may migrate between sourceId and targetId (both ways when `mutual`, else only from sourceId to targetId), up to
+  // `quota` millions a month when set. It ends with the treaty; people who already moved stay.
+  | { kind: 'migration'; sourceId: string; targetId: string; mutual?: boolean; quota?: number }
   | { kind: 'construction-right'; sourceId: string; targetId: string; scope: TreatyScope }
   // ONGOING: sourceId lets targetId transit, dock at, or base forces in the scope.
   | { kind: 'access-right'; sourceId: string; targetId: string; scope: TreatyScope; access: AccessKind }
@@ -185,6 +190,11 @@ export function articleCostFor(article: TreatyArticle, forId: string): number {
       if (forId === article.leaderId) return JOIN_BLOC_LEADER_COST
       if (forId === article.joiningId) return JOIN_BLOC_JOINER_COST
       return 0
+    case 'migration':
+      // Accepting the other's people is the burden; sending your own is a small one (you may lose workers).
+      if (forId === article.targetId) return MIGRATION_ACCEPT_COST
+      if (forId === article.sourceId) return article.mutual ? MIGRATION_ACCEPT_COST : MIGRATION_SEND_COST
+      return 0
     case 'construction-right':
       if (forId === article.targetId) return CONSTRUCTION_RIGHT_RECEIVE_COST
       if (forId === article.sourceId) return CONSTRUCTION_RIGHT_GRANT_COST
@@ -241,6 +251,10 @@ const SHIP_TRANSFER_RECEIVE_COST = -30
 const SHIP_TRANSFER_GIVE_COST = 10
 const JOIN_BLOC_LEADER_COST = -40
 const JOIN_BLOC_JOINER_COST = 30
+// Taking in another nation's people is a modest burden; having an outlet for your own is a small sweetener (the AI weighs both by its
+// own labour shortage or unemployment: scene/treaties.migrationAppetite).
+const MIGRATION_ACCEPT_COST = 10
+const MIGRATION_SEND_COST = -5
 const CONSTRUCTION_RIGHT_RECEIVE_COST = -30
 const CONSTRUCTION_RIGHT_GRANT_COST = 15
 const ACCESS_RIGHT_COST: Record<AccessKind, { receive: number; grant: number }> = {
@@ -275,6 +289,7 @@ export const ARTICLE_LABELS: Record<ArticleKind, string> = {
   'transfer-subject': 'Transfer Subject',
   'ship-transfer': 'Ship Transfer',
   'join-power-bloc': 'Join International Organization',
+  'migration': 'Migration',
   'construction-right': 'Construction Right',
   'access-right': 'Access Right',
   'territorial-recognition': 'Territorial Recognition',
@@ -304,6 +319,8 @@ export function describeArticle(article: TreatyArticle, viewerId: string, nameOf
       return article.fromId === viewerId ? `Transferred a ship to ${nameOf(article.toId)}` : `Received a ship from ${nameOf(article.fromId)}`
     case 'join-power-bloc':
       return article.joiningId === viewerId ? `Joined ${nameOf(article.leaderId)}'s organization` : `${nameOf(article.joiningId)} joined your organization`
+    case 'migration':
+      return article.mutual ? `People may move freely between us and ${nameOf(article.sourceId === viewerId ? article.targetId : article.sourceId)}${article.quota ? ` (up to ${article.quota}M a month)` : ''}` : article.sourceId === viewerId ? `Our people may migrate to ${nameOf(article.targetId)}${article.quota ? ` (up to ${article.quota}M a month)` : ''}` : `${nameOf(article.sourceId)}'s people may migrate to us${article.quota ? ` (up to ${article.quota}M a month)` : ''}`
     case 'construction-right':
       return article.sourceId === viewerId ? `Allowed ${nameOf(article.targetId)} to build in ${article.scope.id}` : `Right to build in ${article.scope.id}, from ${nameOf(article.sourceId)}`
     case 'access-right':

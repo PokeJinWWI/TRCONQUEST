@@ -31,6 +31,7 @@ import { getCountry } from '../data/countryData'
 import type { TechCategory } from '../data/techData'
 import { formatMoney, formatPop } from '../economy/format'
 import { TimeChart } from './TimeChart'
+import { MigrationLawsSection } from './MigrationPanels'
 import { SimpleDistrictsTab } from './planet/SimplePlanetTabs'
 import { HoldingsAbroad } from './planet/ForeignHoldings'
 
@@ -525,6 +526,8 @@ function SocialTab({ countryId, s, r }: TabProps) {
         </span>
       </label>
       <div className="abs-dim" style={{ fontSize: 10 }}>Costs {formatMoney(r.expWelfare)}/yr</div>
+
+      <MigrationLawsSection nationId={countryId} />
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Population by world</div>
       <table className="abs-table">

@@ -1,3 +1,4 @@
+import { LIFE_SUPPORT_GROUP_ID, lifeSupportScale } from './habitability'
 import { GOODS, GOOD_IDS, type GoodId } from './goods'
 import { BUREAUCRACY_OUTPUT, DISTRICT_TYPES, POP_CLASSES, RECIPES, districtOfRecipe, getMethod, qualificationFraction, type DistrictType, type PopClass } from './recipes'
 import { SLOTS_PER_DISTRICT_LEVEL } from './districts'
@@ -214,6 +215,8 @@ export interface WorldSpec {
   capacity: number
   religions: ReligionMix
   buildings: BuildingSpec[]
+  // See World.habitability; absent = 1.
+  habitability?: number
 }
 
 // Seeded deposits are a large-but-finite multiple of current per-tick output —
@@ -301,7 +304,10 @@ function balancedNation(specs: WorldSpec[]): Map<string, BuildingSpec[]> {
       const wf = tierWealthFactor(tier, BALANCE_SOL)
       for (const group of species.needs[tier]) {
         const total = group.goods.reduce((n, x) => n + x.weight, 0) || 1
-        for (const x of group.goods) household[x.good] += ((group.base * NEED_SCALE * wf * spec.population * x.weight) / total) * (adoption[x.good] ?? 1)
+        // Life support is sized by the world's habitability (none on a kind one: the calibrated start does not move).
+        const scale = group.id === LIFE_SUPPORT_GROUP_ID ? lifeSupportScale(spec.habitability) : 1
+        if (scale <= 0) continue
+        for (const x of group.goods) household[x.good] += ((group.base * NEED_SCALE * wf * spec.population * x.weight * scale) / total) * (adoption[x.good] ?? 1)
       }
     }
   }
@@ -408,6 +414,7 @@ function buildWorld(rawSpec: WorldSpec, calibration?: WorldCalibration): World {
     name: spec.id,
     ownerId: spec.ownerId,
     cultureId: spec.culture,
+    ...(spec.habitability !== undefined && spec.habitability < 1 ? { habitability: spec.habitability } : {}),
     populationCapacity: spec.capacity,
     // District slots scale with population, sized to hold the seed with headroom
     // — then rounded up to whole district levels (economy/districts.ts), and the
@@ -825,7 +832,10 @@ function withSupplyChains(specs: WorldSpec[]): WorldSpec[] {
     for (const s of mine) {
       const species = SPECIES_TEMPLATES[s.species]
       if (!species) continue
-      for (const tier of ['basic', 'everyday', 'healthcare'] as const) for (const group of species.needs[tier]) for (const x of group.goods) if (!isEmergentGood(x.good)) everyday.add(x.good)
+      for (const tier of ['basic', 'everyday', 'healthcare'] as const) for (const group of species.needs[tier]) {
+        if (group.id === LIFE_SUPPORT_GROUP_ID && lifeSupportScale(s.habitability) <= 0) continue
+        for (const x of group.goods) if (!isEmergentGood(x.good)) everyday.add(x.good)
+      }
     }
     for (let round = 0; round < 12; round++) {
       const made = new Set<GoodId>()

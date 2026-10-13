@@ -116,7 +116,7 @@ function ownsHere(building: Building, corpId: string): boolean {
 // operate ordinary industry — they're institutional investors, not operating
 // companies — so they're left alone here.
 export function runCorporationAI(corp: Corporation, worlds: World[], tick: number, investmentPool = Infinity, openHosts: Set<string> = new Set(), worldReports?: Record<string, WorldReport>): { corp: Corporation; worlds: World[] } {
-  if (corp.kind === 'financial') return { corp, worlds }
+  if (corp.kind === 'financial') return { corp, worlds: growFinancialDistrict(corp, worlds, tick, investmentPool) }
   if (tick % INVEST_REVIEW_PERIOD !== phase(corp.id, INVEST_REVIEW_PERIOD)) return { corp, worlds }
 
   // --- Divestment first: pull out of the worst chronic loss-maker (if any),
@@ -209,4 +209,31 @@ function invest(corp: Corporation, worlds: World[], tick: number, investmentPool
   const pick = bestExpand ?? bestFound
   if (!pick) return worlds
   return worlds.map((w) => (w.id === pick.worldId ? { ...w, constructionQueue: [...w.constructionQueue, order(pick.recipeId)] } : w))
+}
+
+// A Financial District grows its own centre as its world grows: one level per
+// FD_POP_PER_LEVEL of population (the seed's own rule), financed like any
+// company build from the investment pool. Never state-built (the player cannot
+// queue one), so this is the only way financial centres expand. At the start
+// the seeded level already matches, so nothing changes until people arrive.
+export const FD_POP_PER_LEVEL = 2500
+function growFinancialDistrict(corp: Corporation, worlds: World[], tick: number, investmentPool: number): World[] {
+  if (tick % INVEST_REVIEW_PERIOD !== phase(corp.id, INVEST_REVIEW_PERIOD)) return worlds
+  if (investmentPool < INVEST_CASH_BUFFER) return worlds
+  return worlds.map((w) => {
+    const centre = w.buildings.find((b) => b.recipeId === 'financialCenter' && ownsHere(b, corp.id))
+    if (!centre) return w
+    if (w.constructionQueue.some((o) => o.recipeId === 'financialCenter')) return w
+    const pop = w.pops.reduce((s, p) => s + p.populationSize, 0)
+    if (Math.max(1, Math.round(pop / FD_POP_PER_LEVEL)) <= centre.level) return w
+    if (!districtRoom(w, 'financialCenter')) return w
+    const order: ConstructionOrder = {
+      id: `fd-${corp.id}-${tick}`,
+      recipeId: 'financialCenter',
+      cost: constructionWork('financialCenter'),
+      progress: 0,
+      owner: { kind: 'corporation', corporationId: corp.id },
+    }
+    return { ...w, constructionQueue: [...w.constructionQueue, order] }
+  })
 }

@@ -5,13 +5,16 @@ import { useEffect, useMemo, useRef } from 'react'
 import { KeyboardPan } from './KeyboardPan'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Html, Line, OrbitControls, Stars } from '@react-three/drei'
-import { BufferAttribute, BufferGeometry, Color, MOUSE, SRGBColorSpace, type Group, type InterleavedBuffer, type InterleavedBufferAttribute } from 'three'
+import { BufferAttribute, BufferGeometry, Color, MOUSE, Vector3, SRGBColorSpace, type Group, type InterleavedBuffer, type InterleavedBufferAttribute } from 'three'
 import type { Line2 } from 'three-stdlib'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { TERRAIN, UNIT_TYPES } from '../data/groundData'
 import { ownerDisplay } from '../data/countryRoster'
 import { useArmyStore } from '../state/armyStore'
 import { LINE_THICKNESS_PX, useSettingsStore } from '../state/settingsStore'
+import { useStructureStore } from '../state/structureStore'
+import { RECIPES } from '../economy/recipes'
+import { capturableByGround } from './ruralStructures'
 import { useTerritoryStore } from '../state/territoryStore'
 import { useGroundViewStore } from '../state/groundViewStore'
 import { useViewStore } from '../state/viewStore'
@@ -125,6 +128,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <FrontLines surface={surface} />
           <LensLayers surface={surface} />
           <KeyNodeMarkers surface={surface} />
+          <SeaStructureMarkers surface={surface} />
           <InstallationMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
           <UnitMarkers bodyName={bodyName} />
@@ -143,6 +147,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <FrontLines surface={surface} />
           <LensLayers surface={surface} />
           <KeyNodeMarkers surface={surface} />
+          <SeaStructureMarkers surface={surface} />
           <InstallationMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
           <UnitMarkers bodyName={bodyName} />
@@ -426,21 +431,55 @@ function TerrainBattleChips({ bodyName }: { bodyName: string }) {
 
 const KEY_GLYPHS = { capital: '★', city: '●', spaceport: '⚓', outpost: '◆', fortress: '▣' } as const
 
+// Every key node in ONE overlay, positioned in one pass per frame and only when the camera has moved: a drei Html per node (one
+// projection and style write each, every frame) is what made a world with forty cities lag. The node list re-renders only when
+// the surface or who holds a node changes.
 function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
   const bodyName = surface.bodyName
   const holders = useTerritoryStore((s) => s.nodeHolders[bodyName])
   const owners = useTerritoryStore((s) => s.bodyOwner)
+  const flat = useGroundViewStore((s) => s.projection === 'flat')
+  const showCities = useGroundViewStore((s) => s.showCities)
   const mesh = surfaceMesh()
+  const refs = useRef<(HTMLDivElement | null)[]>([])
+  const last = useRef('')
+  const v = useMemo(() => new Vector3(), [])
+  const points = useMemo(() => surface.keySlots.map((slot) => ({ x: mesh.positions[slot.node * 3], y: mesh.positions[slot.node * 3 + 1], z: mesh.positions[slot.node * 3 + 2] })), [surface, mesh])
+  useEffect(() => { last.current = '' }, [points, flat, showCities])
+  useFrame(({ camera, size }) => {
+    const e = camera.matrixWorld.elements
+    const sig = `${e[0]},${e[1]},${e[2]},${e[5]},${e[6]},${e[10]},${e[12]},${e[13]},${e[14]},${(camera as { zoom?: number }).zoom ?? 1},${size.width},${size.height}`
+    if (sig === last.current) return
+    last.current = sig
+    const r = GLOBE_RADIUS * 1.01
+    // The overlay is drei's Html anchored at the world origin, so every marker is placed relative to where the origin projects.
+    v.set(0, 0, 0).project(camera)
+    const ox = ((v.x + 1) / 2) * size.width
+    const oy = ((1 - v.y) / 2) * size.height
+    for (let i = 0; i < points.length; i++) {
+      const el = refs.current[i]
+      if (!el) continue
+      const p = points[i]
+      const facing = flat || p.x * camera.position.x + p.y * camera.position.y + p.z * camera.position.z > r * 0.2
+      if (!facing) {
+        el.style.display = 'none'
+        continue
+      }
+      v.set(...(flat ? flatPos(p, 0.05) : toVec(p, r))).project(camera)
+      el.style.display = ''
+      el.style.transform = `translate(${((v.x + 1) / 2) * size.width - ox}px, ${((1 - v.y) / 2) * size.height - oy}px)`
+    }
+  })
   return (
-    <>
-      {surface.keySlots.map((slot) => {
+    <Html zIndexRange={[5, 0]} pointerEvents="none">
+      {surface.keySlots.map((slot, i) => {
+        if (slot.kind === 'city' && !showCities) return null
         const holder = holderOf(bodyName, slot.node, owners, { [bodyName]: holders ?? {} })
         const color = holder ? ownerDisplay(holder).color : '#cfd8e3'
-        const p = { x: mesh.positions[slot.node * 3], y: mesh.positions[slot.node * 3 + 1], z: mesh.positions[slot.node * 3 + 2] }
         const kn = keyNameOf(surface, slot)
         const region = regionAt(bodyName, slot.node)
         return (
-          <FacingHtml key={slot.node} point={p} radius={GLOBE_RADIUS * 1.01}>
+          <div key={slot.node} ref={(el) => { refs.current[i] = el }} style={{ position: 'absolute', left: 0, top: 0, display: 'none' }}>
             <div
               className="ground-key"
               title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}\n\n${KEY_ROLE[slot.kind]}\n${KEY_HOLD_BONUS}`}
@@ -450,10 +489,10 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
               </div>
               <div className="ground-key-name" style={{ color }}>{kn.label}</div>
             </div>
-          </FacingHtml>
+          </div>
         )
       })}
-    </>
+    </Html>
   )
 }
 
@@ -485,6 +524,31 @@ function InstallationMarkers({ bodyName }: { bodyName: string }) {
             </FacingHtml>
           )
         })}
+    </>
+  )
+}
+
+// Rural structures at sea (a space-elevator anchor on a floating platform): not key nodes (no one can walk to them), so the key-node
+// markers do not draw them. They stand over the water, coloured by owner; only orbital control takes them.
+function SeaStructureMarkers({ surface }: { surface: BodySurface }) {
+  const bodyName = surface.bodyName
+  const rural = useStructureStore((s) => s.rural[bodyName])
+  const mesh = surfaceMesh()
+  return (
+    <>
+      {(rural ?? []).filter((r) => !capturableByGround(surface, r.node)).map((r) => {
+        const color = ownerDisplay(r.ownerId).color
+        const p = { x: mesh.positions[r.node * 3], y: mesh.positions[r.node * 3 + 1], z: mesh.positions[r.node * 3 + 2] }
+        const label = r.name ?? RECIPES[r.recipeId]?.label ?? 'Platform'
+        return (
+          <FacingHtml key={r.id} point={p} radius={GLOBE_RADIUS * 1.01}>
+            <div className="ground-key" title={`${label} (a platform at sea) — ${ownerDisplay(r.ownerId).name}\nNo army can reach it: it falls only with orbital control of ${bodyName}.`}>
+              <div className="ground-key-marker" style={{ borderColor: color, color }}>◎</div>
+              <div className="ground-key-name" style={{ color }}>{label}</div>
+            </div>
+          </FacingHtml>
+        )
+      })}
     </>
   )
 }

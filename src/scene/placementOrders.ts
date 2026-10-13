@@ -6,6 +6,7 @@
 // It is the place where the two answers meet, and they stay apart in the result: the
 // builder's RIGHT to build there (scene/sovereignty: jurisdiction) and whether the building
 // PHYSICALLY fits (scene/placement: site kind, deposit, room).
+import { isAutoBuilt, isRural } from '../economy/recipes'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -17,7 +18,7 @@ import { accessOnBody } from './infrastructureOrders'
 import { locationsOf, type DevLocation } from './locations'
 import { physicalFit, pickSite, siteKindOf, siteKindsFor, slotsUsedBy, type BuildingRef } from './placement'
 import { decideConstructionNow } from './sovereignty'
-import { districtOfBuilding, isPlacedDistrict, siteKindsOfDistrict, slotsPerLevel } from './districtSites'
+import { INDUSTRY_SHARE_OF_SETTLEMENT, districtOfBuilding, isPlacedDistrict, siteKindsOfDistrict, slotsPerLevel } from './districtSites'
 import { ensureSeeded } from './seedPlacementOrders'
 import { queuedLevels, worldLevels } from './worldDistricts'
 import { recordTerritorialIncident } from './territorialIncidents'
@@ -138,6 +139,11 @@ export function judgeSiteForLevel(builderId: string, bodyName: string, district:
   if (!kinds.includes(site.kind)) return { allowed: false, legal: 'n/a', physical: `a ${district} district is developed on ${kinds.join(' or ')} sites`, why: `A ${district} district is developed on ${kinds.join(' or ')} sites, not ${site.kind} sites` }
   const d = decideConstructionNow(builderId, { kind: 'location', id: site.id }, site.kind)
   if (!d.allowed) return { allowed: false, legal: d.legal, physical: d.physical.ok ? null : d.physical.reason, why: d.reason }
+  if (site.kind === 'settlement' && (district === 'industrial' || district === 'generator')) {
+    const industrial = usePlacementStore.getState().levels[site.id]?.[district] ?? 0
+    const share = Math.max(1, Math.floor(site.capacity * INDUSTRY_SHARE_OF_SETTLEMENT))
+    if (industrial >= share) return { allowed: false, legal: d.legal, physical: 'a settlement gives only a third of its room to industry', why: `This settlement already gives all the room it can spare (${share} level${share === 1 ? '' : 's'}) to industry` }
+  }
   if (levelRoomAt(site) <= 0) return { allowed: false, legal: d.legal, physical: 'no room for another district level', why: 'This site has no room for another district level' }
   void bodyName
   return { allowed: true, legal: d.legal, physical: null, why: d.reason }
@@ -147,6 +153,8 @@ export function judgeSiteForLevel(builderId: string, bodyName: string, district:
 // both the law and the ground allow. A body with no sites at all (nothing generated) has no
 // placement to make and the order goes ahead as it always did.
 export function planPlacement(builderId: string, bodyName: string, ref: BuildingRef, siteId?: string): PlacementPlan {
+  // A rural structure (a space-elevator anchor) stands on a node of its own: scene/ruralOrders places it, no site is booked.
+  if (isRural(ref.id)) return { ok: true }
   const sites = locationsOf(bodyName)
   if (sites.length === 0) return { ok: true }
   ensureSeeded(bodyName)
@@ -165,7 +173,8 @@ export function planPlacement(builderId: string, bodyName: string, ref: Building
   // Best first: good ground that its freight can get out of (scene/infrastructureNet), so the player's default and the
   // AI's are never a factory at the end of nowhere when a connected site would do.
   const reach = accessOnBody(bodyName, builderId)
-  const ranked = [...sites].sort((a, b) => b.suitability * (reach[b.id] ?? 1) - a.suitability * (reach[a.id] ?? 1) || b.suitability - a.suitability || a.id.localeCompare(b.id))
+  const order = siteKindsFor(ref)
+  const ranked = [...sites].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || b.suitability * (reach[b.id] ?? 1) - a.suitability * (reach[a.id] ?? 1) || b.suitability - a.suitability || a.id.localeCompare(b.id))
   let firstFailure: string | null = null
   for (const site of ranked) {
     if (!siteKindsFor(ref).includes(site.kind)) continue
@@ -228,7 +237,7 @@ export function placeUnplacedOrders(): void {
         }
         continue
       }
-      if (!order.recipeId || order.recipeId === 'corporateHq') continue
+      if (!order.recipeId || isAutoBuilt(order.recipeId)) continue
       const ref = { mode: 'complex' as const, id: order.recipeId }
       const plan = planPlacement(world.ownerId, world.id, ref)
       if (!plan.ok || !plan.site) continue
@@ -265,7 +274,7 @@ export function planDistrictLevel(builderId: string, bodyName: string, district:
     return r.ok ? { ok: true, site } : r
   }
   const reach = accessOnBody(bodyName, builderId)
-  const ranked = sites.filter((s) => kinds.includes(s.kind)).sort((a, b) => b.suitability * (reach[b.id] ?? 1) - a.suitability * (reach[a.id] ?? 1) || (a.id < b.id ? -1 : 1))
+  const ranked = sites.filter((s) => kinds.includes(s.kind)).sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind) || b.suitability * (reach[b.id] ?? 1) - a.suitability * (reach[a.id] ?? 1) || (a.id < b.id ? -1 : 1))
   let why: string | null = null
   for (const site of ranked) {
     const r = check(site)

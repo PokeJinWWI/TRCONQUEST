@@ -70,8 +70,10 @@ console.log('\n=== The farmland site kind ===')
   const sites = locationsOf('Earth')
   const agri = sites.filter((s) => s.kind === 'agricultural')
   check('Earth has farmland sites', agri.length > 0, String(agri.length))
-  const firstAgri = sites.findIndex((s) => s.kind === 'agricultural')
-  check('farmland is generated last: no other kind comes after it', firstAgri >= 0 && sites.slice(firstAgri).every((s) => s.kind === 'agricultural'))
+  // Mars is drawn at random: farmland came last of the original kinds, and only the extra settlements (their own stream) were appended after it.
+  const mars = locationsOf('Mars')
+  const firstAgri = mars.findIndex((s) => s.kind === 'agricultural')
+  check('farmland is generated after every other original kind (only the appended extra settlements follow)', firstAgri >= 0 && mars.slice(firstAgri).every((s) => s.kind === 'agricultural' || s.kind === 'settlement'))
   check('farmland sits on ground suited to farming', agri.every((s) => s.suitability > 0))
 }
 

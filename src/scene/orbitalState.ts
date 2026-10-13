@@ -1,6 +1,9 @@
 // Orbital control, read from the live game: armed ships orbiting a body plus working defense platforms
 // (scene/orbits.orbitalControl is the rule). Nothing is stored: control is recomputed whenever asked.
 import { FACILITY_SPECS } from '../data/orbitalData'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { isStarbaseActive, starbaseFirepower } from './starbaseLogic'
+import { STATION_FIREPOWER_PER_STRENGTH } from '../data/starbaseData'
 import { atWar } from '../state/diplomacyStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { useOrbitalStore } from '../state/orbitalStore'
@@ -24,6 +27,14 @@ export function orbitalForcesAt(bodyName: string): Record<string, number> {
     const occupier = useTerritoryStore.getState().bodyController[bodyName]
     const cutOff = !!occupier && occupier !== f.ownerId && atWar(occupier, f.ownerId)
     if (power > 0 && bodyOfZone(f.zone) === bodyName && facilityWorking(f, now) && !cutOff) forces[f.ownerId] = (forces[f.ownerId] ?? 0) + power
+  }
+  // Working stations circling the body add their guns (a station's firepower is its armed strength, like a ship's weapons).
+  for (const sb of useStarbaseStore.getState().starbases) {
+    if (!sb.zone || bodyOfZone(sb.zone) !== bodyName || !isStarbaseActive(sb, now)) continue
+    const occupier = useTerritoryStore.getState().bodyController[bodyName]
+    if (!!occupier && occupier !== sb.ownerId && atWar(occupier, sb.ownerId)) continue
+    const power = Math.round(starbaseFirepower(sb) / STATION_FIREPOWER_PER_STRENGTH)
+    if (power > 0) forces[sb.ownerId] = (forces[sb.ownerId] ?? 0) + power
   }
   return forces
 }

@@ -317,7 +317,18 @@ export interface Recipe {
   // Absent = buildable from the start. Enforced in state/economyStore.queueBuild
   // and hidden in the build picker until researched.
   requiresTech?: string
+  // Built only by its owners on their own (Corporate HQs by their companies,
+  // Financial Centres by their Financial Districts): never in a player or
+  // state build list, and queueConstruction refuses it.
+  autoBuilt?: true
+  // Stands on a ground node of its own, outside any development site (a space-elevator anchor): scene/ruralStructures.ts.
+  placement?: 'rural'
+  // A rural structure that may also stand at sea (a floating platform moored to the sea floor).
+  allowSea?: true
 }
+
+export const isRural = (recipeId: string): boolean => RECIPES[recipeId]?.placement === 'rural'
+export const isAutoBuilt = (recipeId: string): boolean => RECIPES[recipeId]?.autoBuilt === true
 
 // The building roster (design doc Section 4). Real production chains with
 // ELECTRICITY as a near-universal input: power plants feed extraction,
@@ -2111,6 +2122,8 @@ export const RECIPES: Record<string, Recipe> = {
     id: 'spaceElevatorAnchor',
     label: 'Space Elevator Anchor',
     category: 'services',
+    placement: 'rural',
+    allowSea: true,
     requiresTech: 'orbital-tethers',
     methods: [
       {
@@ -2416,6 +2429,7 @@ export const RECIPES: Record<string, Recipe> = {
   // size (its level tracks the number of buildings the company owns).
   corporateHq: {
     id: 'corporateHq',
+    autoBuilt: true,
     label: 'Corporate HQ',
     category: 'corporate',
     methods: [
@@ -2441,6 +2455,7 @@ export const RECIPES: Record<string, Recipe> = {
   // ---------------- Finance (the financial district) ----------------
   financialCenter: {
     id: 'financialCenter',
+    autoBuilt: true,
     label: 'Financial Center',
     category: 'corporate',
     methods: [

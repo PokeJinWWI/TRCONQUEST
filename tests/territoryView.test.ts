@@ -62,7 +62,7 @@ console.log('\n=== 2. Claims, disputes, enclaves, agreements, orbit ===')
   fileClaimNow({ kind: 'body', id: 'Ceres' }, VENUS, 'founding', 1)
   fileClaimNow({ kind: 'body', id: 'Ceres' }, ORION, 'founding', 2)
   const v = territoryView('Ceres')
-  check('rival claims are listed with claimant, scope, status and basis, and the dispute is flagged', v.contested && v.claims.length === 2 && v.claims.every((c) => c.status === 'provisional' && c.basis === 'founding' && c.scope === 'body:Ceres'), v.disputants.join(', '))
+  check('rival claims are listed with claimant, scope, status and basis, and the dispute is flagged', v.contested && v.claims.length === 2 && v.claims.every((c) => c.status === 'provisional' && c.basis === 'founding' && c.scope === 'the whole world'), v.disputants.join(', '))
   const claim = v.claims.find((c) => c.claimant === nameVenus)!
   recognizeClaim(claim.id, { basis: 'treaty', simDays: 5, resolveRivals: true })
   const after = territoryView('Ceres')

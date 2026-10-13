@@ -17,6 +17,9 @@ import { placeUnplacedOrders } from '../src/scene/placementOrders'
 import { siteKindsFor, slotsOfSite } from '../src/scene/placement'
 import { surfaceOf } from '../src/scene/planetTerrain'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
+import { useStarbaseStore } from '../src/state/starbaseStore'
+import { starbaseFirepower } from '../src/scene/starbaseLogic'
+import { useTechStore } from '../src/state/techStore'
 import { resetGame } from '../src/scene/gameReset'
 import { useAbstractEconomyStore } from '../src/state/abstractEconomyStore'
 import { useDiplomacyStore } from '../src/state/diplomacyStore'
@@ -129,14 +132,25 @@ console.log('\n=== 4. An endangered world gets a platform; an overcrowded one a 
   useGameTimeStore.setState({ simDays: 1000 })
   useShipStore.setState({ ships: [] })
   useResourceStore.getState().setAmount(VENUS, 'alloys', 100000)
+  // A station needs Orbital Construction (and the tech for missiles and the rest as it grows).
+  useTechStore.getState().grantAllTech([VENUS])
   useDiplomacyStore.getState().forceWar(MARS, VENUS, 1000)
   for (let i = 0; i < 3; i++) spawnOwnedShip('cruiser', MARS, 'sol', 'Mars')
   check('Venus is threatened: an enemy fleet is in its system, no enemy holds its orbit yet, and it has no platform', threatenedBodiesOf(VENUS).includes('Venus'))
   const plan = planEmpire(VENUS, captureSnapshot(1000), INITIAL_AI_MEMORY)
   check('its plan includes a defense platform over Venus', plan.intents.some((i) => i.kind === 'build-defense-platform' && i.bodyName === 'Venus'))
   executeIntents(VENUS, plan.intents.filter((i): i is Extract<Intent, { kind: 'build-defense-platform' }> => i.kind === 'build-defense-platform'), 1000, MARS)
-  check('the platform is built, owned by Venus, in low orbit, and paid in alloys', useOrbitalStore.getState().facilities.some((f) => f.ownerId === VENUS && f.kind === 'defense' && f.zone === 'Venus~low') && useResourceStore.getState().stateFor(VENUS).amounts.alloys < 100000)
-  check('...and once it stands it is not asked for again', !threatenedBodiesOf(VENUS).includes('Venus'))
+  check('a station is founded, owned by Venus, in low orbit, and paid in alloys', useStarbaseStore.getState().starbases.some((sb) => sb.ownerId === VENUS && sb.zone === 'Venus~low') && useResourceStore.getState().stateFor(VENUS).amounts.alloys < 100000)
+  // The station takes time to build; then the AI powers and arms it, one step a pass, by the player's own rules.
+  let stepDays = 1000
+  for (let pass = 0; pass < 8 && threatenedBodiesOf(VENUS).includes('Venus'); pass++) {
+    stepDays += 200
+    useGameTimeStore.setState({ simDays: stepDays })
+    const again = planEmpire(VENUS, captureSnapshot(stepDays), INITIAL_AI_MEMORY)
+    executeIntents(VENUS, again.intents.filter((i): i is Extract<Intent, { kind: 'build-defense-platform' }> => i.kind === 'build-defense-platform'), stepDays, MARS)
+  }
+  const station = useStarbaseStore.getState().starbases.find((sb) => sb.ownerId === VENUS && sb.zone === 'Venus~low')
+  check('...it is armed, powered, and once it stands it is not asked for again', !!station && starbaseFirepower(station) > 0 && !threatenedBodiesOf(VENUS).includes('Venus'), station ? `${(station.modules ?? []).join(',')}` : 'no station')
   // Too late: once the enemy holds the orbit, nobody can build there, so the AI does not try.
   resetGame()
   usePlayerStore.setState({ selectedCountryId: MARS, sandbox: false, economyModel: 'abstract' })

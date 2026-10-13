@@ -25,6 +25,8 @@ import { orderBuildingAt, orderLevelAt } from './lensOrders'
 import { resolveTarget, type LensSiteCells, type LensTarget } from './lensTarget'
 import { locationById, locationsOf } from './locations'
 import { judgePortNode, placePort } from './portStructures'
+import { isRural } from '../economy/recipes'
+import { isSeaNode, judgeRural, placeRural } from './ruralOrders'
 import { judgeSiteForBuilding, judgeSiteForLevel, refOf } from './placementOrders'
 import { siteKindOf } from './placement'
 import { FOUNDABLE_KINDS } from './siteFounding'
@@ -76,6 +78,10 @@ export function lensHover(bodyName: string, node: number, tool: LensTool): LensH
 
   switch (tool.kind) {
     case 'building': {
+      if (isRural(tool.id)) {
+        const j = judgeRural(bodyName, tool.id, node)
+        return { node, cells: [node], ok: j.ok, text: j.ok ? `Build ${tool.name} here${isSeaNode(bodyName, node) ? ' (a platform at sea)' : ''}` : j.reason }
+      }
       if (tool.id === 'spaceport') {
         const surface = groundKeySurface(bodyName)
         if (!surface) return nothing('No ground here.')
@@ -162,6 +168,10 @@ export function lensClick(bodyName: string, node: number, tool: LensTool): void 
 
   switch (tool.kind) {
     case 'building': {
+      if (isRural(tool.id)) {
+        const r = placeRural(me, bodyName, tool.id, node)
+        return done(r.ok, r.ok ? `${tool.name} ordered here.` : r.reason, [node])
+      }
       if (tool.id === 'spaceport') {
         const r = placePort(me, bodyName, node)
         return done(r.ok, r.ok ? 'Spaceport ordered here.' : r.reason, [node])

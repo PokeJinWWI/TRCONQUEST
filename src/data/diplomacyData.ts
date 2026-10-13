@@ -73,6 +73,8 @@ export type DiplomacyEventKind =
   | 'encroachment'
   // Someone built in ground another country governs or claims, with no right to (scene/territorialIncidents.ts).
   | 'territorial-incident'
+  // A burst of refugees leaving a world in distress for another (economy/migration.ts); a click goes to the world they left.
+  | 'migration-wave'
   | 'tech-researched'
   | 'ship-attacked'
   // An order the ship could not carry out, and why (a hyperdrive jump out of range).

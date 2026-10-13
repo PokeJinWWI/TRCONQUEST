@@ -128,6 +128,12 @@ export const RESOURCES_PER_DISTRICT = 1 / 3
 export const STRATEGIC_PER_DISTRICT = 1 / 5
 export const AGRICULTURAL_PER_DISTRICT = 1 / 3
 export const MAX_SITES_PER_KIND = 12
+// Settlements come in far greater numbers (the nations hold billions of people, a settlement houses up to ~150M): the extra ones are
+// generated last, from a stream of their own, so no earlier site id moves. Per size district, on top of SETTLEMENTS_PER_DISTRICT.
+export const EXTRA_SETTLEMENTS_PER_DISTRICT = 7
+export const MAX_SETTLEMENT_SITES = 40
+// Extra settlements prefer ground within this many fine cells of the sea (fresh water, ports), on a body that has one.
+export const WATER_PROXIMITY_CELLS = 8
 
 // Sites keep this many fine cells apart (the ground war's own key-node spacing,
 // groundData.KEY_MIN_SEPARATION_CELLS, is the floor).
@@ -140,3 +146,8 @@ export const SITE_CAPACITY_RANGE = 3
 // Building slots a site holds per unit of capacity (one district level houses this many
 // buildings: economy/districts.SLOTS_PER_DISTRICT_LEVEL).
 export const SITE_SLOTS_PER_CAPACITY = 8
+
+// A hand-placed anchor (data/earthEconomicGeography.ts) snaps to the nearest free ground within this many fine cells, else it is skipped.
+export const ANCHOR_SNAP_CELLS = 1.6
+// Anchors keep this far from each other (a fine cell is ~4 degrees on Earth): a mine may sit beside a city, two cities may not touch.
+export const ANCHOR_MIN_SEPARATION_CELLS = 1.5

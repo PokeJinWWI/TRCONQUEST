@@ -18,6 +18,8 @@ import { OwnerNote, SimpleDistrictsTab, SimplePopulationTab, SimpleWorldSummary 
 import { ComplexDistrictsTab, ComplexWorldSummary } from './planet/ComplexPlanetTabs'
 import { DefenseTab } from './planet/DefenseTab'
 import { DevelopmentTab } from './planet/DevelopmentTab'
+import { QualityOfLifeCard } from './QualityOfLifeCard'
+import { MigrationCard } from './MigrationPanels'
 import { TerritoryTab } from './planet/TerritoryTab'
 import { SystemTerritoryRows } from './planet/SystemTerritoryRows'
 import { AreaView } from './planet/AreaView'
@@ -369,7 +371,13 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
           )}
         </>
       )}
-      {current === 'population' && (simple ? <SimplePopulationTab bodyName={body.name} /> : <PopsPanel worldName={body.name} world={world} />)}
+      {current === 'population' && (
+        <>
+          {simple ? <SimplePopulationTab bodyName={body.name} /> : <PopsPanel worldName={body.name} world={world} />}
+          <QualityOfLifeCard bodyName={body.name} />
+          <MigrationCard bodyName={body.name} />
+        </>
+      )}
       {current === 'armies' && <BodyArmies bodyName={body.name} />}
       {current === 'defense' && <DefenseTab bodyName={body.name} playerId={playerId} />}
       {current === 'territory' && <TerritoryTab bodyName={body.name} />}

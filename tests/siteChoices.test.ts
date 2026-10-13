@@ -31,7 +31,7 @@ for (const model of ['abstract', 'complex'] as const) {
   const mode = model === 'abstract' ? ('simple' as const) : ('complex' as const)
   const factory = { mode, id: model === 'abstract' ? 'civilianFactory' : 'steelMill' }
   const choices = siteChoicesForBuilding(MARS, 'Mars', factory)
-  check('every industrial site of Mars is offered, and only those', choices.length === locationsOf('Mars').filter((s) => s.kind === 'industrial').length && choices.every((c) => c.kind === 'industrial'))
+  check('every industrial site of Mars is offered, and its settlements (a city has factories too)', choices.filter((c) => c.kind === 'industrial').length === locationsOf('Mars').filter((s) => s.kind === 'industrial').length && choices.every((c) => c.kind === 'industrial' || c.kind === 'settlement'))
   check('the best allowed site is marked, and allowed sites come first', choices.filter((c) => c.best).length === (choices.some((c) => c.allowed) ? 1 : 0) && choices.findIndex((c) => !c.allowed) === -1 || choices.slice(0, choices.filter((c) => c.allowed).length).every((c) => c.allowed))
   check('each choice says what it offers: ground, access, room, owner', choices.every((c) => c.suitability >= 0 && c.access > 0 && /slot/.test(c.room) && c.label.length > 0))
   const asVenus = siteChoicesForBuilding(VENUS, 'Mars', factory)

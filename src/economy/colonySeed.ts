@@ -3,6 +3,7 @@
 // (the same kit the generated empires' colonies run: empireSeed.kitFor), its people of the
 // capital's own culture, species and faiths. Pure; the store adds the result
 // (economyStore.addWorld). Simple mode's analogue is abstractEconomyStore.addColonyWorld.
+import { habitabilityOfClass } from './habitability'
 import { landForBody } from '../scene/bodyLand'
 import { bodyGroundInfoAny } from '../scene/planetTerrain'
 import { MICRO_COLONY_LAND } from '../data/colonyData'
@@ -32,6 +33,7 @@ export function seedColonyWorld(args: { bodyName: string; ownerId: string; settl
     population: args.settlers,
     capacity: Math.max(args.settlers * 5, 100),
     buildings: kitFor(info.planetClass, args.settlers, false),
+    habitability: habitabilityOfClass(info.planetClass),
   }
   return seedStandaloneWorld([{ id: args.ownerId, capitalBodyName: args.home.id, privateLed: false }], spec, { landOf: (b) => Math.min(landForBody(b), cap) })
 }

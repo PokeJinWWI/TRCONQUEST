@@ -15,6 +15,7 @@
 //     nations the economy was calibrated on);
 //   - nothing from its TECH: the economy has no tech hook, so an empire's
 //     researched set does not change its economy (and none is invented here).
+import { habitabilityOfClass } from './habitability'
 import type { PlanetClass, PlanetData } from '../scene/planetData'
 import { getPlanetsForStar } from '../scene/planetData'
 import { estimateSize } from '../scene/bodyStats'
@@ -166,6 +167,7 @@ function worldSpecFor(empire: GalaxyEmpire, planet: PlanetData, home: boolean, o
     capacity: population * 5,
     religions,
     buildings,
+    habitability: habitabilityOfClass(planet.planetClass),
   }
 }
 

@@ -33,10 +33,11 @@ for (const model of ['abstract', 'complex'] as const) {
   const mode = model === 'abstract' ? ('simple' as const) : ('complex' as const)
   const v = areaView('Mars', MARS)
   const all = v.sections.flatMap((s) => s.sites)
-  check('Mars is shown as settlements, industrial, resource and port sites, each with sites', v.sections.map((s) => s.kind).join() === 'settlement,industrial,resource,agricultural,infrastructure', v.sections.map((s) => `${s.title}:${s.sites.length}`).join(' '))
+  check('Mars is shown as its areas (urban, industrial, mining, farmland), with its spaceports as standalone buildings', v.sections.map((s) => s.kind).join() === 'settlement,industrial,resource,agricultural' && v.standalone.some((b) => /spaceport/i.test(b.id)), v.sections.map((s) => `${s.title}:${s.sites.length}`).join(' '))
   check('every building the world has stands on exactly one site: nothing is left over', v.unplaced.length === 0)
   const shown = new Map<string, number>()
   for (const s of all) for (const b of s.buildings) shown.set(b.id, (shown.get(b.id) ?? 0) + b.count)
+  for (const b of v.standalone) shown.set(b.id, (shown.get(b.id) ?? 0) + b.count)
   check('...and the cards add up to the world\'s buildings, building by building', worldBuildings('Mars', mode).every((b) => shown.get(b.id) === b.count))
   check('no site shows more buildings in a district than its developed slots', all.every((s) => s.districts.every((d) => d.used <= d.slots)))
   const capital = all.find((s) => s.civic.some((c) => c.kind === 'seat'))!

@@ -8,7 +8,9 @@ import { buildingTechBlock } from '../state/abstractEconomyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { useCivicStore } from '../state/civicStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
-import { siteOwner } from '../state/locationStore'
+import { siteName, siteOwner } from '../state/locationStore'
+import { bodyAreas } from './footprintState'
+import { zoneBase } from './zoneOrders'
 import { usePlacementStore } from '../state/placementStore'
 import { economyModel } from '../state/playerStore'
 import { useTechStore } from '../state/techStore'
@@ -61,11 +63,13 @@ export interface AreaSite {
 export interface AreaView {
   bodyName: string
   sections: { kind: DevLocation['kind']; title: string; sites: AreaSite[] }[]
+  // Buildings standing outside every area (a spaceport out in the open): just buildings.
+  standalone: AreaBuilding[]
   // Buildings the world has that no site holds (built before sites, or that found none).
   unplaced: AreaBuilding[]
 }
 
-const TITLES: Partial<Record<DevLocation['kind'], string>> = { settlement: 'Settlements', industrial: 'Industrial sites', resource: 'Mining and resource sites', agricultural: 'Farmland', infrastructure: 'Ports and transport', strategic: 'Strategic sites' }
+const TITLES: Partial<Record<DevLocation['kind'], string>> = { settlement: 'Urban areas', industrial: 'Industrial areas', resource: 'Mining areas', agricultural: 'Farmland', infrastructure: 'Ports and transport', strategic: 'Strategic sites' }
 const nameOf = (id: string | null) => (id ? (getCountry(id)?.name ?? id) : null)
 
 const mode = (): EconomyMode => (economyModel() === 'abstract' ? 'simple' : 'complex')
@@ -80,7 +84,7 @@ export function buildableIn(m: EconomyMode, district: string, nationId: string):
   }
   const researched = useTechStore.getState().stateFor(nationId).researched
   return Object.values(RECIPES)
-    .filter((r) => r.id !== 'corporateHq' && districtOfBuilding({ mode: 'complex', id: r.id }) === district)
+    .filter((r) => !r.autoBuilt && districtOfBuilding({ mode: 'complex', id: r.id }) === district)
     .map((r) => ({ id: r.id, name: r.label, blocked: r.requiresTech && !researched.has(r.requiresTech) ? `needs ${r.requiresTech}` : null }))
 }
 
@@ -133,9 +137,49 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
       canBuild: mine && playerId ? districts.filter((d) => (levelsHere[d] ?? 0) > 0).flatMap((d) => buildableIn(m, d, playerId).map((b) => ({ ...b, district: d }))) : [],
     }
   })
+  // One card per AREA (scene/areas.ts): seeds whose ground has grown together are one place, shown under the primary seed's
+  // name; its develop/build actions go to the primary seed. Open ground nobody holds is not listed: found there with the build lens.
+  const base = zoneBase(bodyName)
+  const areas = base ? bodyAreas(bodyName, base) : []
+  const bySeed = new Map(out.map((s) => [s.siteId, s]))
+  const merged: AreaSite[] = []
+  for (const a of areas) {
+    const parts = a.seedIds.map((id) => bySeed.get(id)).filter((s): s is AreaSite => !!s)
+    const primary = bySeed.get(a.id)
+    if (!primary || !parts.some((p) => p.owner)) continue
+    const districtsHere = new Map<string, AreaDistrict>()
+    for (const d of parts.flatMap((p) => p.districts)) {
+      const had = districtsHere.get(d.district)
+      districtsHere.set(d.district, had ? { ...had, levels: had.levels + d.levels, slots: had.slots + d.slots, used: had.used + d.used } : { ...d })
+    }
+    const buildingsHere = new Map<string, AreaBuilding>()
+    for (const b of parts.flatMap((p) => p.buildings)) {
+      const had = buildingsHere.get(b.id)
+      buildingsHere.set(b.id, had ? { ...had, count: had.count + b.count } : { ...b })
+    }
+    merged.push({
+      ...primary,
+      label: siteName(a.id),
+      owner: primary.owner ?? parts.find((p) => p.owner)?.owner ?? null,
+      mine: parts.some((p) => p.mine),
+      captured: parts.some((p) => p.captured),
+      access: parts.reduce<number | null>((m, p) => (p.access === null ? m : m === null ? p.access : Math.min(m, p.access)), null),
+      districts: [...districtsHere.values()].sort((x, y) => (x.district < y.district ? -1 : 1)),
+      buildings: [...buildingsHere.values()].sort((x, y) => (x.name < y.name ? -1 : 1)),
+      civic: parts.flatMap((p) => p.civic),
+      onOrder: parts.flatMap((p) => p.onOrder),
+    })
+  }
+  // Buildings held on ground no area covers (spaceports and other standalone works) are just buildings, listed on their own.
+  const inAreas = new Set(areas.flatMap((a) => a.seedIds))
+  const standaloneBy = new Map<string, AreaBuilding>()
+  for (const s of out) if (!inAreas.has(s.siteId) && s.owner) for (const b of s.buildings) {
+    const had = standaloneBy.get(b.id)
+    standaloneBy.set(b.id, had ? { ...had, count: had.count + b.count } : { ...b })
+  }
   const kinds: DevLocation['kind'][] = ['settlement', 'industrial', 'resource', 'agricultural', 'infrastructure']
   const sections = kinds
-    .map((kind) => ({ kind, title: TITLES[kind] ?? kind, sites: out.filter((s) => s.kind === kind).sort((a, b) => Number(!!b.owner) - Number(!!a.owner) || b.suitability - a.suitability || (a.siteId < b.siteId ? -1 : 1)) }))
+    .map((kind) => ({ kind, title: TITLES[kind] ?? kind, sites: merged.filter((s) => s.kind === kind).sort((a, b) => b.suitability - a.suitability || (a.siteId < b.siteId ? -1 : 1)) }))
     .filter((sec) => sec.sites.length > 0)
   const placedByBuilding: Record<string, number> = {}
   for (const [id, row] of Object.entries(ledger.placed)) if (id.startsWith(`${bodyName}#`)) for (const [b, n] of Object.entries(row)) placedByBuilding[b] = (placedByBuilding[b] ?? 0) + n
@@ -143,5 +187,5 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
     .map((b) => ({ id: b.id, name: buildingName(m, b.id), count: b.count - (placedByBuilding[b.id] ?? 0) }))
     .filter((b) => b.count > 0)
   void slotsPerLevel
-  return { bodyName, sections, unplaced }
+  return { bodyName, sections, standalone: [...standaloneBy.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), unplaced }
 }

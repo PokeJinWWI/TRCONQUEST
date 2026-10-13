@@ -13,6 +13,7 @@
 
 import { UNREST_SOL_CAP, UNREST_SOL_PER_POINT } from '../data/demolitionData'
 import { GOOD_IDS, GOODS, priceFloor, priceCeiling, type GoodId } from './goods'
+import { LIFE_SUPPORT_GROUP_ID, habitatPenalty, lifeSupportScale } from './habitability'
 import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor, type NeedTier, type NeedGroup } from './species'
 import { buildingLevelsByDistrict, districtBonus, withDistrictLevel } from './districts'
 import { DEVASTATION_OUTPUT_LOSS } from '../data/defenseData'
@@ -100,7 +101,10 @@ export const JOB_SCALE = 0.12
 // smoothly. It drives population growth (well-off pops grow, immiserated ones
 // shrink) and education drift (wealthier pops get schooled, qualifying for
 // higher jobs — feeding back into the labor market).
-const SOL_TIER_WEIGHT: Record<NeedTier, number> = { basic: 0.4, everyday: 0.25, healthcare: 0.15, comfort: 0.12, luxury: 0.08 }
+// In this era having food, water, clothes and a roof is the FLOOR, not a good life: basic and everyday together lift the score only to
+// one half, and healthcare, comfort and luxury carry the rest (they were 0.4/0.25/0.15/0.12/0.08, which scored a pop that merely ate
+// and dressed as already well off).
+const SOL_TIER_WEIGHT: Record<NeedTier, number> = { basic: 0.28, everyday: 0.22, healthcare: 0.2, comfort: 0.18, luxury: 0.12 }
 const SOL_SMOOTHING = 0.5
 // Growth is SLOW and realistic. Ticks are monthly (12/year), so at the very top
 // of the SoL scale a population grows on the order of ~2–3%/year, and real
@@ -445,8 +449,10 @@ function priceResponse(group: NeedGroup, tier: NeedTier, prices: Record<GoodId, 
 // makes: at 1 the seeded economy produced 5–9× its people's needs, so most of
 // it could never sell and prices sank to their floors.
 export const NEED_SCALE = 1.5
-function groupTarget(group: NeedGroup, popSize: number, wealthFactor: number): number {
-  return group.base * NEED_SCALE * wealthFactor * popSize
+function groupTarget(group: NeedGroup, popSize: number, wealthFactor: number, habitability?: number): number {
+  // Life support is sized by the world: base x (1 - habitability), nothing on a fully habitable one.
+  const scale = group.id === LIFE_SUPPORT_GROUP_ID ? lifeSupportScale(habitability) : 1
+  return group.base * NEED_SCALE * wealthFactor * popSize * scale
 }
 
 // Buy across a need group's substitutable goods to satisfy `target` need-units,
@@ -522,6 +528,8 @@ function tickWorld(
   treasuryAvailable: number,
   poolByCountry: Map<string, number>,
   corpCountry: Map<string, string>,
+  // State-owned companies: their builds draw on the treasury, not the pool.
+  stateCorps: Set<string>,
   // Currency rate (E$ value) per country id — for converting a cross-border
   // construction draw from the host world's currency into the financing
   // country's currency (Stage 3 FX). Same-country builds convert 1:1.
@@ -686,7 +694,8 @@ function tickWorld(
       for (const tier of NEED_TIERS) {
         const wf = tierWealthFactor(tier, pop.standardOfLiving) * wealthBoost(tier, pop.wealth, income)
         for (const group of species.needs[tier]) {
-          const target = groupTarget(group, pop.populationSize, wf) * priceResponse(group, tier, prices, adoptOf)
+          if (group.id === LIFE_SUPPORT_GROUP_ID && lifeSupportScale(world.habitability) <= 0) continue
+          const target = groupTarget(group, pop.populationSize, wf, world.habitability) * priceResponse(group, tier, prices, adoptOf)
           const totalW = group.goods.reduce((s, g) => s + g.weight, 0) || 1
           for (const g of group.goods) {
             const fullWant = (target * g.weight) / totalW
@@ -831,7 +840,8 @@ function tickWorld(
         let tierWant = 0
         for (const group of groups) {
           const response = priceResponse(group, tier, prices, adoptOf)
-          const target = groupTarget(group, pop.populationSize, wf) * response
+          if (group.id === LIFE_SUPPORT_GROUP_ID && lifeSupportScale(world.habitability) <= 0) continue
+          const target = groupTarget(group, pop.populationSize, wf, world.habitability) * response
           const res = consumeGroup(group, target, budget, prices, finalFulfill, govShareOf, adoptOf)
           // Adoption-reduced want (an unadopted good is not a missed need) — but
           // measured against the want BEFORE dear prices cut it: going without
@@ -864,6 +874,8 @@ function tickWorld(
     for (const tier of NEED_TIERS) solRaw += SOL_TIER_WEIGHT[tier] * nextSatisfaction[tier]
     // People a demolition displaced are unhappy for a while (absent = none: nothing moves).
     if (world.displacedUnrest) solRaw = Math.max(0, solRaw - Math.min(UNREST_SOL_CAP, world.displacedUnrest * UNREST_SOL_PER_POINT))
+    // A hostile world costs a little just to live on (capped; none where habitability is 1).
+    solRaw = Math.max(0, solRaw - habitatPenalty(world.habitability))
     const standardOfLiving = clamp(pop.standardOfLiving * (1 - SOL_SMOOTHING) + solRaw * SOL_SMOOTHING, 0, 1)
     // Savings beyond a buffer are deposited and lent on: a share goes into the
     // nation's investment pool each month, financing new construction — the
@@ -1006,7 +1018,7 @@ function tickWorld(
       const remaining = o.cost - o.progress
       if (remaining <= 0) continue
       const pointsWanted = Math.min(perOrder, remaining)
-      if (o.owner.kind === 'corporation') {
+      if (o.owner.kind === 'corporation' && !stateCorps.has(o.owner.corporationId)) {
         // Private construction is financed by the investment pool of the owning
         // company's HOME country — the capital market that backs it — not the
         // world it's building on. So a FOREIGN company building here draws on its
@@ -1218,6 +1230,9 @@ export function tickEconomy(
   // draws from later-processed nations are reflected.
   const poolByCountry = new Map(countries.map((c) => [c.id, Math.max(0, c.investmentPool)]))
   const corpCountry = new Map(corporations.map((c) => [c.id, c.countryId]))
+  // State-owned companies are the government: their builds are paid from the
+  // treasury, never from the private investment pool.
+  const stateCorps = new Set(corporations.filter((c) => c.kind === 'state').map((c) => c.id))
   // Currency rate per country (E$ value) for cross-border construction FX.
   const fxRate = new Map(countries.map((c) => [c.id, c.currency?.rate ?? 1]))
 
@@ -1260,7 +1275,7 @@ export function tickEconomy(
       // profit) to attract investment (state/economyStore.setSpecialEconomicZone).
       const sez = w.specialEconomicZone
       const effTaxRate = sez?.active ? country.taxRate * (1 - sez.taxDiscount) : country.taxRate
-      const res = tickWorld(w, effTaxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR)
+      const res = tickWorld(w, effTaxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, stateCorps, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR)
       runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
       stockpileSpend += res.stockpileSpend
@@ -1793,10 +1808,14 @@ export function constructionCapacityOf(world: World): number {
   return worldConstructionCapacity(world.buildings)
 }
 
+// Buildings that take no district slot: a spaceport is just a building that stands wherever it is put (in a city or out in the
+// open), so it never fills, or is refused by, the Urban district.
+export const SLOT_FREE_RECIPES: ReadonlySet<string> = new Set(['spaceport'])
+
 export function districtUsage(world: World): Record<DistrictType, number> {
   const used = Object.fromEntries(DISTRICT_TYPES.map((d) => [d, 0])) as Record<DistrictType, number>
-  for (const b of world.buildings) used[districtOfRecipe(b.recipeId)] += b.level
-  for (const o of world.constructionQueue) if (!o.district) used[districtOfRecipe(o.recipeId)] += 1
+  for (const b of world.buildings) if (!SLOT_FREE_RECIPES.has(b.recipeId)) used[districtOfRecipe(b.recipeId)] += b.level
+  for (const o of world.constructionQueue) if (!o.district && !SLOT_FREE_RECIPES.has(o.recipeId)) used[districtOfRecipe(o.recipeId)] += 1
   used.urban += world.foreignSlots ?? 0
   used.military += world.militarySlots ?? 0
   return used
@@ -1804,6 +1823,7 @@ export function districtUsage(world: World): Record<DistrictType, number> {
 
 // Whether there's room in the target district to queue another building.
 export function canBuild(world: World, recipeId: string): boolean {
+  if (SLOT_FREE_RECIPES.has(recipeId)) return true
   const d = districtOfRecipe(recipeId)
   return districtUsage(world)[d] < world.districtCapacity[d]
 }

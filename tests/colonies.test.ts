@@ -260,7 +260,9 @@ console.log('\n=== 7. The starting worlds are colonies, and colonies follow thei
   const colonies = useColonyStore.getState().colonies
   const owned = Object.keys(useTerritoryStore.getState().bodyOwner)
   check('every world owned at the start is a planetary colony', owned.length > 0 && owned.every((b) => colonies[b]?.stage === 'planetary'), owned.filter((b) => !colonies[b]).join(','))
-  check('...each with a planetary outpost on its ground map', owned.every((b) => (groundKeySurface(b)?.keySlots ?? []).some((k) => k.node === colonies[b].outpostNode)))
+  // A settled world (with a capital or cities) has no outpost: its cities are its key nodes.
+  const settled = (b: string) => (groundKeySurface(b)?.keySlots ?? []).some((k) => k.kind === 'capital' || k.kind === 'city')
+  check('...each with a planetary outpost on its ground map, unless it is settled (no outpost beside its cities)', owned.every((b) => (groundKeySurface(b)?.keySlots ?? []).some((k) => k.node === colonies[b].outpostNode) !== settled(b)))
   useTerritoryStore.getState().cedeBody('Luna', VENUS)
   check('ceding a world by treaty hands its colony over with it', useColonyStore.getState().colonies['Luna'] && useTerritoryStore.getState().bodyOwner['Luna'] === VENUS)
 }

@@ -1,3 +1,11 @@
+import { stepAbstractMigration } from '../economy-abstract/migration'
+import { WAVE_EVENT_MIN_MILLIONS, type MigrationFlow } from '../economy/migrationRules'
+import { treatyLanes } from '../scene/migrationPaths'
+import { distressByBody } from '../scene/migrationDistress'
+import { useMigrationStore } from './migrationStore'
+import { useDiplomacyStore } from './diplomacyStore'
+import { useGameTimeStore } from './gameTimeStore'
+import { useTreatyStore } from './treatyStore'
 import { planDistrictLevel, planPlacement, recordLevel, recordPlacement } from '../scene/placementOrders'
 import { syncSiteAccess } from '../scene/infrastructureOrders'
 import { usePlacementStore } from './placementStore'
@@ -272,6 +280,8 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     const stocks: Record<string, Stockpile> = {}
     const ids = Object.keys(byCountry)
     const series: Record<string, { gdp: number; realGdp: number; inflation: number; debtToGdp: number; rate: number }[]> = {}
+    const migrationFlows: MigrationFlow[][] = []
+    const distress = distressByBody()
     for (const id of ids) {
       // A body that changed hands takes its unfinished projects with it.
       const s = byCountry[id]
@@ -325,12 +335,36 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
         for (const t of TECH_TREES) research[id][t] += r.researchByTree[t]
         series[id].push({ gdp: res.state.gdp, realGdp: res.state.realGdp, inflation: res.state.inflation, debtToGdp: r.debtToGdp, rate: res.state.currency.rate })
       }
+      // Then people move (economy-abstract/migration.ts), by the laws and treaties of the month that just ran.
+      const lanes = treatyLanes(useTreatyStore.getState().treaties)
+      const moved = stepAbstractMigration(Object.values(worlds), {
+        ownerOf: (b) => (controllerOf(b, owners, controllers) === owners[b] ? owners[b] : undefined),
+        laws: useMigrationStore.getState().laws,
+        treatyPairs: new Set(lanes.lanes),
+        treatyQuota: lanes.quota,
+        atWar,
+        distress: distress,
+        launchOf: (b) => {
+          const owner = owners[b]
+          const n = owner ? worldsOf(owner, worlds, owners, controllers).length : 0
+          return owner && reports[owner] && n > 0 ? reports[owner].launch / n : Infinity
+        },
+      })
+      for (const [b, d] of Object.entries(moved.deltas)) worlds[b] = { ...worlds[b], population: Math.max(0, worlds[b].population + d) }
+      migrationFlows.push(moved.flows)
     }
     for (const id of ids) {
       if (series[id].length > HISTORY_LENGTH) series[id].splice(0, series[id].length - HISTORY_LENGTH)
       history[id] = series[id]
     }
     set({ byCountry, reports, history, worlds, tick: store.tick + steps })
+    migrationFlows.forEach((flows, i) => {
+      useMigrationStore.getState().record(store.tick + i + 1, flows)
+      for (const f of flows.filter((x) => x.wave && x.amount >= WAVE_EVENT_MIN_MILLIONS)) {
+        const owner = owners[f.from]
+        useDiplomacyStore.getState().pushEvent('migration-wave', owner ? [owner] : [], `${Math.round(f.amount * 1000) / 1000}M people are fleeing ${f.from} for ${f.to}`, useGameTimeStore.getState().simDays, { bodyName: f.from })
+      }
+    })
 
     // Write the stockpiles back and hand research to the tech trees.
     const res = useResourceStore.getState()

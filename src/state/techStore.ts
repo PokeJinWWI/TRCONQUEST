@@ -46,12 +46,17 @@ function withPrerequisites(ids: string[]): string[] {
 }
 export const DEFAULT_RESEARCHED = withPrerequisites([...STARTING_BASE_TECHS.slice(0, 2), ...STARTING_DRIVE_TECHS, ...startingCommsTech(STARTING_DRIVE_TECHS), ...STARTING_BASE_TECHS.slice(2)])
 
-function freshTechState(): TechState {
+// Techs a nation starts with on top of the common ones: the old empire's space-elevator works (the Ring of Heaven's tethers) are Earth's.
+export const COUNTRY_STARTING_TECHS: Record<string, readonly string[]> = { earth: withPrerequisites(['orbital-tethers']) }
+
+function freshTechState(countryId?: string): TechState {
   return {
     researchPoints: { physics: 0, society: 0, engineering: 0 },
-    researched: new Set(DEFAULT_RESEARCHED),
+    researched: new Set([...DEFAULT_RESEARCHED, ...(countryId ? COUNTRY_STARTING_TECHS[countryId] ?? [] : [])]),
   }
 }
+// Reads for a nation with extras must not allocate each time (see UNTOUCHED_COUNTRY_STATE below).
+const UNTOUCHED_EXTRA: Record<string, TechState> = Object.fromEntries(Object.keys(COUNTRY_STARTING_TECHS).map((id) => [id, freshTechState(id)]))
 
 // A single stable reference returned for any country not yet in
 // `byCountry` — `stateFor` must NOT construct a fresh object on every call
@@ -117,11 +122,11 @@ export const useTechStore = create<TechStore>((set, get) => ({
     if (on) for (const countryId of Object.keys(get().byCountry)) get().processQueue(countryId)
   },
 
-  stateFor: (countryId) => get().byCountry[countryId] ?? UNTOUCHED_COUNTRY_STATE,
+  stateFor: (countryId) => get().byCountry[countryId] ?? UNTOUCHED_EXTRA[countryId] ?? UNTOUCHED_COUNTRY_STATE,
 
   grantResearch: (countryId, category, amount) =>
     set((state) => {
-      const current = state.byCountry[countryId] ?? freshTechState()
+      const current = state.byCountry[countryId] ?? freshTechState(countryId)
       return {
         byCountry: {
           ...state.byCountry,
@@ -133,7 +138,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
   researchNode: (countryId, nodeId, viaShortcut = false) => {
     const node = findTech(nodeId)
     if (!node) return false
-    const current = get().byCountry[countryId] ?? freshTechState()
+    const current = get().byCountry[countryId] ?? freshTechState(countryId)
     const freeResearchMode = get().freeResearchMode
     if (!canResearch(node, current.researched, current.researchPoints[node.category], freeResearchMode, viaShortcut)) return false
     if (get().researchBlock(countryId, nodeId, viaShortcut)) return false
@@ -167,7 +172,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
   },
 
   queueTech: (countryId, nodeId) => {
-    const current = get().byCountry[countryId] ?? freshTechState()
+    const current = get().byCountry[countryId] ?? freshTechState(countryId)
     const queue = current.queue ?? []
     const add = queuePlan(nodeId, current.researched, queue)
     if (add.length === 0) return
@@ -199,7 +204,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
   grantAllTech: (countryIds) =>
     set((state) => {
       const byCountry = { ...state.byCountry }
-      for (const id of countryIds) byCountry[id] = { ...(byCountry[id] ?? freshTechState()), researched: new Set(allTechIds()), queue: [] }
+      for (const id of countryIds) byCountry[id] = { ...(byCountry[id] ?? freshTechState(id)), researched: new Set(allTechIds()), queue: [] }
       return { byCountry }
     }),
 
@@ -207,7 +212,7 @@ export const useTechStore = create<TechStore>((set, get) => ({
     if (!usePlayerStore.getState().sandbox || !findTech(nodeId)) return false
     const setResearched = (countryId: string, change: (have: Set<string>) => void) =>
       set((state) => {
-        const current = state.byCountry[countryId] ?? freshTechState()
+        const current = state.byCountry[countryId] ?? freshTechState(countryId)
         const researched = new Set(current.researched)
         change(researched)
         return { byCountry: { ...state.byCountry, [countryId]: { ...current, researched, queue: current.queue ? queueWithoutResearched(current.queue, researched) : current.queue } } }

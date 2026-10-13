@@ -5,6 +5,7 @@
 // sweetener in another, even when they point in opposite directions. A
 // treaty is named, runs for a chosen binding period, and two nations can
 // hold any number of separate treaties simultaneously.
+import { labourPressureOf } from './labourPressure'
 import { getCountry } from '../data/countryData'
 import {
   articleCostFor,
@@ -37,7 +38,18 @@ function nameOf(id: string): string {
 // bundle — the sum of every article's cost for them. Pure, so the AI and the
 // player's UI share one rule; exported for tests.
 export function bundleCostForReceiver(articles: TreatyArticle[], receiverId: string): number {
-  return articles.reduce((sum, a) => sum + articleCostFor(a, receiverId), 0)
+  return articles.reduce((sum, a) => sum + articleCostFor(a, receiverId) + migrationAppetite(a, receiverId), 0)
+}
+
+// A migration article weighs on a nation by its labour market: short of hands, it welcomes incomers and hates to lose its own; short of
+// work, the other way round. 0 for every other article, and where the economy has nothing to say.
+export const MIGRATION_APPETITE_SCALE = 25
+export function migrationAppetite(article: TreatyArticle, receiverId: string): number {
+  if (article.kind !== 'migration') return 0
+  const pressure = labourPressureOf(receiverId)
+  const accepts = article.targetId === receiverId || (!!article.mutual && article.sourceId === receiverId)
+  const sends = article.sourceId === receiverId
+  return (accepts ? -pressure : 0) * MIGRATION_APPETITE_SCALE + (sends ? pressure : 0) * (MIGRATION_APPETITE_SCALE / 2)
 }
 
 function validateArticle(article: TreatyArticle, a: string, b: string): string | null {
@@ -84,6 +96,11 @@ function validateArticle(article: TreatyArticle, a: string, b: string): string |
       if (org.memberIds.includes(article.joiningId)) return 'Already a member'
       return null
     }
+    case 'migration':
+      if (article.sourceId === article.targetId) return 'The two sides must differ'
+      if (!pair.has(article.sourceId) || !pair.has(article.targetId)) return 'Migration must be between these two nations'
+      if (article.quota !== undefined && !(article.quota > 0)) return 'A quota must be positive'
+      return null
     case 'construction-right':
     case 'access-right':
     case 'territorial-recognition':

@@ -80,9 +80,9 @@ export const COUNTRIES: Country[] = [
     color: '#4a6fa5', // a deep steel blue, distinct from Venus/Orion
     capitalStarId: 'sol',
     capitalBodyName: 'Earth',
-    capitalCityName: 'Chengyu Megalopolis',
+    capitalCityName: 'Western China Megalopolis',
     capitalCityNative: '成渝',
-    capitalCityAt: [105.4, 30.0], // the Chengdu–Chongqing megalopolis, Sichuan Basin
+    capitalCityAt: [104.8, 30.4], // the Chengdu–Chongqing megalopolis, Sichuan Basin
     // Earth's four surviving megacities (vast urban sprawls) and the old empire's
     // spaceports at their real launch sites. Each placed at its true coordinates,
     // snapped to the nearest land node and named uniquely (not pool-named). The
@@ -101,9 +101,6 @@ export const COUNTRIES: Country[] = [
       { name: 'Malindi Space Centre', at: [39.5, -3.5], kind: 'spaceport' }, // coastal Kenya, near Nairobi
       { name: 'Edwards Spaceport', at: [-117.9, 34.9], kind: 'spaceport' }, // Edwards AFB, Mojave
       { name: 'Biak Spaceport', at: [136.1, -1.2], kind: 'spaceport' }, // equatorial Indonesia
-      // A frontier settlement key node (the colony outpost snaps to it, so it is
-      // named for its real place instead of the city-name pool).
-      { name: 'Strasbourg', at: [7.75, 48.58], kind: 'outpost' }, // Alsace
     ],
   },
 ]

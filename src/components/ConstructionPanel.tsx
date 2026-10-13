@@ -25,7 +25,7 @@ const RECIPE_GROUPS: { group: BuildingGroup; items: (typeof ALL_RECIPES)[number]
   for (const r of ALL_RECIPES) {
     // Corporate HQs aren't player-built — companies raise and relocate their own
     // (corporationAI). The state never constructs them.
-    if (r.id === 'corporateHq') continue
+    if (r.autoBuilt) continue
     const g = buildingGroup(r.id)
     if (!buckets.has(g)) buckets.set(g, [])
     buckets.get(g)!.push(r)

@@ -201,6 +201,14 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
       ])
       return
     }
+    if (newKind === 'migration') {
+      const d = direction as string
+      setPending([
+        ...pending,
+        d === 'both' ? { kind: 'migration', sourceId: playerId, targetId: id, mutual: true } : d === 'mine' ? { kind: 'migration', sourceId: playerId, targetId: id } : { kind: 'migration', sourceId: id, targetId: playerId },
+      ])
+      return
+    }
     if (newKind === 'treaty-port') {
       if (!portBody) return
       setPending([
@@ -373,6 +381,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
                     'transfer-subject',
                     'ship-transfer',
                     'join-power-bloc',
+                    'migration',
                   ] as ArticleKind[]
                 ).map((k) => (
                   <option key={k} value={k}>
@@ -401,6 +410,13 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
                     ))}
                   </select>
                 </>
+              )}
+              {newKind === 'migration' && (
+                <select className="econ-method-select" value={direction as string} onChange={(e) => setDirection(e.target.value as 'mine' | 'theirs')}>
+                  <option value="mine">Your people may migrate to them</option>
+                  <option value="theirs">Their people may migrate to you</option>
+                  <option value="both">People may move freely both ways</option>
+                </select>
               )}
               {newKind === 'investment-rights' && (
                 <select className="econ-method-select" value={direction} onChange={(e) => setDirection(e.target.value as 'mine' | 'theirs')}>

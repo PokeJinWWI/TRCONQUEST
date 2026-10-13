@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useTerritoryStore } from '../state/territoryStore'
 import { groundPortSurface, useDefenseStore } from '../state/defenseStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -38,9 +38,20 @@ export function useGroundKeySurface(bodyName: string, withInstallations = true):
       .map((i) => i.id)
       .join(),
   )
-  return useMemo(() => {
+  const prev = useRef<BodySurface | null>(null)
+  const next = useMemo(() => {
     const surface = groundPortSurface(bodyName, owners)
     if (!surface || !withInstallations || installations.length === 0) return surface
     return withInstallationKeys(surface, installations, useGameTimeStore.getState().simDays)
   }, [bodyName, owners, complexWorlds, simpleWorld, installations, activeKey, withInstallations, outpostNode, placed, levels, seeded, zones, reserves, custom, established, ports])
+  // The same ground is the same object: the economy's month (and many other inputs above) rebuild the surface with nothing on
+  // the ground changed, and every new object makes the globe recolour all of its nodes.
+  if (next && prev.current && sameGround(prev.current, next)) return prev.current
+  prev.current = next
+  return next
+}
+
+const slotSig = (s: BodySurface) => s.keySlots.map((k) => `${k.node}${k.kind}${k.name ?? ''}${k.site ?? ''}${k.operator ?? ''}`).join(',')
+function sameGround(a: BodySurface, b: BodySurface): boolean {
+  return a === b || (a.bodyName === b.bodyName && a.terrain === b.terrain && a.landValue === b.landValue && slotSig(a) === slotSig(b))
 }

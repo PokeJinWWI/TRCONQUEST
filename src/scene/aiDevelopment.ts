@@ -6,6 +6,11 @@ import { FREIGHT_PER_SLOT, ROUTE_SPECS } from '../data/infrastructureData'
 import { atWar } from '../state/diplomacyStore'
 import { siteOwner } from '../state/locationStore'
 import { useOrbitalStore } from '../state/orbitalStore'
+import { useStarbaseStore } from '../state/starbaseStore'
+import { useGameTimeStore } from '../state/gameTimeStore'
+import { useTechStore } from '../state/techStore'
+import { STARBASE_MODULES } from '../data/starbaseData'
+import { freeModuleSlots, isStarbaseActive, starbaseFirepower, stationPower } from './starbaseLogic'
 import { usePlacementStore } from '../state/placementStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { accessOnBody, buildRoute, planRoute } from './infrastructureOrders'
@@ -15,7 +20,6 @@ import { isArmed } from './armyLogic'
 import { systemOfShip } from './surveyLogic'
 import { bodyStarId } from './territory'
 import { useShipStore } from '../state/shipStore'
-import { buildFacility } from './orbitalOrders'
 import { bodyOfZone } from './orbits'
 import { usedSlots } from './placementOrders'
 import { defaultGeo } from './sovereignty'
@@ -56,7 +60,8 @@ export function threatenedBodiesOf(countryId: string, enemies: (a: string, b: st
     const star = bodyStarId(body)
     if (!star) continue
     const enemyNear = ships.some((s) => enemies(countryId, s.ownerId) && isArmed(s) && systemOfShip(s) === star)
-    if (!enemyNear || useOrbitalStore.getState().facilities.some((f) => f.ownerId === countryId && f.kind === 'defense' && bodyOfZone(f.zone) === body)) continue
+    const armedStation = useStarbaseStore.getState().starbases.some((sb) => sb.ownerId === countryId && !!sb.zone && bodyOfZone(sb.zone) === body && starbaseFirepower(sb) > 0)
+    if (!enemyNear || armedStation || useOrbitalStore.getState().facilities.some((f) => f.ownerId === countryId && f.kind === 'defense' && bodyOfZone(f.zone) === body)) continue
     const control = orbitalControlNow(body).controller
     if (control && enemies(countryId, control)) continue
     out.push(body)
@@ -103,9 +108,25 @@ export function connectSite(countryId: string, siteId: string): { ok: true } | {
   return { ok: false, reason: reasons.find((r) => /^Not enough/.test(r)) ?? reasons.find((r) => !/^Cannot build there/.test(r)) ?? reasons[0] ?? 'no hub to reach' }
 }
 
+// Arms a threatened world from orbit: a station in its low orbit if the nation has none, then power for it, then guns (missiles once
+// researched), then a bigger hull. One step a pass, by the same rules as the player's (starbaseStore).
 export function buildDefensePlatform(countryId: string, bodyName: string): { ok: true } | { ok: false; reason: string } {
-  const built = buildFacility(countryId, `${bodyName}~low`, 'defense')
-  return built.ok ? { ok: true } : built
+  const zone = `${bodyName}~low`
+  const store = useStarbaseStore.getState()
+  const now = useGameTimeStore.getState().simDays
+  const mine = store.starbases.find((sb) => sb.zone === zone && sb.ownerId === countryId)
+  if (!mine) return store.buildOrbitStation(countryId, zone, now)
+  if (!isStarbaseActive(mine, now)) return { ok: false, reason: 'The station is still being built' }
+  const mods = mine.modules ?? []
+  const power = stationPower(mine)
+  const researched = useTechStore.getState().stateFor(countryId).researched
+  // Unpowered guns do nothing: add a solar array when the next module would not be covered.
+  if (power.demand + 2 > power.supply && mods.filter((m) => m === 'solar-array').length < (STARBASE_MODULES['solar-array'].max ?? 1) && freeModuleSlots(mine) > 0) return store.buildModule(mine.id, 'solar-array', now)
+  if (freeModuleSlots(mine) > 0) {
+    const gun = researched.has('missile-platforms') && !mods.includes('missile-battery') ? 'missile-battery' : 'defense-battery'
+    if (!mods.includes(gun)) return store.buildModule(mine.id, gun, now)
+  }
+  return store.upgradeTier(mine.id, now)
 }
 
 export function expandSettlement(countryId: string, siteId: string): { ok: true } | { ok: false; reason: string } {

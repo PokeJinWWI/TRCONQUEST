@@ -1,6 +1,7 @@
 import { claimSystemForStarbase, decideConstructionNow } from '../scene/sovereignty'
 import { create } from 'zustand'
 import { STARBASE_BUILD_DAYS, STARBASE_COST, STARBASE_INTEGRITY, STARBASE_MODULES, STARBASE_TIERS, STARBASE_TIER_ORDER, type StarbaseModuleType } from '../data/starbaseData'
+import { bodyStarId, ringBlock, stationBuildBlock, zoneBody } from '../scene/stationRules'
 import { useResourceStore } from './resourceStore'
 import { starbaseAnchorBody, starbaseInfluenceCost, starbasesAt, starbaseTierOf, starbaseModulesOf, freeModuleSlots, starbaseMaxIntegrity, type Starbase } from '../scene/starbaseLogic'
 import { cargoCovers, cargoMinus } from '../scene/cargoLogic'
@@ -15,6 +16,7 @@ import { usePlayerStore } from './playerStore'
 import { formatDate, simDaysToDate } from './gameTimeStore'
 import { ownerDisplay } from '../data/countryRoster'
 import { findStar } from '../data/starData'
+import { findTech } from '../data/techData'
 import { starbaseShortReason, starbaseStartedText } from '../scene/starbaseNotices'
 import { getCountry } from '../data/countryData'
 import { clusterOfStar, klyBetweenClusters } from '../scene/clusters'
@@ -34,6 +36,11 @@ interface StarbaseState {
   applyDamage: (updates: Record<string, number>, destroyedIds: string[]) => void
   upgradeTier: (starbaseId: string, simDays: number) => StarbaseResult
   buildModule: (starbaseId: string, moduleType: StarbaseModuleType, simDays: number) => StarbaseResult
+  // Takes a module down (no refund): the modules after it keep their order, so power is re-shared.
+  removeModule: (starbaseId: string, moduleType: StarbaseModuleType) => StarbaseResult
+  renameStation: (starbaseId: string, name: string) => void
+  // Founds an ORBITAL station in a body's zone ("Earth~low"): paid from the nation's stockpile, ready after the outpost build time.
+  buildOrbitStation: (countryId: string, zone: string, simDays: number) => StarbaseResult
   // Add a fully-built Starbase outright (seeding — e.g. Earth's Ring of Heaven).
   addStarbase: (sb: Omit<Starbase, 'id'> & { id?: string }) => string
 }
@@ -88,7 +95,8 @@ export function canBuildStarbase(countryId: string, starId: string, starbases: S
   // A system's sovereign (a recognized system claim; owning a Starbase never makes one) may refuse.
   const rights = decideConstructionNow(countryId, { kind: 'system', id: starId }, 'starbase')
   if (!rights.allowed) return { ok: false, reason: rights.reason }
-  const here = starbasesAt(starId, starbases)
+  // Orbital stations circling a world are not the system station: only stations at the star count here.
+  const here = starbasesAt(starId, starbases).filter((sb) => !sb.zone)
   if (here.some((sb) => sb.ownerId === countryId)) return { ok: false, reason: 'Already have a Starbase here' }
   // A nation doesn't build a Starbase to contest ground it's already at war
   // over by other means — refuse where it would just be free-riding into an
@@ -145,6 +153,12 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
     const idx = STARBASE_TIER_ORDER.indexOf(cur)
     const next = STARBASE_TIER_ORDER[idx + 1]
     if (!next) return { ok: false, reason: 'Already at the highest tier' }
+    const need = STARBASE_TIERS[next].requiresTech
+    if (need && !useTechStore.getState().stateFor(sb.ownerId).researched.has(need)) return { ok: false, reason: `Needs ${findTech(need)?.name ?? need} researched` }
+    if (next === 'orbital-ring') {
+      const block = ringBlock(sb.zone)
+      if (block) return { ok: false, reason: block }
+    }
     const cost = STARBASE_TIERS[next].upgradeCost
     if (!spendResources(sb.ownerId, cost)) {
       return { ok: false, reason: `Needs ${Object.entries(cost).map(([id, n]) => `${n} ${id}`).join(', ')}` }
@@ -156,7 +170,10 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
   buildModule: (starbaseId, moduleType) => {
     const sb = get().starbases.find((s) => s.id === starbaseId)
     if (!sb) return { ok: false, reason: 'No such starbase' }
-    if (starbaseModulesOf(sb).includes(moduleType)) return { ok: false, reason: 'Already has that module' }
+    const def = STARBASE_MODULES[moduleType]
+    if (starbaseModulesOf(sb).filter((m) => m === moduleType).length >= (def.max ?? 1)) return { ok: false, reason: (def.max ?? 1) > 1 ? `At most ${def.max} ${def.label} modules` : 'Already has that module' }
+    if (def.requiresTech && !useTechStore.getState().stateFor(sb.ownerId).researched.has(def.requiresTech)) return { ok: false, reason: `Needs ${findTech(def.requiresTech)?.name ?? def.requiresTech} researched` }
+    if (moduleType === 'space-elevator-tether' && !sb.zone) return { ok: false, reason: 'A tether hangs from a station circling a world, not one at a star' }
     if (freeModuleSlots(sb) <= 0) return { ok: false, reason: 'No free module slot (upgrade the tier)' }
     if (!spendResources(sb.ownerId, STARBASE_MODULES[moduleType].cost)) {
       return { ok: false, reason: `Needs ${Object.entries(STARBASE_MODULES[moduleType].cost).map(([id, n]) => `${n} ${id}`).join(', ')}` }
@@ -169,6 +186,41 @@ export const useStarbaseStore = create<StarbaseState>((set, get) => ({
         return moduleType === 'defense-battery' ? { ...withModule, integrity: starbaseMaxIntegrity(withModule) } : withModule
       }),
     }))
+    return { ok: true }
+  },
+  removeModule: (starbaseId, moduleType) => {
+    const sb = get().starbases.find((s) => s.id === starbaseId)
+    if (!sb) return { ok: false, reason: 'No such starbase' }
+    const mods = starbaseModulesOf(sb)
+    const at = mods.lastIndexOf(moduleType)
+    if (at < 0) return { ok: false, reason: 'It has no such module' }
+    set((s) => ({
+      starbases: s.starbases.map((x) => {
+        if (x.id !== starbaseId) return x
+        const next = { ...x, modules: mods.filter((_, i) => i !== at) }
+        return { ...next, integrity: Math.min(next.integrity, starbaseMaxIntegrity(next)) }
+      }),
+    }))
+    return { ok: true }
+  },
+  renameStation: (starbaseId, name) => set((s) => ({ starbases: s.starbases.map((x) => (x.id === starbaseId ? { ...x, name: name.trim() ? name.trim().slice(0, 40) : undefined } : x)) })),
+  buildOrbitStation: (countryId, zone, simDays) => {
+    const block = stationBuildBlock(countryId, zone, get().starbases)
+    if (block) return { ok: false, reason: block }
+    if (!spendResources(countryId, STARBASE_COST)) return { ok: false, reason: `Needs ${Object.entries(STARBASE_COST).map(([id, n]) => `${n} ${id}`).join(', ')}` }
+    counter += 1
+    const starId = bodyStarId(zoneBody(zone))
+    const sb: Starbase = {
+      id: `station-${zone}-${countryId}-${counter}-${Math.round(simDays)}`,
+      starId: starId ?? 'sol',
+      ownerId: countryId,
+      zone,
+      integrity: STARBASE_TIERS.outpost.integrity,
+      readySimDays: simDays + STARBASE_TIERS.outpost.buildDays,
+      tier: 'outpost',
+      modules: [],
+    }
+    set({ starbases: [...get().starbases, sb] })
     return { ok: true }
   },
   addStarbase: (sb) => {

@@ -6,6 +6,8 @@ import { COUNTRIES } from '../src/data/countryData'
 import { KEY_MIN_SEPARATION_CELLS, TERRAIN } from '../src/data/groundData'
 import { depositTables } from '../src/data/deposits'
 import { CLASS_PROFILE, LOCATION_KINDS } from '../src/data/locationData'
+import { EARTH_ANCHORS } from '../src/data/earthEconomicGeography'
+import { fromLonLat } from '../src/scene/mapProjection'
 import { PLANETS_BY_STAR } from '../src/scene/planetData'
 import { bodyDevelopment, beltLocations, bodyOfLocation, clearLocationCache, locationById, locationsOf } from '../src/scene/locations'
 import { bodyGroundInfoAny, clearSurfaceCache, surfaceOf, terrainAt } from '../src/scene/planetTerrain'
@@ -41,25 +43,49 @@ console.log('\n=== 1. Deterministic, with stable ids ===')
   const venusFirst = JSON.stringify(locationsOf('Venus'))
   locationsOf('Mars')
   check('a body\'s sites do not depend on which bodies were generated before it', venusFirst === JSON.stringify(first[2]))
-  // Pinned: a change here means every site id on that body moved (a save-breaking change). Farmland was appended (its own stream), so the first five counts are the original ones.
-  check('Mars: pinned site counts', counts('Mars') === 'resource:3 settlement:2 industrial:2 infrastructure:1 strategic:1 agricultural:2', counts('Mars'))
-  check('Earth: pinned site counts', counts('Earth') === 'resource:4 settlement:4 industrial:3 infrastructure:6 strategic:2 agricultural:3', counts('Earth'))
+  // Pinned: a change here means every site id on that body moved (a save-breaking change). Farmland and the extra settlements were appended (their own streams), so Mars's first ids are the original ones; Earth is hand-placed (data/earthEconomicGeography.ts).
+  check('Mars: pinned site counts', counts('Mars') === 'resource:3 settlement:37 industrial:2 infrastructure:1 strategic:1 agricultural:2', counts('Mars'))
+  check('Earth: pinned site counts', counts('Earth') === 'resource:25 settlement:56 industrial:16 infrastructure:6 strategic:2 agricultural:16', counts('Earth'))
 }
 
 console.log('\n=== 2. Valid placement ===')
 {
   const mesh = surfaceMesh()
-  const minSep = (KEY_MIN_SEPARATION_CELLS - 1) * mesh.fineSpacingRad
   for (const body of ['Mars', 'Earth', 'Venus', 'Luna', 'Ceres']) {
     const sites = locationsOf(body)
     const surface = surfaceOf(body, 'wild')
     check(`${body}: ids are unique and name their body`, new Set(sites.map((s) => s.id)).size === sites.length && sites.every((s) => bodyOfLocation(s.id) === body && s.id.startsWith(`${body}#${s.kind}-`)))
     check(`${body}: every site stands on walkable ground`, sites.every((s) => s.node !== null && surface.landComponent[s.node] >= 0 && TERRAIN[terrainAt(surface, s.node)].passable === 'all'))
+    // Earth's hand-placed sites of different kinds may stand a cell apart (same kind ANCHOR_MIN_SEPARATION_CELLS, data/locationData.ts), every other body keeps the key-node spacing.
+    const minSep = (body === 'Earth' ? 0.85 : KEY_MIN_SEPARATION_CELLS - 1) * mesh.fineSpacingRad
     let tooClose = 0
     for (const a of sites) for (const b of sites) if (a.id < b.id && (!a.fixed || !b.fixed) && arc(nodePoint(a.node!), nodePoint(b.node!)) < minSep) tooClose++
     check(`${body}: placed sites keep their distance`, tooClose === 0, `${tooClose} too close`)
     check(`${body}: suitability 0..1, capacity at least 1`, sites.every((s) => s.suitability >= 0 && s.suitability <= 1 && s.capacity >= 1))
   }
+}
+
+console.log('\n=== 2b. Earth\'s economic geography ===')
+{
+  const sites = locationsOf('Earth')
+  const surface = surfaceOf('Earth', 'wild')
+  const named = new Map(sites.map((x) => [x.name, x]))
+  const placed = EARTH_ANCHORS.filter((a) => named.has(a.name))
+  check('almost every anchor found dry ground within reach (at most 5% skipped)', placed.length >= EARTH_ANCHORS.length * 0.95, `${placed.length}/${EARTH_ANCHORS.length}, skipped ${EARTH_ANCHORS.filter((a) => !named.has(a.name)).map((a) => a.name).join(', ')}`)
+  check('every Earth site stands above the risen sea (relief above 70 m sea level)', sites.every((x) => x.node !== null && (surface.reliefM?.[x.node] ?? 1) > 0), sites.filter((x) => x.node !== null && (surface.reliefM?.[x.node] ?? 1) <= 0).map((x) => x.name).join(', '))
+  const distanceDeg = (name: string, at: [number, number]): number => {
+    const site = named.get(name)
+    if (!site || site.node === null) return 999
+    return (arc(nodePoint(site.node), fromLonLat((at[0] * Math.PI) / 180, (at[1] * Math.PI) / 180)) * 180) / Math.PI
+  }
+  const anchor = (name: string) => EARTH_ANCHORS.find((a) => a.name === name)!
+  check('farmland lies in the Prairies and the Ukrainian steppe', distanceDeg('Prairie Farmlands', anchor('Prairie Farmlands').at) < 9 && distanceDeg('Ukrainian Steppe Farmlands', anchor('Ukrainian Steppe Farmlands').at) < 9)
+  check('mining lies by the Urals and the Pilbara', distanceDeg('Urals Iron Mines', anchor('Urals Iron Mines').at) < 9 && distanceDeg('Pilbara Iron Mines', anchor('Pilbara Iron Mines').at) < 9)
+  check('industry stands on the Ganges uplands and in Germany', distanceDeg('Ganges Upland Industrial Zone', anchor('Ganges Upland Industrial Zone').at) < 9 && distanceDeg('Hessian Industrial Zone', anchor('Hessian Industrial Zone').at) < 9)
+  check('Africa is a developed core: at least ten settlements south of the Sahara and east of 0 degrees', EARTH_ANCHORS.filter((a) => a.kind === 'settlement' && a.at[1] < 12 && a.at[0] > 0 && a.at[0] < 50 && named.has(a.name)).length >= 10)
+  check('a mine holds its anchor\'s resource', sites.filter((x) => x.kind === 'resource' && x.good).every((x) => EARTH_ANCHORS.some((a) => a.name === x.name && a.good === x.good)))
+  check('the capital and Earth\'s cities keep their real names', ['Western China Megalopolis', 'Great Lakes Megalopolis', 'São Paulo', 'Nairobi'].every((n) => named.has(n)))
+  check('every site has a name and names are unique per body', sites.every((x) => !!x.name) && new Set(sites.map((x) => x.name)).size === sites.length)
 }
 
 console.log('\n=== 3. The kinds a body gets follow its class ===')

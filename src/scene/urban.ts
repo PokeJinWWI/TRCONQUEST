@@ -7,7 +7,7 @@
 //   ACCESS      how much of the freight from its surroundings reaches a hub (scene/infrastructureNet)
 // Its tier needs a population, room (capacity) and access together; a town with no road to anywhere stays
 // a town. A colony need never become a city: a mining outpost with a few buildings stays an outpost.
-import { CATCHMENT_CELLS, JOB_PULL, POP_PER_CAPACITY, SPECIALIZATION_MIN_SLOTS, SPECIALIZATION_SHARE, TIERS, TIER_RULES, type Specialization, type SettlementTier } from '../data/urbanData'
+import { CATCHMENT_CELLS, JOB_PULL, MAX_CAPITAL_POPULATION, MAX_SETTLEMENT_POPULATION, POP_PER_CAPACITY, SPECIALIZATION_MIN_SLOTS, SPECIALIZATION_SHARE, TIERS, TIER_RULES, type Specialization, type SettlementTier } from '../data/urbanData'
 import type { LocationKind } from '../data/locationData'
 
 export interface UrbanInput {
@@ -15,7 +15,7 @@ export interface UrbanInput {
   // The world's population, millions.
   population: number
   // Established settlement sites.
-  settlements: { id: string; node: number; capacity: number; suitability: number; capital: boolean; shareCapacity?: number }[]
+  settlements: { id: string; node: number; capacity: number; suitability: number; capital: boolean; shareCapacity?: number; maturity?: number }[]
   // Buildings placed on the body's sites: where, what kind of site, how many.
   placements: { siteId: string; node: number; kind: LocationKind; good?: string; count: number }[]
   // Each site's transport access (scene/infrastructureNet.siteAccess).
@@ -35,7 +35,41 @@ export interface UrbanSettlement {
   next: { tier: SettlementTier; needs: string[] } | null
   overcrowded: boolean
   catchment: string[]
+  // How far it has filled toward its share, 0..1 (1 = settled): a founded town is still drawing people in below that.
+  maturity: number
 }
+
+// Shares `total` people out by `weights`, never giving one place more than its cap while another has room (water-filling);
+// what no place can hold is spread by weight again, so the total is always kept and a full world is overcrowded, not lossy.
+export function shareOutPopulation(total: number, weights: readonly number[], caps: readonly number[]): number[] {
+  const out = weights.map(() => 0)
+  let left = total
+  let open = weights.map((_, i) => i)
+  for (let round = 0; round < weights.length + 1 && left > 1e-9 && open.length > 0; round++) {
+    const w = open.reduce((n, i) => n + weights[i], 0) || open.length
+    const give = (i: number) => (left * (weights[i] || (w === open.length ? 1 : 0))) / w
+    const capped = open.filter((i) => out[i] + give(i) > caps[i])
+    if (capped.length === 0) {
+      const g = open.map((i) => give(i))
+      open.forEach((i, k) => (out[i] += g[k]))
+      left = 0
+      break
+    }
+    // Fill the capped ones to the brim and share the rest among the others.
+    for (const i of capped) {
+      left -= caps[i] - out[i]
+      out[i] = caps[i]
+    }
+    open = open.filter((i) => !capped.includes(i))
+  }
+  if (left > 1e-9) {
+    const w = weights.reduce((n, x) => n + x, 0) || weights.length
+    weights.forEach((x, i) => (out[i] += (left * (x || 1)) / w))
+  }
+  return out
+}
+
+export const populationCap = (capital: boolean): number => (capital ? MAX_CAPITAL_POPULATION : MAX_SETTLEMENT_POPULATION)
 
 const FIELD_OF_KIND: Partial<Record<LocationKind, Specialization>> = { agricultural: 'agriculture', resource: 'mining', industrial: 'industry', infrastructure: 'port', settlement: 'services' }
 
@@ -67,11 +101,12 @@ export function urbanProfile(input: UrbanInput): UrbanSettlement[] {
     }
     catchment.set(who, (catchment.get(who) ?? new Set<string>()).add(p.siteId))
   }
-  const weight = (s: UrbanInput['settlements'][number]) => (s.shareCapacity ?? s.capacity) * s.suitability + JOB_PULL * (jobsOf.get(s.id) ?? 0)
+  const weight = (s: UrbanInput['settlements'][number]) => ((s.shareCapacity ?? s.capacity) * s.suitability + JOB_PULL * (jobsOf.get(s.id) ?? 0)) * (s.maturity ?? 1)
   const total = settlements.reduce((n, s) => n + weight(s), 0) || 1
-  return settlements.map((s) => {
-    const share = weight(s) / total
-    const population = input.population * share
+  const people = shareOutPopulation(input.population, settlements.map(weight), settlements.map((s) => populationCap(s.capital)))
+  return settlements.map((s, index) => {
+    const population = people[index]
+    const share = input.population > 0 ? population / input.population : weight(s) / total
     const acc = access[s.id] ?? 1
     // The best tier whose population, room and access are ALL met.
     let tier: SettlementTier = 'outpost'
@@ -94,6 +129,6 @@ export function urbanProfile(input: UrbanInput): UrbanSettlement[] {
       if (acc < r.minAccess) needs.push(`transport access ${Math.round(r.minAccess * 100)}% (it has ${Math.round(acc * 100)}%)`)
       next = { tier: nextTier, needs }
     }
-    return { id: s.id, population, share, tier, specializations, jobs, access: acc, next, overcrowded: population > s.capacity * POP_PER_CAPACITY, catchment: [...(catchment.get(s.id) ?? [])].sort() }
+    return { id: s.id, population, share, tier, specializations, jobs, access: acc, next, overcrowded: population > s.capacity * POP_PER_CAPACITY, catchment: [...(catchment.get(s.id) ?? [])].sort(), maturity: s.maturity ?? 1 }
   })
 }

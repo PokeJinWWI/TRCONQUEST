@@ -24,6 +24,9 @@ export const slotsPerLevel = (mode: EconomyMode): number => (mode === 'simple' ?
 // A district nobody places: its levels are the world's planetary defenses (state/defenseStore), not sites.
 export const isPlacedDistrict = (district: string): boolean => district !== 'military'
 
+// The part of a settlement's room (capacity) that can be developed as industry.
+export const INDUSTRY_SHARE_OF_SETTLEMENT = 1 / 3
+
 export function siteKindsOfDistrict(mode: EconomyMode, district: string): LocationKind[] {
   switch (district) {
     case 'core':
@@ -33,7 +36,8 @@ export function siteKindsOfDistrict(mode: EconomyMode, district: string): Locati
       return ['settlement', 'infrastructure']
     case 'industrial':
     case 'generator':
-      return ['industrial']
+      // Industry belongs on industrial ground first, but a city has its own factories (a share of its room: INDUSTRY_SHARE_OF_SETTLEMENT).
+      return ['industrial', 'settlement']
     case 'resource':
     case 'mining':
       return ['resource']

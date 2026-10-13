@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
+import { BUILDABLE_DEFENSE_KINDS, DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
 import { ROUTE_SPECS, type RouteKind } from '../data/infrastructureData'
 import { LAND_USE_LABEL, LAND_USE_POLICIES, LAND_USE_TEXT } from '../data/zoningData'
 import { buildableIn, districtLabel, districtsOfMode } from '../scene/areaView'
@@ -79,11 +79,11 @@ export function LensPalette({ bodyName }: { bodyName: string | undefined }) {
       <div>
         <div className="lens-group-title">Defences</div>
         <div className="lens-group">
-          {(Object.keys(DEFENSE_DEFS) as DefenseKind[]).map((k) => {
-            const tool: LensTool = { kind: 'defense', defense: k, name: k === 'spaceport' ? 'Spaceport (installation)' : DEFENSE_DEFS[k].name }
+          {BUILDABLE_DEFENSE_KINDS.map((k: DefenseKind) => {
+            const tool: LensTool = { kind: 'defense', defense: k, name: DEFENSE_DEFS[k].name }
             return (
               <button key={k} type="button" className={`lens-tool${on(tool)}`} onClick={() => pick(tool)} title={`Place a ${DEFENSE_DEFS[k].name} exactly where you click`}>
-                {k === 'spaceport' ? 'Spaceport (installation)' : DEFENSE_DEFS[k].name}
+                {DEFENSE_DEFS[k].name}
               </button>
             )
           })}

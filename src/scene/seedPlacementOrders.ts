@@ -2,14 +2,19 @@
 // buildings to its sites, makes those sites the owner's (marked connected), and records the body as seeded.
 import { seedPorts } from './portStructures'
 import { useGameTimeStore } from '../state/gameTimeStore'
-import { siteOwner, useLocationStore } from '../state/locationStore'
+import { siteName, siteOwner, useLocationStore } from '../state/locationStore'
 import { usePlacementStore } from '../state/placementStore'
 import { economyModel } from '../state/playerStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { groundKeySurface } from '../state/defenseStore'
 import { useCivicStore } from '../state/civicStore'
-import { civicOf } from './civic'
+import { isRural } from '../economy/recipes'
+import { civicOf, withSettlementHalls } from './civic'
+import { bodyAreas } from './footprintState'
+import { zoneBase } from './zoneOrders'
 import { locationsOf } from './locations'
+import { bodyPopulation } from './urbanPopulation'
+import { SEED_POP_PER_SETTLEMENT } from '../data/urbanData'
 import { assignSeed, type SeedResult } from './seedPlacement'
 import { hasWorld, worldBuildings, worldLevels } from './worldDistricts'
 
@@ -23,6 +28,28 @@ export function seedCivic(bodyName: string): void {
   useCivicStore.getState().setBody(bodyName, civicOf(surface, locationsOf(bodyName)))
 }
 
+// A starting world is settled enough to house its people: its capital and cities (fixed sites) plus the best open settlement sites,
+// until there is one place per SEED_POP_PER_SETTLEMENT million (or the body has no more sites). Marked connected like the rest of the start.
+export function seedSettlements(bodyName: string, owner: string): void {
+  const need = Math.ceil(bodyPopulation(bodyName) / SEED_POP_PER_SETTLEMENT)
+  const sites = locationsOf(bodyName).filter((s) => s.kind === 'settlement')
+  const held = sites.filter((s) => siteOwner(s.id) === owner).length
+  const open = sites.filter((s) => !siteOwner(s.id)).sort((a, b) => b.suitability * b.capacity - a.suitability * a.capacity || (a.id < b.id ? -1 : 1))
+  const now = useGameTimeStore.getState().simDays
+  for (const s of open.slice(0, Math.max(0, need - held))) useLocationStore.getState().establish(s.id, owner, now, { connected: true })
+}
+
+// Brings a body's municipal halls in line with its established settlements (scene/civic.withSettlementHalls). Cheap and idempotent:
+// call it after anything that founds, gives up or renames a settlement. A body whose civic buildings are not written yet is left alone.
+export function syncCivicHalls(bodyName: string): void {
+  const store = useCivicStore.getState()
+  const list = store.civic[bodyName]
+  if (!list) return
+  const base = zoneBase(bodyName)
+  const next = withSettlementHalls(list, base ? bodyAreas(bodyName, base) : [], (id) => !!siteOwner(id), (id) => siteName(id))
+  if (next !== list) store.setBody(bodyName, next)
+}
+
 // Seeds one body (idempotent). Returns what was left over, or null if there was nothing to seed.
 export function seedBodyPlacement(bodyName: string): SeedResult | null {
   const store = usePlacementStore.getState()
@@ -32,14 +59,17 @@ export function seedBodyPlacement(bodyName: string): SeedResult | null {
   if (!owner || !hasWorld(bodyName, mode)) return null
   const sites = locationsOf(bodyName)
   if (sites.length === 0) return null
+  seedSettlements(bodyName, owner)
   seedCivic(bodyName)
+  syncCivicHalls(bodyName)
   const result = assignSeed({
     mode,
     sites,
     // A settlement or port must already be the nation's (the capital and cities, its spaceports); open ground may be taken.
     eligible: (s) => (s.kind === 'settlement' || s.kind === 'infrastructure' ? siteOwner(s.id) === owner : !siteOwner(s.id) || siteOwner(s.id) === owner),
     districts: worldLevels(bodyName, mode),
-    buildings: worldBuildings(bodyName, mode),
+    // Rural structures (anchors) stand on a node of their own, not on a site.
+    buildings: worldBuildings(bodyName, mode).filter((b) => !isRural(b.id)),
   })
   const now = useGameTimeStore.getState().simDays
   for (const siteId of new Set([...Object.keys(result.levels), ...Object.keys(result.placed)])) {

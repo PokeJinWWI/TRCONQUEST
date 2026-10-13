@@ -1,5 +1,6 @@
 import { interestGroupStrengths } from '../economy/politics'
 import type { World } from '../economy/economyTypes'
+import { NationQualityOfLifeCard } from './QualityOfLifeCard'
 
 // The interest-group balance of power on a world, derived live from its pops
 // (see economy/politics.ts). Raw material for the legislature and Political map
@@ -28,6 +29,7 @@ export function PoliticsPanel({ worldName, world }: { worldName?: string; world?
       <div className="ship-panel-hint">
         Strength weights population by class and wealth. Parties, agendas and the legislature come next.
       </div>
+      <NationQualityOfLifeCard nationId={world.ownerId} />
     </div>
   )
 }

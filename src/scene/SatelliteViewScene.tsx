@@ -11,6 +11,7 @@ import { FocusableMarker } from './FocusableMarker'
 import { Moon } from './Moon'
 import { MoonDetailScene } from './MoonDetailScene'
 import { SatelliteShipMarker } from './SatelliteShipMarker'
+import { StationMarkers } from './StationMarkers'
 import { ShipPanel } from './ShipPanel'
 import { CameraFocusRig } from './CameraFocusRig'
 import { SelectionTracker } from './SelectionTracker'
@@ -339,6 +340,8 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
               onOrderTo={handleOrderToMoonOrbit}
             />
           ))}
+
+          {!isStar && <StationMarkers bodyName={primaryBody.name} radius={primaryVisualRadius} />}
 
           {shipOrbitInclinations.map((incl) => (
             <OrbitRing key={incl} radius={primaryVisualRadius + 1.2} inclinationDeg={incl} />

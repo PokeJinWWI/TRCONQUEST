@@ -46,7 +46,11 @@ console.log('\n=== 1. Spaceports become structures where they already were ===')
   const after = ports('Mars').map((k) => k.node)
   check('the key nodes are exactly the ones the map had', JSON.stringify([...before].sort()) === JSON.stringify([...after].sort()))
   check('every auto-placed port is recorded (the terrain\'s own is not)', list.length === spaceportSitesOf('Mars').length - ports('Mars').filter((k) => !k.site).length)
-  check('the names the map gave are unchanged', [...keyNamesOf(groundKeySurface('Mars')!).values()].map((n) => n.label).sort().join('|') === labelsBefore)
+  // Seeding draws the districts, and every urban area becomes a key node of its own (scene/footprintState.withAreaKeys): those are
+  // new; every node the map had keeps its name.
+  const afterSurface = groundKeySurface('Mars')!
+  const areaNodes = new Set(afterSurface.keySlots.filter((k) => k.area).map((k) => k.node))
+  check('the names the map gave are unchanged', [...keyNamesOf(afterSurface)].filter(([node]) => !areaNodes.has(node)).map(([, n]) => n.label).sort().join('|') === labelsBefore)
   seedPorts('Mars')
   check('seeding twice records them once', (useStructureStore.getState().ports['Mars'] ?? []).length === list.length)
 

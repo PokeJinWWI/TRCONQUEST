@@ -51,6 +51,8 @@ export type KeyKind = 'capital' | 'city' | 'spaceport' | 'outpost' | 'fortress'
 export interface KeySlot {
   node: number
   kind: KeyKind
+  // A city node of an urban area (scene/footprintState.areaKeySlots): never what a spaceport or fortress is named after.
+  area?: true
   // A landmark installation's own name (defenseLogic.withInstallationKeys).
   name?: string
   // A spaceport's operator, for display ("the state", a company's name).
@@ -303,7 +305,7 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
   // km across — a megalopolis, not a whole state.
   const megacity = !!capitalOf?.cities
   const CITY_SPRAWL_BUDGET = 3.5
-  const CAPITAL_SPRAWL_BUDGET = 5
+  const CAPITAL_SPRAWL_BUDGET = 2.2
   for (const slot of keySlots) {
     if (slot.kind === 'outpost') continue
     if (megacity) {

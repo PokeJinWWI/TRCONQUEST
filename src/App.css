@@ -7040,3 +7040,24 @@ button.pl-tile.empty:hover {
   padding: 3px 6px;
   font-family: inherit;
 }
+
+.station-label {
+  font-size: 10px;
+  white-space: nowrap;
+  text-shadow: 0 0 4px #000;
+  letter-spacing: 0.04em;
+}
+
+/* Development tab: area cards (components/planet/DevelopmentTab.tsx) */
+.pl-output-chip.pl-chip-warn {
+  background: rgba(255, 179, 107, 0.08);
+  border-color: rgba(255, 179, 107, 0.4);
+  color: #ffcf9e;
+}
+.pl-district.pl-area-captured {
+  border-color: rgba(255, 107, 107, 0.45);
+}
+.pl-area-next {
+  font-size: 10px;
+  margin-top: 5px;
+}

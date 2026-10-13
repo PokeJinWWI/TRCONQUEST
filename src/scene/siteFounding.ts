@@ -53,6 +53,25 @@ export function nextCustomId(bodyName: string, kind: LocationKind, existing: rea
   return `${bodyName}#${kind}-${n}`
 }
 
+const FOUNDED_SUFFIX: Record<string, string> = { settlement: 'New Town', industrial: 'Industrial Zone', agricultural: 'Farmlands', resource: 'Workings', infrastructure: 'Spaceport', strategic: 'Outpost' }
+
+// A founded site is named for the place it lies by (the nearest existing site), numbered so no two share a name.
+function foundedName(bodyName: string, kind: LocationKind, node: number, existing: readonly DevLocation[], good?: SiteGood): string {
+  let near: DevLocation | null = null
+  let nearD = Infinity
+  for (const s of existing) {
+    if (s.node === null) continue
+    const d = arc(nodePoint(node), nodePoint(s.node))
+    if (d < nearD) { near = s; nearD = d }
+  }
+  const place = near?.name?.replace(/ (Industrial Zone|Farmlands|Spaceport|Heights|Watch|Workings|New Town)( [IVX]+)?$/, '') ?? bodyName
+  const base = `${place} ${kind === 'resource' && good ? `${good.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())} ${FOUNDED_SUFFIX.resource}` : FOUNDED_SUFFIX[kind]}`
+  const taken = new Set(existing.map((s) => s.name))
+  let name = base
+  for (let n = 2; taken.has(name); n++) name = `${base} ${n}`
+  return name
+}
+
 // Can a `kind` district be founded at `node` of `bodyName`, given the sites already there? Ground only: land of a terrain that
 // suits it, clear of every other site by the same distance the generator keeps. Returns the site it would be.
 export function planFounding(bodyName: string, kind: LocationKind, node: number, existing: readonly DevLocation[]): Founding {
@@ -66,7 +85,8 @@ export function planFounding(bodyName: string, kind: LocationKind, node: number,
   const suitability = foundingSuitability(kind, terrain)
   if (suitability <= 0) return { ok: false, reason: kind === 'resource' ? `there is nothing to mine or cut on ${terrain}` : `${terrain} is no use for ${kind === 'agricultural' ? 'farming' : kind === 'industrial' ? 'industry' : 'a settlement'}` }
   const minSep = Math.max(SITE_MIN_SEPARATION_CELLS, KEY_MIN_SEPARATION_CELLS - 1) * mesh.fineSpacingRad
-  const near = existing.find((s) => s.node !== null && arc(nodePoint(node), nodePoint(s.node)) < minSep)
+  // Sites of another kind may stand closer (a farm beside a town); the same kind keeps the full distance.
+  const near = existing.find((s) => s.node !== null && arc(nodePoint(node), nodePoint(s.node)) < (s.kind === kind ? minSep : 0.9 * mesh.fineSpacingRad))
   if (near) return { ok: false, reason: `too close to another site (${near.name ?? near.id.slice(near.id.lastIndexOf('#') + 1)})` }
   if (existing.filter((s) => s.kind === kind && isFounded(s.id)).length >= MAX_FOUNDED_PER_KIND) {
     return { ok: false, reason: `this body already has ${MAX_FOUNDED_PER_KIND} founded ${kind} sites` }
@@ -93,6 +113,7 @@ export function planFounding(bodyName: string, kind: LocationKind, node: number,
     extra.weight = weight
   }
   const capacity = Math.round(1 + SITE_CAPACITY_RANGE * (kind === 'resource' ? (extra.weight ?? 0.5) : suitability))
+  extra.name = foundedName(bodyName, kind, node, existing, extra.good)
   return {
     ok: true,
     site: { id: nextCustomId(bodyName, kind, existing), bodyName, kind, tags, node, terrain, suitability: Math.round(suitability * 100) / 100, capacity, ...extra },

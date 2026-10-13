@@ -350,17 +350,6 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
 
       {!only && <CoreCard bodyName={bodyName} />}
 
-      {choosing && countryId && (
-        <SiteChooser
-          request={{ bodyName, builderId: countryId, title: choosing.building ? SIMPLE_BUILDING_DEFS[choosing.building].name : `${SIMPLE_DISTRICT_DEFS[choosing.district!].name} level`, ...(choosing.building ? { ref: { mode: 'simple' as const, id: choosing.building } } : { district: choosing.district }) }}
-          onCancel={() => setChoosing(null)}
-          onChoose={(siteId) => {
-            if (choosing.building) build(choosing.building, choosing.count ?? qty, siteId)
-            else develop(choosing.district!, siteId)
-            setChoosing(null)
-          }}
-        />
-      )}
 
       {shown.map((d) => {
         const def = SIMPLE_DISTRICT_DEFS[d]
@@ -452,6 +441,17 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                 </div>
               )
             })()}
+            {choosing && countryId && (choosing.district ?? DISTRICT_OF_BUILDING[choosing.building!]) === d && (
+              <SiteChooser
+                request={{ bodyName, builderId: countryId, title: choosing.building ? SIMPLE_BUILDING_DEFS[choosing.building].name : `${SIMPLE_DISTRICT_DEFS[choosing.district!].name} level`, ...(choosing.building ? { ref: { mode: 'simple' as const, id: choosing.building } } : { district: choosing.district }) }}
+                onCancel={() => setChoosing(null)}
+                onChoose={(siteId) => {
+                  if (choosing.building) build(choosing.building, choosing.count ?? qty, siteId)
+                  else develop(choosing.district!, siteId)
+                  setChoosing(null)
+                }}
+              />
+            )}
             {picking === d && (
               <div className="pl-picker">
                 <div className="pl-qty">

@@ -14,6 +14,10 @@ import {
   DEFENSE_MODULE_FIREPOWER,
   DEFENSE_MODULE_INTEGRITY,
   DEFENSE_MODULE_ARMOR,
+  MISSILE_MODULE_FIREPOWER,
+  SHIELD_MODULE_ARMOR,
+  SHIELD_MODULE_INTEGRITY,
+  STARBASE_MODULES,
   STARBASE_INFLUENCE_COST,
   STARBASE_INFLUENCE_PER_KLY,
   type StarbaseTier,
@@ -34,9 +38,51 @@ export interface Starbase {
   // Tier (data/starbaseData.ts). Optional: absent = 'starbase' (the only tier
   // that existed before), so old literals and tests don't change.
   tier?: StarbaseTier
-  // Built modules (shipyard, defense battery, trade hub, elevator tether).
-  // Optional: absent = none.
+  // Built modules, in the order they were built (a stackable kind may appear more than once). Optional: absent = none.
   modules?: StarbaseModuleType[]
+  // An ORBITAL station: the orbital zone it circles in ("Earth~low"); `starId` is then that body's star. Absent = a system station
+  // standing at the star.
+  zone?: string
+  // Its own name (the Ring of Heaven); absent = named for where it stands.
+  name?: string
+}
+
+export const isOrbitStation = (sb: Starbase): boolean => !!sb.zone
+
+// The body a station stands at, for sieges and orbital control: its zone's body, else the star's primary.
+export function stationBody(sb: Starbase): string | null {
+  return sb.zone ? sb.zone.slice(0, sb.zone.lastIndexOf('~')) : starbaseAnchorBody(sb.starId)
+}
+
+// ---- power ----------------------------------------------------------------------------------
+// The hull supplies its tier's baseEnergy; generators add to it. Consumers come online in the order they were built while the supply
+// lasts, so a base that has outgrown its power loses its newest modules first. Pure.
+export interface StationPower {
+  supply: number
+  demand: number
+  // Per module, in build order: does it work?
+  online: boolean[]
+}
+
+export function stationPower(sb: Starbase): StationPower {
+  const modules = sb.modules ?? []
+  const supply = STARBASE_TIERS[sb.tier ?? 'starbase'].baseEnergy + modules.reduce((n, m) => n + Math.max(0, STARBASE_MODULES[m].energy), 0)
+  let used = 0
+  const online = modules.map((m) => {
+    const draw = -Math.min(0, STARBASE_MODULES[m].energy)
+    if (draw === 0) return true
+    if (used + draw > supply) return false
+    used += draw
+    return true
+  })
+  const demand = modules.reduce((n, m) => n + -Math.min(0, STARBASE_MODULES[m].energy), 0)
+  return { supply, demand, online }
+}
+
+// The modules that actually work (a generator always does; the rest only while there is power).
+export function onlineModulesOf(sb: Starbase): StarbaseModuleType[] {
+  const { online } = stationPower(sb)
+  return (sb.modules ?? []).filter((_, i) => online[i])
 }
 
 export function starbaseTierOf(sb: Starbase): StarbaseTier {
@@ -49,7 +95,7 @@ export function starbaseShipyardSlots(countryId: string, starbases: Starbase[], 
   let slots = 0
   for (const sb of starbases) {
     if (sb.ownerId !== countryId || !isStarbaseActive(sb, simDays)) continue
-    if (starbaseModulesOf(sb).includes('shipyard')) slots += SHIPYARD_SLIPS_BY_TIER[starbaseTierOf(sb)]
+    if (onlineModulesOf(sb).includes('shipyard')) slots += SHIPYARD_SLIPS_BY_TIER[starbaseTierOf(sb)]
   }
   return slots
 }
@@ -65,20 +111,26 @@ export function freeModuleSlots(sb: Starbase): number {
 
 // Max integrity this base can have, given its tier and defense modules.
 export function starbaseMaxIntegrity(sb: Starbase): number {
-  const batteries = starbaseModulesOf(sb).filter((m) => m === 'defense-battery').length
-  return STARBASE_TIERS[starbaseTierOf(sb)].integrity + batteries * DEFENSE_MODULE_INTEGRITY
+  const mods = onlineModulesOf(sb)
+  const batteries = mods.filter((m) => m === 'defense-battery').length
+  const shields = mods.filter((m) => m === 'shield-generator').length
+  return STARBASE_TIERS[starbaseTierOf(sb)].integrity + batteries * DEFENSE_MODULE_INTEGRITY + shields * SHIELD_MODULE_INTEGRITY
 }
 
 function effectiveArmor(sb: Starbase): number {
-  const batteries = starbaseModulesOf(sb).filter((m) => m === 'defense-battery').length
-  return STARBASE_TIERS[starbaseTierOf(sb)].armor + batteries * DEFENSE_MODULE_ARMOR
+  const mods = onlineModulesOf(sb)
+  const batteries = mods.filter((m) => m === 'defense-battery').length
+  const shields = mods.filter((m) => m === 'shield-generator').length
+  return STARBASE_TIERS[starbaseTierOf(sb)].armor + batteries * DEFENSE_MODULE_ARMOR + shields * SHIELD_MODULE_ARMOR
 }
 
 // Damage this base returns to besieging warships per day: its tier's firepower
 // plus each defense-battery module. Zero for an undefended outpost.
 export function starbaseFirepower(sb: Starbase): number {
-  const batteries = starbaseModulesOf(sb).filter((m) => m === 'defense-battery').length
-  return STARBASE_TIERS[starbaseTierOf(sb)].firepower + batteries * DEFENSE_MODULE_FIREPOWER
+  const mods = onlineModulesOf(sb)
+  const batteries = mods.filter((m) => m === 'defense-battery').length
+  const missiles = mods.filter((m) => m === 'missile-battery').length
+  return STARBASE_TIERS[starbaseTierOf(sb)].firepower + batteries * DEFENSE_MODULE_FIREPOWER + missiles * MISSILE_MODULE_FIREPOWER
 }
 
 // Which Starbases are live right now, as a string ('1'/'0' each, in list order).
@@ -155,7 +207,7 @@ export function stepStarbaseSieges(
   const shipDamageAccum = new Map<string, number>()
   for (const sb of starbases) {
     if (!isStarbaseActive(sb, simDays)) continue
-    const anchor = starbaseAnchorBody(sb.starId)
+    const anchor = stationBody(sb)
     if (!anchor) continue
     const hostiles = hostileWarshipsAt(sb.ownerId, anchor, ships, atWarFn) as SiegeShip[]
     if (hostiles.length === 0) continue

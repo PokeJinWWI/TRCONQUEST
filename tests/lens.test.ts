@@ -48,7 +48,7 @@ function plainsNear(body: string, clearOf: number[] = []): number {
   const p = (n: number) => ({ x: mesh.positions[n * 3], y: mesh.positions[n * 3 + 1], z: mesh.positions[n * 3 + 2] })
   for (let i = 5; i < mesh.count.fine; i += 3) {
     if (surface.landComponent[i] < 0 || terrainAt(surface, i) !== 'plains') continue
-    if ([...keep, ...clearOf].every((k) => Math.hypot(p(i).x - p(k).x, p(i).y - p(k).y, p(i).z - p(k).z) > 0.45)) return i
+    if ([...keep, ...clearOf].every((k) => Math.hypot(p(i).x - p(k).x, p(i).y - p(k).y, p(i).z - p(k).z) > 0.2)) return i
   }
   return -1
 }

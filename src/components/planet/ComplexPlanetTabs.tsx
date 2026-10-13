@@ -134,6 +134,19 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
   const levelsByDistrict = buildingLevelsByDistrict(world)
   const land = freeLandOfWorld(world)
 
+  // Where to build opens INSIDE the district card that asked, right under its buttons, not at the top of the list.
+  const chooser = choosing && playerId ? (
+    <SiteChooser
+      request={{ bodyName: world.name, builderId: playerId, title: choosing.recipeId ? RECIPES[choosing.recipeId]?.label ?? choosing.recipeId : `${DISTRICT_LABELS[choosing.district!]} district level`, ...(choosing.recipeId ? { ref: { mode: 'complex' as const, id: choosing.recipeId } } : { district: choosing.district }) }}
+      onCancel={() => setChoosing(null)}
+      onChoose={(siteId) => {
+        if (choosing.recipeId) queueConstruction(world.id, choosing.recipeId, owner, siteId)
+        else queueDistrict(world.id, choosing.district!, siteId)
+        setChoosing(null)
+      }}
+    />
+  ) : null
+  const chooserDistrict = choosing ? (choosing.district ?? districtOfRecipe(choosing.recipeId!)) : null
   return (
     <div className="pl-districts">
       <div className="pl-land" title="Each district level uses one unit of land; a world's land comes from its size.">
@@ -144,17 +157,6 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
         </label>
       </div>
 
-      {choosing && playerId && (
-        <SiteChooser
-          request={{ bodyName: world.name, builderId: playerId, title: choosing.recipeId ? RECIPES[choosing.recipeId]?.label ?? choosing.recipeId : `${DISTRICT_LABELS[choosing.district!]} district level`, ...(choosing.recipeId ? { ref: { mode: 'complex' as const, id: choosing.recipeId } } : { district: choosing.district }) }}
-          onCancel={() => setChoosing(null)}
-          onChoose={(siteId) => {
-            if (choosing.recipeId) queueConstruction(world.id, choosing.recipeId, owner, siteId)
-            else queueDistrict(world.id, choosing.district!, siteId)
-            setChoosing(null)
-          }}
-        />
-      )}
 
       {DISTRICT_TYPES.map((d) => {
         const bonus = districtBonus(world, d, levelsByDistrict)
@@ -162,7 +164,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
         const free = Math.max(0, cap - usage[d])
         const inDistrict = world.buildings.filter((b) => districtOfRecipe(b.recipeId) === d).sort((a, b) => buildingGroup(a.recipeId).localeCompare(buildingGroup(b.recipeId)) || b.level - a.level)
         const queued = world.constructionQueue.filter((o) => (o.district ? o.district === d : districtOfRecipe(o.recipeId) === d))
-        const buildable = Object.values(RECIPES).filter((r) => districtOfRecipe(r.id) === d)
+        const buildable = Object.values(RECIPES).filter((r) => !r.autoBuilt && districtOfRecipe(r.id) === d)
         return (
           <div key={d} className={`pl-district pl-district-c-${d}`}>
             <div className="pl-district-head" title={DISTRICT_DESCRIPTIONS[d]}>
@@ -228,6 +230,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
                 <ForeignHoldingsRow bodyName={world.name} playerId={playerId} />
               </div>
             )}
+            {chooserDistrict === d && chooser}
             {picking === d && (
               <div className="pl-picker pl-picker-wide">
                 {buildable.map((r) => {

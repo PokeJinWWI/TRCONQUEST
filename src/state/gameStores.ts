@@ -48,6 +48,8 @@ import { useShipStore } from './shipStore'
 import { useShipyardStore } from './shipyardStore'
 import { useStarbasePanelStore } from './starbasePanelStore'
 import { useStarbaseStore } from './starbaseStore'
+import { useMigrationStore } from './migrationStore'
+import { RING_OF_HEAVEN_MODULES } from '../data/starbaseData'
 import { useSubjectStore } from './subjectStore'
 import { useSurveyStore } from './surveyStore'
 import { useTechStore } from './techStore'
@@ -88,6 +90,17 @@ function migrateEconomyState(saved: unknown): unknown {
   return state.worlds ? { ...state, worlds: state.worlds.map(migrateWorldDistricts) } : saved
 }
 
+// Earth's development sites were redrawn (data/earthEconomicGeography.ts), so ids saved before that point at other places. Anything keyed by an
+// 'Earth#...' id is dropped, and Earth is marked unseeded so its starting buildings are assigned to the new sites the next time it is looked at.
+function dropEarthSites<T extends object>(saved: T): T {
+  const strip = (rec: unknown): unknown => (rec && typeof rec === 'object' && !Array.isArray(rec) ? Object.fromEntries(Object.entries(rec).filter(([k]) => !k.startsWith('Earth#'))) : rec)
+  const out: Record<string, unknown> = { ...(saved as Record<string, unknown>) }
+  for (const key of ['established', 'placed', 'levels', 'names']) if (key in out) out[key] = strip(out[key])
+  if (out.custom && typeof out.custom === 'object') out.custom = Object.fromEntries(Object.entries(out.custom as object).filter(([k]) => k !== 'Earth'))
+  if (out.seeded && typeof out.seeded === 'object') out.seeded = Object.fromEntries(Object.entries(out.seeded as object).filter(([k]) => k !== 'Earth'))
+  return out as T
+}
+
 const game = (key: string, store: unknown, extra: Partial<StoreEntry> = {}): StoreEntry => ({ key, store: store as RegisteredStore, kind: 'game', version: 1, ...extra })
 const ui = (key: string, store: unknown): StoreEntry => ({ key, store: store as RegisteredStore, kind: 'ui', version: 1 })
 
@@ -101,14 +114,16 @@ export const STORE_REGISTRY: StoreEntry[] = [
   game('resources', useResourceStore),
   game('colonies', useColonyStore),
   game('deposits', useDepositStore),
-  game('locations', useLocationStore),
+  // v2: player-given site names (v1 saves have none).
+  game('locations', useLocationStore, { version: 2, migrate: (saved) => dropEarthSites({ names: {}, ...(saved as object) }) }),
   game('jurisdiction', useJurisdictionStore),
-  // v2: district levels per site, seeded bodies, auto-seed flag (v1 saves keep their `placed`).
+  // v2: district levels per site, seeded bodies, auto-seed flag (v1 saves keep their `placed`). v3: Earth's sites moved (hand-placed).
   game('civic', useCivicStore),
   game('unrest', useUnrestStore),
   game('zones', useZoneStore),
-  game('structures', useStructureStore),
-  game('placement', usePlacementStore, { version: 2, migrate: (saved) => ({ levels: {}, seeded: {}, autoSeed: false, ...(saved as object) }) }),
+  // v2: rural structures (space-elevator anchors).
+  game('structures', useStructureStore, { version: 2, migrate: (saved) => ({ rural: {}, ...(saved as object) }) }),
+  game('placement', usePlacementStore, { version: 3, migrate: (saved) => dropEarthSites({ levels: {}, seeded: {}, autoSeed: false, ...(saved as object) }) }),
   game('infrastructure', useInfrastructureStore),
   game('orbital', useOrbitalStore),
   game('materials', useMaterialStore),
@@ -118,7 +133,15 @@ export const STORE_REGISTRY: StoreEntry[] = [
   game('ai', useAiStore),
   game('survey', useSurveyStore),
   game('clusterVisit', useClusterVisitStore),
-  game('starbases', useStarbaseStore),
+  // v2: orbital stations. Earth's ring used to hang at the star Sol: it now circles Earth (zone Earth~low) with the modules it opens with.
+  game('migration', useMigrationStore),
+  game('starbases', useStarbaseStore, {
+    version: 2,
+    migrate: (saved) => {
+      const state = saved as { starbases?: { ownerId: string; tier?: string; zone?: string; starId: string; name?: string; modules?: string[] }[] }
+      return { ...state, starbases: (state.starbases ?? []).map((sb) => (sb.ownerId === 'earth' && sb.tier === 'orbital-ring' && !sb.zone && sb.starId === 'sol' ? { ...sb, zone: 'Earth~low', name: sb.name ?? 'Ring of Heaven', modules: RING_OF_HEAVEN_MODULES } : sb)) }
+    },
+  }),
   game('armies', useArmyStore),
   game('battles', useBattleStore),
   game('combat', useCombatStore),

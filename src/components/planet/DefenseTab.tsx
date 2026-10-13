@@ -1,6 +1,6 @@
 import { useThrottledSimDays } from '../../hooks/useThrottledSimDays'
 import { useState } from 'react'
-import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS, DEFENSE_DEFS, DEFENSE_KINDS, type DefenseKind } from '../../data/defenseData'
+import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS, BUILDABLE_DEFENSE_KINDS, DEFENSE_DEFS, type DefenseKind } from '../../data/defenseData'
 import { RESOURCE_TYPES, type ResourceId } from '../../data/resourceData'
 import { ownerDisplay } from '../../data/countryRoster'
 import { useDefenseStore, canBuildDefense, militaryInUse } from '../../state/defenseStore'
@@ -136,7 +136,7 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
           </div>
           {message && <div className="econ-neg pl-message">{message}</div>}
           <div className="pl-def-build">
-            {DEFENSE_KINDS.map((kind) => {
+            {BUILDABLE_DEFENSE_KINDS.map((kind) => {
               const def = DEFENSE_DEFS[kind]
               const check = canBuildDefense(playerId!, bodyName, kind, installations)
               const cost = Object.entries(def.cost) as [ResourceId, number][]

@@ -42,6 +42,17 @@ function hash(s: string): number {
 
 const cache = new Map<string, Map<number, KeyName>>()
 
+// The names a founding nation hands out to a body's settlements, in order from a per-body starting point (the capital's own name left
+// out). Empty for a body nobody founded or a nation without a list. Shared by the key nodes and the development sites.
+export function settlementNamePool(bodyName: string): { pool: CityName[]; start: number } {
+  const nation = founderOf(bodyName)
+  const country = nation ? getCountry(nation) : undefined
+  const list: CityName[] = (nation && CITY_NAMES[nation]) || []
+  const capitalName = country?.capitalBodyName === bodyName ? country.capitalCityName : undefined
+  const pool = list.filter((c) => c.name !== capitalName)
+  return { pool, start: pool.length > 0 ? hash(bodyName) % pool.length : 0 }
+}
+
 // Every key node's name on this surface.
 export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
   const key = `${surface.bodyName}|${surface.keySlots.map((k) => `${k.node}${k.kind[0]}${k.name ?? ''}${k.site ?? ''}`).join(',')}`
@@ -143,12 +154,13 @@ export function keyNameOf(surface: BodySurface, slot: Pick<KeySlot, 'node' | 'ki
 }
 
 // The settlement (not a fortress) nearest a node, within `maxCells` map cells.
-export function nearestSettlement(surface: BodySurface, node: number, maxCells: number): KeySlot | null {
+export function nearestSettlement(surface: BodySurface, node: number, maxCells: number, citiesOnly = false): KeySlot | null {
   const cell = surfaceMesh().fineSpacingRad
   let best: KeySlot | null = null
   let bestD = Infinity
   for (const k of surface.keySlots) {
-    if (k.kind === 'fortress' || k.site) continue
+    if (k.kind === 'fortress' || k.site || k.area) continue
+    if (citiesOnly && k.kind !== 'capital' && k.kind !== 'city') continue
     const d = arc(nodePoint(k.node), nodePoint(node)) / cell
     if (d <= maxCells && d < bestD) {
       best = k
@@ -160,6 +172,6 @@ export function nearestSettlement(surface: BodySurface, node: number, maxCells: 
 
 // Which city a stretch of urban ground belongs to (its key node's name), or null.
 export function cityOfNode(surface: BodySurface, node: number): KeyName | null {
-  const k = nearestSettlement(surface, node, 2.6)
+  const k = nearestSettlement(surface, node, 2.6, true)
   return k ? keyNameOf(surface, k) : null
 }

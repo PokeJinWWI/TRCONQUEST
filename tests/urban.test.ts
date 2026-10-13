@@ -5,6 +5,7 @@
 // Run:  npx tsx tests/urban.test.ts
 import { CATCHMENT_CELLS, POP_PER_CAPACITY, TIER_RULES } from '../src/data/urbanData'
 import { urbanProfile, type UrbanInput } from '../src/scene/urban'
+import { shareOutPopulation } from '../src/scene/urban'
 import { bodyPopulation, foundSettlement, urbanNow } from '../src/scene/urbanState'
 import { locationsOf } from '../src/scene/locations'
 import { defaultGeo } from '../src/scene/sovereignty'
@@ -59,6 +60,16 @@ console.log('\n=== 2. Work draws people ===')
   check('work out of reach of every settlement belongs to none', far.population === idle.population && far.jobs === 0)
 }
 
+console.log('\n=== 2b. No settlement is a giant: people overflow to the others ===')
+{
+  const out = shareOutPopulation(100, [1, 1, 1], [40, 40, 40])
+  check('100M over three equal places: each holds a third, within the cap', out.every((x) => Math.abs(x - 100 / 3) < 1e-9))
+  const skew = shareOutPopulation(100, [10, 1, 1], [40, 40, 40])
+  check('a favourite place stops at its cap and the rest go to the others', Math.abs(skew[0] - 40) < 1e-9 && Math.abs(skew[1] - 30) < 1e-9 && Math.abs(skew.reduce((n, x) => n + x, 0) - 100) < 1e-9, skew.join(' '))
+  const full = shareOutPopulation(500, [1, 1], [40, 40])
+  check('when every place is full the total is still kept (overcrowding)', Math.abs(full.reduce((n, x) => n + x, 0) - 500) < 1e-9)
+}
+
 console.log('\n=== 3. A tier needs population, room AND roads ===')
 {
   const cut = find(urbanProfile(base({ access: { A: 0.5 } })), 'A')
@@ -66,8 +77,8 @@ console.log('\n=== 3. A tier needs population, room AND roads ===')
   check('...and it says what it would need', !!cut.next && cut.next.needs.some((n) => /transport access/.test(n)), JSON.stringify(cut.next))
   const tight = find(urbanProfile(base({ settlements: [{ id: 'A', node: 0, capacity: 2, suitability: 1, capital: false }] })), 'A')
   check('a million-strong site with only capacity 2 stays a town however big it gets', tight.tier === 'town' && tight.next?.needs.some((n) => /capacity/.test(n)) === true, `${tight.tier}, ${tight.next?.needs.join('; ')}`)
-  const tiny = find(urbanProfile(base({ population: 3, settlements: [{ id: 'A', node: 0, capacity: 2, suitability: 1, capital: false }] })), 'A')
-  check('a young colony of 3M people is an outpost: it need never become a city', tiny.tier === 'outpost' && tiny.next?.tier === 'town')
+  const tiny = find(urbanProfile(base({ population: 0.3, settlements: [{ id: 'A', node: 0, capacity: 2, suitability: 1, capital: false }] })), 'A')
+  check('a young colony of 300,000 people is an outpost: it need never become a city', tiny.tier === 'outpost' && tiny.next?.tier === 'town')
   const over = find(urbanProfile(base({ population: 5000, settlements: [{ id: 'A', node: 0, capacity: 2, suitability: 1, capital: false }] })), 'A')
   check('more people than the site can house is flagged as overcrowded', over.overcrowded && over.population > 2 * POP_PER_CAPACITY)
 }
@@ -89,7 +100,7 @@ console.log('\n=== 5. In the live game ===')
   resetGame()
   usePlayerStore.setState({ selectedCountryId: MARS, sandbox: false, economyModel: 'abstract' })
   const list = urbanNow('Mars', MARS)
-  check('Mars\'s settlements are its established settlement sites, with the capital marked', list.length === locationsOf('Mars').filter((s) => s.kind === 'settlement').length && list.some((s) => s.specializations.includes('capital')), list.map((s) => `${s.id}:${s.tier}`).join(' '))
+  check('Mars\'s settlements are its established settlement sites, with the capital marked', list.length === locationsOf('Mars').filter((s) => s.kind === 'settlement' && siteOwner(s.id) === MARS).length && list.some((s) => s.specializations.includes('capital')), list.map((s) => `${s.id}:${s.tier}`).join(' '))
   check('their people add up to the world\'s', Math.abs(list.reduce((n, s) => n + s.population, 0) - bodyPopulation('Mars')) < 1e-6 && bodyPopulation('Mars') > 0)
   // A mine placed next to a settlement becomes work for it.
   const mine = locationsOf('Mars').find((s) => s.kind === 'resource' && !s.material)!

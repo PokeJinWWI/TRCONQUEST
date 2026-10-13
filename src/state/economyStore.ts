@@ -1,3 +1,8 @@
+import { treatyLanes } from '../scene/migrationPaths'
+import { distressByBody } from '../scene/migrationDistress'
+import { useMigrationStore } from './migrationStore'
+import { useTreatyStore } from './treatyStore'
+import { WAVE_EVENT_MIN_MILLIONS } from '../economy/migrationRules'
 import { planDistrictLevel, planPlacement, recordLevel, recordPlacement } from '../scene/placementOrders'
 import { syncSiteAccess } from '../scene/infrastructureOrders'
 import { usePlacementStore } from './placementStore'
@@ -6,7 +11,7 @@ import { useDiplomacyStore } from './diplomacyStore'
 import { useTradePolicyStore, inSharedMarket } from './tradePolicyStore'
 import { pairKey } from '../data/diplomacyData'
 import { useStarbaseStore } from './starbaseStore'
-import { isStarbaseActive, starbaseModulesOf, starbaseAnchorBody } from '../scene/starbaseLogic'
+import { isStarbaseActive, onlineModulesOf, stationBody } from '../scene/starbaseLogic'
 import { useGameTimeStore } from './gameTimeStore'
 import { TRADE_HUB_INTERSTELLAR } from '../data/starbaseData'
 import { advanceEmpiresInline, onEmpireUpdate, runOffThread, startEmpires, stopEmpires } from './economyEngine'
@@ -34,7 +39,7 @@ import {
   type ExchangeRateRegime,
 } from '../economy/centralBank'
 import { convertBetween } from '../economy/fx'
-import { RECIPES, constructionWork } from '../economy/recipes'
+import { RECIPES, constructionWork, isAutoBuilt } from '../economy/recipes'
 import { useTechStore } from './techStore'
 import { researchByNation } from '../economy/research'
 import type { TechCategory } from '../data/techData'
@@ -501,9 +506,10 @@ function stepInputOf(state: Pick<EconomyStore, 'countries' | 'worlds' | 'corpora
   const interstellarBonusByCountry: Record<string, number> = {}
   for (const sb of useStarbaseStore.getState().starbases) {
     if (!isStarbaseActive(sb, sim)) continue
-    const modules = starbaseModulesOf(sb)
+    // Only modules with power work: an unpowered tether lifts nothing.
+    const modules = onlineModulesOf(sb)
     if (modules.includes('space-elevator-tether')) {
-      const anchor = starbaseAnchorBody(sb.starId)
+      const anchor = stationBody(sb)
       if (anchor) tetheredBodyNames.push(anchor)
     }
     const hubs = modules.filter((m) => m === 'trade-hub').length
@@ -525,6 +531,10 @@ function stepInputOf(state: Pick<EconomyStore, 'countries' | 'worlds' | 'corpora
     sharedMarketPairs,
     tetheredBodyNames,
     interstellarBonusByCountry,
+    migration: (() => {
+      const { lanes, quota } = treatyLanes(useTreatyStore.getState().treaties)
+      return { laws: useMigrationStore.getState().laws, treatyPairs: lanes, treatyQuota: quota, distress: distressByBody() }
+    })(),
   }
 }
 
@@ -567,6 +577,15 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
           return { ...c, bonds: { ...c.bonds, foreign: c.bonds.foreign + amount }, treasury: c.treasury + amount }
         })
       }
+      // Who moved this advance is kept for the Population tab, and a refugee burst is told to the nation that lost the people.
+      out.migrationFlows?.forEach((flows, i) => {
+        const tick = state.tick + i + 1
+        useMigrationStore.getState().record(tick, flows)
+        for (const f of flows.filter((x) => x.wave && x.amount >= WAVE_EVENT_MIN_MILLIONS)) {
+          const owner = out.worlds.find((w) => w.id === f.from)?.ownerId
+          useDiplomacyStore.getState().pushEvent('migration-wave', owner ? [owner] : [], `${Math.round(f.amount * 1000) / 1000}M people are fleeing ${f.from} for ${f.to}`, useGameTimeStore.getState().simDays, { bodyName: f.from })
+        }
+      })
       return { countries, worlds: out.worlds, corporations: out.corporations, banks: out.banks, worldReports: out.worldReports, countryReports: out.countryReports, moneyReports: out.moneyReports, centralBankEvents: cbEvents, history, tick: out.tick }
     })
 
@@ -780,7 +799,7 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
   queueConstruction: (worldId, recipeId, owner = { kind: 'state' }, siteId) => {
     const target = get().worlds.find((w) => w.id === worldId)
     // Corporate HQs are the companies' own (corporationAI builds/relocates them), never state-constructed.
-    if (!target || recipeId === 'corporateHq') return
+    if (!target || isAutoBuilt(recipeId)) return
     const ref = { mode: 'complex' as const, id: recipeId }
     const plan = planPlacement(target.ownerId, target.id, ref, siteId)
     if (!plan.ok) return
@@ -1085,7 +1104,11 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
           return { ...w, buildings: addOwnerLevels(stripped, building.recipeId, owner, count) }
         })
       }
-      const countries = state.countries.map((c) => (c.id === world.ownerId ? { ...c, treasury: c.treasury + proceeds } : c))
+      // The buyer pays out of its own cash (at most what it has): the sale is a
+      // transfer from the company to the treasury, never money from nowhere.
+      const paid = Math.max(0, Math.min(proceeds, target.cash))
+      corporations = corporations.map((c) => (c.id === target.id ? { ...c, cash: c.cash - paid } : c))
+      const countries = state.countries.map((c) => (c.id === world.ownerId ? { ...c, treasury: c.treasury + paid } : c))
       return { countries, corporations, characters, worlds: syncCorporateHqs(worlds, corporations) }
     }),
 

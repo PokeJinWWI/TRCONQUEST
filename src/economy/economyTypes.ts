@@ -171,6 +171,8 @@ export interface LaborMarket {
 // local market and labor market, but NO treasury or tax policy: those belong to
 // its owning country (the v1 mistake this restructure fixes).
 export interface World {
+  // How kind the surface is to its people, 0..1 (economy/habitability.ts). Absent = 1: a fully habitable world, no life-support need.
+  habitability?: number
   // Unrest from displaced people (state/unrestStore), set by the main thread before each month. Absent = none.
   displacedUnrest?: number
   // The rendered body's name, e.g. 'Mars' / 'Lalande 21185 d'.

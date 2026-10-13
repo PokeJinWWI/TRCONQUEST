@@ -344,7 +344,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const treasury = country?.treasury ?? 0
   const rate = country?.currency?.rate ?? 1
   const fmt = (n: number) => formatIED(n, rate)
-  const buildable = Object.values(RECIPES).filter((r) => !groups || groups.includes(buildingGroup(r.id)))
+  const buildable = Object.values(RECIPES).filter((r) => !r.autoBuilt && (!groups || groups.includes(buildingGroup(r.id))))
 
   // Once a tab holds more than a handful of distinct building types, a flat
   // list stops being legible — add sub-category divider rows/headers. A tab

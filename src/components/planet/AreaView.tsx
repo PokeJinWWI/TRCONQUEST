@@ -122,7 +122,7 @@ export function AreaView({ bodyName, playerId }: { bodyName: string; playerId: s
   const complexWorlds = useEconomyStore((s) => s.worlds)
   const [message, setMessage] = useState<string | null>(null)
   const ready = useSeededBody(bodyName)
-  const view = useMemo(() => (ready ? areaView(bodyName, playerId) : { bodyName, sections: [], unplaced: [] }), [ready, bodyName, playerId, placed, levels, established, civic, simpleQueue, complexWorlds])
+  const view = useMemo(() => (ready ? areaView(bodyName, playerId) : { bodyName, sections: [], standalone: [], unplaced: [] }), [ready, bodyName, playerId, placed, levels, established, civic, simpleQueue, complexWorlds])
   return (
     <div className="pl-districts pl-area">
       {message && <div className="econ-neg pl-message">{message}</div>}
@@ -134,6 +134,21 @@ export function AreaView({ bodyName, playerId }: { bodyName: string; playerId: s
           ))}
         </div>
       ))}
+      {view.standalone.length > 0 && (
+        <div>
+          <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere">Standalone buildings</div>
+          <div className="pl-district">
+            <div className="pl-grid">
+              {view.standalone.map((b) => (
+                <div key={b.id} className="pl-tile" title={`${b.count} × ${b.name}`}>
+                  <PlanetIcon id={b.id} size={18} />
+                  <span className="pl-tile-name">{b.name}{b.count > 1 ? ` ×${b.count}` : ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {view.unplaced.length > 0 && (
         <div className="abs-dim" title="Buildings the world has that no site holds (built before sites existed, or that found no developed slot)">
           Not on any site: {view.unplaced.map((b) => `${b.count}× ${b.name}`).join(', ')}

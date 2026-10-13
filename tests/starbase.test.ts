@@ -6,7 +6,7 @@
 import { STARBASE_COST, STARBASE_INTEGRITY } from '../src/data/starbaseData'
 import { STARBASE_LOSS_VALUE } from '../src/data/starbaseData'
 import { starbaseAnchorBody, starbaseOwnersOf, stepStarbaseSieges, starbaseTierOf, starbaseModulesOf, freeModuleSlots, starbaseMaxIntegrity, starbaseFirepower, starbaseShipyardSlots, type Starbase, type SiegeShip } from '../src/scene/starbaseLogic'
-import { STARBASE_TIERS } from '../src/data/starbaseData'
+import { STARBASE_MODULES, STARBASE_TIERS } from '../src/data/starbaseData'
 import type { ShipLike } from '../src/scene/armyLogic'
 import { canBuildStarbase, useStarbaseStore } from '../src/state/starbaseStore'
 import { useResourceStore } from '../src/state/resourceStore'
@@ -240,9 +240,16 @@ console.log('\n=== 6. Tiers, modules, shipyard & fire-back ===')
   check('a defense battery raises firepower and max integrity', starbaseFirepower(defended) > starbaseFirepower(built) && starbaseMaxIntegrity(defended) > starbaseMaxIntegrity(built))
   check('it used a slot', freeModuleSlots(defended) === STARBASE_TIERS.starbase.moduleSlots - 1)
   check('the same module can\'t be built twice', !useStarbaseStore.getState().buildModule(defended.id, 'defense-battery', 10).ok)
+  check('solar arrays stack up to their limit', useStarbaseStore.getState().buildModule(defended.id, 'solar-array', 10).ok && useStarbaseStore.getState().buildModule(defended.id, 'solar-array', 10).ok === (STARBASE_MODULES['solar-array'].max! > 1))
 
+  check('a station at a star cannot become an orbital ring (a ring circles a world)', !useStarbaseStore.getState().upgradeTier(defended.id, 20).ok)
+  const setZone = (zone: string | undefined) => useStarbaseStore.setState((st) => ({ starbases: st.starbases.map((x) => (x.id === defended.id ? { ...x, zone } : x)) }))
+  setZone('Mars~low')
+  check('...and even one in orbit needs Starbase Citadels', !useStarbaseStore.getState().upgradeTier(defended.id, 20).ok)
+  useTechStore.getState().grantAllTech([MARS])
   const up = useStarbaseStore.getState().upgradeTier(defended.id, 20)
-  check('it can be upgraded to an orbital ring', up.ok)
+  setZone(undefined)
+  check('with the tech, a station circling a world can be upgraded to an orbital ring', up.ok)
   const ring = useStarbaseStore.getState().starbases[0]
   check('the orbital ring has more slots and firepower', starbaseTierOf(ring) === 'orbital-ring' && freeModuleSlots(ring) > freeModuleSlots(built) && starbaseFirepower(ring) > starbaseFirepower(defended))
 

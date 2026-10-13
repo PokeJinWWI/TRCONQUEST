@@ -26,6 +26,9 @@ interface GroundViewState {
   // The Zoning map mode: every district's zone drawn as a bordered, tinted area with what is built inside it picked out.
   zoningMode: boolean
   setZoningMode: (on: boolean) => void
+  // Draw every city's circle and name on the map, not just the capital and the other key places. Off by default.
+  showCities: boolean
+  setShowCities: (on: boolean) => void
   // A one-line message from the last click (a refused landing, etc.).
   notice: string | null
   selectUnit: (id: string | null) => void
@@ -50,6 +53,8 @@ export const useGroundViewStore = create<GroundViewState>((set) => ({
   hoverNode: null,
   zoningMode: false,
   setZoningMode: (zoningMode) => set({ zoningMode }),
+  showCities: false,
+  setShowCities: (showCities) => set({ showCities }),
   notice: null,
   selectUnit: (id) => set({ selectedUnitIds: id ? [id] : [] }),
   toggleUnit: (id) =>

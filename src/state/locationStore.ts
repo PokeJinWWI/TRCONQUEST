@@ -25,6 +25,9 @@ interface LocationStore {
   established: Record<string, EstablishedSite>
   // Sites FOUNDED during play by choosing ground (scene/siteFounding.ts), by body. `locationsOf` adds them to the generated ones.
   custom: Record<string, DevLocation[]>
+  // Names the player gave sites (site id -> name); a site with none keeps its generated name.
+  names: Record<string, string>
+  renameSite: (siteId: string, name: string) => void
   addCustom: (site: DevLocation) => void
   removeCustom: (siteId: string) => void
   // Establishes a site for `ownerId`. False for an unknown id or a site already held by someone else.
@@ -36,6 +39,15 @@ interface LocationStore {
 export const useLocationStore = create<LocationStore>((set) => ({
   established: {},
   custom: {},
+  names: {},
+  renameSite: (siteId, name) =>
+    set((s) => {
+      const trimmed = name.trim().slice(0, 40)
+      const names = { ...s.names }
+      if (trimmed) names[siteId] = trimmed
+      else delete names[siteId]
+      return { names }
+    }),
   addCustom: (site) => set((s) => ({ custom: { ...s.custom, [site.bodyName]: [...(s.custom[site.bodyName] ?? []).filter((x) => x.id !== site.id), site] } })),
   removeCustom: (siteId) =>
     set((s) => {
@@ -46,7 +58,9 @@ export const useLocationStore = create<LocationStore>((set) => ({
       else delete custom[body]
       const established = { ...s.established }
       delete established[siteId]
-      return { custom, established }
+      const names = { ...s.names }
+      delete names[siteId]
+      return { custom, established, names }
     }),
   establish: (siteId, ownerId, simDays, opts) => {
     if (!locationById(siteId)) return false
@@ -80,4 +94,9 @@ export function siteOwner(siteId: string, established = useLocationStore.getStat
   if (!site?.fixed) return undefined
   seedOwners ??= seedBodyOwners()
   return seedOwners[bodyOfLocation(siteId)]
+}
+
+// What to call a site: the player's name for it, else its generated one, else its plain id.
+export function siteName(siteId: string, names = useLocationStore.getState().names): string {
+  return names[siteId] ?? locationById(siteId)?.name ?? siteId.slice(siteId.lastIndexOf('#') + 1)
 }

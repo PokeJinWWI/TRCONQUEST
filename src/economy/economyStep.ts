@@ -6,6 +6,8 @@
 // (plain, structured-clonable data: a function such as `atWar` cannot cross a
 // worker boundary, so the wars come as a list of pairs), and everything it
 // produces goes out through `EconomyStepOutput`.
+import { stepMigration } from './migration'
+import type { MigrationFlow, MigrationLaws } from './migrationRules'
 import { tickEconomy } from './economyTick'
 import type { Bank, CentralBankEvent, Corporation, Country, CountryFiscal, MonetaryAggregates, World, WorldReport } from './economyTypes'
 import type { TradePolicy } from '../data/tradePolicyData'
@@ -129,6 +131,10 @@ export interface EconomyStepInput {
   // Extra national interstellar (merchant-marine) capacity from starbase
   // trade-hub modules, by country id.
   interstellarBonusByCountry?: Record<string, number>
+  // Migration (economy/migration.ts): each nation's laws, the lanes a `migration` treaty opens ('from>to', migrationLane) with their
+  // monthly quota in millions, and each world's distress (war, occupation, displacement). Absent = every nation's default laws
+  // (closed borders), so only movement within one nation can happen.
+  migration?: { laws: Record<string, MigrationLaws>; treatyPairs: string[]; treatyQuota?: Record<string, number>; distress?: Record<string, number> }
 }
 
 export interface EconomyStepOutput {
@@ -145,6 +151,8 @@ export interface EconomyStepOutput {
   events: CentralBankEvent[]
   // One fiscal sample per step per country, oldest first.
   samples: Record<string, FiscalSample[]>
+  // The people who moved, per step oldest first (economy/migration.ts).
+  migrationFlows: MigrationFlow[][]
 }
 
 const pairKeyOf = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
@@ -171,6 +179,8 @@ export function runEconomySteps(input: EconomyStepInput): EconomyStepOutput {
   let moneyReports: Record<string, MonetaryAggregates> = {}
   const events: CentralBankEvent[] = []
   const samples: Record<string, FiscalSample[]> = {}
+  const migrationFlows: MigrationFlow[][] = []
+  const treatyPairs = input.migration ? new Set(input.migration.treatyPairs) : undefined
   for (let i = 0; i < input.steps; i++) {
     const res = tickEconomy(countries, worlds, corporations, { humanCountryIds: input.humanCountryIds, tick: input.startTick + i + 1, enableAI: true, atWar, canTrade, embargoed, sharedMarket, tariffRate, importSubvention, exportSubvention, tetheredBodies, interstellarBonus }, banks)
     countries = res.countries
@@ -181,7 +191,20 @@ export function runEconomySteps(input: EconomyStepInput): EconomyStepOutput {
     countryReports = res.reports.countries
     moneyReports = res.reports.money
     events.push(...res.reports.events)
+    // Then people move, by the laws and paths of the month that just ran.
+    const moved = stepMigration(worlds, {
+      laws: input.migration?.laws ?? {},
+      treatyPairs: treatyPairs ?? new Set<string>(),
+      treatyQuota: input.migration?.treatyQuota,
+      atWar,
+      canReach: (a, b) => (groups ? (groups[a] ?? 'core') === (groups[b] ?? 'core') : true),
+      distress: input.migration?.distress,
+      launch: Object.fromEntries(Object.entries(worldReports).map(([id, r]) => [id, r.launch ?? Infinity])),
+      reports: worldReports,
+    })
+    worlds = moved.worlds
+    migrationFlows.push(moved.flows)
     for (const c of countries) (samples[c.id] ??= []).push(sampleOf(countryReports[c.id], c, moneyReports[c.id], unemploymentOf(c.id, worlds, worldReports)))
   }
-  return { countries, worlds, corporations, banks, tick: input.startTick + input.steps, worldReports, countryReports, moneyReports, events, samples }
+  return { countries, worlds, corporations, banks, tick: input.startTick + input.steps, worldReports, countryReports, moneyReports, events, samples, migrationFlows }
 }
