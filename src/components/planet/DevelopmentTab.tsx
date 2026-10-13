@@ -8,7 +8,8 @@ import { developmentView, type AreaRow } from '../../scene/territoryView'
 import { useCivicStore } from '../../state/civicStore'
 import { PlanetIcon } from './PlanetIcons'
 import { useInfrastructureStore } from '../../state/infrastructureStore'
-import { useLocationStore } from '../../state/locationStore'
+import { useLocationStore, siteNative } from '../../state/locationStore'
+import { usePlaceNameStore } from '../../state/placeNameStore'
 import { useEconomyStore, worldByName } from '../../state/economyStore'
 import { useBuildingDetailStore } from '../../state/buildingDetailStore'
 import { RECIPES } from '../../economy/recipes'
@@ -29,31 +30,31 @@ const HOLDS_LABEL: Record<string, string> = {
 function RenamableName({ id, name, canRename }: { id: string; name: string; canRename: boolean }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(name)
+  const [nativeDraft, setNativeDraft] = useState('')
+  usePlaceNameStore((s) => s.natives[id])
+  const native = siteNative(id)
+  const sub = native ? <sub className="abs-dim" style={{ marginLeft: 4 }}>{native}</sub> : null
   if (!editing) {
     return canRename ? (
-      <button type="button" className="good-flow-link" style={{ width: 'auto', textAlign: 'left' }} title="Click to rename" onClick={() => { setDraft(name); setEditing(true) }}>{name}</button>
-    ) : <>{name}</>
+      <button type="button" className="good-flow-link" style={{ width: 'auto', textAlign: 'left' }} title="Click to rename it and edit its subscript" onClick={() => { setDraft(name); setNativeDraft(native ?? ''); setEditing(true) }}>{name}{sub}</button>
+    ) : <>{name}{sub}</>
   }
   const commit = () => {
     useLocationStore.getState().renameSite(id, draft)
+    usePlaceNameStore.getState().setNative(id, nativeDraft)
     syncCivicHalls(id.slice(0, id.lastIndexOf('#')))
     setEditing(false)
   }
+  const keys = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') commit()
+    if (e.key === 'Escape') setEditing(false)
+    e.stopPropagation()
+  }
   return (
     <span>
-      <input
-        className="ground-key-name-input"
-        autoFocus
-        value={draft}
-        maxLength={40}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit()
-          if (e.key === 'Escape') setEditing(false)
-          e.stopPropagation()
-        }}
-      />
-      <button type="button" className="ground-key-rename" onClick={commit} title="Save the name (empty goes back to the generated one)">✓</button>
+      <input className="ground-key-name-input" autoFocus value={draft} maxLength={40} onChange={(e) => setDraft(e.target.value)} onKeyDown={keys} />
+      <input className="ground-key-name-input" value={nativeDraft} maxLength={40} placeholder="subscript" title="The little subscript beside the name: Chinese, or anything you like. Empty hides it." onChange={(e) => setNativeDraft(e.target.value)} onKeyDown={keys} />
+      <button type="button" className="ground-key-rename" onClick={commit} title="Save (an empty name goes back to the generated one)">✓</button>
     </span>
   )
 }

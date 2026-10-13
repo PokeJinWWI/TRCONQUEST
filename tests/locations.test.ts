@@ -84,7 +84,7 @@ console.log('\n=== 2b. Earth\'s economic geography ===')
   check('industry stands on the Ganges uplands and in Germany', distanceDeg('Ganges Upland Industrial Zone', anchor('Ganges Upland Industrial Zone').at) < 9 && distanceDeg('Hessian Industrial Zone', anchor('Hessian Industrial Zone').at) < 9)
   check('Africa is a developed core: at least ten settlements south of the Sahara and east of 0 degrees', EARTH_ANCHORS.filter((a) => a.kind === 'settlement' && a.at[1] < 12 && a.at[0] > 0 && a.at[0] < 50 && named.has(a.name)).length >= 10)
   check('a mine holds its anchor\'s resource', sites.filter((x) => x.kind === 'resource' && x.good).every((x) => EARTH_ANCHORS.some((a) => a.name === x.name && a.good === x.good)))
-  check('the capital and Earth\'s cities keep their real names', ['Western China Megalopolis', 'Great Lakes Megalopolis', 'São Paulo', 'Nairobi'].every((n) => named.has(n)))
+  check('the capital and Earth\'s cities keep their real names', ['Chengyu Megalopolis', 'Great Lakes Megalopolis', 'São Paulo', 'Nairobi'].every((n) => named.has(n)))
   check('every site has a name and names are unique per body', sites.every((x) => !!x.name) && new Set(sites.map((x) => x.name)).size === sites.length)
 }
 

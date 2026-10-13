@@ -8,6 +8,7 @@ import { useGameTimeStore } from '../../state/gameTimeStore'
 import { holderOf } from '../../scene/groundLogic'
 import { isActive, isMilitaryInstallation, withInstallationKeys } from '../../scene/defenseLogic'
 import { keyNameOf } from '../../scene/keyNames'
+import { nativeOfName } from '../../data/nativeNames'
 import { KEY_BUILDING_ICON, keyBuildingsOf, type KeyBuilding } from '../../scene/keyBuildings'
 import { PlanetIcon } from './PlanetIcons'
 import { useCivicDetailStore, useCivicStore } from '../../state/civicStore'
@@ -132,7 +133,7 @@ export function MilitaryTiles({ bodyName, playerId, canBuild, slots, grouped }: 
             <div key={i.id} className={`pl-tile${building ? ' queued' : ''}${captured ? ' captured' : ''}`}
               title={`${label}\n${def.description}\n${building ? `Under construction — ready in ${Math.ceil(i.readySimDays - simDays)} days` : `Integrity ${Math.round(i.integrity)} / ${def.integrity}`} · held by ${holder ? ownerDisplay(holder).name : 'nobody'}${captured ? ' (captured)' : ''}`}>
               <PlanetIcon id={i.kind} size={22} />
-              <span className="pl-tile-name">{label}</span>
+              <span className="pl-tile-name">{label}{nativeOfName(label) ? <sub className="abs-dim"> {nativeOfName(label)}</sub> : null}</span>
               {captured && <span className="pl-key-flag" style={{ background: ownerDisplay(holder!).color }} />}
               <span className="pl-tile-bar"><span style={{ width: `${Math.max(0, Math.min(1, i.integrity / def.integrity)) * 100}%` }} /></span>
             </div>

@@ -80,7 +80,7 @@ export const COUNTRIES: Country[] = [
     color: '#4a6fa5', // a deep steel blue, distinct from Venus/Orion
     capitalStarId: 'sol',
     capitalBodyName: 'Earth',
-    capitalCityName: 'Western China Megalopolis',
+    capitalCityName: 'Chengyu Megalopolis',
     capitalCityNative: '成渝',
     capitalCityAt: [104.8, 30.4], // the Chengdu–Chongqing megalopolis, Sichuan Basin
     // Earth's four surviving megacities (vast urban sprawls) and the old empire's

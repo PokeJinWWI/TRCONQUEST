@@ -4,6 +4,8 @@ import { seedBodyOwners } from './territory'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
 import { lonLatOf } from './mapProjection'
 import { regionAt } from './bodyTopography'
+import { nativeOfName } from '../data/nativeNames'
+import { keyNodeId, nativeFor, usePlaceNameStore } from '../state/placeNameStore'
 import type { BodySurface, KeySlot } from './planetTerrain'
 
 // Names and roles for a world's key nodes. A world's cities are named from its
@@ -79,7 +81,7 @@ export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
     // use the name as given (it's already a real place like "Jiuquan Cosmodrome").
     if (slot.name) {
       const label = slot.kind === 'capital' ? `${slot.name} (capital)` : slot.kind === 'outpost' ? `${slot.name} Outpost` : slot.name
-      out.set(slot.node, { name: slot.name, native: slot.kind === 'capital' ? country?.capitalCityNative : undefined, label })
+      out.set(slot.node, { name: slot.name, native: slot.kind === 'capital' ? country?.capitalCityNative ?? nativeOfName(slot.name) : nativeOfName(slot.name), label })
       continue
     }
     if (slot.kind === 'capital' && capitalName) {
@@ -98,7 +100,7 @@ export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
   for (const slot of surface.keySlots) {
     if (slot.kind !== 'fortress') continue
     if (slot.name) {
-      out.set(slot.node, { name: slot.name, label: slot.name })
+      out.set(slot.node, { name: slot.name, native: nativeOfName(slot.name), label: slot.name })
       continue
     }
     const guarded = nearestSettlement(surface, slot.node, Infinity)
@@ -119,7 +121,7 @@ export function keyNamesOf(surface: BodySurface): Map<number, KeyName> {
     if (!slot.site) continue
     // A spaceport its owner has named keeps that name.
     if (slot.name) {
-      out.set(slot.node, { name: slot.name, label: unique(slot.name) })
+      out.set(slot.node, { name: slot.name, native: nativeOfName(slot.name), label: unique(slot.name) })
       continue
     }
     const region = slot.site === 'outlier' ? regionAt(surface.bodyName, slot.node) : null
@@ -150,7 +152,15 @@ function compass(from: number, to: number): string {
 }
 
 export function keyNameOf(surface: BodySurface, slot: Pick<KeySlot, 'node' | 'kind'>): KeyName {
-  return keyNamesOf(surface).get(slot.node) ?? { name: null, label: KEY_KIND_LABEL[slot.kind] }
+  const base = keyNamesOf(surface).get(slot.node) ?? { name: null, label: KEY_KIND_LABEL[slot.kind] }
+  // The player's own name and subscript win.
+  const id = keyNodeId(surface.bodyName, slot.node)
+  const { names, natives } = usePlaceNameStore.getState()
+  const own = names[id]
+  const native = nativeFor(id, base.native, natives)
+  if (!own && native === base.native) return base
+  const suffix = base.name && base.label.startsWith(base.name) ? base.label.slice(base.name.length) : ''
+  return { ...base, name: own ?? base.name, native, label: own ? `${own}${suffix}` : base.label }
 }
 
 // The settlement (not a fortress) nearest a node, within `maxCells` map cells.

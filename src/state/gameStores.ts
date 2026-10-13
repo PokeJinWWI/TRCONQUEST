@@ -32,6 +32,7 @@ import { useHoldingsStore } from './holdingsStore'
 import { useHyperlaneStore } from './hyperlaneStore'
 import { useJurisdictionStore } from './jurisdictionStore'
 import { useLocationStore } from './locationStore'
+import { usePlaceNameStore } from './placeNameStore'
 import { useInfrastructureStore } from './infrastructureStore'
 import { useInternationalOrgStore } from './internationalOrgStore'
 import { useMapModeStore } from './mapModeStore'
@@ -115,6 +116,7 @@ export const STORE_REGISTRY: StoreEntry[] = [
   game('colonies', useColonyStore),
   game('deposits', useDepositStore),
   // v2: player-given site names (v1 saves have none).
+  game('placeNames', usePlaceNameStore),
   game('locations', useLocationStore, { version: 2, migrate: (saved) => dropEarthSites({ names: {}, ...(saved as object) }) }),
   game('jurisdiction', useJurisdictionStore),
   // v2: district levels per site, seeded bodies, auto-seed flag (v1 saves keep their `placed`). v3: Earth's sites moved (hand-placed).

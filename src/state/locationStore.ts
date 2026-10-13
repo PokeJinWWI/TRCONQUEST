@@ -1,3 +1,5 @@
+import { nativeOfName } from '../data/nativeNames'
+import { nativeFor } from './placeNameStore'
 import { create } from 'zustand'
 import { setCustomSites } from '../scene/customSites'
 import { bodyOfLocation, locationById, type DevLocation } from '../scene/locations'
@@ -99,4 +101,9 @@ export function siteOwner(siteId: string, established = useLocationStore.getStat
 // What to call a site: the player's name for it, else its generated one, else its plain id.
 export function siteName(siteId: string, names = useLocationStore.getState().names): string {
   return names[siteId] ?? locationById(siteId)?.name ?? siteId.slice(siteId.lastIndexOf('#') + 1)
+}
+
+// The subscript beside a site's name: the player's own, else the built-in one for Earth's Chinese places.
+export function siteNative(siteId: string): string | undefined {
+  return nativeFor(siteId, nativeOfName(locationById(siteId)?.name))
 }

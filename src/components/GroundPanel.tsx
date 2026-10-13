@@ -1,3 +1,4 @@
+import { keyNodeId, usePlaceNameStore } from '../state/placeNameStore'
 import { KEY_HOLD_BONUS, KEY_KIND_LABEL, KEY_ROLE, keyNameOf } from '../scene/keyNames'
 import { useState } from 'react'
 import { regionAt } from '../scene/bodyTopography'
@@ -118,6 +119,9 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
   // Renaming a spaceport or an installation of your own (the pencil beside it in the list).
   const [renaming, setRenaming] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
+  const [nativeDraft, setNativeDraft] = useState('')
+  usePlaceNameStore((s) => s.names)
+  usePlaceNameStore((s) => s.natives)
   useStructureStore((s) => s.ports[bodyName])
   const installations = useDefenseStore((s) => s.installations)
 
@@ -154,11 +158,13 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
             const port = k.kind === 'spaceport' && k.site ? portAt(bodyName, k.node) : undefined
             const installation = k.kind === 'fortress' || (k.kind === 'spaceport' && !k.site) ? installations.find((i) => i.bodyName === bodyName && i.node === k.node) : undefined
             const mine = owner === player && !!player
-            const canRename = mine && (!!port || !!installation)
+            const canRename = mine
             if (renaming === k.node) {
               const commit = () => {
                 if (port) renamePort(bodyName, port.id, draft)
                 else if (installation) useDefenseStore.getState().renameInstallation(installation.id, draft)
+                else usePlaceNameStore.getState().setName(keyNodeId(bodyName, k.node), draft)
+                usePlaceNameStore.getState().setNative(keyNodeId(bodyName, k.node), nativeDraft)
                 setRenaming(null)
               }
               return (
@@ -170,6 +176,19 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                     maxLength={40}
                     placeholder={kn.label}
                     onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commit()
+                      if (e.key === 'Escape') setRenaming(null)
+                      e.stopPropagation()
+                    }}
+                  />
+                  <input
+                    className="ground-key-name-input"
+                    value={nativeDraft}
+                    maxLength={40}
+                    placeholder="subscript"
+                    title="The little subscript beside the name: Chinese, or anything you like. Empty hides it."
+                    onChange={(e) => setNativeDraft(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') commit()
                       if (e.key === 'Escape') setRenaming(null)
@@ -188,7 +207,7 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                   onClick={() => useGroundViewStore.getState().focusNode(k.node)}
                   title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''}${k.operator ? `\nRun by ${k.operator}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
                 >
-                  <span className="ground-key-row-name">{kn.name ?? kn.label}{kn.native ? <span className="abs-dim"> {kn.native}</span> : null}</span>
+                  <span className="ground-key-row-name">{kn.name ?? kn.label}{kn.native ? <sub className="abs-dim"> {kn.native}</sub> : null}</span>
                   <span className="abs-dim">{[kn.name ? KEY_KIND_LABEL[k.kind] : '', region ?? '', k.operator ? `run by ${k.operator}` : ''].filter(Boolean).join(' · ')}</span>
                   <span className="ground-key-row-holder" style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined }}>{k.holder ? ownerDisplay(k.holder).name : 'nobody'}</span>
                 </button>
@@ -198,7 +217,8 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                     className="ground-key-rename"
                     title="Name it"
                     onClick={() => {
-                      setDraft(port?.name ?? installation?.name ?? '')
+                      setDraft(port?.name ?? installation?.name ?? usePlaceNameStore.getState().names[keyNodeId(bodyName, k.node)] ?? (port || installation ? '' : kn.name ?? ''))
+                      setNativeDraft(kn.native ?? '')
                       setRenaming(k.node)
                     }}
                   >
