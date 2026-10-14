@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <!-- NERV reticle: an orange hexagon with a centre dot and ticks, black keyline. Hotspot is the centre (13,13). -->
+  <g fill="none" stroke="#000" stroke-width="4.2" stroke-linejoin="miter">
+    <path d="M13 3 L21.7 8 V18 L13 23 L4.3 18 V8 Z"/>
+    <path d="M13 0 V5 M13 21 V26 M0 13 H5 M21 13 H26"/>
+  </g>
+  <g fill="none" stroke="#ff9900" stroke-width="1.8" stroke-linejoin="miter">
+    <path d="M13 3 L21.7 8 V18 L13 23 L4.3 18 V8 Z"/>
+    <path d="M13 0.5 V5 M13 21 V25.5 M0.5 13 H5 M21 13 H25.5"/>
+  </g>
+  <circle cx="13" cy="13" r="2.4" fill="#ff9900" stroke="#000" stroke-width="1"/>
+</svg>

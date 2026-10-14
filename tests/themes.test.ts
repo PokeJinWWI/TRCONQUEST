@@ -30,8 +30,8 @@ function check(label: string, cond: boolean, detail = '') {
 }
 
 console.log('\n=== 1. Theme preference ===')
-check('nothing saved = Default, Japanese, full motion', JSON.stringify(parseThemePrefs(null)) === JSON.stringify({ theme: 'default', script: 'ja', reduceMotion: false, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false } }))
-check('a saved NERV / Simplified / reduced loads', JSON.stringify(parseThemePrefs('{"theme":"nerv","script":"zh-Hans","reduceMotion":true}')) === JSON.stringify({ theme: 'nerv', script: 'zh-Hans', reduceMotion: true, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false } }))
+check('nothing saved = Default, Japanese, full motion', JSON.stringify(parseThemePrefs(null)) === JSON.stringify({ theme: 'default', script: 'ja', reduceMotion: false, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
+check('a saved NERV / Simplified / reduced loads', JSON.stringify(parseThemePrefs('{"theme":"nerv","script":"zh-Hans","reduceMotion":true}')) === JSON.stringify({ theme: 'nerv', script: 'zh-Hans', reduceMotion: true, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
 check('junk gives the defaults', parseThemePrefs('{{').theme === 'default' && parseThemePrefs('{"theme":"pink","script":"xx"}').script === 'ja')
 
 console.log('\n=== 2. Default is the original look ===')
@@ -54,6 +54,20 @@ console.log('\n=== 2. Default is the original look ===')
   check('every NERV rule is scoped to html[data-theme=nerv] (Default untouched)', unscoped.length === 0, unscoped.slice(0, 3).join(' | '))
   check('the scene chrome keeps its original colours in Default', SCENE_COLORS.default.orbit === '#7ce8ff' && SCENE_COLORS.default.grid === '#6fe3ff' && SCENE_COLORS.default.lattice === '#2b6b80')
 }
+
+console.log('\n=== 2a. Windows 95 theme ===')
+{
+  check('a saved Windows 95 theme loads', parseThemePrefs('{"theme":"win95"}').theme === 'win95')
+  check('the Windows 95 scene colours exist', SCENE_COLORS.win95.toneMapped === false)
+  const w95 = readFileSync('src/themes/win95.css', 'utf8')
+  const rules = w95.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@font-face\s*{[^}]*}/g, '')
+  const selectors = [...rules.matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim()).filter(Boolean)
+  const unscoped = selectors.filter((sel) => !sel.split(/,(?![^(]*\))/).every((part) => part.includes("[data-theme='win95']")))
+  check('every Windows 95 rule is scoped to html[data-theme=win95]', unscoped.length === 0, unscoped.slice(0, 3).join(' | '))
+}
+
+check('NERV screen effects default off and load per switch', (() => { const n = parseThemePrefs('{"theme":"nerv","nervCrt":{"scanlines":true,"glow":"x"}}').nervCrt; return n.scanlines === true && n.glow === false && n.curve === false })())
+check('the shared effect rules reach both Terminal and NERV', readFileSync('src/themes/terminal.css', 'utf8').includes("html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-scanlines='on']"))
 
 console.log('\n=== 2b. Terminal theme ===')
 {

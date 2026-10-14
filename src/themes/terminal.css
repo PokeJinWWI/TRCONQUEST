@@ -186,23 +186,23 @@ html[data-theme='terminal'] .situation-badge.sev-danger {
   color: #000;
 }
 
-/* --- CRT effects (each its own switch) ---------------------------------------------------- */
+/* --- CRT effects (each its own switch; shared with the NERV theme, which sets its own switches) ---------------------------------------------------- */
 /* Glow: text-shadow inherits, so setting it once on the body lights every label. */
-html[data-theme='terminal'][data-crt-glow='on'] body {
+html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-glow='on'] body {
   text-shadow: var(--phosphor-glow);
 }
-html[data-theme='terminal'][data-crt-glow='on'] :is(.draggable-window-titlebar, .nav-category-btn.active, .time-btn.active, .time-mode-btn.active, .dip-toast.sev-danger, .confirm-title, .situation-badge.sev-danger) {
+html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-glow='on'] :is(.draggable-window-titlebar, .nav-category-btn.active, .time-btn.active, .time-mode-btn.active, .dip-toast.sev-danger, .confirm-title, .situation-badge.sev-danger) {
   text-shadow: none;
 }
 
 /* Scanlines and noise share one overlay: the layers are variables, so either alone works. */
-html[data-theme='terminal'][data-crt-scanlines='on'] {
+html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-scanlines='on'] {
   --crt-scan: repeating-linear-gradient(transparent 0 2px, rgba(0, 0, 0, 0.18) 2px 3px);
 }
-html[data-theme='terminal'][data-crt-noise='on'] {
+html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-noise='on'] {
   --crt-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-html[data-theme='terminal']:is([data-crt-scanlines='on'], [data-crt-noise='on'])::after {
+html:is([data-theme='terminal'], [data-theme='nerv']):is([data-crt-scanlines='on'], [data-crt-noise='on'])::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -214,7 +214,7 @@ html[data-theme='terminal']:is([data-crt-scanlines='on'], [data-crt-noise='on'])
 /* Curved glass: a dark bezel with rounded inner corners, a vignette that darkens toward the
    edges and a faint highlight, like light on a bulging tube. Drawn as one overlay; the page is
    not warped (a flat fake), so clicks land where they look. */
-html[data-theme='terminal'][data-crt-curve='on']::before {
+html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-curve='on']::before {
   content: '';
   position: fixed;
   inset: 6px;
@@ -243,7 +243,7 @@ html[data-theme='terminal'][data-crt-curve='on']::before {
   53% { opacity: 0; }
   82% { opacity: 0.03; }
 }
-html[data-theme='terminal'][data-crt-flicker='on'] body::after {
+html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-flicker='on'] body::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -254,7 +254,7 @@ html[data-theme='terminal'][data-crt-flicker='on'] body::after {
   animation: terminal-flicker 0.9s steps(1) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-theme='terminal'] body::after {
+  html:is([data-theme='terminal'], [data-theme='nerv']) body::after {
     display: none;
   }
 }

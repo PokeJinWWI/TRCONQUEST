@@ -1,0 +1,538 @@
+/* The Windows 95 theme: silver 3D-bevelled chrome, navy title bars, a teal desktop, a taskbar
+   along the bottom, white sunken input wells, black text. A pure reskin of the Default theme:
+   most of the look comes from redefining the theme tokens (index.css :root) for a LIGHT UI, the
+   rest is the bevels. Every rule is under html[data-theme='win95'], so Default, NERV and Terminal
+   are untouched. Relation colours (own / allied / neutral / hostile) and nation colours are NOT
+   themed; the alert colours are darkened so they still read on silver. */
+
+@font-face {
+  font-family: 'Pixelated MS Sans Serif';
+  font-weight: 400;
+  src: url('../assets/fonts/ms_sans_serif.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pixelated MS Sans Serif';
+  font-weight: 700;
+  src: url('../assets/fonts/ms_sans_serif_bold.woff2') format('woff2');
+}
+
+html[data-theme='win95'] {
+  --accent-rgb: 0, 0, 128;
+  --accent-soft-rgb: 0, 0, 0;
+  --ink-rgb: 0, 0, 0;
+  --panel-rgb: 192, 192, 192;
+  --panel-deep-rgb: 192, 192, 192;
+  --panel-raised-rgb: 223, 223, 223;
+  --panel-hover-rgb: 208, 208, 208;
+  --shade-rgb: 0, 0, 0;
+  --text-bright-rgb: 0, 0, 0;
+  --ok-rgb: 0, 112, 0;
+  --warn-rgb: 160, 90, 0;
+  --danger-rgb: 192, 0, 0;
+  --caution-rgb: 128, 96, 0;
+  --accent: #000080;
+  --accent-soft: #000;
+  --text: #000;
+  --text-bright: #000;
+  --text-cool: #000;
+  --text-toast: #000;
+  --strong: #000;
+  --danger: #c00000;
+  --warn: #a05a00;
+  --caution: #806000;
+  --ok: #007000;
+  --page-bg: #000;
+  --font-ui: 'Pixelated MS Sans Serif', 'MS Sans Serif', Tahoma, sans-serif;
+  --font-body: 'Pixelated MS Sans Serif', 'MS Sans Serif', Tahoma, sans-serif;
+  --font-mono: 'Pixelated MS Sans Serif', 'MS Sans Serif', Tahoma, sans-serif;
+  --cursor-default: url('../assets/cursors/win95-pointer.svg') 0 0, default;
+  --cursor-pointer: url('../assets/cursors/win95-hand.svg') 5 0, pointer;
+  --cursor-blocked: url('../assets/cursors/win95-blocked.svg') 11 11, not-allowed;
+  --w95-silver: #c0c0c0;
+  --w95-navy: #000080;
+  --w95-title: linear-gradient(90deg, #000080, #1084d0);
+  --w95-raised: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+  --w95-sunken: inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  --w95-field: inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  --w95-dither: repeating-conic-gradient(#fff 0% 25%, #c0c0c0 0% 50%) 0 0 / 2px 2px;
+}
+
+/* No glows anywhere: Windows 95 never had them (the rules below that want a shadow are more specific). */
+html[data-theme='win95'] * {
+  text-shadow: none;
+}
+
+/* --- Type --------------------------------------------------------------------------------- */
+html[data-theme='win95'] body {
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+html[data-theme='win95'] :is(.hud-bar, .draggable-window, .main-menu, .nav-sidebar, .outliner) {
+  font-family: var(--font-ui);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+html[data-theme='win95'] :is(.hud-title, .draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-title, .main-menu-subtitle, .confirm-title, .outliner-section-title, .action-dock-header) {
+  font-family: var(--font-ui);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+html[data-theme='win95'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn) {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+html[data-theme='win95'] :is(.fiscal-ind-val, .resource-value, .resource-delta, .time-clock) {
+  font-family: var(--font-ui);
+}
+
+/* --- Square, bevelled chrome -------------------------------------------------------------- */
+html[data-theme='win95'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .outliner-filter-pill, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .game-tooltip) {
+  border-radius: 0 !important;
+}
+/* The top bar and the bottom bar (the taskbar) are raised silver strips. */
+html[data-theme='win95'] .hud-bar {
+  background: var(--w95-silver);
+  color: #000;
+  text-shadow: none;
+}
+html[data-theme='win95'] .hud-top {
+  border-bottom: none;
+  box-shadow: inset 0 -1px #808080, inset 0 1px #fff, 0 1px #0a0a0a;
+}
+html[data-theme='win95'] .hud-bottom {
+  border-top: none;
+  box-shadow: inset 0 1px #dfdfdf, inset 0 2px #fff;
+}
+html[data-theme='win95'] :is(.nav-sidebar, .outliner) {
+  background: var(--w95-silver);
+  border: none;
+  color: #000;
+  box-shadow: var(--w95-raised);
+}
+html[data-theme='win95'] .draggable-window {
+  background: var(--w95-silver);
+  border: none;
+  color: #000;
+  box-shadow: var(--w95-raised), 2px 2px 0 rgba(0, 0, 0, 0.35);
+  padding: 2px;
+}
+/* A title bar is the navy gradient strip. */
+html[data-theme='win95'] .draggable-window-titlebar {
+  background: var(--w95-title);
+  color: #fff;
+  border-bottom: none;
+  padding: 3px 4px 3px 6px;
+  font-weight: 700;
+  font-size: 11px;
+  text-shadow: none;
+}
+html[data-theme='win95'] .draggable-window-titlebar-controls {
+  gap: 2px;
+}
+/* Close / collapse / maximize are little raised silver squares. */
+html[data-theme='win95'] .draggable-window-titlebar :is(.draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  background: var(--w95-silver);
+  color: #000;
+  width: 16px;
+  height: 14px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+  box-shadow: var(--w95-raised);
+}
+html[data-theme='win95'] .draggable-window-titlebar :is(.draggable-window-close, .draggable-window-collapse, .draggable-window-maximize):hover {
+  color: #000;
+}
+html[data-theme='win95'] .draggable-window-titlebar :is(.draggable-window-close, .draggable-window-collapse, .draggable-window-maximize):active {
+  box-shadow: var(--w95-sunken);
+  padding: 1px 0 0 1px;
+}
+html[data-theme='win95'] .draggable-window.collapsed .draggable-window-titlebar {
+  border-radius: 0;
+}
+
+/* Buttons are raised silver; pressed and selected are sunken (selected on a dither); disabled
+   is the embossed grey. */
+html[data-theme='win95'] :is(button, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: var(--w95-silver);
+  border: none;
+  color: #000;
+  box-shadow: var(--w95-raised);
+  text-shadow: none;
+}
+html[data-theme='win95'] :is(.draggable-window-titlebar button):not(:hover) {
+  text-shadow: none;
+}
+html[data-theme='win95'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: var(--w95-silver);
+  color: #000;
+}
+html[data-theme='win95'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):active:not(:disabled) {
+  box-shadow: var(--w95-sunken);
+}
+html[data-theme='win95'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: var(--w95-dither);
+  color: #000;
+  font-weight: 700;
+  box-shadow: var(--w95-sunken);
+}
+html[data-theme='win95'] button:disabled:not(.situations-icon) {
+  color: #808080;
+  text-shadow: 1px 1px 0 #fff;
+}
+/* Input wells: white, sunken. */
+html[data-theme='win95'] :is(input, select, textarea) {
+  background: #fff;
+  border: none;
+  color: #000;
+  font-family: var(--font-ui);
+  box-shadow: var(--w95-field);
+}
+html[data-theme='win95'] :is(input[type='checkbox'], input[type='radio'], input[type='range']) {
+  box-shadow: none;
+  background: transparent;
+}
+html[data-theme='win95'] :is(input, textarea) {
+  caret-color: #000;
+}
+html[data-theme='win95'] ::selection {
+  background: var(--w95-navy);
+  color: #fff;
+}
+/* A selected list row is the navy highlight. */
+html[data-theme='win95'] .outliner-entry.selected .outliner-entry-name {
+  background: var(--w95-navy);
+  color: #fff;
+}
+
+/* --- HUD ---------------------------------------------------------------------------------- */
+html[data-theme='win95'] .hud-title {
+  color: #000;
+  font-weight: 700;
+  font-size: 13px;
+}
+html[data-theme='win95'] .time-date {
+  font-family: var(--font-ui);
+  color: #000;
+}
+/* The taskbar's Start button. */
+html[data-theme='win95'] .time-controls::before {
+  content: 'Start';
+  font: 700 12px/1 var(--font-ui);
+  color: #000;
+  background: var(--w95-silver);
+  box-shadow: var(--w95-raised);
+  padding: 6px 10px 6px 24px;
+  margin-right: 8px;
+  background-image:
+    linear-gradient(#ff0000, #ff0000), linear-gradient(#00a000, #00a000),
+    linear-gradient(#0000ff, #0000ff), linear-gradient(#ffd800, #ffd800);
+  background-size: 6px 5px, 6px 5px, 6px 5px, 6px 5px;
+  background-position: 7px 6px, 14px 6px, 7px 12px, 14px 12px;
+  background-repeat: no-repeat;
+  background-color: var(--w95-silver);
+  padding-left: 26px;
+}
+
+/* --- Alerts ------------------------------------------------------------------------------- */
+html[data-theme='win95'] .dip-toast {
+  background: #ffffe1;
+  color: #000;
+  border: 1px solid #000;
+  border-left: 4px solid var(--w95-navy);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+html[data-theme='win95'] .dip-toast.sev-danger {
+  background: #ffffe1;
+  color: #000;
+  border-left-color: var(--danger);
+  font-weight: 700;
+}
+html[data-theme='win95'] .dip-toast.sev-warning {
+  border-left-color: var(--warn);
+}
+html[data-theme='win95'] .confirm-box {
+  background: var(--w95-silver);
+  color: #000;
+  border: none;
+  box-shadow: var(--w95-raised), 3px 3px 0 rgba(0, 0, 0, 0.4);
+}
+html[data-theme='win95'] .confirm-title {
+  background: var(--w95-title);
+  color: #fff;
+  margin: -16px -18px 12px;
+  padding: 4px 18px;
+  font-size: 12px;
+}
+html[data-theme='win95'] .situations-type {
+  background: var(--w95-silver);
+  border: none;
+  border-left: 4px solid var(--sev-color);
+  box-shadow: var(--w95-raised);
+}
+html[data-theme='win95'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='win95'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='win95'] .sev-info {
+  --sev-color: var(--w95-navy);
+}
+html[data-theme='win95'] .situation-badge {
+  background: var(--w95-silver);
+  color: #000;
+  box-shadow: var(--w95-raised);
+}
+html[data-theme='win95'] .situation-badge.sev-danger {
+  background: var(--danger);
+  color: #fff;
+}
+/* The tooltip is the classic pale-yellow one. */
+html[data-theme='win95'] .game-tooltip {
+  background: #ffffe1;
+  color: #000;
+  border: 1px solid #000;
+  box-shadow: none;
+  font-size: 12px;
+}
+html[data-theme='win95'] .game-tooltip-gloss,
+html[data-theme='win95'] .game-tooltip-gloss b {
+  color: #000;
+}
+
+/* --- Main menu: the desktop --------------------------------------------------------------- */
+html[data-theme='win95'] .main-menu {
+  background: #008080;
+  color: #fff;
+}
+html[data-theme='win95'] :is(.main-menu-title, .main-menu-subtitle) {
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* --- Scrollbars --------------------------------------------------------------------------- */
+html[data-theme='win95'] ::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+html[data-theme='win95'] ::-webkit-scrollbar-track {
+  background: var(--w95-dither);
+}
+html[data-theme='win95'] ::-webkit-scrollbar-thumb {
+  background: var(--w95-silver);
+  box-shadow: var(--w95-raised);
+}
+html[data-theme='win95'] ::-webkit-scrollbar-button {
+  background: var(--w95-silver);
+  box-shadow: var(--w95-raised);
+  width: 16px;
+  height: 16px;
+}
+html[data-theme='win95'] ::-webkit-scrollbar-corner {
+  background: var(--w95-silver);
+}
+
+/* --- Pastel colours on silver ------------------------------------------------------------ */
+/* The panels hard-code light pastels for text, swatches and chart lines (made for a dark UI).
+   Inline styles are matched by their normalised rgb() value and given a dark equivalent. */
+html[data-theme='win95'] [style*='color: rgb(74, 222, 128)'] { color: #007000 !important; }
+html[data-theme='win95'] [style*='background: rgb(74, 222, 128)'] { background: #007000 !important; }
+html[data-theme='win95'] [stroke='#4ade80'] { stroke: #007000; }
+html[data-theme='win95'] [fill='#4ade80'] { fill: #007000; }
+html[data-theme='win95'] [style*='color: rgb(155, 227, 123)'] { color: #2f7a00 !important; }
+html[data-theme='win95'] [style*='background: rgb(155, 227, 123)'] { background: #2f7a00 !important; }
+html[data-theme='win95'] [stroke='#9be37b'] { stroke: #2f7a00; }
+html[data-theme='win95'] [fill='#9be37b'] { fill: #2f7a00; }
+html[data-theme='win95'] [style*='color: rgb(155, 227, 111)'] { color: #2f7a00 !important; }
+html[data-theme='win95'] [style*='background: rgb(155, 227, 111)'] { background: #2f7a00 !important; }
+html[data-theme='win95'] [stroke='#9be36f'] { stroke: #2f7a00; }
+html[data-theme='win95'] [fill='#9be36f'] { fill: #2f7a00; }
+html[data-theme='win95'] [style*='color: rgb(143, 227, 176)'] { color: #1a7a45 !important; }
+html[data-theme='win95'] [style*='background: rgb(143, 227, 176)'] { background: #1a7a45 !important; }
+html[data-theme='win95'] [stroke='#8fe3b0'] { stroke: #1a7a45; }
+html[data-theme='win95'] [fill='#8fe3b0'] { fill: #1a7a45; }
+html[data-theme='win95'] [style*='color: rgb(138, 180, 255)'] { color: #1040b0 !important; }
+html[data-theme='win95'] [style*='background: rgb(138, 180, 255)'] { background: #1040b0 !important; }
+html[data-theme='win95'] [stroke='#8ab4ff'] { stroke: #1040b0; }
+html[data-theme='win95'] [fill='#8ab4ff'] { fill: #1040b0; }
+html[data-theme='win95'] [style*='color: rgb(143, 208, 255)'] { color: #0060a0 !important; }
+html[data-theme='win95'] [style*='background: rgb(143, 208, 255)'] { background: #0060a0 !important; }
+html[data-theme='win95'] [stroke='#8fd0ff'] { stroke: #0060a0; }
+html[data-theme='win95'] [fill='#8fd0ff'] { fill: #0060a0; }
+html[data-theme='win95'] [style*='color: rgb(111, 227, 255)'] { color: #006080 !important; }
+html[data-theme='win95'] [style*='background: rgb(111, 227, 255)'] { background: #006080 !important; }
+html[data-theme='win95'] [stroke='#6fe3ff'] { stroke: #006080; }
+html[data-theme='win95'] [fill='#6fe3ff'] { fill: #006080; }
+html[data-theme='win95'] [style*='color: rgb(255, 154, 107)'] { color: #b04000 !important; }
+html[data-theme='win95'] [style*='background: rgb(255, 154, 107)'] { background: #b04000 !important; }
+html[data-theme='win95'] [stroke='#ff9a6b'] { stroke: #b04000; }
+html[data-theme='win95'] [fill='#ff9a6b'] { fill: #b04000; }
+html[data-theme='win95'] [style*='color: rgb(255, 180, 84)'] { color: #a05a00 !important; }
+html[data-theme='win95'] [style*='background: rgb(255, 180, 84)'] { background: #a05a00 !important; }
+html[data-theme='win95'] [stroke='#ffb454'] { stroke: #a05a00; }
+html[data-theme='win95'] [fill='#ffb454'] { fill: #a05a00; }
+html[data-theme='win95'] [style*='color: rgb(255, 107, 107)'] { color: #c00000 !important; }
+html[data-theme='win95'] [style*='background: rgb(255, 107, 107)'] { background: #c00000 !important; }
+html[data-theme='win95'] [stroke='#ff6b6b'] { stroke: #c00000; }
+html[data-theme='win95'] [fill='#ff6b6b'] { fill: #c00000; }
+html[data-theme='win95'] [style*='color: rgb(255, 107, 74)'] { color: #c00000 !important; }
+html[data-theme='win95'] [style*='background: rgb(255, 107, 74)'] { background: #c00000 !important; }
+html[data-theme='win95'] [stroke='#ff6b4a'] { stroke: #c00000; }
+html[data-theme='win95'] [fill='#ff6b4a'] { fill: #c00000; }
+html[data-theme='win95'] [style*='color: rgb(255, 210, 63)'] { color: #806000 !important; }
+html[data-theme='win95'] [style*='background: rgb(255, 210, 63)'] { background: #806000 !important; }
+html[data-theme='win95'] [stroke='#ffd23f'] { stroke: #806000; }
+html[data-theme='win95'] [fill='#ffd23f'] { fill: #806000; }
+html[data-theme='win95'] [style*='color: rgb(205, 238, 255)'] { color: #000000 !important; }
+html[data-theme='win95'] [style*='background: rgb(205, 238, 255)'] { background: #000000 !important; }
+html[data-theme='win95'] [stroke='#cdeeff'] { stroke: #000000; }
+html[data-theme='win95'] [fill='#cdeeff'] { fill: #000000; }
+html[data-theme='win95'] [style*='color: rgb(124, 232, 255)'] { color: #006080 !important; }
+html[data-theme='win95'] [style*='background: rgb(124, 232, 255)'] { background: #006080 !important; }
+html[data-theme='win95'] [stroke='#7ce8ff'] { stroke: #006080; }
+html[data-theme='win95'] [fill='#7ce8ff'] { fill: #006080; }
+
+/* --- Buttons that are plain text in Default stay plain (links, list rows, goods) -------------- */
+html[data-theme='win95'] :is(.abs-world-toggle, .abs-x, .action-dock-close, .action-dock-scope-item, .bld-name-btn, .context-menu-item, .crumb, .debug-console-close, .econ-build-cancel, .good-flow-link, .good-link, .situations-link, .situations-type-toggle, .strategizer-name, .tab-bar-tab-close) {
+  background: none;
+  box-shadow: none;
+}
+/* ... and these keep the raised bar but get room inside it, so the arrow and text fit. */
+html[data-theme='win95'] :is(.outliner-section-title, .shipyard-group-title, .pops-tier-head, .resource-item, .fleet-group-toggle, .ground-army-head, .eco-details) {
+  padding: 3px 6px;
+  gap: 6px;
+  opacity: 1;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+html[data-theme='win95'] .outliner-section-caret {
+  font-size: 9px;
+  flex: 0 0 auto;
+  transition: none;
+}
+/* The top-bar readouts are sunken status-bar wells with room for their text. */
+html[data-theme='win95'] .fiscal-ind {
+  background: var(--w95-silver);
+  box-shadow: var(--w95-sunken);
+  padding: 3px 8px;
+  opacity: 1;
+  min-width: 0;
+}
+html[data-theme='win95'] .fiscal-ind-label {
+  font-size: 11px;
+  letter-spacing: 0;
+  color: #404040;
+}
+html[data-theme='win95'] .fiscal-ind-val {
+  font-size: 11px;
+  white-space: nowrap;
+}
+html[data-theme='win95'] .fiscal-indicators {
+  gap: 8px;
+}
+
+/* Tabs and pills truncate with an ellipsis instead of spilling. */
+html[data-theme='win95'] :is(.outliner-tab, .outliner-subtab, .nav-subtab, .tab-bar-tab, .outliner-filter-pill) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Small print is too small for a pixel font: lift it to the font's own size --------------- */
+html[data-theme='win95'] :is(.abs-statcard-head, .tchart-range, .econ-graph-title, .econ-graph-legend, .main-menu-econ-desc, .main-menu-econ-name, .debt-setting) {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+html[data-theme='win95'] .abs-statcard-head {
+  color: #000;
+}
+html[data-theme='win95'] .abs-statcard {
+  background: var(--w95-silver);
+  box-shadow: var(--w95-raised);
+  border: none;
+}
+html[data-theme='win95'] .abs-statcard.active {
+  box-shadow: var(--w95-sunken);
+  outline: 1px dotted #000;
+  outline-offset: -5px;
+  background: var(--w95-dither);
+}
+html[data-theme='win95'] .abs-statcard.active :is(.abs-statcard-head, .abs-statcard-value) {
+  background: var(--w95-silver);
+}
+
+/* --- Charts: a white well, black text, grey rules -------------------------------------------- */
+html[data-theme='win95'] :is(.tchart-svg, .econ-graph-svg) {
+  background: #fff;
+  box-shadow: var(--w95-sunken);
+}
+html[data-theme='win95'] .tchart-svg line {
+  stroke: #a0a0a0;
+}
+html[data-theme='win95'] .tchart-svg line[stroke-dasharray] {
+  stroke: #404040;
+}
+html[data-theme='win95'] .tchart-label {
+  fill: #000;
+}
+html[data-theme='win95'] :is(.econ-graph-title, .econ-graph-legend, .tchart-when) {
+  color: #000;
+}
+html[data-theme='win95'] .tchart-range {
+  background: var(--w95-silver);
+  border: none;
+  color: #000;
+  padding: 1px 5px;
+  box-shadow: var(--w95-raised);
+}
+html[data-theme='win95'] .tchart-range.active {
+  box-shadow: var(--w95-sunken);
+  font-weight: 700;
+  background: var(--w95-dither);
+}
+html[data-theme='win95'] .econ-graph-swatch {
+  border-radius: 0;
+  box-shadow: inset 0 0 0 1px #000;
+}
+
+/* --- Main menu: the chosen economy / interface option is plainly highlighted ------------------ */
+html[data-theme='win95'] .main-menu-econ-option {
+  background: var(--w95-silver);
+  color: #000;
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--w95-raised);
+}
+html[data-theme='win95'] .main-menu-econ-option.active {
+  background: var(--w95-navy);
+  color: #fff;
+  box-shadow: var(--w95-sunken);
+}
+html[data-theme='win95'] .main-menu-econ-option.active :is(.main-menu-econ-name, .main-menu-econ-desc) {
+  color: #fff;
+}
+html[data-theme='win95'] .main-menu-econ-name {
+  color: #000;
+}
+html[data-theme='win95'] .main-menu-econ-desc {
+  color: #404040;
+}
+html[data-theme='win95'] .main-menu :is(.inspect-label, .main-menu-section, .main-menu-heading) {
+  color: #fff;
+}
+html[data-theme='win95'] .resource-delta:not(.econ-pos):not(.econ-neg) {
+  color: #404040;
+}
+/* Nation cards: the name is always black (the swatch carries the nation's colour). */
+html[data-theme='win95'] .main-menu-country-name {
+  color: #000 !important;
+}

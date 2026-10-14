@@ -52,6 +52,30 @@ export function hslToRgb(h: number, s: number, l: number): [number, number, numb
 const triplet = (c: [number, number, number]) => `${c[0]}, ${c[1]}, ${c[2]}`
 const hex = (c: [number, number, number]) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('')
 
+// The Terminal cursors, drawn in the phosphor (a cursor image cannot read a CSS variable, so the
+// colour goes into the picture): the ordinary terminal caret, a solid block, for the pointer; the
+// block ringed by a bracket for anything clickable; a hollow block struck through in the alert red
+// where an action is not allowed.
+export function terminalCursors(color: string): { default: string; pointer: string; blocked: string } {
+  const url = (svg: string, hx: number, hy: number, fallback: string) =>
+    `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' ${svg}</svg>`)}") ${hx} ${hy}, ${fallback}`
+  return {
+    default: url(`width='12' height='20' viewBox='0 0 12 20' shape-rendering='crispEdges'><rect x='1.5' y='1.5' width='9' height='17' fill='${color}' stroke='#000' stroke-width='1'/>`, 1, 1, 'default'),
+    pointer: url(
+      `width='22' height='26' viewBox='0 0 22 26' shape-rendering='crispEdges'><rect x='2.5' y='2.5' width='17' height='21' fill='none' stroke='#000' stroke-width='3'/><rect x='2.5' y='2.5' width='17' height='21' fill='none' stroke='${color}' stroke-width='1' stroke-dasharray='5 3'/><rect x='6.5' y='6.5' width='9' height='13' fill='${color}' stroke='#000' stroke-width='1'/>`,
+      11,
+      13,
+      'pointer',
+    ),
+    blocked: url(
+      `width='22' height='26' viewBox='0 0 22 26' shape-rendering='crispEdges'><rect x='5.5' y='4.5' width='11' height='17' fill='none' stroke='#000' stroke-width='3'/><rect x='5.5' y='4.5' width='11' height='17' fill='none' stroke='#ff5038' stroke-width='1'/><path d='M4 22 L18 4' stroke='#000' stroke-width='3.5'/><path d='M4 22 L18 4' stroke='#ff5038' stroke-width='1.5'/>`,
+      11,
+      13,
+      'not-allowed',
+    ),
+  }
+}
+
 // Every token the Terminal theme sets from the phosphor (the names index.css :root defines).
 export function phosphorTokens(p: Phosphor): Record<string, string> {
   const tone = (s: number, l: number) => hslToRgb(p.h, Math.min(p.s, s), l)
@@ -61,6 +85,7 @@ export function phosphorTokens(p: Phosphor): Record<string, string> {
   const bright = tone(p.s * 0.8, 88)
   const strong = tone(p.s * 0.6, 94)
   const panel = (l: number) => hslToRgb(p.h, Math.min(p.s, 70), l)
+  const cursors = terminalCursors(hex(accent))
   return {
     '--accent-rgb': triplet(accent),
     '--accent-soft-rgb': triplet(soft),
@@ -81,6 +106,9 @@ export function phosphorTokens(p: Phosphor): Record<string, string> {
     '--ok': hex(accent),
     '--page-bg': hex(panel(0.8)),
     '--phosphor-dim-rgb': triplet(hslToRgb(p.h, p.s, Math.max(20, p.l - 28))),
+    '--cursor-default': cursors.default,
+    '--cursor-pointer': cursors.pointer,
+    '--cursor-blocked': cursors.blocked,
   }
 }
 

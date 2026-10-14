@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="25" viewBox="0 0 12 19" shape-rendering="crispEdges">
+  <!-- Windows 95 arrow: white with a black outline. Hotspot is the tip (0,0). -->
+  <polygon points="0.5,0.5 0.5,16 4,12.7 6.7,18.3 8.8,17.3 6.2,11.8 10.8,11.8" fill="#fff" stroke="#000" stroke-width="1" stroke-linejoin="miter"/>
+</svg>

@@ -22,6 +22,7 @@ export interface SceneColors {
 export const SCENE_COLORS: Record<ThemeId, SceneColors> = {
   default: { orbit: '#7ce8ff', lane: '#7ce8ff', grid: '#6fe3ff', gridPoint: '#6fe3ff', frame: '#6fe3ff', lattice: '#2b6b80', latticeNode: '#7ce8ff', toneMapped: true },
   terminal: phosphorSceneColors(PHOSPHORS.green),
+  win95: { orbit: '#c0c0c0', lane: '#00c0c0', grid: '#808080', gridPoint: '#c0c0c0', frame: '#ffffff', lattice: '#404040', latticeNode: '#c0c0c0', toneMapped: false },
   nerv: { orbit: '#3df5b0', lane: '#3df5b0', grid: '#3df5b0', gridPoint: '#7dffc8', frame: '#ff9900', lattice: '#0e5a40', latticeNode: '#3df5b0', toneMapped: false },
 }
 

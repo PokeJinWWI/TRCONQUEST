@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <!-- NERV refusal: a red hexagon with a slash. Hotspot is the centre (13,13). -->
+  <path d="M13 3 L21.7 8 V18 L13 23 L4.3 18 V8 Z" fill="none" stroke="#000" stroke-width="4.2"/>
+  <path d="M13 3 L21.7 8 V18 L13 23 L4.3 18 V8 Z" fill="none" stroke="#ff2b1d" stroke-width="1.8"/>
+  <path d="M7.5 18.5 L18.5 7.5" stroke="#000" stroke-width="4.2"/>
+  <path d="M7.5 18.5 L18.5 7.5" stroke="#ff2b1d" stroke-width="1.8"/>
+</svg>
