@@ -1,0 +1,260 @@
+/* The Terminal theme: a 1980s phosphor CRT. One colour on near-black, square outlined chrome,
+   fixed-width type, a selected item shown INVERTED (dark text on a lit block). The colour is the
+   player's choice: state/themeStore.ts sets the colour tokens from the chosen phosphor
+   (scene/phosphor.ts) as inline properties on <html>, so nothing here names a colour except the
+   alert reds. The CRT effects (curved glass, scanlines, glow, noise, flicker) are separate
+   switches, data-crt-* on <html>. Every rule is under html[data-theme='terminal'], so Default and
+   NERV are untouched. Relation colours (own / allied / neutral / hostile) and nation colours are
+   NOT themed; neither are the alert colours, so a warning still reads as one. */
+
+html[data-theme='terminal'] {
+  --warn-rgb: 255, 176, 0;
+  --danger-rgb: 255, 80, 56;
+  --caution-rgb: 255, 214, 64;
+  --danger: #ff5038;
+  --warn: #ffb000;
+  --caution: #ffd640;
+  --font-ui: 'Share Tech Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, 'Courier New', monospace;
+  --font-body: 'Share Tech Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, 'Courier New', monospace;
+  --font-mono: 'Share Tech Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, 'Courier New', monospace;
+  --phosphor-glow: 0 0 5px rgba(var(--accent-rgb), 0.55);
+  --crt-scan: none;
+  --crt-noise: none;
+}
+
+/* --- Type --------------------------------------------------------------------------------- */
+html[data-theme='terminal'] body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+html[data-theme='terminal'] :is(.hud-title, .draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-title, .confirm-title, .outliner-section-title, .action-dock-header) {
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-shadow: none;
+}
+html[data-theme='terminal'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn) {
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* --- Square, outlined chrome -------------------------------------------------------------- */
+html[data-theme='terminal'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .outliner-filter-pill, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn) {
+  border-radius: 0 !important;
+}
+html[data-theme='terminal'] .hud-bar {
+  background: rgba(var(--panel-deep-rgb), 0.96);
+}
+html[data-theme='terminal'] .hud-top {
+  border-bottom: 1px solid var(--accent);
+}
+html[data-theme='terminal'] .hud-bottom {
+  border-top: 1px solid var(--accent);
+}
+html[data-theme='terminal'] :is(.nav-sidebar, .outliner) {
+  background: rgba(var(--panel-deep-rgb), 0.95);
+  border-color: var(--accent);
+}
+html[data-theme='terminal'] .draggable-window {
+  border: 1px solid var(--accent);
+  background: rgba(var(--panel-deep-rgb), 0.96);
+  box-shadow: 0 0 0 1px #000, 0 0 18px rgba(var(--accent-rgb), 0.18);
+}
+/* A title bar is an inverted strip. */
+html[data-theme='terminal'] .draggable-window-titlebar {
+  background: var(--accent);
+  color: #000;
+  border-bottom: none;
+  font-weight: 700;
+  font-size: 14px;
+  text-shadow: none;
+}
+html[data-theme='terminal'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: #000;
+  text-shadow: none;
+}
+
+/* Buttons are outlined; hover brightens; selected / active is INVERTED; disabled is dim. */
+html[data-theme='terminal'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: rgba(var(--panel-deep-rgb), 0.8);
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  color: var(--accent);
+}
+html[data-theme='terminal'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: rgba(var(--accent-rgb), 0.18);
+  color: var(--strong);
+}
+html[data-theme='terminal'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  box-shadow: none;
+  text-shadow: none;
+}
+html[data-theme='terminal'] button:disabled:not(.situations-icon) {
+  color: rgba(var(--phosphor-dim-rgb), 0.7);
+  border-color: rgba(var(--phosphor-dim-rgb), 0.4);
+  background: transparent;
+}
+html[data-theme='terminal'] :is(input, select, textarea) {
+  background: rgba(var(--panel-deep-rgb), 0.9);
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+}
+html[data-theme='terminal'] :is(input, textarea) {
+  caret-color: var(--accent);
+}
+/* A selected list row is inverted too. */
+html[data-theme='terminal'] .outliner-entry.selected .outliner-entry-name {
+  background: var(--accent);
+  color: #000;
+  text-shadow: none;
+}
+
+/* --- HUD ---------------------------------------------------------------------------------- */
+html[data-theme='terminal'] .hud-title {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 16px;
+}
+html[data-theme='terminal'] .time-date {
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+html[data-theme='terminal'] .time-controls::before {
+  content: 'SYS.CLOCK';
+  font: 600 9px/1 var(--font-ui);
+  letter-spacing: 0.1em;
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
+  color: var(--accent);
+  padding: 3px 4px;
+  margin-right: 8px;
+}
+
+/* --- Alerts ------------------------------------------------------------------------------- */
+html[data-theme='terminal'] .dip-toast {
+  background: rgba(var(--panel-deep-rgb), 0.95);
+  border: 1px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  font-size: 13px;
+}
+html[data-theme='terminal'] .dip-toast.sev-danger {
+  background: var(--danger);
+  color: #000;
+  border: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+html[data-theme='terminal'] .dip-toast.sev-warning {
+  border-color: var(--warn);
+  border-left-color: var(--warn);
+}
+html[data-theme='terminal'] .confirm-box {
+  background: rgba(var(--panel-deep-rgb), 0.97);
+  border: 1px solid var(--accent);
+}
+html[data-theme='terminal'] .confirm-title {
+  background: var(--accent);
+  color: #000;
+  margin: -16px -18px 12px;
+  padding: 6px 18px;
+}
+html[data-theme='terminal'] .situations-type {
+  background: rgba(var(--panel-deep-rgb), 0.85);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='terminal'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='terminal'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='terminal'] .sev-info {
+  --sev-color: var(--accent);
+}
+html[data-theme='terminal'] .situation-badge {
+  background: #000;
+  font-family: var(--font-mono);
+}
+html[data-theme='terminal'] .situation-badge.sev-danger {
+  background: var(--danger);
+  color: #000;
+}
+
+/* --- CRT effects (each its own switch) ---------------------------------------------------- */
+/* Glow: text-shadow inherits, so setting it once on the body lights every label. */
+html[data-theme='terminal'][data-crt-glow='on'] body {
+  text-shadow: var(--phosphor-glow);
+}
+html[data-theme='terminal'][data-crt-glow='on'] :is(.draggable-window-titlebar, .nav-category-btn.active, .time-btn.active, .time-mode-btn.active, .dip-toast.sev-danger, .confirm-title, .situation-badge.sev-danger) {
+  text-shadow: none;
+}
+
+/* Scanlines and noise share one overlay: the layers are variables, so either alone works. */
+html[data-theme='terminal'][data-crt-scanlines='on'] {
+  --crt-scan: repeating-linear-gradient(transparent 0 2px, rgba(0, 0, 0, 0.18) 2px 3px);
+}
+html[data-theme='terminal'][data-crt-noise='on'] {
+  --crt-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html[data-theme='terminal']:is([data-crt-scanlines='on'], [data-crt-noise='on'])::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99990;
+  background: var(--crt-noise), var(--crt-scan);
+}
+
+/* Curved glass: a dark bezel with rounded inner corners, a vignette that darkens toward the
+   edges and a faint highlight, like light on a bulging tube. Drawn as one overlay; the page is
+   not warped (a flat fake), so clicks land where they look. */
+html[data-theme='terminal'][data-crt-curve='on']::before {
+  content: '';
+  position: fixed;
+  inset: 6px;
+  pointer-events: none;
+  z-index: 99991;
+  border-radius: 38px / 34px;
+  box-shadow:
+    0 0 0 100vmax #000,
+    inset 0 0 0 2px rgba(0, 0, 0, 0.9),
+    inset 0 0 70px 14px rgba(0, 0, 0, 0.55),
+    inset 0 0 160px 20px rgba(0, 0, 0, 0.3),
+    inset 0 0 26px rgba(var(--accent-rgb), 0.12);
+  background:
+    radial-gradient(ellipse 60% 45% at 28% 12%, rgba(var(--accent-rgb), 0.05), transparent 70%),
+    radial-gradient(ellipse at 50% 50%, transparent 62%, rgba(0, 0, 0, 0.22) 100%);
+}
+
+/* Flicker: a black sheet whose opacity wobbles. Off under Reduce motion (themeStore) and the
+   OS setting. */
+@keyframes terminal-flicker {
+  0%, 100% { opacity: 0; }
+  8% { opacity: 0.05; }
+  10% { opacity: 0; }
+  47% { opacity: 0.02; }
+  50% { opacity: 0.06; }
+  53% { opacity: 0; }
+  82% { opacity: 0.03; }
+}
+html[data-theme='terminal'][data-crt-flicker='on'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99992;
+  background: #000;
+  opacity: 0;
+  animation: terminal-flicker 0.9s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme='terminal'] body::after {
+    display: none;
+  }
+}

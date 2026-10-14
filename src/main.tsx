@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './themes/nerv.css'
+import './themes/terminal.css'
+import '@fontsource/share-tech-mono/latin-400.css'
 // Puts the saved theme on <html> before the first paint.
 import './state/themeStore'
 import App from './App.tsx'
