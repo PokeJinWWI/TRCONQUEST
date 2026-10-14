@@ -36,25 +36,21 @@ const w = (bodyName: string, starId: string, ly: number): ChooserWorld => ({ bod
 console.log('\n=== 1. The chooser groups worlds by system, the ship\'s own system first ===')
 {
   const worlds = [w('Mars', 'sol', 0), w('Titan', 'sol', 0), w('Barnard b', 'barnards-star', 5.96), w('Arcadia', 'alpha-centauri', 4.37), w('Barnard c', 'barnards-star', 5.96)]
-  const g = groupColonizeWorlds({ worlds, waiting: [], hereStarId: 'barnards-star', homeStarId: 'sol', starName })
+  const g = groupColonizeWorlds({ worlds, hereStarId: 'barnards-star', homeStarId: 'sol', starName })
   check('one group per system, with its name', g.length === 3 && g.map((x) => x.name).join() === "Barnard's Star,Sol,Alpha Centauri")
   check('the system the ship is in comes first, then the home system, then the rest nearest first', g[0].here && !g[0].home && g[1].home && !g[1].here && g[2].starId === 'alpha-centauri')
   check('every world under its own system, in the order given', g[0].bodies.join() === 'Barnard b,Barnard c' && g[1].bodies.join() === 'Mars,Titan' && g[2].bodies.join() === 'Arcadia')
-  check('33 worlds are 3 headed groups, not one list', groupColonizeWorlds({ worlds: Array.from({ length: 33 }, (_, i) => w(`W${i}`, i < 20 ? 'sol' : i < 28 ? 'barnards-star' : 'alpha-centauri', i < 20 ? 0 : i < 28 ? 5.96 : 4.37)), waiting: [], hereStarId: 'barnards-star', homeStarId: 'sol', starName }).length === 3)
-  const atHome = groupColonizeWorlds({ worlds, waiting: [], hereStarId: 'sol', homeStarId: 'sol', starName })
+  check('33 worlds are 3 headed groups, not one list', groupColonizeWorlds({ worlds: Array.from({ length: 33 }, (_, i) => w(`W${i}`, i < 20 ? 'sol' : i < 28 ? 'barnards-star' : 'alpha-centauri', i < 20 ? 0 : i < 28 ? 5.96 : 4.37)), hereStarId: 'barnards-star', homeStarId: 'sol', starName }).length === 3)
+  const atHome = groupColonizeWorlds({ worlds, hereStarId: 'sol', homeStarId: 'sol', starName })
   check('at home the home system is first and flagged both ways', atHome[0].starId === 'sol' && atHome[0].here && atHome[0].home)
-  check('no worlds, no groups', groupColonizeWorlds({ worlds: [], waiting: [], hereStarId: null, homeStarId: 'sol', starName }).length === 0)
-  const waiting = groupColonizeWorlds({ worlds: [w('Mars', 'sol', 0)], waiting: [{ starId: 'barnards-star', readyText: '3 FEB 2601' }], hereStarId: 'barnards-star', homeStarId: 'sol', starName })
-  check('a system whose Starbase is still being built is listed with the reason and no worlds', waiting[0].starId === 'barnards-star' && waiting[0].bodies.length === 0 && /Waiting for the Starbase here to finish, ready about 3 FEB 2601/.test(waiting[0].waiting ?? ''))
+  check('no worlds, no groups', groupColonizeWorlds({ worlds: [], hereStarId: null, homeStarId: 'sol', starName }).length === 0)
 }
 
 console.log('\n=== 2. The reason when there is nothing to settle ===')
 {
-  const base = { systemName: "Barnard's Star", starbase: 'finished' as const, isHomeSystem: false, hasSettlers: true, orbit: 'settleable' as const }
-  check('Starbase still being built: says so, with the date', nothingHereReason({ ...base, starbase: 'building', readyText: '3 FEB 2601', orbit: 'not' }) === 'Waiting for the Starbase here to finish, ready about 3 FEB 2601.')
-  check('no Starbase of your own: says where one is needed', /Needs a Starbase of your own in Barnard's Star/.test(nothingHereReason({ ...base, starbase: 'none' })))
-  check('the home system needs no Starbase, so neither reason applies there', !/Starbase/.test(nothingHereReason({ ...base, starbase: 'none', isHomeSystem: true, orbit: 'not' })))
-  check('no settlers aboard comes first', nothingHereReason({ ...base, hasSettlers: false, starbase: 'building', readyText: 'x' }) === 'The ship carries no settlers.')
+  const base = { systemName: "Barnard's Star", hasSettlers: true, orbit: 'settleable' as const }
+  check('no Starbase is ever asked for (colonizing needs none)', !/Starbase/.test(nothingHereReason({ ...base, orbit: 'not' })) && !/Starbase/.test(nothingHereReason({ ...base, orbit: 'none' })))
+  check('no settlers aboard comes first', nothingHereReason({ ...base, hasSettlers: false }) === 'The ship carries no settlers.')
   check('orbiting something that cannot be settled (a star)', /cannot be settled/.test(nothingHereReason({ ...base, orbit: 'not' })))
   check('at a star in open space it still points to what to do', /Right-click a surveyed, unowned world/.test(nothingHereReason({ ...base, orbit: 'none' })))
 }

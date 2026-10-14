@@ -138,6 +138,9 @@ export const WATER_PROXIMITY_CELLS = 8
 // Sites keep this many fine cells apart (the ground war's own key-node spacing,
 // groundData.KEY_MIN_SEPARATION_CELLS, is the floor).
 export const SITE_MIN_SEPARATION_CELLS = 4
+// A nation may found a new settlement this close to one of ITS OWN (a town growing out of a colony or a city), against the full
+// distance it keeps from anyone else's and from other sites of its own kind elsewhere.
+export const OWN_SETTLEMENT_MIN_SEPARATION_CELLS = 2
 
 // Capacity of a site, in district-level equivalents (the unit both economies' `land`
 // is counted in): 1 at the poorest, this many more at the best.

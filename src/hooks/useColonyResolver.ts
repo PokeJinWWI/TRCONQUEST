@@ -12,12 +12,18 @@ import { landForBody } from '../scene/bodyLand'
 import { stepColonies } from '../scene/colonyLogic'
 import { controllerOf } from '../scene/territory'
 import { resolveFoundings } from '../scene/colonies'
+import { upgradeGrownOutposts } from '../scene/seedPlacementOrders'
 
 // One pass over every colony at `simDays`: Colony Ships founding, the patrol clocks, and micro-colonies
 // becoming planetary colonies (their land limit lifted). Exported so a headless
 // run (tests) can drive it without React.
 export function resolveColonies(simDays: number): void {
   resolveFoundings(simDays)
+  // A settlement grown past the outpost size gets its municipal hall.
+  for (const body of upgradeGrownOutposts()) {
+    const owner = useTerritoryStore.getState().bodyOwner[body]
+    if (owner) useDiplomacyStore.getState().pushEvent('colony-outpost-upgraded', [owner], `${ownerDisplay(owner).name}'s outpost on ${body} grew into a municipal government`, simDays, { bodyName: body })
+  }
   const { colonies, setColonies } = useColonyStore.getState()
   if (!Object.values(colonies).some((c) => c.stage === 'micro')) return
   const { bodyOwner, bodyController, nodeHolders } = useTerritoryStore.getState()

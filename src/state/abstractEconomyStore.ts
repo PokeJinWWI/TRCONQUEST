@@ -1,3 +1,4 @@
+import type { ColonyKit } from '../economy-abstract/colonyKit'
 import { stepAbstractMigration } from '../economy-abstract/migration'
 import { WAVE_EVENT_MIN_MILLIONS, type MigrationFlow } from '../economy/migrationRules'
 import { treatyLanes } from '../scene/migrationPaths'
@@ -235,7 +236,8 @@ interface AbstractEconomyStore {
   // Colonies (scene/colonies.ts): a newly founded world with its settlers and
   // a land limit; people leaving on (or arriving by) a Colony Ship; a colony's
   // land limit changing with its stage.
-  addColonyWorld: (bodyName: string, population: number, land: number) => void
+  // `kit`: what the colony starts running (economy-abstract/colonyKit.ts).
+  addColonyWorld: (bodyName: string, population: number, land: number, kit?: ColonyKit) => void
   adjustPopulation: (bodyName: string, delta: number) => void
   setLand: (bodyName: string, land: number) => void
   // Records the development site of a queued building the economy's own AI ordered (scene/placementOrders.placeUnplacedOrders).
@@ -498,8 +500,8 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
       }
       return { worlds }
     }),
-  addColonyWorld: (bodyName, population, land) =>
-    set((s) => (s.worlds[bodyName] ? s : { worlds: { ...s.worlds, [bodyName]: { bodyName, population, buildings: {}, districts: {}, land } } })),
+  addColonyWorld: (bodyName, population, land, kit) =>
+    set((s) => (s.worlds[bodyName] ? s : { worlds: { ...s.worlds, [bodyName]: { bodyName, population, buildings: { ...(kit?.buildings ?? {}) }, districts: { ...(kit?.districts ?? {}) }, land } } })),
   adjustPopulation: (bodyName, delta) =>
     set((s) => {
       const w = s.worlds[bodyName]

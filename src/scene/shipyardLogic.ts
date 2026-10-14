@@ -314,7 +314,7 @@ export function spawnOwnedShip(classId: string, ownerId: string, systemId: strin
 // nation.
 export function spawnBuiltShip(order: ShipBuildOrder, country: Pick<Country, 'id' | 'capitalStarId' | 'capitalBodyName'>): string | null {
   const id = spawnOwnedShip(order.classId, country.id, country.capitalStarId, country.capitalBodyName)
-  if (id) embarkSettlers(id, country.id)
+  if (id) embarkSettlers(id, country.id, order.settlerSource)
   return id
 }
 

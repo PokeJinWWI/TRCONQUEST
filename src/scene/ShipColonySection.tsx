@@ -6,13 +6,12 @@ import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { isArmed, orbitedBody } from './armyLogic'
 import { useState } from 'react'
-import { canColonize, colonizeGroups, nothingHereText, sendToColonize } from './colonies'
+import { canColonize, colonizeGroups, nothingHereText, chooseLanding } from './colonies'
 import { takeBackLabel, takeBackStatus } from './colonyChooser'
 import { bodyStarId } from './territory'
 import { systemOfShip } from './surveyLogic'
 import { queuePatrol } from './commsVisual'
 import { groundSurface } from './groundLogic'
-import { queueShipCommand } from './shipCommands'
 
 // A Colony Ship's part of ShipPanel: the settlers aboard, the colony it is
 // founding, and a Colonize button for the world it orbits (with the reason
@@ -100,14 +99,13 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
         <div className="colony-chooser">
           {(() => {
             const groups = colonizeGroups(ship)
-            if (groups.length === 0) return <div className="ship-panel-hint">No world to settle yet: survey a world, hold a Starbase in its system, and have settlers aboard.</div>
+            if (groups.length === 0) return <div className="ship-panel-hint">No world to settle yet: survey a free world and have settlers aboard.</div>
             return groups.map((g) => (
               <div key={g.starId} className="colony-chooser-group">
                 <div className="colony-chooser-system">
                   {g.name}
                   {g.here ? ' · where the ship is' : g.home ? ' · your home system' : ''}
                 </div>
-                {g.waiting && <div className="ship-panel-hint">{g.waiting}.</div>}
                 <div className="colony-chooser-bodies">
                   {g.bodies.map((bodyName) => (
                     <button
@@ -118,7 +116,7 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
                         const systemId = bodyStarId(bodyName)
                         if (!systemId) return
                         useShipStore.getState().setAutomation(ship.id, null)
-                        sendToColonize(ship, systemId, bodyName)
+                        chooseLanding(ship, systemId, bodyName)
                         setChoosing(false)
                       }}
                     >
@@ -139,8 +137,8 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
               type="button"
               className="detail-view-btn"
               disabled={!check.ok}
-              title={check.ok ? `Spend ${COLONY_FOUNDING_DAYS} days founding a micro-colony on ${body}. The ship is used up.` : check.reason}
-              onClick={() => queueShipCommand(ship.id, { kind: 'colonize', bodyName: body })}
+              title={check.ok ? `Open the ground map to pick the landing site; then ${COLONY_FOUNDING_DAYS} days in orbit founding a micro-colony on ${body}. The ship is used up.` : check.reason}
+              onClick={() => { const systemId = bodyStarId(body); if (systemId) chooseLanding(ship, systemId, body) }}
             >
               Colonize {body}
             </button>

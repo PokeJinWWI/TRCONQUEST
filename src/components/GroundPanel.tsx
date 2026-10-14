@@ -1,3 +1,6 @@
+import { completeLanding } from '../scene/colonies'
+import { planLanding } from '../scene/landingSite'
+import { useShipStore } from '../state/shipStore'
 import { keyNodeId, usePlaceNameStore } from '../state/placeNameStore'
 import { KEY_HOLD_BONUS, KEY_KIND_LABEL, KEY_ROLE, keyNameOf } from '../scene/keyNames'
 import { useState } from 'react'
@@ -45,6 +48,12 @@ export function handleGroundClick(bodyName: string, node: number): void {
       const island = !!surface && surface.landComponent[node] !== surface.mainland
       const done = r.kind === 'invade' ? 'Invasion landed.' : 'Armies unloaded.'
       view.setNotice(island ? `${done} Note: this is an island — only marines can reach the mainland's key nodes.` : done)
+    } else view.setNotice(r.reason)
+  } else if (mode.kind === 'colonize') {
+    const r = completeLanding(bodyName, node, mode.shipId, mode.systemId)
+    if (r.ok) {
+      view.setMode({ kind: 'order' })
+      view.setNotice('The Colony Ship is on its way to land there.')
     } else view.setNotice(r.reason)
   } else if (mode.kind === 'spawn') {
     useArmyStore.getState().addArmy({ ownerId: mode.ownerId, kind: mode.armyKind, location: { kind: 'body', bodyName }, anchorNode: node })
@@ -99,6 +108,23 @@ function bodyArmies(bodyName: string): Army[] {
   return useArmyStore.getState().armies.filter((a) => a.location.kind === 'body' && a.location.bodyName === bodyName)
 }
 
+
+// While choosing a Colony Ship's landing: says what a click under the pointer would do (a free site close by is taken, else a
+// new settlement is founded there) or why not.
+function LandingBanner({ bodyName, onCancel, shipId }: { bodyName: string; onCancel: () => void; shipId: string }) {
+  const hover = useGroundViewStore((s) => s.hoverNode)
+  const ownerId = useShipStore((s) => s.ships.find((x) => x.id === shipId)?.ownerId)
+  const plan = hover !== null && ownerId ? planLanding(bodyName, hover, ownerId) : null
+  return (
+    <div className="ground-mode-banner">
+      Choose where the Colony Ship lands: click open ground. It becomes an outpost, and a municipal hall once the colony has grown.
+      {plan && <div className={`inspect-status ${plan.ok ? 'ok' : ''}`}>{plan.ok ? (plan.adopt ? `Land at ${plan.adopt.name ?? 'the nearby site'}` : 'Found a new settlement here') : plan.reason}</div>}
+      <button type="button" className="detail-view-btn" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  )
+}
 
 // --- The roster/controls window ----------------------------------------------
 
@@ -272,6 +298,7 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
           </button>
         </div>
       )}
+      {mode.kind === 'colonize' && <LandingBanner bodyName={bodyName} onCancel={() => view.setMode({ kind: 'order' })} shipId={mode.shipId} />}
       {mode.kind === 'spawn' && (
         <div className="ground-mode-banner">
           Click the ground to place a {ownerDisplay(mode.ownerId).name} {ARMY_KINDS[mode.armyKind].name}.

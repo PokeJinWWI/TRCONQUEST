@@ -7,6 +7,7 @@ import { useEconomyStore } from '../../state/economyStore'
 import { useLocationStore } from '../../state/locationStore'
 import { usePlacementStore } from '../../state/placementStore'
 import { isAbstractEconomy } from '../../state/playerStore'
+import { freeLandOfWorld } from '../../economy/districts'
 import type { SimpleBuildingId, SimpleDistrictId } from '../../data/simplisticEconomyData'
 import type { DistrictType } from '../../economy/recipes'
 import { KEY_BUILDING_ICON } from '../../scene/keyBuildings'
@@ -26,18 +27,28 @@ function SiteCard({ s, bodyName, playerId, onMessage }: { s: AreaSite; bodyName:
   const queueConstruction = useEconomyStore((st) => st.queueConstruction)
   const queueDistrictComplex = useEconomyStore((st) => st.queueDistrict)
 
-  const develop = (district: string) => {
-    if (!playerId) return
+  // Develops one more level of a district here. Returns false (with the reason shown) when it was refused.
+  const develop = (district: string): boolean => {
+    if (!playerId) return false
     if (simple) {
       const r = queueDistrictSimple(playerId, bodyName, district as SimpleDistrictId, s.siteId)
       onMessage(r.ok ? null : r.reason)
-    } else {
-      queueDistrictComplex(bodyName, district as DistrictType, s.siteId)
-      onMessage(null)
+      return r.ok
     }
+    // Complex refuses without a word, so the reason is worked out here, from the same figure it checks.
+    const left = freeLandOfWorld(useEconomyStore.getState().worlds.find((w) => w.id === bodyName) ?? { districtCapacity: {}, districts: {}, land: 0, constructionQueue: [] } as never)
+    if (left <= 0) {
+      onMessage(`${bodyName} has no land left for another district level.`)
+      return false
+    }
+    queueDistrictComplex(bodyName, district as DistrictType, s.siteId)
+    onMessage(null)
+    return true
   }
-  const build = (id: string) => {
+  // Builds here. A building whose district is not yet developed at this place develops one level first.
+  const build = (id: string, district: string, developed: boolean) => {
     if (!playerId) return
+    if (!developed && !develop(district)) return
     if (simple) {
       const r = queueBuilding(playerId, bodyName, id as SimpleBuildingId, s.siteId)
       onMessage(r.ok ? null : r.reason)
@@ -56,14 +67,16 @@ function SiteCard({ s, bodyName, playerId, onMessage }: { s: AreaSite; bodyName:
         {s.captured && <span className="econ-neg"> held by the enemy</span>}
         {!s.captured && s.access !== null && s.access < 0.99 && <span className="econ-neg" title="Share of what is made here that reaches a hub"> {pct(s.access)} access</span>}
       </div>
-      {s.districts.length > 0 && (
+      {s.districts.length > 0 ? (
         <div className="pl-site-districts">
           {s.districts.map((d) => (
-            <span key={d.district} className="pl-site-district" title={`${d.levels} developed level${d.levels === 1 ? '' : 's'}: ${d.used} of ${d.slots} building slots used`}>
-              {d.label} Lv {d.levels} <span className="abs-dim">{d.used}/{d.slots}</span>
+            <span key={d.district} className="pl-site-district" title={`${d.levels} developed level${d.levels === 1 ? '' : 's'} of ${d.label}: ${d.used} of ${d.slots} building slots used`}>
+              {d.label}: level {d.levels} <span className="abs-dim">· {d.used}/{d.slots} slots used</span>
             </span>
           ))}
         </div>
+      ) : (
+        <div className="abs-dim pl-land">No districts here yet. Building something develops the district it needs.</div>
       )}
       <div className="pl-grid">
         {s.civic.map((c) => (
@@ -84,29 +97,36 @@ function SiteCard({ s, bodyName, playerId, onMessage }: { s: AreaSite; bodyName:
           </div>
         ))}
       </div>
-      {mineOrOpen && (
+      {mineOrOpen && s.canBuild.length > 0 && (
         <div className="pl-site-actions">
-          {s.canDevelop.map((d) => (
+          <button type="button" className="pl-develop" onClick={() => setBuilding(!building)} title={`Build something at ${s.label}. If its district is not developed here yet, one level is developed first.`}>
+            {building ? '− Close' : '+ Build here'}
+          </button>
+          {s.canDevelop.length > 0 && s.districts.length > 0 && s.canDevelop.map((d) => (
             <button key={d.district} type="button" className="pl-develop" disabled={s.levelRoom <= 0} title={s.levelRoom > 0 ? `Develop another ${d.label} level at ${s.label}` : 'This site has no room for another level'} onClick={() => develop(d.district)}>
               + {d.label} level
             </button>
           ))}
-          {s.canBuild.length > 0 && (
-            <button type="button" className="pl-develop" onClick={() => setBuilding(!building)} title="Build here">
-              + Build
-            </button>
-          )}
         </div>
       )}
       {building && (
         <div className="pl-picker">
-          {s.canBuild.map((b) => (
-            <button key={`${b.district}-${b.id}`} type="button" className="pl-pick" disabled={!!b.blocked} title={b.blocked ?? `Build a ${b.name} at ${s.label}`} onClick={() => build(b.id)}>
-              <PlanetIcon id={b.id} size={16} />
-              <span>{b.name}</span>
-              {b.blocked && <span className="abs-dim">{b.blocked}</span>}
-            </button>
-          ))}
+          {[...new Set(s.canBuild.map((b) => b.district))].map((district) => {
+            const rows = s.canBuild.filter((b) => b.district === district)
+            const label = s.canDevelop.find((d) => d.district === district)?.label ?? district
+            return (
+              <div key={district}>
+                <div className="abs-dim">{label}{rows[0].developed ? '' : ' (develops a level first)'}</div>
+                {rows.map((b) => (
+                  <button key={`${district}-${b.id}`} type="button" className="pl-pick" disabled={!!b.blocked} title={b.blocked ?? (b.developed ? `Build a ${b.name} at ${s.label}` : `Develop a ${label} level at ${s.label}, then build a ${b.name}`)} onClick={() => build(b.id, district, b.developed)}>
+                    <PlanetIcon id={b.id} size={16} />
+                    <span>{b.name}</span>
+                    {b.blocked && <span className="abs-dim">{b.blocked}</span>}
+                  </button>
+                ))}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -122,18 +142,35 @@ export function AreaView({ bodyName, playerId }: { bodyName: string; playerId: s
   const complexWorlds = useEconomyStore((s) => s.worlds)
   const [message, setMessage] = useState<string | null>(null)
   const ready = useSeededBody(bodyName)
-  const view = useMemo(() => (ready ? areaView(bodyName, playerId) : { bodyName, sections: [], standalone: [], unplaced: [] }), [ready, bodyName, playerId, placed, levels, established, civic, simpleQueue, complexWorlds])
+  const view = useMemo(() => (ready ? areaView(bodyName, playerId) : { bodyName, landLeft: null, sections: [], standalone: [], unplaced: [] }), [ready, bodyName, playerId, placed, levels, established, civic, simpleQueue, complexWorlds])
   return (
     <div className="pl-districts pl-area">
+      <div className="abs-dim pl-land">
+        Each card is a place on {bodyName}. Press <b>+ Build here</b> on any of yours: the district it needs is developed for you.
+        {view.landLeft !== null && <> Room for <b>{Math.max(0, view.landLeft)}</b> more district level{view.landLeft === 1 ? '' : 's'} on this world.</>}
+      </div>
       {message && <div className="econ-neg pl-message">{message}</div>}
-      {view.sections.map((sec) => (
-        <div key={sec.kind}>
-          <div className="econ-subtitle">{sec.title}</div>
-          {sec.sites.map((s) => (
-            <SiteCard key={s.siteId} s={s} bodyName={bodyName} playerId={playerId} onMessage={setMessage} />
-          ))}
-        </div>
-      ))}
+      {view.sections.map((sec) => {
+        const used = (s: AreaSite) => s.districts.length > 0 || s.buildings.length > 0 || s.onOrder.length > 0 || s.civic.some((c) => c.kind !== 'cityHall')
+        const active = sec.sites.filter(used)
+        const idle = sec.sites.filter((s) => !used(s))
+        return (
+          <div key={sec.kind}>
+            <div className="econ-subtitle">{sec.title}</div>
+            {active.map((s) => (
+              <SiteCard key={s.siteId} s={s} bodyName={bodyName} playerId={playerId} onMessage={setMessage} />
+            ))}
+            {idle.length > 0 && (
+              <details open={active.length === 0}>
+                <summary className="abs-dim" title="Places you could build on but nothing is developed or built there yet">{idle.length} undeveloped</summary>
+                {idle.map((s) => (
+                  <SiteCard key={s.siteId} s={s} bodyName={bodyName} playerId={playerId} onMessage={setMessage} />
+                ))}
+              </details>
+            )}
+          </div>
+        )
+      })}
       {view.standalone.length > 0 && (
         <div>
           <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere">Standalone buildings</div>

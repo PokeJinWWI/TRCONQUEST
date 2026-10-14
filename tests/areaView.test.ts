@@ -45,6 +45,10 @@ for (const model of ['abstract', 'complex'] as const) {
   check('a site Mars owns offers its developed districts\' buildings and the districts it can develop', capital.mine && capital.canBuild.length > 0 && capital.canDevelop.length > 0)
   const open = all.find((s) => !s.owner)
   check('an open site offers no buildings (nothing is developed there) but can be developed', !open || (open.canBuild.length === 0 && open.canDevelop.length > 0))
+  // An owned site with nothing developed still offers buildings: building there develops the district first.
+  const bare = all.find((s) => s.mine && s.districts.length === 0 && s.canDevelop.length > 0)
+  check('a bare site of yours offers buildings from every district it could take, each marked as needing a new level', !!bare && bare.canBuild.length > 0 && bare.canBuild.every((b) => !b.developed))
+  check('the world says how much land is left, and with none a new level is blocked with that reason, visibly', v.landLeft !== null && (v.landLeft > 0 || bare!.canBuild.every((b) => !!b.blocked) && bare!.canBuild.some((b) => /no land left/.test(b.blocked ?? ''))), `landLeft ${v.landLeft}`)
   const asVenus = areaView('Mars', VENUS).sections.flatMap((s) => s.sites)
   check('for another country no site of Mars offers a building', asVenus.every((s) => s.canBuild.length === 0))
   // A foreign site and an order.

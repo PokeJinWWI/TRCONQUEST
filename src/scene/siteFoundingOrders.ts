@@ -19,7 +19,7 @@ export interface FoundingJudgement {
 }
 
 export function judgeFounding(builderId: string, bodyName: string, kind: LocationKind, node: number): FoundingJudgement {
-  const plan = planFounding(bodyName, kind, node, locationsOf(bodyName))
+  const plan = planFounding(bodyName, kind, node, locationsOf(bodyName), builderId)
   if (!plan.ok) return { allowed: false, why: `Cannot found a district there: ${plan.reason}`, legal: 'n/a' }
   const site = plan.site
   const state = { ...jurisdictionState(), geo: { ...defaultGeo, siteOf: (id: string) => (id === site.id ? { bodyName, node } : defaultGeo.siteOf(id)) } }

@@ -206,21 +206,21 @@ console.log('\n=== 6. A Starbase abroad: the same checks as at home, influence b
   check('with a base in that cluster, the next Starbase there costs the base 30 again', starbaseInfluenceCostFor(MARS, A.id === colonyStar.id ? B.id : A.id, starbases()) === STARBASE_INFLUENCE_COST)
   check('nobody was there: no encroachment', useDiplomacyStore.getState().encroachments.length === 0)
 
-  console.log('\n=== 7. A colony abroad: a Starbase of your own first, a surveyed world with land ===')
+  console.log('\n=== 7. A colony abroad: a surveyed world with land (no Starbase needed) ===')
   const world = settleable(colonyStar.id)!
   const colonist = spawnOwnedShip('colony-ship', MARS, 'sol', 'Mars')!
   useShipStore.getState().setSettlers(colonist, 20)
   restAt(colonist, colonyStar.id, world)
   useGameTimeStore.setState({ simDays: 120 })
   const early = canColonize(ship(colonist), world)
-  check('before the Starbase is finished the colony is refused', !early.ok && early.reason.includes('Starbase'), early.ok ? '' : early.reason)
+  check('a colony needs no Starbase: even before it is finished the world may be settled', early.ok, early.ok ? '' : early.reason)
   useGameTimeStore.setState({ simDays: 100 + STARBASE_BUILD_DAYS + 1 })
   check('with the Starbase standing it may be founded', canColonize(ship(colonist), world).ok, (canColonize(ship(colonist), world) as { reason?: string }).reason ?? '')
   const otherStar = withPlanets.find((st) => st.id !== colonyStar.id && settleable(st.id))
   if (otherStar) {
     surveyAll(MARS, otherStar.id)
     const elsewhere = canColonize(ship(colonist), settleable(otherStar.id)!, { anywhere: true })
-    check('a world of a system without a Starbase of yours is refused', !elsewhere.ok && elsewhere.reason.includes('Starbase'), elsewhere.ok ? '' : elsewhere.reason)
+    check('a world of a system without a Starbase of yours may be settled too', elsewhere.ok || !elsewhere.reason.includes('Starbase'), elsewhere.ok ? '' : elsewhere.reason)
   }
   const start = 100 + STARBASE_BUILD_DAYS + 1
   check('the colonize command starts the founding', startFounding(colonist, world, start) && !!ship(colonist).founding)
@@ -321,7 +321,7 @@ console.log('\n=== 9. The AI\'s ships and nations pass and fail the same checks 
   useShipStore.getState().setSettlers(aiColonist, 20)
   restAt(aiColonist, colonyStar.id, settleable(colonyStar.id)!)
   useGameTimeStore.setState({ simDays: 120 })
-  check('no colony before its Starbase is finished, as for the player', !canColonize(ship(aiColonist), settleable(colonyStar.id)!).ok)
+  check('no Starbase is needed for the AI either, as for the player', canColonize(ship(aiColonist), settleable(colonyStar.id)!).ok)
   useGameTimeStore.setState({ simDays: 100 + STARBASE_BUILD_DAYS + 1 })
   check('...and a colony after', canColonize(ship(aiColonist), settleable(colonyStar.id)!).ok)
   check('the AI Expander reads the same cost function', /starbaseInfluenceCostFor\(bb\.countryId/.test(readFileSync(new URL('../src/ai/expander.ts', import.meta.url), 'utf8')))

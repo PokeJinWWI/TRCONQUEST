@@ -1496,3 +1496,6 @@ Dev-server gotcha: after editing files while Vite is mid-edit the browser can ca
 ## Verified live (real clicks): Sandbox start in Simple and Complex mode (all 56 researched, Free on, Technology in nav); un-research Frigate Hulls (confirm names the 3 hulls that go), Free-Flight Maneuvering, Hyperdrive Mk I (ship panel: "Orbital (needs Free-Flight Maneuvering)", Hyperdrive button disabled with the reason, Upgrade row "Needs Autonomous Navigation"), Shipyard rows ("Can't build: needs Frigate Hulls"), designer hull picker (Civilian/Corvette/Frigate only); tree view click on Warp Theory (cascade of 9) and re-research (shared by all 4 factions); normal game: 9 default techs, Free off, Queue buttons, no undo controls.
 ## Unverified / known
 - Free-off researching in the real UI (covered by tests only). The top "Shipyard" quick button opens nothing in the sandbox (no yard, as before); the shipyard list is under Fleet Management > Navy > Shipyard.
+
+## 2026-10-13: colonization rework
+No Starbase to colonize; 3M real-pop settlers from a chosen world; landing picked on the ground map (outpost -> municipal hall at 5M); Control tab replaces Territory (presence, colony progress, decisions); claim planet by Influence; Simple colonies get a starter kit like Complex. See CLAUDE.md "Colonization rework".

@@ -15,6 +15,7 @@ import { useShipDeconstructionStore } from '../state/shipDeconstructionStore'
 import { deconstructionRemaining } from '../scene/shipDeconstruction'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { useEconomyStore } from '../state/economyStore'
+import { settlerSourceWorlds } from '../scene/colonies'
 import { shipyardRows, shipyardSlotsForWorld, techBlock, capitalStockpileOf, capitalWorldIdOf } from '../scene/shipyardLogic'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { starbaseShipyardSlots } from '../scene/starbaseLogic'
@@ -128,6 +129,9 @@ export function ShipyardPanel() {
   const building = orders.filter((o) => o.startedSimDays !== null)
   const waiting = orders.filter((o) => o.startedSimDays === null)
   const queueFull = orders.length >= MAX_QUEUED_BUILDS
+  // Colony Ships: the world their settlers are taken from (default the capital).
+  const [sourceBody, setSourceBody] = useState('')
+  const sources = settlerSourceWorlds(countryId)
 
   const status = (shipClass: ShipClass) => {
     const cost: Record<string, number> = complex ? complexShipBuildCost(shipClass) : shipBuildCost(shipClass)
@@ -147,7 +151,7 @@ export function ShipyardPanel() {
   }, [designClasses, researched])
 
   const handleBuild = (classId: string) => {
-    const result = queueBuild(countryId, classId, simDays)
+    const result = queueBuild(countryId, classId, simDays, { settlerSource: sources.some((w) => w.bodyName === sourceBody) ? sourceBody : sources[0]?.bodyName })
     setMessage(result.ok ? null : result.reason)
   }
 
@@ -283,6 +287,19 @@ export function ShipyardPanel() {
                     {shipClass.ftlDrives.map(describeFtlDrive).join(', ')} · {shipBuildDays(shipClass)} days
                     {shipClass.cargoCapacity ? ` · Hold ${shipClass.cargoCapacity}` : ''}
                   </div>
+                  {shipClass.role === 'colony' && sources.length > 0 && (
+                    <div className="fleet-row-status" title="The settlers are real people taken from this world: a mix of professions, mostly from the working classes. A world never gives up people below 50 million in all.">
+                      Settlers from{' '}
+                      <select className="econ-method-select" value={sources.some((w) => w.bodyName === sourceBody) ? sourceBody : sources[0].bodyName} onChange={(e) => setSourceBody(e.target.value)}>
+                        {sources.map((w) => (
+                          <option key={w.bodyName} value={w.bodyName}>
+                            {w.bodyName} ({Math.round(w.population).toLocaleString()}M)
+                          </option>
+                        ))}
+                      </select>{' '}
+                      · {shipClass.settlerCapacity ?? 0}M people
+                    </div>
+                  )}
                   <CostChips ids={costIds} labelOf={labelOf} cost={cost} have={have} />
                   {reason && <div className="shipyard-reason">Can't build: {reason}</div>}
                 </div>

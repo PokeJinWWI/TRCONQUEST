@@ -65,6 +65,7 @@ export type DiplomacyEventKind =
   | 'treaty-broken'
   | 'colony-founded'
   | 'colony-promoted'
+  | 'colony-outpost-upgraded'
   | 'colony-abandoned'
   // A Starbase of the player's begun / finished (scene/starbaseNotices.ts); a click goes to its system.
   | 'starbase-started'

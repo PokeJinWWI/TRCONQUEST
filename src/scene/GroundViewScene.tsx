@@ -283,7 +283,7 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
         e.stopPropagation()
         const armed = useLensStore.getState().armed
         if (armed) return lensClick(bodyName, nearestNode(pointOf(e), 'fine'), armed)
-        handleGroundClick(bodyName, pickNode(e))
+        handleGroundClick(bodyName, useGroundViewStore.getState().mode.kind === 'colonize' ? nearestNode(pointOf(e), 'fine') : pickNode(e))
       }}
       onContextMenu={(e) => {
         e.stopPropagation()

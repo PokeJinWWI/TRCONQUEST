@@ -41,6 +41,8 @@ export interface ShipBuildOrder {
   // A REPAIR order (queueRepair): the damaged ship restored to a pristine hull on finish.
   repairShipId?: string
   repairShipName?: string
+  // A Colony Ship: the world its settlers are taken from (default the capital). Drawn when the hull is finished.
+  settlerSource?: string
 }
 
 export type QueueBuildResult = { ok: true; orderId: string } | { ok: false; reason: string }
@@ -66,7 +68,8 @@ interface ShipyardState {
   // Validates the class, the queue bound, and affordability against THIS
   // country's stockpile; on success deducts the cost and appends the order.
   // Returns why it refused rather than throwing so the UI can show the reason.
-  queueBuild: (countryId: string, classId: string, simDays: number) => QueueBuildResult
+  // `opts.settlerSource` (Colony Ships): the world the settlers come from.
+  queueBuild: (countryId: string, classId: string, simDays: number, opts?: { settlerSource?: string }) => QueueBuildResult
   // Removes the order and refunds its full cost to its country. No-op for an
   // unknown id.
   cancelBuild: (countryId: string, orderId: string) => void
@@ -99,7 +102,7 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
 
   ordersFor: (countryId) => get().ordersByCountry[countryId] ?? NO_ORDERS,
 
-  queueBuild: (countryId, classId, simDays) => {
+  queueBuild: (countryId, classId, simDays, opts) => {
     // A hull in an upgrade line (the scouts) is built at the best level researched.
     const shipClass = resolveShipClass(bestLevelClass(classId, useTechStore.getState().stateFor(countryId).researched, resolveShipClass))
     if (!shipClass) return { ok: false, reason: 'Unknown ship class.' }
@@ -133,6 +136,7 @@ export const useShipyardStore = create<ShipyardState>((set, get) => ({
       queuedSimDays: simDays,
       startedSimDays: null,
       finishSimDays: null,
+      ...(shipClass.role === 'colony' && opts?.settlerSource ? { settlerSource: opts.settlerSource } : {}),
     }
     set((s) => ({ ordersByCountry: { ...s.ordersByCountry, [countryId]: [...(s.ordersByCountry[countryId] ?? []), order] } }))
     startFreeSlips(countryId, simDays)

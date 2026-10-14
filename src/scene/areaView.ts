@@ -4,6 +4,8 @@
 import { getCountry } from '../data/countryData'
 import { SIMPLE_BUILDING_DEFS, SIMPLE_DISTRICT_DEFS, SIMPLE_DISTRICTS, type SimpleBuildingId, type SimpleDistrictId } from '../data/simplisticEconomyData'
 import { DISTRICT_LABELS, DISTRICT_TYPES, RECIPES } from '../economy/recipes'
+import { freeLand } from '../economy-abstract/abstractEconomy'
+import { freeLandOfWorld } from '../economy/districts'
 import { buildingTechBlock } from '../state/abstractEconomyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { useCivicStore } from '../state/civicStore'
@@ -57,11 +59,14 @@ export interface AreaSite {
   // Districts that can be developed here.
   canDevelop: { district: string; label: string }[]
   // Buildings that can be built here, per district developed at the site.
-  canBuild: { id: string; name: string; district: string; blocked: string | null }[]
+  // Every building the site's kind allows. `developed` = its district already has a level here; if not, building it develops one first.
+  canBuild: { id: string; name: string; district: string; blocked: string | null; developed: boolean }[]
 }
 
 export interface AreaView {
   bodyName: string
+  // District levels the world's land can still take (null = no economy here).
+  landLeft: number | null
   sections: { kind: DevLocation['kind']; title: string; sites: AreaSite[] }[]
   // Buildings standing outside every area (a spaceport out in the open): just buildings.
   standalone: AreaBuilding[]
@@ -88,6 +93,17 @@ export function buildableIn(m: EconomyMode, district: string, nationId: string):
     .map((r) => ({ id: r.id, name: r.label, blocked: r.requiresTech && !researched.has(r.requiresTech) ? `needs ${r.requiresTech}` : null }))
 }
 
+// District levels the world's land can still take, queued ones counted (the same figure each economy refuses an order on).
+function freeLandNow(bodyName: string, m: EconomyMode): number | null {
+  if (m === 'simple') {
+    const w = useAbstractEconomyStore.getState().worlds[bodyName]
+    const owner = useTerritoryStore.getState().bodyOwner[bodyName]
+    return w && owner ? freeLand(w, useAbstractEconomyStore.getState().byCountry[owner]?.queue ?? []) : null
+  }
+  const w = worldByName(useEconomyStore.getState().worlds, bodyName)
+  return w ? freeLandOfWorld(w) : null
+}
+
 export function areaView(bodyName: string, playerId: string | null): AreaView {
   ensureSeededFor(bodyName)
   const m = mode()
@@ -110,6 +126,7 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
       if (o.siteId) orders.push({ siteId: o.siteId, name: o.district ? `${districtLabel(m, o.district)} level` : buildingName(m, o.recipeId), what: o.district ? 'level' : 'building' })
     }
   }
+  const landLeft = freeLandNow(bodyName, m)
   const sites = locationsOf(bodyName).filter((s) => s.kind !== 'strategic' && !s.material)
   const districts = districtsOfMode(m)
   const out: AreaSite[] = sites.map((s) => {
@@ -134,7 +151,14 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
       civic: civicList.filter((c) => c.siteId === s.id),
       onOrder: orders.filter((o) => o.siteId === s.id).map(({ name, what }) => ({ name, what })),
       canDevelop: districts.filter((d) => siteKindsOfDistrict(m, d).includes(s.kind)).map((d) => ({ district: d, label: districtLabel(m, d) })),
-      canBuild: mine && playerId ? districts.filter((d) => (levelsHere[d] ?? 0) > 0).flatMap((d) => buildableIn(m, d, playerId).map((b) => ({ ...b, district: d }))) : [],
+      canBuild: (mine || (!holder && !!playerId)) && playerId
+        ? districts.filter((d) => siteKindsOfDistrict(m, d).includes(s.kind)).flatMap((d) => {
+            const developed = (levelsHere[d] ?? 0) > 0
+            const label = districtLabel(m, d)
+            const noRoom = !developed ? ((landLeft ?? 0) <= 0 ? `${bodyName} has no land left for a new ${label} level` : levelRoomAt(s) <= 0 ? `this site has no room for a new ${label} level` : null) : null
+            return buildableIn(m, d, playerId).map((b) => ({ ...b, district: d, developed, blocked: b.blocked ?? noRoom }))
+          })
+        : [],
     }
   })
   // One card per AREA (scene/areas.ts): seeds whose ground has grown together are one place, shown under the primary seed's
@@ -187,5 +211,5 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
     .map((b) => ({ id: b.id, name: buildingName(m, b.id), count: b.count - (placedByBuilding[b.id] ?? 0) }))
     .filter((b) => b.count > 0)
   void slotsPerLevel
-  return { bodyName, sections, standalone: [...standaloneBy.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), unplaced }
+  return { bodyName, landLeft, sections, standalone: [...standaloneBy.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), unplaced }
 }

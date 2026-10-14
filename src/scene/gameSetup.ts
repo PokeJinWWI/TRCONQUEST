@@ -15,7 +15,7 @@ import { economyModel } from '../state/playerStore'
 import { bodiesOwnedBy } from './territory'
 import { spawnOwnedShip, seedMilitaryStockpile } from './shipyardLogic'
 import { resolveShipClass } from '../state/shipClassResolver'
-import { seedColonies } from './colonies'
+import { seedColonies, seedOutpostWorlds } from './colonies'
 import { groundSurface, musterNode } from './groundLogic'
 import { RING_ANCHORS } from '../data/earthEconomicGeography'
 import { seedRuralStructures } from './ruralOrders'
@@ -53,6 +53,7 @@ export function setUpNewGame(): void {
   // and the military shipyard draws real goods from the capital stockpile, so each
   // nation opens with a standing war-materials reserve + targets (scene/shipyardLogic).
   if (economyModel() === 'complex') {
+    seedOutpostWorlds()
     useEconomyStore.getState().seedEmpires()
     for (const country of COUNTRIES) seedMilitaryStockpile(country.id)
   }

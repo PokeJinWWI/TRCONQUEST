@@ -6,6 +6,7 @@ import {
   INDUSTRIAL_SUITABILITY,
   SETTLEMENT_SUITABILITY,
   SITE_CAPACITY_RANGE,
+  OWN_SETTLEMENT_MIN_SEPARATION_CELLS,
   SITE_MIN_SEPARATION_CELLS,
   TERRAIN_RESOURCES,
   type LocationKind,
@@ -16,6 +17,7 @@ import { KEY_MIN_SEPARATION_CELLS, TERRAIN, type TerrainId } from '../data/groun
 import { bodyGroundInfoAny, surfaceOf, terrainAt } from './planetTerrain'
 import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
 import { rngFor, type DevLocation } from './locations'
+import { siteOwner } from '../state/locationStore'
 
 // What can be founded by clicking. Spaceports and defences are structures (state/structureStore), strategic ground is the
 // military's; neither is a district.
@@ -74,7 +76,7 @@ function foundedName(bodyName: string, kind: LocationKind, node: number, existin
 
 // Can a `kind` district be founded at `node` of `bodyName`, given the sites already there? Ground only: land of a terrain that
 // suits it, clear of every other site by the same distance the generator keeps. Returns the site it would be.
-export function planFounding(bodyName: string, kind: LocationKind, node: number, existing: readonly DevLocation[]): Founding {
+export function planFounding(bodyName: string, kind: LocationKind, node: number, existing: readonly DevLocation[], builderId?: string): Founding {
   if (!FOUNDABLE_KINDS.includes(kind)) return { ok: false, reason: `a ${kind} site is not founded by clicking the ground` }
   if (!bodyGroundInfoAny(bodyName)) return { ok: false, reason: 'there is no ground here to build on' }
   const mesh = surfaceMesh()
@@ -84,10 +86,18 @@ export function planFounding(bodyName: string, kind: LocationKind, node: number,
   if (wild.landComponent[node] < 0 || TERRAIN[terrain].passable !== 'all') return { ok: false, reason: 'that ground cannot be built on' }
   const suitability = foundingSuitability(kind, terrain)
   if (suitability <= 0) return { ok: false, reason: kind === 'resource' ? `there is nothing to mine or cut on ${terrain}` : `${terrain} is no use for ${kind === 'agricultural' ? 'farming' : kind === 'industrial' ? 'industry' : 'a settlement'}` }
-  const minSep = Math.max(SITE_MIN_SEPARATION_CELLS, KEY_MIN_SEPARATION_CELLS - 1) * mesh.fineSpacingRad
-  // Sites of another kind may stand closer (a farm beside a town); the same kind keeps the full distance.
-  const near = existing.find((s) => s.node !== null && arc(nodePoint(node), nodePoint(s.node)) < (s.kind === kind ? minSep : 0.9 * mesh.fineSpacingRad))
-  if (near) return { ok: false, reason: `too close to another site (${near.name ?? near.id.slice(near.id.lastIndexOf('#') + 1)})` }
+  const fullSep = Math.max(SITE_MIN_SEPARATION_CELLS, KEY_MIN_SEPARATION_CELLS - 1)
+  // Sites of another kind may stand closer (a farm beside a town); the same kind keeps the full distance, except that a nation
+  // may grow a new settlement right beside one of its own.
+  const sepFor = (s: DevLocation): number => {
+    if (s.kind !== kind) return 0.9
+    return kind === 'settlement' && builderId && siteOwner(s.id) === builderId ? OWN_SETTLEMENT_MIN_SEPARATION_CELLS : fullSep
+  }
+  const near = existing.find((s) => s.node !== null && arc(nodePoint(node), nodePoint(s.node)) < sepFor(s) * mesh.fineSpacingRad)
+  if (near) {
+    const cells = Math.round((arc(nodePoint(node), nodePoint(near.node!)) / mesh.fineSpacingRad) * 10) / 10
+    return { ok: false, reason: `too close to another site (${near.name ?? near.id.slice(near.id.lastIndexOf('#') + 1)}: ${cells} cells away, ${sepFor(near)} needed)` }
+  }
   if (existing.filter((s) => s.kind === kind && isFounded(s.id)).length >= MAX_FOUNDED_PER_KIND) {
     return { ok: false, reason: `this body already has ${MAX_FOUNDED_PER_KIND} founded ${kind} sites` }
   }

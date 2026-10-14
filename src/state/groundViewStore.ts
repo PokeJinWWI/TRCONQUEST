@@ -9,6 +9,8 @@ import type { ArmyKind } from '../data/armyData'
 export type GroundClickMode =
   | { kind: 'order' }
   | { kind: 'drop'; shipId: string }
+  // Choosing where a Colony Ship lands (scene/colonies.completeLanding); `systemId` is the world's star.
+  | { kind: 'colonize'; shipId: string; systemId: string }
   | { kind: 'spawn'; ownerId: string; armyKind: ArmyKind }
 
 // Which way the planetary map is drawn: a turning globe, or a flat rectangular

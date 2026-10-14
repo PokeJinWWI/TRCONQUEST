@@ -20,7 +20,7 @@ import { DefenseTab } from './planet/DefenseTab'
 import { DevelopmentTab } from './planet/DevelopmentTab'
 import { QualityOfLifeCard } from './QualityOfLifeCard'
 import { MigrationCard } from './MigrationPanels'
-import { TerritoryTab } from './planet/TerritoryTab'
+import { ControlTab } from './planet/ControlTab'
 import { SystemTerritoryRows } from './planet/SystemTerritoryRows'
 import { AreaView } from './planet/AreaView'
 import { usePlanetViewStore } from '../state/planetViewStore'
@@ -58,14 +58,14 @@ const KIND_LABEL: Record<InspectableBody['kind'], string> = {
 // The planet screen (Stellaris-style) for planets and moons: Summary, Districts
 // & Buildings, Population, Armies — plus Complex mode's per-world Market and
 // Politics. Stars keep the plain single-pane readout.
-type InspectTab = 'summary' | 'districts' | 'population' | 'armies' | 'defense' | 'territory' | 'development' | 'market' | 'politics'
+type InspectTab = 'summary' | 'districts' | 'population' | 'armies' | 'defense' | 'control' | 'development' | 'market' | 'politics'
 const TAB_LABELS: Record<InspectTab, string> = {
   summary: 'Summary',
   districts: 'Districts & Buildings',
   population: 'Population',
   armies: 'Armies',
   defense: 'Defense',
-  territory: 'Territory',
+  control: 'Control',
   development: 'Development',
   market: 'Market',
   politics: 'Politics',
@@ -76,7 +76,7 @@ const TAB_TIPS: Record<InspectTab, string> = {
   population: 'Who lives here and what they do',
   armies: 'Ground forces on this world',
   defense: 'Planetary defenses — fortresses, shield generators, defense batteries — and the orbit',
-  territory: 'Who governs, who holds it by force, who owns what stands here, claims, agreements, and the orbit: each on its own row',
+  control: 'Who is present and how much of the world each controls, your colony\'s progress, decisions open to you, then who governs, who holds it by force, claims, agreements and the orbit',
   development: 'Sites for settlements, mines, factories and ports; what stands on them; routes; how cities grow',
   market: 'This world’s goods market (Complex mode)',
   politics: 'This world’s politics (Complex mode)',
@@ -335,7 +335,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   // world with an economy adds Districts & Buildings and Population; Complex
   // mode keeps its per-world Market and Politics.
   const hasEconomy = simple ? simpleWorld : !!world
-  const tabs: InspectTab[] = ['summary', ...(hasEconomy ? (['districts', 'population'] as InspectTab[]) : []), 'armies', 'defense', ...(surveyed ? (['territory', 'development'] as InspectTab[]) : []), ...(!simple && world ? (['market', 'politics'] as InspectTab[]) : [])]
+  const tabs: InspectTab[] = ['summary', ...(hasEconomy ? (['districts', 'population'] as InspectTab[]) : []), 'armies', 'defense', ...(surveyed ? (['control', 'development'] as InspectTab[]) : []), ...(!simple && world ? (['market', 'politics'] as InspectTab[]) : [])]
   const current = tabs.includes(tab) ? tab : 'summary'
 
   return (
@@ -358,8 +358,8 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
       {current === 'districts' && (
         <>
           <div className="nav-subtabs pl-subtabs" title="The same buildings two ways: the master list by district, or each settlement and site with what stands on it">
-            <button type="button" className={`nav-subtab${districtsView === 'building' ? ' active' : ''}`} onClick={() => setDistrictsView('building')}>By building</button>
             <button type="button" className={`nav-subtab${districtsView === 'area' ? ' active' : ''}`} onClick={() => setDistrictsView('area')}>By area</button>
+            <button type="button" className={`nav-subtab${districtsView === 'building' ? ' active' : ''}`} onClick={() => setDistrictsView('building')}>By building</button>
           </div>
           {simple && <OwnerNote bodyName={body.name} countryId={playerId} />}
           {districtsView === 'area' ? (
@@ -380,7 +380,7 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
       )}
       {current === 'armies' && <BodyArmies bodyName={body.name} />}
       {current === 'defense' && <DefenseTab bodyName={body.name} playerId={playerId} />}
-      {current === 'territory' && <TerritoryTab bodyName={body.name} />}
+      {current === 'control' && <ControlTab bodyName={body.name} />}
       {current === 'development' && <DevelopmentTab bodyName={body.name} />}
       {current === 'market' && <EconomyPanel subcategory="Market" worldName={body.name} world={world} country={country} />}
       {current === 'politics' && <PoliticsPanel worldName={body.name} world={world} />}

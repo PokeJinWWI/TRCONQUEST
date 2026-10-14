@@ -217,6 +217,9 @@ export interface WorldSpec {
   buildings: BuildingSpec[]
   // See World.habitability; absent = 1.
   habitability?: number
+  // Real people: the make-up of the population as millions per class (a colony of settlers drawn from another world),
+  // used instead of the split worked out from the buildings' jobs.
+  classMix?: Partial<Record<PopClass, number>>
 }
 
 // Seeded deposits are a large-but-finite multiple of current per-tick output —
@@ -255,6 +258,10 @@ const FRICTIONAL_SLACK = 1.06
 const INVESTOR_SHARE = 0.04
 const MIN_SUBSISTENCE_SHARE = 0.08
 function classSplitFor(spec: WorldSpec): Record<PopClass, number> {
+  if (spec.classMix) {
+    const total = POP_CLASSES.reduce((n, c) => n + (spec.classMix?.[c] ?? 0), 0)
+    if (total > 0) return Object.fromEntries(POP_CLASSES.map((c) => [c, (spec.classMix?.[c] ?? 0) / total])) as Record<PopClass, number>
+  }
   const jobs = {} as Record<PopClass, number>
   for (const cls of POP_CLASSES) jobs[cls] = 0
   for (const b of spec.buildings) {

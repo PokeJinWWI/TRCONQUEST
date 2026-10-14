@@ -3,6 +3,9 @@ import { useSeededBody } from '../../hooks/useSeededBody'
 import { connectSite } from '../../scene/aiDevelopment'
 import { syncCivicHalls } from '../../scene/seedPlacementOrders'
 import { ruralRows } from '../../scene/territoryView'
+import { useColonyStore } from '../../state/colonyStore'
+import { MICRO_COLONY_LAND } from '../../data/colonyData'
+import { OWN_SETTLEMENT_MIN_SEPARATION_CELLS } from '../../data/locationData'
 import { useStructureStore } from '../../state/structureStore'
 import { developmentView, type AreaRow } from '../../scene/territoryView'
 import { useCivicStore } from '../../state/civicStore'
@@ -140,6 +143,7 @@ export function DevelopmentTab({ bodyName }: { bodyName: string }) {
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const [message, setMessage] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
+  const colony = useColonyStore((s) => s.colonies[bodyName])
   const ruralLedger = useStructureStore((s) => s.rural[bodyName])
   // The body's starting settlements and buildings are assigned to sites the first time it is looked at.
   const ready = useSeededBody(bodyName)
@@ -162,6 +166,11 @@ export function DevelopmentTab({ bodyName }: { bodyName: string }) {
         <div className="pl-stat"><span>Urban people</span><b>{urban.reduce((n, a) => n + (a.urban?.population ?? 0), 0)}M</b></div>
         <div className="pl-stat"><span>Other areas</span><b>{view.areas.length - urban.length}</b></div>
       </div>
+      {colony && colony.stage === 'micro' && owners[bodyName] === playerId && (
+        <div className="abs-dim pl-land" title="A micro-colony can develop only this many district levels until an armed patrol holds its orbit long enough (see the Control tab)">
+          Micro-colony: districts are limited to {MICRO_COLONY_LAND} levels until the colony is promoted. New towns beside your own settlements may be founded {OWN_SETTLEMENT_MIN_SEPARATION_CELLS} cells apart; elsewhere sites keep their distance.
+        </div>
+      )}
       <div className="abs-dim pl-land">Every connected patch of one kind of district is one area. Found new ones anywhere with the build lens.</div>
       {message && <div className="econ-neg pl-message">{message}</div>}
       {kinds.map((kind) => {

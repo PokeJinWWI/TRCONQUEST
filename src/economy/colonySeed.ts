@@ -6,11 +6,12 @@
 import { habitabilityOfClass } from './habitability'
 import { landForBody } from '../scene/bodyLand'
 import { bodyGroundInfoAny } from '../scene/planetTerrain'
-import { MICRO_COLONY_LAND } from '../data/colonyData'
+import { COLONY_KIT_POPULATION, MICRO_COLONY_LAND } from '../data/colonyData'
 import type { World } from './economyTypes'
 import { kitFor } from './empireSeed'
 import { seedStandaloneWorld, type WorldSpec } from './economySeed'
 import type { ReligionMix } from './demographics'
+import type { SettlerMix } from './settlerPicker'
 
 // The people's make-up copied from an existing world: its culture, species and the share of each faith.
 function demographicsOf(home: World): { culture: string; species: string; religions: ReligionMix } {
@@ -22,7 +23,7 @@ function demographicsOf(home: World): { culture: string; species: string; religi
 }
 
 // `settlers` is in millions of people. `home` is the nation's capital world (whose people they are).
-export function seedColonyWorld(args: { bodyName: string; ownerId: string; settlers: number; home: World; landLimit?: number }): World | null {
+export function seedColonyWorld(args: { bodyName: string; ownerId: string; settlers: number; home: World; landLimit?: number; mix?: SettlerMix }): World | null {
   const info = bodyGroundInfoAny(args.bodyName)
   if (!info || args.settlers <= 0) return null
   const cap = args.landLimit ?? MICRO_COLONY_LAND
@@ -32,8 +33,11 @@ export function seedColonyWorld(args: { bodyName: string; ownerId: string; settl
     ...demographicsOf(args.home),
     population: args.settlers,
     capacity: Math.max(args.settlers * 5, 100),
-    buildings: kitFor(info.planetClass, args.settlers, false),
+    // Sized as for a colony of COLONY_KIT_POPULATION: a few million settlers could not staff a single level of anything by the
+    // job budget, so the colony would start with nothing to run; the plants run at what the people there can staff.
+    buildings: kitFor(info.planetClass, Math.max(args.settlers, COLONY_KIT_POPULATION), false),
     habitability: habitabilityOfClass(info.planetClass),
+    ...(args.mix && Object.keys(args.mix).length > 0 ? { classMix: args.mix } : {}),
   }
   return seedStandaloneWorld([{ id: args.ownerId, capitalBodyName: args.home.id, privateLed: false }], spec, { landOf: (b) => Math.min(landForBody(b), cap) })
 }

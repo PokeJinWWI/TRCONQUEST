@@ -47,6 +47,15 @@ export function civicOf(surface: BodySurface, sites: readonly DevLocation[]): Ci
     .map((k) => ({ id: k.id, kind: k.kind, name: k.name, description: k.description, place: k.place, native: k.native, role: k.role, node: k.node, siteId: siteForNode(sites, k.node) }))
 }
 
+// A colony's landing is an Outpost Station; once its people number `threshold` (millions) the outpost is upgraded: it is dropped
+// from the civic list here and withSettlementHalls puts the municipal hall in its place. Returns the same array when nothing
+// changes (under the threshold, or no outpost at that node). The upgrade is one way: a hall is not an outpost again.
+export function withoutGrownOutpost(list: readonly CivicBuilding[], node: number, populationMillions: number, threshold: number): CivicBuilding[] {
+  if (populationMillions < threshold) return list as CivicBuilding[]
+  const next = list.filter((c) => !(c.kind === 'outpostStation' && c.node === node))
+  return next.length === list.length ? (list as CivicBuilding[]) : next
+}
+
 export const HALL_ID_PREFIX = 'hall-'
 
 // Every urban area (scene/areas.ts) has one municipal government building: an area holding a key-node civic building already has its

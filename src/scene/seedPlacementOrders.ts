@@ -9,7 +9,9 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { groundKeySurface } from '../state/defenseStore'
 import { useCivicStore } from '../state/civicStore'
 import { isRural } from '../economy/recipes'
-import { civicOf, withSettlementHalls } from './civic'
+import { civicOf, withSettlementHalls, withoutGrownOutpost } from './civic'
+import { useColonyStore } from '../state/colonyStore'
+import { OUTPOST_HALL_POPULATION } from '../data/colonyData'
 import { bodyAreas } from './footprintState'
 import { zoneBase } from './zoneOrders'
 import { locationsOf } from './locations'
@@ -48,6 +50,22 @@ export function syncCivicHalls(bodyName: string): void {
   const base = zoneBase(bodyName)
   const next = withSettlementHalls(list, base ? bodyAreas(bodyName, base) : [], (id) => !!siteOwner(id), (id) => siteName(id))
   if (next !== list) store.setBody(bodyName, next)
+}
+
+// Colonies whose settlement has grown past OUTPOST_HALL_POPULATION swap their Outpost Station for a municipal hall. Returns the
+// bodies upgraded now (for the caller's notification). A body whose civic buildings are not written yet is left alone.
+export function upgradeGrownOutposts(): string[] {
+  const upgraded: string[] = []
+  for (const colony of Object.values(useColonyStore.getState().colonies)) {
+    const list = useCivicStore.getState().civic[colony.bodyName]
+    if (!list) continue
+    const next = withoutGrownOutpost(list, colony.outpostNode, bodyPopulation(colony.bodyName), OUTPOST_HALL_POPULATION)
+    if (next === list) continue
+    useCivicStore.getState().setBody(colony.bodyName, next)
+    syncCivicHalls(colony.bodyName)
+    upgraded.push(colony.bodyName)
+  }
+  return upgraded
 }
 
 // Seeds one body (idempotent). Returns what was left over, or null if there was nothing to seed.

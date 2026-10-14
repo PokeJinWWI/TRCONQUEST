@@ -95,7 +95,7 @@ export function applyShipCommand(shipId: string, command: ShipCommand, simDays: 
       return
     }
     case 'colonize':
-      startFounding(shipId, command.bodyName, simDays)
+      startFounding(shipId, command.bodyName, simDays, command.node)
       return
     case 'upgrade':
       useShipyardStore.getState().queueUpgrade(ship.ownerId, shipId, simDays)

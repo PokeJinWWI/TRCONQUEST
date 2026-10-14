@@ -17,19 +17,10 @@ export interface ChooserGroup {
   // The system the ship is in / the nation's home system.
   here: boolean
   home: boolean
-  // Set for a system whose own Starbase is still being built: no worlds can be offered yet.
-  waiting?: string
-}
-
-export interface WaitingSystem {
-  starId: string
-  // When its Starbase is done, as a date the player reads ("3 JAN 2601").
-  readyText: string
 }
 
 export interface GroupInput {
   worlds: readonly ChooserWorld[]
-  waiting: readonly WaitingSystem[]
   hereStarId: string | null
   homeStarId: string | null
   starName: (starId: string) => string
@@ -53,7 +44,6 @@ export function groupColonizeWorlds(input: GroupInput): ChooserGroup[] {
     make(w.starId).bodies.push(w.bodyName)
     lyOf.set(w.starId, Math.min(lyOf.get(w.starId) ?? Infinity, w.ly))
   }
-  for (const w of input.waiting) make(w.starId).waiting = `Waiting for the Starbase here to finish, ready about ${w.readyText}`
   const rank = (g: ChooserGroup) => (g.here ? 0 : g.home ? 1 : 2)
   return [...bySystem.values()].sort((a, b) => rank(a) - rank(b) || (lyOf.get(a.starId) ?? Infinity) - (lyOf.get(b.starId) ?? Infinity) || a.name.localeCompare(b.name))
 }
@@ -61,10 +51,6 @@ export function groupColonizeWorlds(input: GroupInput): ChooserGroup[] {
 export interface NothingHereInput {
   // The system the ship is in, and its name.
   systemName: string
-  // The nation's own Starbase there: absent, finished, or ready at `readyText`.
-  starbase: 'none' | 'finished' | 'building'
-  readyText?: string
-  isHomeSystem: boolean
   hasSettlers: boolean
   // The world the ship orbits: none (at a star or in open space), one that could be settled
   // (unowned, with land), or one that cannot (a star, an owned or landless world).
@@ -74,8 +60,6 @@ export interface NothingHereInput {
 // Why the "Nothing here to settle" line has nothing to offer, in the order a player can act on it.
 export function nothingHereReason(i: NothingHereInput): string {
   if (!i.hasSettlers) return 'The ship carries no settlers.'
-  if (i.starbase === 'building' && !i.isHomeSystem) return `Waiting for the Starbase here to finish, ready about ${i.readyText ?? 'soon'}.`
-  if (i.starbase === 'none' && !i.isHomeSystem) return `Needs a Starbase of your own in ${i.systemName} before anything here can be settled.`
   if (i.orbit === 'not') return 'The world it orbits cannot be settled. Open Colonize… to pick a world, or right-click one.'
   return 'Nothing here to settle. Right-click a surveyed, unowned world to colonize it.'
 }

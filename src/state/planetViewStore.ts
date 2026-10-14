@@ -14,6 +14,6 @@ interface PlanetViewStore {
 export const usePlanetViewStore = create<PlanetViewStore>((set) => ({
   groupBuildings: false,
   setGroupBuildings: (groupBuildings) => set({ groupBuildings }),
-  view: 'building',
+  view: 'area',
   setView: (view) => set({ view }),
 }))

@@ -1,3 +1,4 @@
+import type { PopClass } from '../economy/recipes'
 import { create } from 'zustand'
 import type { ResourceId } from '../data/resourceData'
 import type { SurveyJob } from '../scene/surveyLogic'
@@ -88,7 +89,8 @@ export type ShipCommand =
   | { kind: 'build-starbase' }
   // A Colony Ship founds a colony on `bodyName`, the body it orbits
   // (scene/colonies.ts).
-  | { kind: 'colonize'; bodyName: string }
+  // `node`: the landing site the player chose on the ground map (absent = the colony picks one itself).
+  | { kind: 'colonize'; bodyName: string; node?: number }
   // Chase `targetShipId` and open fire on it when they meet, whoever owns it
   // (scene/aggression.ts): firing on a nation you are not at war with is an
   // incident, with consequences once the news reaches it.
@@ -342,10 +344,12 @@ export interface ShipInstance {
   pendingPatrol?: { on: boolean; arrivesSimDays: number; sentSimDays?: number } | null
   // Settlers (millions) a Colony Ship carries. Absent = none.
   settlers?: number
+  // The professions they came from (millions per pop class), so the colony they found is made of those people.
+  settlerMix?: Partial<Record<PopClass, number>>
   // A Colony Ship at work founding a colony on `bodyName` (the body it
   // orbits) since `sinceSimDays`; the colony exists after COLONY_FOUNDING_DAYS
   // (scene/colonies.resolveFoundings). Cleared by any manual order.
-  founding?: { bodyName: string; sinceSimDays: number } | null
+  founding?: { bodyName: string; sinceSimDays: number; node?: number } | null
   // Stellaris-style automation (scene/automation.ts): the ship finds its own
   // work. Absent = off; any manual order turns it off.
   // Queued or running in a shipyard slip to be upgraded to its class's next level
@@ -528,7 +532,7 @@ interface ShipState {
   setPendingFreeFlight: (id: string, pending: ShipInstance['pendingFreeFlight']) => void
   setPatrol: (id: string, on: boolean) => void
   setPendingPatrol: (id: string, pending: ShipInstance['pendingPatrol']) => void
-  setSettlers: (id: string, settlers: number) => void
+  setSettlers: (id: string, settlers: number, mix?: Partial<Record<PopClass, number>>) => void
   setFounding: (id: string, founding: ShipInstance['founding']) => void
   // Exactly this one mode (null: none).
   setAutomation: (id: string, automation: Automation | null) => void
@@ -829,7 +833,7 @@ export const useShipStore = create<ShipState>((set) => ({
     })),
   setPatrol: (id, on) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, patrol: on, pendingPatrol: null } : ship)) })),
   setPendingPatrol: (id, pending) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, pendingPatrol: pending } : ship)) })),
-  setSettlers: (id, settlers) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, settlers } : ship)) })),
+  setSettlers: (id, settlers, mix) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, settlers, ...(mix ? { settlerMix: mix } : {}) } : ship)) })),
   setFounding: (id, founding) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, founding } : ship)) })),
   setAutomation: (id, automation) => set((s) => ({ ships: s.ships.map((ship) => (ship.id === id ? { ...ship, automations: automation ? [automation] : [], autoHome: null, autoRoute: null, automationNote: null } : ship)) })),
   toggleAutomation: (id, automation) =>

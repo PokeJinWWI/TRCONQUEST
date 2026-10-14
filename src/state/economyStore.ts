@@ -1,3 +1,4 @@
+import { pickSettlers, mixOf, type SettlerMix } from '../economy/settlerPicker'
 import { treatyLanes } from '../scene/migrationPaths'
 import { distressByBody } from '../scene/migrationDistress'
 import { useMigrationStore } from './migrationStore'
@@ -290,7 +291,8 @@ interface EconomyStore {
   addWorld: (world: World) => void
   // Settlers leave a world: its pops shrink in proportion by up to `millions` (never below `floor`
   // people in all). Returns how many left.
-  takeSettlers: (worldId: string, millions: number, floor: number) => number
+  // Which pops they came from is drawn by economy/settlerPicker; returns what was taken and its class mix.
+  takeSettlers: (worldId: string, millions: number, floor: number, rng: () => number) => { taken: number; mix: SettlerMix }
   // The land (district levels) a world can hold: a micro-colony growing into a planetary one.
   setWorldLand: (worldId: string, land: number) => void
   // Records the development site of a queued building the economy's own AI ordered (scene/placementOrders.placeUnplacedOrders).
@@ -740,15 +742,15 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
       worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, ownerId: countryId } : w)),
     })),
   addWorld: (world) => set((state) => (state.worlds.some((w) => w.id === world.id) ? state : { worlds: [...state.worlds, world] })),
-  takeSettlers: (worldId, millions, floor) => {
+  takeSettlers: (worldId, millions, floor, rng) => {
     const world = get().worlds.find((w) => w.id === worldId)
-    if (!world) return 0
-    const total = world.pops.reduce((n, p) => n + p.populationSize, 0)
-    const taken = Math.max(0, Math.min(millions, total - floor))
-    if (taken <= 0) return 0
-    const keep = (total - taken) / total
-    set((state) => ({ worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, pops: w.pops.map((p) => ({ ...p, populationSize: p.populationSize * keep })) } : w)) }))
-    return taken
+    if (!world) return { taken: 0, mix: {} }
+    const { byPop, taken } = pickSettlers(world.pops, millions, floor, rng)
+    if (taken <= 0) return { taken: 0, mix: {} }
+    const mix = mixOf(world.pops, byPop)
+    // A pop's wealth leaves with its people.
+    set((state) => ({ worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, pops: w.pops.map((p) => { const n = byPop[p.id] ?? 0; if (n <= 0) return p; const keep = (p.populationSize - n) / p.populationSize; return { ...p, populationSize: p.populationSize - n, wealth: p.wealth * keep } }) } : w)) }))
+    return { taken, mix }
   },
   setDisplacedUnrest: (byCountry) =>
     set((state) => {
