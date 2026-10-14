@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { useState } from 'react'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
 import { STARBASE_COST } from '../data/starbaseData'
@@ -59,7 +60,7 @@ export function ShipCargoSection({ ship }: { ship: ShipInstance }) {
   return (
     <>
       <div className="inspect-row">
-        <span className="inspect-label">Hold</span>
+        <span className="inspect-label"><Bi en="Hold" /></span>
         <span className="inspect-value">
           {cargoTotal(hold)} / {capacity}
           {cargoTotal(hold) > 0 && <> — {describe(hold)}</>}
@@ -67,14 +68,14 @@ export function ShipCargoSection({ ship }: { ship: ShipInstance }) {
       </div>
       {pending > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Orders</span>
+          <span className="inspect-label"><Bi en="Orders" /></span>
           <span className="inspect-value">{pending} in transit…</span>
         </div>
       )}
 
       {ship.arrivalCommand?.command.kind === 'load' && ship.arrivalCommand.bodyName && (
         <div className="inspect-row">
-          <span className="inspect-label">On arrival</span>
+          <span className="inspect-label"><Bi en="On arrival" /></span>
           <span className="inspect-value">Load at {ship.arrivalCommand.bodyName}</span>
         </div>
       )}

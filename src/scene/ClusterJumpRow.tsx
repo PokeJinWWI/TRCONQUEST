@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 // The cluster panel's Jump row: the loss chance of a hyperdrive jump there for the
 // player's selected ships, and what would make it safer. Its own component so the
 // number follows research and newly charted lanes (it used to be computed once, when
@@ -30,7 +31,7 @@ export function ClusterJumpRow({ clusterId }: { clusterId: string }) {
   return (
     <>
       <div className="inspect-row" title="A hyperdrive jump's loss chance grows with distance (and falls with your Hyperdrive Mk, and on a lane you have charted). Warp ships fly instead, at warp speed.">
-        <span className="inspect-label">Jump</span>
+        <span className="inspect-label"><Bi en="Jump" /></span>
         <span className="inspect-value">{formatLossPercent(worst)} chance the ship is lost</span>
       </div>
       {hint && <div className="inspect-status">{hint}</div>}

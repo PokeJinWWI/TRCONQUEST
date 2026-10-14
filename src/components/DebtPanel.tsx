@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { FOREIGN_BOND_POLICIES, foreignBondPolicyDef } from '../economy/laws'
@@ -47,17 +48,17 @@ export function DebtPanel() {
         </span>
       </div>
 
-      <div className="econ-subtitle">Bonds outstanding, by holder</div>
+      <div className="econ-subtitle"><Bi en="Bonds outstanding, by holder" /></div>
       <div className="inspect-row">
-        <span className="inspect-label">Domestic pops</span>
+        <span className="inspect-label"><Bi en="Domestic pops" /></span>
         <span className="inspect-value">{fmt(country.bonds.pops)}</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Corporations</span>
+        <span className="inspect-label"><Bi en="Corporations" /></span>
         <span className="inspect-value">{fmt(country.bonds.corporations)}</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Foreign holders</span>
+        <span className="inspect-label"><Bi en="Foreign holders" /></span>
         <span className="inspect-value">{fmt(country.bonds.foreign)}</span>
       </div>
 
@@ -66,10 +67,10 @@ export function DebtPanel() {
       </div>
       <div className="econ-build-buttons">
         <button type="button" className="corp-btn" onClick={() => issueBonds(country.id, BLOCK, 'pops')}>
-          Sell to Pops
+          <Bi en="Sell to Pops" />
         </button>
         <button type="button" className="corp-btn" onClick={() => issueBonds(country.id, BLOCK, 'corporations')}>
-          Sell to Companies
+          <Bi en="Sell to Companies" />
         </button>
         <button
           type="button"
@@ -78,10 +79,10 @@ export function DebtPanel() {
           title={foreignAllowed ? 'Sell bonds abroad' : 'Foreign bond sales are closed by law'}
           onClick={() => issueBonds(country.id, BLOCK, 'foreign')}
         >
-          Sell to Foreign
+          <Bi en="Sell to Foreign" />
         </button>
         <button type="button" className="corp-btn corp-btn-danger" disabled={total <= 0 || country.treasury <= 0} onClick={() => redeemBonds(country.id, BLOCK)}>
-          Redeem
+          <Bi en="Redeem" />
         </button>
       </div>
 
@@ -116,10 +117,10 @@ export function DebtPanel() {
               </span>
               <span className="debt-offer-actions">
                 <button type="button" className="stock-btn stock-buy" onClick={() => approveForeignOffer(country.id, o.id)}>
-                  Accept
+                  <Bi en="Accept" />
                 </button>
                 <button type="button" className="stock-btn stock-sell" onClick={() => rejectForeignOffer(country.id, o.id)}>
-                  Reject
+                  <Bi en="Reject" />
                 </button>
               </span>
             </div>

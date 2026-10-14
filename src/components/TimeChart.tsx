@@ -1,3 +1,4 @@
+import { Bi, useNativeText } from './Bi'
 import { useState, type MouseEvent } from 'react'
 import { simDaysToDate } from '../state/gameTimeStore'
 
@@ -42,6 +43,8 @@ const PAD_L = 66
 const PAD_R = 6
 const PAD_T = 6
 const PAD_B = 16
+// NERV puts the native month on a second line under the English tick.
+const PAD_B_NATIVE = 26
 
 // Round-number y ticks spanning [min, max].
 export function niceTicks(min: number, max: number, count = 4): number[] {
@@ -80,6 +83,8 @@ function monthOf(tick: number): { m: number; y: number } {
 
 export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1), includeZero, height = 110, tip }: TimeChartProps) {
   const [rangeIdx, setRangeIdx] = useState(0)
+  // NERV: month ticks carry their native label ("Apr 4月"); see components/Bi.tsx.
+  const nativeText = useNativeText()
   const [hover, setHover] = useState<number | null>(null)
   const range = RANGES[rangeIdx]
   const n = Math.max(0, ...series.map((s) => s.values.length))
@@ -90,7 +95,7 @@ export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1)
 
   const header = (
     <div className="tchart-head">
-      <span className="econ-graph-title" title={tip}>{title}</span>
+      <span className="econ-graph-title" title={tip}><Bi en={title} /></span>
       <span className="tchart-ranges">
         {RANGES.map((r, i) => (
           <button key={r.label} type="button" className={`tchart-range${i === rangeIdx ? ' active' : ''}`} title={`Show the last ${r.months === 36 ? '3 years' : r.months === 12 ? 'year' : '6 months'}`} onClick={() => setRangeIdx(i)}>
@@ -127,13 +132,16 @@ export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1)
     if (!(includeZero && min === 0)) min -= pad
   }
   const yTicks = niceTicks(min, max)
+  const xTicks = monthTicks(firstTick, shown, range.every)
+  const xTicksHaveNative = xTicks.some((t) => nativeText(t.label))
 
   const plotW = W - PAD_L - PAD_R
-  const plotH = height - PAD_T - PAD_B
+  const hasNative = xTicksHaveNative
+  const padB = hasNative ? PAD_B_NATIVE : PAD_B
+  const plotH = height - PAD_T - padB
   const x = (j: number) => PAD_L + (j / (shown - 1)) * plotW
   const y = (v: number) => PAD_T + (1 - (v - min) / (max - min)) * plotH
 
-  const xTicks = monthTicks(firstTick, shown, range.every)
 
   const onMove = (e: MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -146,7 +154,7 @@ export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1)
   return (
     <div className="econ-graph">
       {header}
-      <svg viewBox={`0 0 ${W} ${height}`} className="tchart-svg" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${height + (hasNative ? PAD_B_NATIVE - PAD_B : 0)}`} className="tchart-svg" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         {/* y gridlines + labels */}
         {yTicks.map((v) => (
           <g key={v}>
@@ -161,7 +169,10 @@ export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1)
         {xTicks.map((t) => (
           <g key={t.j}>
             <line x1={x(t.j)} x2={x(t.j)} y1={PAD_T + plotH} y2={PAD_T + plotH + 3} stroke="rgba(255,255,255,0.4)" strokeWidth={0.7} />
-            <text x={x(t.j)} y={height - 3} textAnchor={t.j === 0 ? 'start' : t.j === shown - 1 ? 'end' : 'middle'} className="tchart-label">{t.label}</text>
+            <text x={x(t.j)} y={PAD_T + plotH + 11} textAnchor={t.j === 0 ? 'start' : t.j === shown - 1 ? 'end' : 'middle'} className="tchart-label">
+              {t.label}
+              {nativeText(t.label) && <tspan className="tchart-native" x={x(t.j)} dy="1.1em">{nativeText(t.label)}</tspan>}
+            </text>
           </g>
         ))}
         {sliced.map((s) => {

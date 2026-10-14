@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 // Government > Leaders: the people who serve the nation, by kind. Categories
 // are data: add a line to LEADER_CATEGORIES for a new kind.
 //
@@ -37,7 +38,7 @@ export function LeadersPanel() {
             <div className="econ-subtitle" title={c.description}>
               {c.label}
             </div>
-            {entries.length > 0 ? entries : <div className="nav-placeholder">Not yet available</div>}
+            {entries.length > 0 ? entries : <div className="nav-placeholder"><Bi en="Not yet available" /></div>}
           </div>
         )
       })}

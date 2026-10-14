@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { bringToFrontZIndex } from '../state/layering'
@@ -43,7 +44,8 @@ export function MapModesButton() {
           if (rect) setAt({ right: window.innerWidth - rect.right, bottom: window.innerHeight - rect.top + 8, z: bringToFrontZIndex() })
           setOpen((o) => !o)
         }} title="Map modes — what the map's colours show">
-        Map Modes{mode !== 'none' ? `: ${MAP_MODE_LABELS[mode]}` : ''}
+        <Bi en="Map Modes" />
+        {mode !== 'none' ? `: ${MAP_MODE_LABELS[mode]}` : ''}
       </button>
       {open && at && createPortal(
         <div
@@ -53,7 +55,7 @@ export function MapModesButton() {
           // Clicking anywhere in it brings it to the front, like a window.
           onPointerDownCapture={() => setAt((a) => (a ? { ...a, z: bringToFrontZIndex() } : a))}
         >
-          <div className="map-modes-title">Colour the map by</div>
+          <div className="map-modes-title"><Bi en="Colour the map by" /></div>
           {MAP_MODES.map((m) => (
             <button
               key={m}

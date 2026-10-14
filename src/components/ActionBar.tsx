@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useState } from 'react'
 import { useMapModeStore, type MapMode } from '../state/mapModeStore'
 import { BuildingsPanel } from './BuildingsPanel'
@@ -181,11 +182,11 @@ export function ActionBar() {
             {activePanel.id === 'buildings' && activeSubtab === LENS_TAB ? (
               <LensPalette bodyName={scopeName} />
             ) : activePanel.id === 'buildings' && simple ? (
-              scopeName ? <SimpleDistrictsTab key={`${scopeName}-${activeSubtab}`} countryId={playerCountryId} bodyName={scopeName} only={simpleDistrict} /> : <div className="nav-placeholder">No world selected</div>
+              scopeName ? <SimpleDistrictsTab key={`${scopeName}-${activeSubtab}`} countryId={playerCountryId} bodyName={scopeName} only={simpleDistrict} /> : <div className="nav-placeholder"><Bi en="No world selected" /></div>
             ) : activePanel.id === 'buildings' ? (
               <BuildingsPanel subtab={activeSubtab} worldName={scopeName} world={scopeWorld} country={scopeCountry} />
             ) : (
-              <div className="nav-placeholder">Not yet available</div>
+              <div className="nav-placeholder"><Bi en="Not yet available" /></div>
             )}
           </div>
         </div>

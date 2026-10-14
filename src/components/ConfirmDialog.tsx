@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useConfirmStore } from '../state/confirmStore'
 
 // The global confirmation dialog. Any impactful action routes through
@@ -24,7 +25,7 @@ export function ConfirmDialog() {
         )}
         <div className="confirm-actions">
           <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => resolve(false)}>
-            Cancel
+            <Bi en="Cancel" />
           </button>
           <button type="button" className="confirm-btn confirm-btn-go" onClick={() => resolve(true)}>
             {pending.confirmLabel ?? 'Confirm'}

@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import {
   COMPONENT_LABELS,
   CHAFF_DURATION_SECONDS,
@@ -185,7 +186,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
   const renderSide = (label: string, group: typeof engagement.participants, targetable: boolean) => (
     <div className="combat-side">
       <div className="combat-side-label">{label}</div>
-      {group.length === 0 && <div className="combat-side-empty">None</div>}
+      {group.length === 0 && <div className="combat-side-empty"><Bi en="None" /></div>}
       {group.map((p) => {
         const ship = shipsById.get(p.shipId)
         if (!ship) return null
@@ -211,8 +212,8 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           >
             <span className="combat-roster-name">
               {ship.name}
-              {ship.combat.ftlCharge && <span className="combat-roster-tag">FTL</span>}
-              {isChaffActive(ship.combat, simDays) && <span className="combat-roster-tag chaff">CHAFF</span>}
+              {ship.combat.ftlCharge && <span className="combat-roster-tag"><Bi en="FTL" /></span>}
+              {isChaffActive(ship.combat, simDays) && <span className="combat-roster-tag chaff"><Bi en="CHAFF" /></span>}
               {/* Same badge set as the arena marker (see CombatShipMarker.tsx)
                   — the roster is the other place a player scans for "who's
                   doing what" without hunting across the arena for a marker. */}
@@ -224,7 +225,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   </span>
                 )
               })}
-              {isTargetOfSelected && <span className="combat-roster-tag target">TGT</span>}
+              {isTargetOfSelected && <span className="combat-roster-tag target"><Bi en="TGT" /></span>}
               {/* Local odds. Absent (rather than "0") when nothing can shoot
                   this hull — a clear ship should read as quiet, not as a
                   statistic. */}
@@ -275,7 +276,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
 
       {engagement.obstacles.length > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Terrain</span>
+          <span className="inspect-label"><Bi en="Terrain" /></span>
           <span className="inspect-value">
             {engagement.obstacles.map((o) => o.name).join(', ')} — blocks line of fire
           </span>
@@ -283,7 +284,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
       )}
 
       <div className="inspect-row">
-        <span className="inspect-label">Grid</span>
+        <span className="inspect-label"><Bi en="Grid" /></span>
         <span className="inspect-value combat-density-row">
           {GRID_DENSITIES.map((d) => (
             <button
@@ -304,16 +305,16 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
           width. Flagged loudly when the selected ship has left the frame,
           since that's the moment it stops being orderable. */}
       <div className="inspect-row">
-        <span className="inspect-label">Frame</span>
+        <span className="inspect-label"><Bi en="Frame" /></span>
         <span className="inspect-value">
           {selectedOutsideWindow ? (
-            <span className="ship-panel-combat">Ship outside frame</span>
+            <span className="ship-panel-combat"><Bi en="Ship outside frame" /></span>
           ) : (
             'Centered'
           )}
           {onRecenter && (
             <button type="button" className="ship-panel-unfollow-btn" onClick={onRecenter}>
-              Recenter
+              <Bi en="Recenter" />
             </button>
           )}
         </span>
@@ -329,7 +330,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
               because concentrating the whole fleet is the move that matters
               most when you're the smaller force. */}
           <div className="inspect-row">
-            <span className="inspect-label">Focus Fleet</span>
+            <span className="inspect-label"><Bi en="Focus Fleet" /></span>
             <span className="inspect-value combat-density-row">
               {hostiles.map((hostile) => {
                 const hostileShip = shipsById.get(hostile.shipId)
@@ -355,12 +356,12 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   </button>
                 )
               })}
-              {hostiles.length === 0 && <span className="combat-side-empty">No hostiles</span>}
+              {hostiles.length === 0 && <span className="combat-side-empty"><Bi en="No hostiles" /></span>}
             </span>
           </div>
 
           <div className="inspect-row">
-            <span className="inspect-label">Target</span>
+            <span className="inspect-label"><Bi en="Target" /></span>
             <span className="inspect-value">
               {selectedParticipant.targetShipId
                 ? shipsById.get(selectedParticipant.targetShipId)?.name ?? 'Unknown'
@@ -371,14 +372,14 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   className="ship-panel-unfollow-btn"
                   onClick={() => setParticipantTarget(engagement.id, selectedParticipant.shipId, null)}
                 >
-                  Auto
+                  <Bi en="Auto" />
                 </button>
               )}
             </span>
           </div>
 
           <div className="inspect-row">
-            <span className="inspect-label">Focus Fire</span>
+            <span className="inspect-label"><Bi en="Focus Fire" /></span>
             <span className="inspect-value combat-density-row">
               {TARGET_COMPONENTS.map((kind) => (
                 <button
@@ -407,7 +408,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
             return block ? <div className="ship-panel-hint">{block}. Its tactics still work: Balanced, Flee, targeting, chase and boosts.</div> : null
           })()}
           <div className="inspect-row">
-            <span className="inspect-label">Movement</span>
+            <span className="inspect-label"><Bi en="Movement" /></span>
             <span className="inspect-value">
               {selectedParticipant.holdPosition
                 ? 'Manual'
@@ -424,7 +425,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
                   className="ship-panel-unfollow-btn"
                   onClick={() => setHoldPosition(engagement.id, selectedParticipant.shipId, false)}
                 >
-                  Resume Auto
+                  <Bi en="Resume Auto" />
                 </button>
               )}
               {!selectedParticipant.holdPosition && hostiles.length > 0 && (
@@ -454,7 +455,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
               checkbox already has) or worked by hand once Auto is
               unchecked. */}
           <div className="inspect-row">
-            <span className="inspect-label">Tactics</span>
+            <span className="inspect-label"><Bi en="Tactics" /></span>
           </div>
 
           {/* Thruster Boost / Shield Boost / Spin Thrust — all three are
@@ -610,7 +611,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
               itself drops any manual hold the moment it's used anyway. */}
           {!selectedParticipant.holdPosition && engagement.obstacles.length > 0 && (
             <div className="inspect-row">
-              <span className="inspect-label">Inherit Velocity</span>
+              <span className="inspect-label"><Bi en="Inherit Velocity" /></span>
               <span className="inspect-value combat-density-row">
                 {engagement.obstacles.map((obstacle) => {
                   const active = selectedParticipant.inheritVelocityFrom === obstacle.name
@@ -640,7 +641,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
               than the row disappearing: "none left" is decision-relevant
               information, and a row that vanishes reads as a bug. */}
           <div className="inspect-row">
-            <span className="inspect-label">Chaff</span>
+            <span className="inspect-label"><Bi en="Chaff" /></span>
             <span className="inspect-value">
               {chaffActive ? (
                 <span className="ship-panel-combat">Active {chaffSecondsLeft.toFixed(1)}s</span>
@@ -676,7 +677,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
               confirm — it destroys the ship outright, and an accidental click
               here is unrecoverable in a way nothing else in this panel is. */}
           <div className="inspect-row">
-            <span className="inspect-label">Scuttle</span>
+            <span className="inspect-label"><Bi en="Scuttle" /></span>
             <span className="inspect-value">
               {selectedParticipant.scuttleOrdered ? (
                 <span className="ship-panel-combat">Detonating…</span>
@@ -703,7 +704,7 @@ export function CombatPanel({ engagement, onRecenter }: CombatPanelProps) {
 
           {selectedShip?.combat.ftlCharge && (
             <div className="inspect-row">
-              <span className="inspect-label">Escaping</span>
+              <span className="inspect-label"><Bi en="Escaping" /></span>
               <span className="inspect-value ship-panel-combat">
                 {Math.max(0, simDaysToSeconds(selectedShip.combat.ftlCharge.readySimDays - simDays)).toFixed(1)}s —
                 weapons offline

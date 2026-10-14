@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEffect } from 'react'
 import { useLensStore } from '../state/lensStore'
 
@@ -33,7 +34,7 @@ export function LensHud() {
         {armed.kind === 'zone' && <span className="abs-dim">{zoneSiteId ? 'painting a zone' : 'pick a district'}</span>}
         {armed.kind === 'route' && <span className="abs-dim">{routeFrom ? 'pick the other end' : 'pick the first end'}</span>}
         <button type="button" className="detail-view-btn" onClick={() => useLensStore.getState().arm(null)} title="Put the tool down (Esc)">
-          Done
+          <Bi en="Done" />
         </button>
       </div>
       {hover && <div className={`lens-hud-line ${hover.ok ? 'ok' : 'bad'}`}>{hover.text}</div>}

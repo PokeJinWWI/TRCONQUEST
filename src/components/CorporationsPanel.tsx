@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
@@ -100,7 +101,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
               </div>
               {kind !== 'financial' && country && (
                 <div className="econ-control-row" title="A standing per-tick treasury payment to this company's cash — a real, ongoing budget cost, not free money.">
-                  <span className="inspect-label">Subsidize/tick</span>
+                  <span className="inspect-label"><Bi en="Subsidize/tick" /></span>
                   <span className="econ-control">
                     <button
                       type="button"
@@ -182,7 +183,7 @@ export function CorporationsPanel({ subcategory }: { subcategory: string | null 
               ))}
             </select>
             <button type="button" className="corp-btn" onClick={submit} disabled={!name.trim()}>
-              Found
+              <Bi en="Found" />
             </button>
           </div>
           <div className="ship-panel-hint">

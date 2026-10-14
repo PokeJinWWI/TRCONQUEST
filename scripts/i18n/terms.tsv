@@ -1,0 +1,1311 @@
+# Native-script labels for the NERV theme: English<TAB>Japanese<TAB>Traditional Chinese<TAB>Simplified Chinese.
+# The source of src/i18n/{ja,zhHant,zhHans}.ts: edit here, then run  npx tsx scripts/i18n/buildDicts.ts
+# Lines starting with # are comments. Keys must match the English label exactly.
+# --- Navigation and panels
+Situations	情勢	情勢	情势
+Government	政府	政府	政府
+Government Overview	政府概要	政府概覽	政府概览
+Executive	行政	行政	行政
+Legislative	立法	立法	立法
+Judicial	司法	司法	司法
+Offices	官職	官職	官职
+Leaders	指導者	領袖	领袖
+Laws	法律	法律	法律
+Institutions	機関	機構	机构
+Economy	経済	經濟	经济
+Overview	概要	概覽	概览
+Budget	予算	預算	预算
+Finance	財政	財政	财政
+Construction	建設	建設	建设
+Trade	貿易	貿易	贸易
+Stockpiles	備蓄	儲備	储备
+Welfare	福祉	福利	福利
+Markets	市場	市場	市场
+Market	市場	市場	市场
+Stock Exchange	証券取引所	證券交易所	证券交易所
+Bond Market	債券市場	債券市場	债券市场
+Forex	外国為替	外匯	外汇
+Central Bank	中央銀行	中央銀行	中央银行
+Monetary Policy	金融政策	貨幣政策	货币政策
+Balance Sheet	貸借対照表	資產負債表	资产负债表
+Commercial Banks	商業銀行	商業銀行	商业银行
+Currency	通貨	貨幣	货币
+Corporations	企業	企業	企业
+State Owned	国営	國營	国营
+Private	民間	民營	民营
+Financial Districts	金融街	金融區	金融区
+Technology	技術	技術	技术
+Physics	物理	物理	物理
+Society	社会	社會	社会
+Engineering	工学	工程	工程
+Demographics	人口統計	人口統計	人口统计
+Culture	文化	文化	文化
+Religion	宗教	宗教	宗教
+Species	種族	物種	物种
+Diplomacy	外交	外交	外交
+Relations	関係	關係	关系
+Wars	戦争	戰爭	战争
+Treaties	条約	條約	条约
+Subjects	従属国	附庸	附庸
+Trade Policy	通商政策	貿易政策	贸易政策
+Trade policy	通商政策	貿易政策	贸易政策
+Events	出来事	事件	事件
+International Organizations	国際機関	國際組織	国际组织
+Fleet Management	艦隊管理	艦隊管理	舰队管理
+Army	陸軍	陸軍	陆军
+Navy	海軍	艦隊	舰队
+Asymmetric Warfare	非対称戦	非對稱作戰	非对称作战
+Mercenaries	傭兵	傭兵	佣兵
+Characters	人物	人物	人物
+Families	一族	家族	家族
+Shipyard	造船所	造船廠	造船厂
+Sandbox	箱庭	沙盒	沙盒
+Settings	設定	設定	设置
+Interface	表示	介面	界面
+UI Theme	画面様式	介面主題	界面主题
+Native labels	併記言語	並列文字	并列文字
+Reduce motion	動作軽減	減少動態	减少动态
+Outliner	総覧	總覽	总览
+Territory	領土	領土	领土
+Fleet	艦隊	艦隊	舰队
+Fleets	艦隊	艦隊	舰队
+Info	情報	資訊	资讯
+Neighborhoods	星域	星域	星域
+Neighbourhood	星域	星域	星域
+Stars	恒星	恆星	恒星
+Star	恒星	恆星	恒星
+Planets	惑星	行星	行星
+Moons	衛星	衛星	卫星
+Black Holes	黒穴	黑洞	黑洞
+Colonies	植民地	殖民地	殖民地
+Colony	植民地	殖民地	殖民地
+Starbases	宇宙基地	星際基地	星际基地
+Starbase	宇宙基地	星際基地	星际基地
+Your Starbase	自軍基地	我方基地	我方基地
+Starbases of	宇宙基地	星際基地	星际基地
+In View	視界内	視野內	视野内
+Quick buttons	短縮	快捷鍵	快捷键
+Back	戻る	返回	返回
+Map mode	地図表示	地圖模式	地图模式
+Colour the map by	地図色分け	地圖著色	地图着色
+Recent	最近	最近	最近
+Done	完了	完成	完成
+Show	表示	顯示	显示
+Pause	停止	暫停	暂停
+Resume	再開	繼續	继续
+Quit	終了	退出	退出
+Quit to empire select	国家選択へ	返回選擇國家	返回选择国家
+Save / Load	保存/読込	存檔/讀檔	存档/读档
+Load	読込	讀取	读取
+Overwrite	上書き	覆寫	覆盖
+Export this game to a file	ファイル出力	匯出存檔	导出存档
+Controls	操作	操作	操作
+Cheats	不正	作弊	作弊
+Open cheats console	不正操作卓	開啟作弊台	打开作弊台
+Scenarios	想定	想定	想定
+Load army scenario	陸戦想定	載入陸戰想定	载入陆战想定
+Load ship scenario	艦隊戦想定	載入艦戰想定	载入舰战想定
+Observer: empires	観測:帝国	觀測:帝國	观测:帝国
+# --- Main menu
+Economic model	経済模型	經濟模型	经济模型
+Simple mode	簡易	簡易模式	简易模式
+Choose your nation	国家選択	選擇國家	选择国家
+# --- Time and HUD
+STRAT	戦略	戰略	战略
+OPS	作戦	作戰	作战
+TAC	戦術	戰術	战术
+GALAXY	銀河	銀河	银河
+INTERSTELLAR	恒星間	恆星際	恒星际
+SYSTEM	星系	星系	星系
+SATELLITE	衛星	衛星	卫星
+GROUND	地上	地面	地面
+TERRAIN	地形	地形	地形
+COMBAT	戦闘	戰鬥	战斗
+IN COMBAT	交戦中	交戰中	交战中
+Treasury	国庫	國庫	国库
+Balance	収支	收支	收支
+Influence	影響力	影響力	影响力
+# --- Situations
+Military	軍事	軍事	军事
+Research & expansion	研究・拡張	研究與擴張	研究与扩张
+Diplomacy & territory	外交・領土	外交與領土	外交与领土
+Battles under way	交戦中	交戰中	交战中
+Enemy warships at your worlds	敵艦接近	敵艦臨境	敌舰临境
+Occupied worlds	占領地	被佔領地	被占领地
+Ground war on your worlds	地上戦	地面戰	地面战
+Damaged ships	損傷艦	受損艦艇	受损舰艇
+Armies under strength	兵力不足	兵力不足	兵力不足
+Ships that could not carry on	行動不能艦	無法行動艦艇	无法行动舰艇
+Jumps waiting on the drive	跳躍待機	躍遷待命	跃迁待命
+Idle shipyard slips	空き船台	船台閒置	船台闲置
+Nothing under construction	建設なし	無建設工程	无建设工程
+Budget deficit	財政赤字	財政赤字	财政赤字
+Resources running out	資源枯渇	資源將盡	资源将尽
+Expensive goods	物価高騰	物價高漲	物价高涨
+Cheap goods (oversupply)	供給過剰	供給過剩	供给过剩
+Inflation / deflation	物価変動	通膨/通縮	通胀/通缩
+Industry short of inputs	原料不足	原料不足	原料不足
+Low standard of living	生活水準低下	生活水準低落	生活水平低下
+Unemployment	失業	失業	失业
+Unrest from displacement	立退き不安	遷離動盪	迁离动荡
+Deposits nearly dry	鉱床枯渇	礦藏將盡	矿藏将尽
+Routes in disrepair	路線荒廃	路線失修	路线失修
+Research queue empty	研究待機なし	研究佇列空	研究队列空
+Research blocked	研究停滞	研究受阻	研究受阻
+Idle science ships	待機中科学船	閒置科學船	闲置科学船
+Idle construction ships	待機中工作船	閒置工程船	闲置工程船
+Idle colony ships	待機中植民船	閒置殖民船	闲置殖民船
+Idle cargo ships	待機中輸送船	閒置貨船	闲置货船
+Unsurveyed bodies in your systems	未調査天体	未勘測天體	未勘测天体
+Influence at its cap	影響力上限	影響力已滿	影响力已满
+Colonies being founded	植民進行中	殖民進行中	殖民进行中
+Starbases finishing soon	基地完成間近	基地即將完工	基地即将完工
+Encroachments on your space	領域侵犯	領域侵犯	领域侵犯
+Incidents against you	敵対事件	敵對事件	敌对事件
+Contested claims	係争中	爭議主張	争议主张
+Pop-up notifications	通知表示	彈出通知	弹出通知
+# --- Common labels
+Accept	承認	接受	接受
+Add Article	条項追加	新增條款	新增条款
+Age	年齢	年齡	年龄
+Agreements and bans in force	有効な協定	現行協定	现行协定
+Alert	警報	警報	警报
+All	全て	全部	全部
+All here /mo	当地合計/月	此處合計/月	此处合计/月
+Amenities	生活施設	生活設施	生活设施
+Amphibious	揚陸	兩棲	两栖
+Approval	支持率	支持度	支持度
+Approve	承認	批准	批准
+Armament	兵装	武裝	武装
+Armies	陸軍	陸軍	陆军
+Armor	装甲	裝甲	装甲
+Assets	資産	資產	资产
+Atk	攻	攻	攻
+Attraction	魅力	吸引力	吸引力
+Auto	自動	自動	自动
+Auto-approve foreign investments	外資自動承認	外資自動批准	外资自动批准
+Automation	自動化	自動化	自动化
+Avg price	平均価格	均價	均价
+Back to the ground map	地上図へ	返回地面圖	返回地面图
+Balance sheet & money	資産・通貨	資產與貨幣	资产与货币
+Bank deposits	銀行預金	銀行存款	银行存款
+Bank reserves	銀行準備金	銀行準備金	银行准备金
+Base	基本	基礎	基础
+Base / level	基本/段階	基礎/級	基础/级
+Base money (M0)	マネタリーベース	基礎貨幣	基础货币
+Bonds outstanding, by holder	債券残高	未償債券	未偿债券
+Broad money (M2)	広義通貨	廣義貨幣	广义货币
+Build cost	建造費	建造成本	建造成本
+Build here	ここに建設	在此建造	在此建造
+Building	建物	建築	建筑
+Buildings	建物	建築	建筑
+Business tax	法人税	營業稅	营业税
+Buy (loosen)	買入(緩和)	買入(寬鬆)	买入(宽松)
+Buy / Sell	売買	買賣	买卖
+CB borrowing	中銀借入	央行借款	央行借款
+CB equity	中銀資本	央行權益	央行权益
+CHAFF	欺瞞	干擾	干扰
+Chaff	欺瞞片	干擾片	干扰片
+Cancel	取消	取消	取消
+Cancel deconstruction	解体取消	取消拆除	取消拆除
+Capacity	容量	容量	容量
+Capital	首都	首都	首都
+Cargo	積荷	貨物	货物
+Chassis	船体	船體	船体
+Civil	民生	民用	民用
+Civilian	民間	民用	民用
+Claimed by	請求者	主張者	主张者
+Claims	領有請求	主張	主张
+Class	等級	級別	级别
+Clear target	目標解除	清除目標	清除目标
+Commercial	商業	商業	商业
+Companies	企業	公司	公司
+Computed Stats	算出値	計算數值	计算数值
+Connect	接続	連接	连接
+Construction here	当地の建設	此處建設	此处建设
+Contested by	係争相手	爭議方	争议方
+Control	支配	控制	控制
+Controller	支配者	控制者	控制者
+Cooldowns	冷却	冷卻	冷却
+Core District	中枢区	核心區	核心区
+Corporation	企業	企業	企业
+Create Design	設計作成	建立設計	创建设计
+Credit Rating	信用格付	信用評級	信用评级
+Credit rating	信用格付	信用評級	信用评级
+Currency & exchange rate	通貨と為替	貨幣與匯率	货币与汇率
+Currency in circulation	流通通貨	流通貨幣	流通货币
+Current Action	現行動	當前行動	当前行动
+Debt	債務	債務	债务
+Debt / GDP	債務/GDP	債務/GDP	债务/GDP
+Debt ceiling	債務上限	債務上限	债务上限
+Debt servicing	債務返済	償債	偿债
+Decisions	決定	決策	决策
+Declare War	宣戦布告	宣戰	宣战
+Deconstruct	解体	拆除	拆除
+Deconstructing	解体中	拆除中	拆除中
+Def	防	防	防
+Defences	防衛	防禦	防御
+Delete	削除	刪除	删除
+Demand	需要	需求	需求
+Deposits	鉱床	礦藏	矿藏
+Deposits held	預金保有	持有存款	持有存款
+Detailed View	詳細	詳細	详细
+Devastation	荒廃	破壞	破坏
+Develop a district level	区画開発	開發區級	开发区级
+Disband	解散	解散	解散
+Discount borrowing	割引借入	貼現借款	贴现借款
+Distance	距離	距離	距离
+Distance from core	中心距離	距核心	距核心
+Districts	区画	區劃	区划
+Dmg	損害	傷害	伤害
+Domestic pops	国内人口	國內人口	国内人口
+Drive	推進	推進	推进
+Drives	推進	推進	推进
+Economic System	経済体制	經濟體制	经济体制
+Economy type	経済形態	經濟類型	经济类型
+Efficiency	効率	效率	效率
+Embargoes	禁輸	禁運	禁运
+Employed	就業	就業	就业
+Employment	雇用	就業	就业
+Enact	施行	頒行	颁行
+Engaged Against	交戦相手	交戰對象	交战对象
+Engagement	交戦	交戰	交战
+Enter Neighborhood	星域へ	進入星域	进入星域
+Escaping	離脱中	脫離中	脱离中
+Establish a Central Bank	中銀設立	設立央行	设立央行
+Exchange rate	為替相場	匯率	汇率
+Excise	物品税	消費稅	消费税
+Exhaustion	疲弊	厭戰	厌战
+Expectations	期待	預期	预期
+Expenditure	歳出	支出	支出
+Explore scope	探査範囲	探索範圍	探索范围
+Export	輸出	出口	出口
+Exports / mo	輸出/月	出口/月	出口/月
+FTL	超光速	超光速	超光速
+FTL Charge	超光速充填	超光速充能	超光速充能
+FX reserves	外貨準備	外匯存底	外汇储备
+Factory	工場	工廠	工厂
+Faith	信仰	信仰	信仰
+Filled	充足	已填	已填
+Firepower	火力	火力	火力
+Fleet command	艦隊指揮	艦隊指揮	舰队指挥
+Fleet strength	艦隊戦力	艦隊戰力	舰队战力
+Flight	航行	航行	航行
+Float	変動	浮動	浮动
+Focus Fire	集中砲火	集中火力	集中火力
+Focus Fleet	艦隊集中	集中艦隊	集中舰队
+Foreign Exchange	外国為替	外匯	外汇
+Foreign embassies & firms	外国公館・企業	外國使館與企業	外国使馆与企业
+Foreign holders	外国保有者	外國持有人	外国持有人
+Foreign-owned areas	外国所有地	外資地區	外资地区
+Found	設立	建立	建立
+Found a new organization	新機関設立	成立新組織	成立新组织
+Founded	設立	成立	成立
+Founding	設立中	建立中	建立中
+Frame	船枠	框架	框架
+Free Flight	自由飛行	自由飛行	自由飞行
+Freight capacity	貨物容量	貨運量	货运量
+Fundamentals	基礎	基本面	基本面
+GDP / yr	GDP/年	GDP/年	GDP/年
+GDP per capita	一人当GDP	人均GDP	人均GDP
+Go	行け	前往	前往
+Good	品目	貨品	货品
+Goods	物資	貨品	货品
+Got	取得	已得	已得
+Gov. securities	国債	公債	公债
+Governed by	統治者	統治者	统治者
+Government pool (treasury)	国庫資金	國庫資金	国库资金
+Governor	総裁	總裁	总裁
+Grant Independence	独立承認	准予獨立	准予独立
+Grid	電力網	電網	电网
+Grid Tier	電力段階	電網等級	电网等级
+Ground Map	地上図	地面圖	地面图
+Ground held by	地上支配	地面控制	地面控制
+Habitability	居住性	宜居度	宜居度
+Halt	停止	停止	停止
+Happiness	幸福度	幸福度	幸福度
+Heading toward	目的地	前往	前往
+Held by	保持	持有	持有
+Hold	保持	固守	固守
+Hostile ships	敵艦	敵艦	敌舰
+House	家門	家族	家族
+Households	世帯	家戶	家户
+Hull	船体	艦體	舰体
+Imports / mo	輸入/月	進口/月	进口/月
+Imports by world	世界別輸入	各星進口	各星进口
+In force	有効	生效中	生效中
+Income tax	所得税	所得稅	所得税
+Industry use	工業消費	工業用量	工业用量
+Inflation	物価上昇	通膨	通胀
+Inherit Velocity	速度継承	繼承速度	继承速度
+Inputs / tick	投入/期	投入/期	投入/期
+Inputs supplied	投入充足	投入供給	投入供给
+Installations	施設	設施	设施
+Integrity	耐久	完整度	完整度
+Interest Groups	利益団体	利益團體	利益团体
+Invest	投資	投資	投资
+Investment pool	投資資金	投資池	投资池
+Jobs	職	職位	职位
+Jobs / level	職/段階	職位/級	职位/级
+Join	加盟	加入	加入
+Jump	跳躍	躍遷	跃迁
+Key node	要衝	要地	要地
+Key nodes	要衝	要地	要地
+Key sites	要地	要地	要地
+Land used	使用地	已用土地	已用土地
+Land-use law	土地法	土地法	土地法
+Leader	指導者	領袖	领袖
+Leave	脱退	退出	退出
+Levels	段階	級	级
+Liabilities	負債	負債	负债
+Loan / deposit	貸出/預金	貸款/存款	贷款/存款
+Loans	貸付	貸款	贷款
+Loans outstanding	貸出残高	未償貸款	未偿贷款
+Loans to banks	対銀行貸出	銀行貸款	银行贷款
+Lvl	段	級	级
+Make top	先頭へ	置頂	置顶
+Makes /mo	生産/月	產出/月	产出/月
+Mandate	委任	授權	授权
+Matchups	相性	對陣	对阵
+Members	加盟国	成員	成员
+Merge Fleets	艦隊統合	合併艦隊	合并舰队
+Merge onto the top fleet	先頭艦隊へ統合	併入首艦隊	并入首舰队
+Met	充足	已滿足	已满足
+Method	方式	方式	方式
+Migration	移民	移民	移民
+Module slots	区画枠	模組槽	模组槽
+Modules	区画	模組	模组
+Monetary policy	金融政策	貨幣政策	货币政策
+Monetary stance	金融姿勢	貨幣立場	货币立场
+Money creation	通貨発行	貨幣創造	货币创造
+Money-financed deficit	財政ファイナンス	貨幣融資赤字	货币融资赤字
+Monthly	月次	每月	每月
+Mount	搭載	掛載	挂载
+Movement	移動	移動	移动
+Moves at	速度	移速	移速
+Name	名称	名稱	名称
+Nation	国家	國家	国家
+National debt	国債残高	國債	国债
+National needs satisfaction	需要充足度	需求滿足度	需求满足度
+Nearby	近傍	附近	附近
+Needs	需要	需求	需求
+Net/mo	純増/月	淨額/月	净额/月
+New Design	新設計	新設計	新设计
+No army raised	陸軍なし	無陸軍	无陆军
+No hostiles	敵影なし	無敵蹤	无敌踪
+No system data available	星系情報なし	無星系資料	无星系资料
+No world selected	未選択	未選擇	未选择
+None	なし	無	无
+Not in any battle or contest	交戦なし	無交戰	无交战
+Not yet available	未実装	尚未開放	尚未开放
+Not yet charted	未踏	尚未測繪	尚未测绘
+Occupied by enemy	敵占領	被敵佔領	被敌占领
+Occupying	占領中	佔領中	占领中
+Offer Subjection	従属要求	提出附庸	提出附庸
+On arrival	到着時	抵達時	抵达时
+Open ground map	地上図を開く	開啟地面圖	打开地面图
+Open-market ops	公開市場操作	公開市場操作	公开市场操作
+Opinion of you	対自国感情	對我觀感	对我观感
+Orbit	軌道	軌道	轨道
+Orbital (needs Free-Flight Maneuvering)	軌道戦(自由飛行要)	軌道(需自由飛行)	轨道(需自由飞行)
+Orbital period	公転周期	公轉週期	公转周期
+Order	命令	命令	命令
+Order/mo	発注/月	訂購/月	订购/月
+Orders	命令	命令	命令
+Organizations you could join	加盟可能機関	可加入組織	可加入组织
+Other	その他	其他	其他
+Other areas	他地域	其他地區	其他地区
+Other wars	他の戦争	其他戰爭	其他战争
+Output	産出	產出	产出
+Output gap	需給差	產出缺口	产出缺口
+Outputs / tick	産出/期	產出/期	产出/期
+Outside the districts	区画外	區劃外	区划外
+Owner	所有者	擁有者	拥有者
+Paid monthly	月払	每月支付	每月支付
+Pay Debt	返済	償債	偿债
+Peg target	固定目標	釘住目標	钉住目标
+People	人々	人民	人民
+Personnel	人員	人員	人员
+Pillars	柱	支柱	支柱
+Point Defense	近接防御	點防禦	点防御
+Policy authority	政策権限	政策權限	政策权限
+Policy interest rate	政策金利	政策利率	政策利率
+Policy rate	政策金利	政策利率	政策利率
+Political Lobbies	政治団体	政治遊說	政治游说
+Political Movements	政治運動	政治運動	政治运动
+Pop	人口	人口	人口
+Pop growth	人口増加	人口成長	人口增长
+Population	人口	人口	人口
+Power	電力	電力	电力
+Power Distribution	電力配分	電力分配	电力分配
+Power Used	消費電力	用電	用电
+Presence	存在	存在	存在
+Price	価格	價格	价格
+Price by planet	惑星別価格	各星價格	各星价格
+Price level	物価水準	物價水準	物价水平
+Private investment pool	民間投資資金	民間投資池	民间投资池
+Produced	生産	生產	生产
+Producers	生産者	生產者	生产者
+Production Units	生産単位	生產單位	生产单位
+Productivity	生産性	生產力	生产力
+Profit	利益	利潤	利润
+Quality of life	生活の質	生活品質	生活质量
+Quality of life (nation)	生活の質(国)	生活品質(國)	生活质量(国)
+Queued	待機	排程中	排程中
+Radius	半径	半徑	半径
+Range	射程	射程	射程
+Range km	射程km	射程km	射程km
+Rate	率	率	率
+Raw DPS	素DPS	原始DPS	原始DPS
+Real GDP	実質GDP	實質GDP	实际GDP
+Real growth	実質成長	實質成長	实际增长
+Real rate	実質金利	實質利率	实际利率
+Recenter	再中心	重置中心	重置中心
+Recenter camera	視点再中心	鏡頭置中	镜头置中
+Recruit	徴募	招募	招募
+Redeem	償還	贖回	赎回
+Refining to hyperium	超空間鉱精製	精煉超空間礦	精炼超空间矿
+Regime	体制	體制	体制
+Reject	拒否	拒絕	拒绝
+Release	解放	釋放	释放
+Release a world as a new subject	従属国として独立	釋出附庸	释出附庸
+Remove	除去	移除	移除
+Repair	修理	修理	修理
+Research queue	研究予定	研究佇列	研究队列
+Researched	研究済	已研究	已研究
+Reserve ratio	準備率	準備率	准备率
+Reserve requirement	準備預金	存款準備	存款准备
+Reserves	準備	儲備	储备
+Resume Auto	自動再開	恢復自動	恢复自动
+Revenue	歳入	收入	收入
+Revenue (per year)	歳入(年)	收入(年)	收入(年)
+Roads and railways	道路・鉄道	道路與鐵路	道路与铁路
+Role	役割	角色	角色
+Routes	路線	路線	路线
+Run	稼働	運轉	运转
+Scuttle	自沈	自沉	自沉
+Securities	証券	證券	证券
+Sell (tighten)	売却(引締)	賣出(緊縮)	卖出(紧缩)
+Sell to Companies	企業へ販売	售予企業	售予企业
+Sell to Foreign	外国へ販売	售予外國	售予外国
+Sell to Pops	民へ販売	售予人民	售予人民
+Set target	目標設定	設定目標	设定目标
+Settlement site	入植地	聚落地	聚落地
+Settlers	入植者	移民	移民
+Share	割合	比例	比例
+Shields	遮蔽	護盾	护盾
+Ship outside frame	枠外艦	框外艦艇	框外舰艇
+Ships	艦船	艦艇	舰艇
+Show all city circles	全都市圏表示	顯示城市圈	显示城市圈
+Signal Delay	通信遅延	訊號延遲	信号延迟
+Since	以来	起	起
+Size class	規模	規模	规模
+SoL	生活水準	生活水準	生活水平
+Sovereign	主権者	主權者	主权者
+Spaceports	宇宙港	太空港	太空港
+Speed (open ground)	速度(平地)	速度(平地)	速度(平地)
+Stability	安定	穩定	稳定
+Staffed	充員	已配員	已配员
+Stance (all yours)	態勢(全艦)	姿態(全部)	姿态(全部)
+Standalone buildings	単独建物	獨立建築	独立建筑
+Standard of living	生活水準	生活水準	生活水平
+Standing on	所在	所在	所在
+Stands in	所在	所在	所在
+Start Skirmish	小競合い開始	發動衝突	发动冲突
+State	国家	國家	国家
+Status	状態	狀態	状态
+Stock	在庫	庫存	库存
+Stockpile	備蓄	儲備	储备
+Stop	停止	停止	停止
+Str	兵力	兵力	兵力
+Strategic Reserves	戦略備蓄	戰略儲備	战略储备
+Stratum	階層	階層	阶层
+Strength	兵力	兵力	兵力
+Sublight	亜光速	亞光速	亚光速
+Subsidize/tick	補助/期	補貼/期	补贴/期
+Supply	供給	供給	供给
+Survey	調査	勘測	勘测
+System	星系	星系	星系
+System capital	星系首都	星系首都	星系首都
+System deposits	星系預金	系統存款	系统存款
+System governed by	星系統治者	星系統治者	星系统治者
+System loans	星系貸付	系統貸款	系统贷款
+TGT	目標	目標	目标
+Tactics	戦術	戰術	战术
+Target	目標	目標	目标
+Tariff	関税	關稅	关税
+Tax rate	税率	稅率	税率
+Tax revenue	税収	稅收	税收
+Tech	技術	科技	科技
+Terrain	地形	地形	地形
+Trade / mo	貿易/月	貿易/月	贸易/月
+Trade balance	貿易収支	貿易收支	贸易收支
+Trade volume	貿易量	貿易量	贸易量
+Tree View	系統図	樹狀圖	树状图
+Tribute	貢納	貢金	贡金
+Type	種別	類型	类型
+Unclaimed	無主	無主	无主
+Under construction	建設中	建設中	建设中
+Unemployed	失業者	失業者	失业者
+Unit	部隊	部隊	部队
+Unlimited (unsurveyed deposit)	無限(未調査)	無限(未勘測)	无限(未勘测)
+Upgrade	改装	升級	升级
+Upkeep /B	維持費/十億	維護/十億	维护/十亿
+Urban areas	都市部	都市區	都市区
+Urban people	都市人口	城市人口	城市人口
+Value	価値	價值	价值
+Wanted	需要量	需求量	需求量
+Warp Risk	歪曲危険	曲速風險	曲速风险
+Wealth	富	財富	财富
+Welfare level	福祉水準	福利水準	福利水平
+Workers / jobs	労働者/職	勞工/職位	劳工/职位
+Workforce	労働力	勞動力	劳动力
+Working	稼働中	運作中	运作中
+Yearly balance	年間収支	年度收支	年度收支
+You are their subject	貴国は従属国	你是其附庸	你是其附庸
+Your Designs	自国設計	我方設計	我方设计
+Your colony	自国植民地	我方殖民地	我方殖民地
+Zoning	用途地域	分區	分区
+Map Modes	地図表示	地圖模式	地图模式
+# --- Places: stars, planets, moons
+Sol	太陽	太陽	太阳
+Sol System	太陽系	太陽系	太阳系
+Mercury	水星	水星	水星
+Venus	金星	金星	金星
+Earth	地球	地球	地球
+Luna	月	月球	月球
+Mars	火星	火星	火星
+Phobos	フォボス	福波斯	福波斯
+Deimos	ダイモス	戴摩斯	戴摩斯
+Ceres	ケレス	穀神星	谷神星
+Jupiter	木星	木星	木星
+Io	イオ	埃歐	埃欧
+Europa	エウロパ	歐羅巴	欧罗巴
+Ganymede	ガニメデ	甘尼米德	甘尼米德
+Callisto	カリスト	卡利斯多	卡利斯托
+Saturn	土星	土星	土星
+Titan	タイタン	泰坦	泰坦
+Rhea	レア	瑞亞	瑞亚
+Dione	ディオネ	狄俄涅	狄俄涅
+Iapetus	イアペトゥス	伊阿珀托斯	伊阿珀托斯
+Uranus	天王星	天王星	天王星
+Miranda	ミランダ	米蘭達	米兰达
+Ariel	アリエル	艾瑞爾	艾瑞尔
+Umbriel	ウンブリエル	烏姆柏里厄爾	乌姆柏里厄尔
+Titania	チタニア	泰坦妮亞	泰坦尼亚
+Oberon	オベロン	奧伯龍	奥伯龙
+Neptune	海王星	海王星	海王星
+Triton	トリトン	崔頓	特里同
+Pluto	冥王星	冥王星	冥王星
+Haumea	ハウメア	妊神星	妊神星
+Makemake	マケマケ	鳥神星	鸟神星
+Eris	エリス	鬩神星	阋神星
+Alpha Centauri	ケンタウルス座α	半人馬座α	半人马座α
+Rigil Kentaurus	リギル・ケンタウルス	南門二	南门二
+Toliman	トリマン	南門二乙	南门二乙
+Proxima Centauri	プロキシマ	比鄰星	比邻星
+Proxima	プロキシマ	比鄰星	比邻星
+Barnard's Star	バーナード星	巴納德星	巴纳德星
+Barnard	バーナード	巴納德	巴纳德
+Wolf 359	ウォルフ359	沃夫359	沃夫359
+Wolf	ウォルフ	沃夫	沃夫
+Lalande 21185	ラランド21185	拉蘭德21185	拉兰德21185
+Lalande	ラランド	拉蘭德	拉兰德
+Sirius	シリウス	天狼星	天狼星
+Sirius A	シリウスA	天狼星A	天狼星A
+Sirius B	シリウスB	天狼星B	天狼星B
+Luyten 726-8	ライテン726-8	魯坦726-8	鲁坦726-8
+Luyten	ライテン	魯坦	鲁坦
+Ross 154	ロス154	羅斯154	罗斯154
+Ross	ロス	羅斯	罗斯
+UV Ceti	くじら座UV	鯨魚座UV	鲸鱼座UV
+BL Ceti	くじら座BL	鯨魚座BL	鲸鱼座BL
+Arcadia	アルカディア	阿卡迪亞	阿卡迪亚
+Centauri Minor	小ケンタウルス	小半人馬	小半人马
+Toliman Minor	小トリマン	小南門	小南门
+Sirius Remnant	シリウス残骸	天狼殘骸	天狼残骸
+Sirius Aeon	シリウス・イオン	天狼永世	天狼永世
+Sirius Cinder	シリウス燼	天狼餘燼	天狼余烬
+Barnard’s Reach	バーナード辺境	巴納德之境	巴纳德之境
+Lalande’s Hollow	ラランドの窪	拉蘭德之谷	拉兰德之谷
+Luyten’s Speck	ライテンの点	魯坦之點	鲁坦之点
+Ross’s Cairn	ロスの塚	羅斯之塚	罗斯之冢
+Wolf’s Ring Minor	小ウォルフ環	小沃夫環	小沃夫环
+# --- Nations
+Imperial State of Mars	火星帝国	火星帝國	火星帝国
+Republic of Venus	金星共和国	金星共和國	金星共和国
+Orion Republic	オリオン共和国	獵戶共和國	猎户共和国
+Kingdom of Lalande	ラランド王国	拉蘭德王國	拉兰德王国
+# --- Places on Earth
+Baikonur Cosmodrome	バイコヌール宇宙基地	拜科努爾太空發射場	拜科努尔航天发射场
+Biak Spaceport	ビアク宇宙港	比亞克太空港	比亚克太空港
+Edwards Spaceport	エドワーズ宇宙港	愛德華茲太空港	爱德华兹太空港
+Great Lakes Megalopolis	五大湖都市圏	五大湖都會區	五大湖都会区
+Jiuquan Cosmodrome	酒泉衛星発射センター	酒泉衛星發射中心	酒泉卫星发射中心
+Taiyuan Launch Centre	太原衛星発射センター	太原衛星發射中心	太原卫星发射中心
+Malindi Space Centre	マリンディ宇宙センター	馬林迪太空中心	马林迪太空中心
+Nairobi	ナイロビ	奈洛比	内罗毕
+São Paulo	サンパウロ	聖保羅	圣保罗
+# --- Ship classes
+Corvette	コルベット	輕型巡防艦	轻型护卫舰
+Frigate	フリゲート	巡防艦	护卫舰
+Destroyer	駆逐艦	驅逐艦	驱逐舰
+Cruiser	巡洋艦	巡洋艦	巡洋舰
+Battleship	戦艦	戰艦	战舰
+Science Ship	科学船	科學船	科学船
+Construction Ship	工作船	工程船	工程船
+Cargo Ship	輸送船	貨船	货船
+Colony Ship	植民船	殖民船	殖民船
+Troop Transport	兵員輸送艦	運兵艦	运兵舰
+Hyperspace Scout	超空間偵察艇	超空間偵察艇	超空间侦察艇
+Turing Scout	チューリング偵察艇	圖靈偵察艇	图灵侦察艇
+Swift Courier	快速連絡艇	快速信使艇	快速信使艇
+Star Jumper	星跳艇	躍星艇	跃星艇
+# --- Titles
+TERRA RELICTA: CONQUEST	テラ・レリクタ：征服	殘存地球：征服	残存地球：征服
+Complex mode (mr1noobfatfish’s attempt at economic modeling)	複雑	複雜模式	复杂模式
+Earth	地球	地球	地球
+# --- Districts
+Academic District	学術区	學術區	学术区
+Agricultural District	農業区	農業區	农业区
+Generator District	発電区	發電區	发电区
+Industrial District	工業区	工業區	工业区
+Military District	軍事区	軍事區	军事区
+Mining District	鉱業区	礦業區	矿业区
+Urban District	都市区	都市區	都市区
+Commercial Zone	商業区	商業區	商业区
+Construction Sector	建設部門	建設部門	建设部门
+# --- Goods and resources
+ALLOY	合金	合金	合金
+ELEC	電子	電子	电子
+EXOTIC	異物質	奇異	奇异
+FOOD	食料	糧食	粮食
+HYPER	超鉱	超礦	超矿
+INF	影響	影響	影响
+MIN	鉱物	礦物	矿物
+NRG	電力	能源	能源
+RKT	噴進	火箭	火箭
+SPEC	特殊	特殊	特殊
+Aircraft	航空機	飛機	飞机
+Alloys	合金	合金	合金
+Aluminium	アルミニウム	鋁	铝
+Art	芸術	藝術	艺术
+Automobiles	自動車	汽車	汽车
+Chemicals	化学品	化學品	化学品
+Coal	石炭	煤	煤
+Coffee	珈琲	咖啡	咖啡
+Concrete	コンクリート	混凝土	混凝土
+Consumer Goods	消費財	消費品	消费品
+Copper	銅	銅	铜
+Dental Care	歯科	牙科	牙科
+Dyes	染料	染料	染料
+Education	教育	教育	教育
+Electrical Machinery	電気機械	電機	电机
+Electricity	電気	電力	电力
+Electronics	電子機器	電子產品	电子产品
+Energy	エネルギー	能源	能源
+Engines	機関	引擎	引擎
+Exotic Matter	異種物質	奇異物質	奇异物质
+Explosives	爆薬	炸藥	炸药
+Fertilizer	肥料	肥料	肥料
+Fish	魚	魚	鱼
+Food	食料	糧食	粮食
+Fuel	燃料	燃料	燃料
+Furniture	家具	家具	家具
+Glass	硝子	玻璃	玻璃
+Grains	穀物	穀物	谷物
+Groceries	食品	食品雜貨	食品杂货
+Hardwood	硬材	硬木	硬木
+Healthcare	医療	醫療	医疗
+Heavy Machinery	重機械	重型機械	重型机械
+Hyperium	超空間鉱	超空間礦	超空间矿
+Iron Ore	鉄鉱石	鐵礦	铁矿
+Lithium	リチウム	鋰	锂
+Livestock	家畜	牲畜	牲畜
+Locomotives	機関車	機車	机车
+Lumber	製材	木材	木材
+Luxury Goods	奢侈品	奢侈品	奢侈品
+Machinery	機械	機械	机械
+Meat	肉	肉類	肉类
+Metallic Hydrogen	金属水素	金屬氫	金属氢
+Minerals	鉱物	礦物	矿物
+Nickel	ニッケル	鎳	镍
+Ocean-Going Ships	外航船	遠洋船	远洋船
+Oil	石油	石油	石油
+Online Services	通信網	網路服務	网络服务
+Paper	紙	紙	纸
+Phosphate	燐鉱	磷礦	磷矿
+Precision Machinery	精密機械	精密機械	精密机械
+Rare Metals	希少金属	稀有金屬	稀有金属
+Retail	小売	零售	零售
+Rocket Fuel	推進剤	火箭燃料	火箭燃料
+Rockets	ロケット	火箭	火箭
+Semiconductors	半導体	半導體	半导体
+Spaceships	宇宙船	太空船	太空船
+Special	特殊	特殊	特殊
+Steel	鋼	鋼	钢
+Sugar	砂糖	糖	糖
+Sulfur	硫黄	硫磺	硫磺
+Tea	茶	茶	茶
+Textiles	繊維	紡織品	纺织品
+Timber	原木	原木	原木
+Titanium	チタン	鈦	钛
+Tools	工具	工具	工具
+Transportation	輸送	運輸	运输
+Water	水	水	水
+# --- Buildings
+Aircraft Factory	航空機工場	飛機廠	飞机厂
+Alloy Foundry	合金鋳造所	合金鑄造廠	合金铸造厂
+Alloy Smelter	合金精錬所	合金冶煉廠	合金冶炼厂
+Art Studio	芸術工房	藝術工作室	艺术工作室
+Automobile Plant	自動車工場	汽車廠	汽车厂
+Base Metals Mine	卑金属鉱山	基本金屬礦	基本金属矿
+Cement Works	セメント工場	水泥廠	水泥厂
+Chemical Plant	化学工場	化工廠	化工厂
+Civilian Factory	民生工場	民用工廠	民用工厂
+Clinic	診療所	診所	诊所
+Coal Mine	炭鉱	煤礦	煤矿
+Coal Power Plant	石炭火力発電所	燃煤電廠	燃煤电厂
+Coffee Plantation	珈琲農園	咖啡園	咖啡园
+Consumer Goods Factory	消費財工場	消費品廠	消费品厂
+Corporate HQ	企業本社	企業總部	企业总部
+Data Center	データセンター	資料中心	数据中心
+Deep Core Mine	深部鉱山	深層礦場	深层矿场
+Desalination Plant	淡水化施設	海水淡化廠	海水淡化厂
+Dye Works	染料工場	染料廠	染料厂
+Electrical Machinery Plant	電機工場	電機廠	电机厂
+Electronics Factory	電子機器工場	電子廠	电子厂
+Electronics Plant	電子機器工場	電子廠	电子厂
+Engine Factory	機関工場	引擎廠	引擎厂
+Engineering Lab	工学研究所	工程實驗室	工程实验室
+Engineering Laboratory	工学研究所	工程實驗室	工程实验室
+Entertainment Center	娯楽施設	娛樂中心	娱乐中心
+Exotic Matter Containment Plant	異種物質封じ込め施設	奇異物質收容廠	奇异物质收容厂
+Explosives Factory	爆薬工場	炸藥廠	炸药厂
+Farm	農場	農場	农场
+Fertilizer Plant	肥料工場	肥料廠	肥料厂
+Financial Center	金融センター	金融中心	金融中心
+Fishery	漁場	漁場	渔场
+Fishing Wharves	漁港	漁港	渔港
+Food Processing Plant	食品加工場	食品加工廠	食品加工厂
+Furniture Factory	家具工場	家具廠	家具厂
+Fusion Reactor	核融合炉	核融合反應爐	核聚变反应堆
+Glassworks	硝子工場	玻璃廠	玻璃厂
+Government Office	官庁	政府辦公室	政府办公室
+Groundwater Pumps	地下水揚水所	地下水泵站	地下水泵站
+Gun Battery	砲台	砲台	炮台
+Habitat Ring	居住環	居住環	居住环
+Hardwood Logging	硬材伐採所	硬木伐木場	硬木伐木场
+Heavy Machinery Plant	重機械工場	重機廠	重机厂
+Hydroponic Farm	水耕農場	水耕農場	水耕农场
+Hydroponics Bay	水耕区画	水耕艙	水耕舱
+Hyperium Refinery	超空間鉱精製所	超空間礦精煉廠	超空间矿精炼厂
+Hyperium Synthesis Plant	超空間鉱合成所	超空間礦合成廠	超空间矿合成厂
+Ice Mine	氷鉱山	冰礦	冰矿
+Institute of Social Research	社会研究所	社會研究所	社会研究所
+Iron Mine	鉄鉱山	鐵礦場	铁矿场
+Light Metals Mine	軽金属鉱山	輕金屬礦	轻金属矿
+Livestock Ranch	牧場	牧場	牧场
+Locomotive Works	機関車工場	機車廠	机车厂
+Logging Camp	伐採所	伐木場	伐木场
+Luxury Manufactory	奢侈品工房	奢侈品工坊	奢侈品工坊
+Machinery Factory	機械工場	機械廠	机械厂
+Meat Packing Plant	食肉加工場	肉品加工廠	肉品加工厂
+Metallic Hydrogen Plant	金属水素工場	金屬氫廠	金属氢厂
+Mine	鉱山	礦場	矿场
+Ministry	省庁	部會	部委
+Missile Battery	誘導弾陣地	飛彈陣地	导弹阵地
+Oil Refinery	製油所	煉油廠	炼油厂
+Oil Well	油井	油井	油井
+Outpost	前哨	前哨站	前哨站
+Paper Mill	製紙工場	造紙廠	造纸厂
+Phosphate Mine	燐鉱山	磷礦場	磷矿场
+Physics Lab	物理研究所	物理實驗室	物理实验室
+Physics Laboratory	物理研究所	物理實驗室	物理实验室
+Power Plant	発電所	發電廠	发电厂
+Precision Machinery Plant	精密機械工場	精密機械廠	精密机械厂
+Railway	鉄道	鐵路	铁路
+Rare Metals Mine	希少金属鉱山	稀有金屬礦	稀有金属矿
+Refinery	精製所	精煉廠	精炼厂
+Research Lab	研究所	研究室	研究室
+Retail Center	商業施設	零售中心	零售中心
+Rice Farm	水田	稻田	稻田
+Road Network	道路網	道路網	道路网
+Rocket Factory	ロケット工場	火箭廠	火箭厂
+Rocket Fuel Refinery	推進剤精製所	火箭燃料廠	火箭燃料厂
+Rocket Works	ロケット工廠	火箭工廠	火箭工厂
+Sawmill	製材所	鋸木廠	锯木厂
+School	学校	學校	学校
+Seaport	海港	海港	海港
+Semiconductor Fab	半導体工場	晶圓廠	晶圆厂
+Shield Generator	遮蔽発生器	護盾產生器	护盾发生器
+Society Lab	社会研究所	社會實驗室	社会实验室
+Solar Array	太陽光発電	太陽能陣列	太阳能阵列
+Space Elevator Anchor	軌道昇降機基部	太空電梯錨座	太空电梯锚座
+Space Elevator Tether	軌道昇降機索	太空電梯纜繩	太空电梯缆绳
+Spaceport	宇宙港	太空港	太空港
+Spaceyard	宇宙造船所	太空船廠	太空船厂
+Steel Mill	製鉄所	煉鋼廠	炼钢厂
+Sugar Plantation	砂糖農園	甘蔗園	甘蔗园
+Sulfur Mine	硫黄鉱山	硫磺礦	硫磺矿
+Tea Plantation	茶園	茶園	茶园
+Textile Mill	紡績工場	紡織廠	纺织厂
+Tool Workshop	工具工房	工具工坊	工具工坊
+Trade Hub	交易拠点	貿易樞紐	贸易枢纽
+University	大学	大學	大学
+Urban Center	都心	都市中心	都市中心
+Water Treatment Plant	浄水場	淨水廠	净水厂
+Wheat Farm	麦畑	麥田	麦田
+Orbital Ring	軌道環	軌道環	轨道环
+Missile Platforms	誘導弾基台	飛彈平台	导弹平台
+Mirror Coating	鏡面塗装	鏡面塗層	镜面涂层
+Shielding	遮蔽	護盾	护盾
+Sensors & Jammers	探知・妨害	感測與干擾	感测与干扰
+Station Power Systems	基地電源	站點電力	站点电力
+Thermal Cloaking	熱遮蔽	熱隱匿	热隐匿
+Radioisotope Power Systems	原子力電池	放射性同位素電源	放射性同位素电源
+Waste Heat Management	廃熱管理	廢熱管理	废热管理
+Exotic Matter Containment	異種物質封じ込め	奇異物質收容	奇异物质收容
+# --- Technologies
+Anomalous Phenomena	異常現象	異常現象	异常现象
+Atomic Physics	原子物理	原子物理	原子物理
+Autonomous Navigation	自律航法	自主導航	自主导航
+Battleship Hulls	戦艦船体	戰艦艦體	战舰舰体
+Biology	生物学	生物學	生物学
+Classical Mechanics	古典力学	古典力學	经典力学
+Cruiser Hulls	巡洋艦船体	巡洋艦艦體	巡洋舰舰体
+Destroyer Hulls	駆逐艦船体	驅逐艦艦體	驱逐舰舰体
+Directed Energy Weapons	指向性エネルギー兵器	定向能武器	定向能武器
+Dual-Drive Systems	二重推進	雙推進系統	双推进系统
+Dyson Swarm Engineering	ダイソン群工学	戴森群工程	戴森群工程
+Electromagnetism	電磁気学	電磁學	电磁学
+Exotic Matter Extraction	異種物質採掘	奇異物質開採	奇异物质开采
+Exotic Matter Theory	異種物質理論	奇異物質理論	奇异物质理论
+Extradimensional Physics	異次元物理	超維物理	超维物理
+Free-Flight Maneuvering	自由飛行機動	自由飛行機動	自由飞行机动
+Frigate Hulls	フリゲート船体	巡防艦艦體	护卫舰舰体
+Genetic Engineering	遺伝子工学	基因工程	基因工程
+Hyper Comms	超空間通信	超空間通訊	超空间通讯
+Hyperdrive Mk	超空間航法	超空間引擎	超空间引擎
+Hyperium Extraction	超空間鉱採掘	超空間礦開採	超空间矿开采
+Hyperium Synthesis	超空間鉱合成	超空間礦合成	超空间矿合成
+Hyperspace Theory	超空間理論	超空間理論	超空间理论
+Nuclear Energetics	核エネルギー	核能學	核能学
+Orbital Construction	軌道建設	軌道建設	轨道建设
+Orbital Mechanics	軌道力学	軌道力學	轨道力学
+Orbital Tethers	軌道索	軌道纜繩	轨道缆绳
+Point Defense Systems	近接防御システム	點防禦系統	点防御系统
+Quantum Computing	量子計算	量子計算	量子计算
+Quantum Mechanics	量子力学	量子力學	量子力学
+Relativity	相対性理論	相對論	相对论
+Starbase Citadels	要塞基地	星際堡壘	星际堡垒
+Thermodynamics	熱力学	熱力學	热力学
+Warp Comms	歪曲通信	曲速通訊	曲速通讯
+Warp Drive Mk	歪曲航法	曲速引擎	曲速引擎
+Warp Theory	歪曲理論	曲速理論	曲速理论
+Xenobiology	異星生物学	外星生物學	外星生物学
+# --- Earth's cities (established names)
+Abuja	アブジャ	阿布賈	阿布贾
+Ankara	アンカラ	安卡拉	安卡拉
+Atlanta	アトランタ	亞特蘭大	亚特兰大
+Belo Horizonte	ベロオリゾンテ	貝洛奧里藏特	贝洛奥里藏特
+Córdoba	コルドバ	哥多華	科尔多瓦
+Dodoma	ドドマ	杜篤瑪	多多马
+Edmonton	エドモントン	艾德蒙頓	埃德蒙顿
+Harare	ハラレ	哈拉雷	哈拉雷
+Hyderabad	ハイデラバード	海德拉巴	海得拉巴
+Irkutsk	イルクーツク	伊爾庫茨克	伊尔库茨克
+Johannesburg	ヨハネスブルグ	約翰尼斯堡	约翰内斯堡
+Kampala	カンパラ	坎帕拉	坎帕拉
+Kano	カノ	卡諾	卡诺
+Kansas City	カンザスシティ	堪薩斯城	堪萨斯城
+Kigali	キガリ	吉佳利	基加利
+Kinshasa	キンシャサ	金夏沙	金沙萨
+Krasnoyarsk	クラスノヤルスク	克拉斯諾亞爾斯克	克拉斯诺亚尔斯克
+Kyiv	キーウ	基輔	基辅
+Lubumbashi	ルブンバシ	盧本巴希	卢本巴希
+Lucknow	ラクナウ	勒克瑙	勒克瑙
+Lusaka	ルサカ	路沙卡	卢萨卡
+Moscow	モスクワ	莫斯科	莫斯科
+Munich	ミュンヘン	慕尼黑	慕尼黑
+Niamey	ニアメ	尼亞美	尼亚美
+Novosibirsk	ノヴォシビルスク	新西伯利亞	新西伯利亚
+Quito	キト	基多	基多
+Tashkent	タシケント	塔什干	塔什干
+Ulaanbaatar	ウランバートル	烏蘭巴托	乌兰巴托
+Windhoek	ウィントフック	溫荷克	温得和克
+Winnipeg	ウィニペグ	溫尼伯	温尼伯
+Yakutsk	ヤクーツク	雅庫茨克	雅库茨克
+Yekaterinburg	エカテリンブルク	葉卡捷琳堡	叶卡捷琳堡
+Chengyu	成渝	成渝	成渝
+Congo	コンゴ	剛果	刚果
+Gauteng	ハウテン	豪登	豪登
+Kenya Highlands	ケニア高地	肯亞高地	肯尼亚高地
+Kuzbass	クズバス	庫茲巴斯	库兹巴斯
+Nebraska Plains	ネブラスカ平原	內布拉斯加平原	内布拉斯加平原
+Atlantic	大西洋	大西洋	大西洋
+Pacific	太平洋	太平洋	太平洋
+# --- Mars places
+Akakyō	赤京	赤京	赤京
+Hellas Planitia	ヘラス平原	希臘平原	希腊平原
+Planum Australe	南極高原	南極高原	南极高原
+Terra Sabaea	サバ大陸	薩巴大陸	萨巴大陆
+Terra Sirenum	セイレーン大陸	塞壬大陸	塞壬大陆
+Tyrrhena Terra	ティレーナ大陸	第勒尼安大陸	第勒尼安大陆
+Olympus Castle	オリンポス城	奧林帕斯城	奥林帕斯城
+Imperial Palace of Mars	火星皇宮	火星皇宮	火星皇宫
+Imperial Diet Building	帝国議事堂	帝國議會大廈	帝国议会大厦
+Imperial Church of Mars	火星帝国教会	火星帝國教會	火星帝国教会
+# --- Other nations' cities (transliterated)
+Anis	アニス	阿尼斯	阿尼斯
+Delith	デリス	德里斯	德里斯
+Isanro	イサンロ	伊桑羅	伊桑罗
+Ithri	イスリ	伊斯里	伊斯里
+Kaka	カカ	卡卡	卡卡
+Risoris	リソリス	里索里斯	里索里斯
+Roroky	ロロキ	羅羅基	罗罗基
+Senne	セネ	塞納	塞纳
+Sentaba	センタバ	森塔巴	森塔巴
+Sorsenmi	ソルセンミ	索森米	索森米
+Tasor	タソル	塔索	塔索
+Venlo	フェンロー	芬洛	芬洛
+# --- Characters
+Augustin Delorme	オーギュスタン・ドロルム	奧古斯丁·德洛姆	奥古斯丁·德洛姆
+Aurelia Vance	アウレリア・ヴァンス	奧蕾莉亞·萬斯	奥蕾莉亚·万斯
+Dane Voss	デイン・ヴォス	戴恩·沃斯	戴恩·沃斯
+Doran Kessler	ドラン・ケスラー	多蘭·凱斯勒	多兰·凯斯勒
+Halvard Renn	ハルヴァルド・レン	哈爾瓦德·倫恩	哈尔瓦德·伦恩
+Ives Marlowe	アイヴス・マーロウ	艾夫斯·馬洛	艾夫斯·马洛
+Lorne Sable	ローン・セーブル	洛恩·塞布爾	洛恩·塞布尔
+Lucia Vance	ルチア・ヴァンス	露西亞·萬斯	露西亚·万斯
+Marcus Thorne	マーカス・ソーン	馬可斯·索恩	马库斯·索恩
+Marcus Vance	マーカス・ヴァンス	馬可斯·萬斯	马库斯·万斯
+Priya Ander	プリヤ・アンダー	普莉雅·安德	普莉雅·安德
+Rin Takamori	高森凛	高森凜	高森凛
+Serit Kessler	セリット・ケスラー	塞里特·凱斯勒	塞里特·凯斯勒
+Solenne Hart	ソレンヌ・ハート	索蘭·哈特	索兰·哈特
+Sora Quist	ソラ・クイスト	索拉·奎斯特	索拉·奎斯特
+Theodora Anthemis	テオドラ・アンテミス	狄奧多拉·安塞米斯	狄奥多拉·安塞米斯
+Kessler	ケスラー	凱斯勒	凯斯勒
+Vance	ヴァンス	萬斯	万斯
+# --- More interface words
+AAA	最上位	最高級	最高级
+Build	建設	建造	建造
+Build station	基地建設	建造基地	建造基地
+By area	地域別	依地區	按地区
+By building	建物別	依建築	按建筑
+Current situation	現状	當前情勢	当前情势
+Edit	編集	編輯	编辑
+Default	標準	預設	默认
+NERV	ネルフ	NERV	NERV
+Off	切	關	关
+On	入	開	开
+Summary	概要	摘要	摘要
+Districts & Buildings	区画・建物	區劃與建築	区划与建筑
+Defense	防衛	防禦	防御
+Development	開発	開發	开发
+Politics	政治	政治	政治
+Sites	用地	用地	用地
+Planet	惑星	行星	行星
+Moon	衛星	衛星	卫星
+Small	小	小	小
+Medium	中	中	中
+Tiny	極小	微小	微小
+Large	大	大	大
+Huge	巨大	巨大	巨大
+Continental World	大陸惑星	大陸行星	大陆行星
+Ocean World	海洋惑星	海洋行星	海洋行星
+Desert World	砂漠惑星	沙漠行星	沙漠行星
+Arid World	乾燥惑星	乾燥行星	干燥行星
+Tundra World	凍土惑星	凍原行星	冻原行星
+Arctic World	氷雪惑星	冰原行星	冰原行星
+Barren World	不毛惑星	荒蕪行星	荒芜行星
+Gas Giant	巨大ガス惑星	氣態巨行星	气态巨行星
+Ice Giant	巨大氷惑星	冰巨星	冰巨星
+Molten World	溶岩惑星	熔岩行星	熔岩行星
+Toxic World	有毒惑星	毒性行星	毒性行星
+Frozen World	凍結惑星	冰凍行星	冰冻行星
+Industrial	工業	工業	工业
+Industry	産業	產業	产业
+Agricultural	農業	農業	农业
+Academic	学術	學術	学术
+Generator	発電	發電	发电
+Mining	鉱業	礦業	矿业
+Urban	都市	都市	都市
+Core	中枢	核心	核心
+Farmland	農地	農田	农田
+Fortress	要塞	要塞	要塞
+Garrison	守備隊	守備隊	守备队
+Assault	強襲	突擊	突击
+Marine	海兵	陸戰	陆战
+Defense Battery	防衛砲台	防禦砲台	防御炮台
+Planetary Shield Generator	惑星遮蔽発生器	行星護盾產生器	行星护盾发生器
+Ring of Heaven	天の環	天之環	天之环
+Northern Federal Command HQ	北方連邦司令部	北方聯邦司令部	北方联邦司令部
+Grand Federal Assembly	連邦大議会	聯邦大會	联邦大会
+Municipal government	市政	市政府	市政府
+Settlement	集落	聚落	聚落
+Settled	入植済	已定居	已定居
+Planned	計画中	規劃中	规划中
+Housing	住宅	住宅	住宅
+Infrastructure	社会基盤	基礎設施	基础设施
+Public services	公共サービス	公共服務	公共服务
+Safety	治安	治安	治安
+Shortages	不足	短缺	短缺
+Unrest	不穏	動盪	动荡
+Social	社会	社會	社会
+Workers	労働者	勞工	劳工
+Specialists	専門職	專業人員	专业人员
+Strata	階層	階層	阶层
+Scientists	科学者	科學家	科学家
+Spies	諜報員	間諜	间谍
+Envoys	使節	使節	使节
+Fleet Commanders	艦隊司令	艦隊司令	舰队司令
+Governors (planet)	総督(惑星)	總督(行星)	总督(行星)
+Interactions	交流	互動	互动
+Honor	名誉	榮譽	荣誉
+Prestige	威信	聲望	声望
+Diligent	勤勉	勤奮	勤奋
+Incorruptible	清廉	廉潔	廉洁
+Mentor	指南役	導師	导师
+Reformer	改革者	改革者	改革者
+Notable	名士	名人	名人
+Martian	火星人	火星人	火星人
+History	歴史	歷史	历史
+Policy	政策	政策	政策
+Peace	平和	和平	和平
+Neutral	中立	中立	中立
+Embargo	禁輸	禁運	禁运
+Stage	段階	階段	阶段
+Macro	大局	宏觀	宏观
+Loose	緩和	寬鬆	宽松
+Tight	引締	緊縮	紧缩
+Screened	審査制	審查	审查
+GDP	GDP	GDP	GDP
+IED	IED	IED	IED
+Queue	待機列	佇列	队列
+Tabs	タブ	分頁	标签页
+Fleet Manager	艦隊管理	艦隊管理	舰队管理
+Ship Designer	艦艇設計	艦艇設計	舰艇设计
+Strategizer	戦略設定	戰略設定	战略设定
+Ground forces	地上部隊	地面部隊	地面部队
+Low orbit	低軌道	低軌道	低轨道
+High orbit	高軌道	高軌道	高轨道
+In orbit	軌道上	軌道上	轨道上
+Hyperium deposit	超空間鉱床	超空間礦藏	超空间矿藏
+Planetary colony	惑星植民地	行星殖民地	行星殖民地
+Foreign investment	外国投資	外國投資	外国投资
+Grant Funds	資金供与	撥款	拨款
+Demand Dividend	配当要求	要求股息	要求股息
+Recruit Assault Army	強襲軍徴募	招募突擊軍	招募突击军
+Recruit Marine Army	海兵軍徴募	招募陸戰軍	招募陆战军
+Jobs by building	建物別雇用	各建築職位	各建筑职位
+Population by world	世界別人口	各星人口	各星人口
+Pop upkeep (per month)	人口維持(月)	人口維護(月)	人口维护(月)
+Pin this panel	画面を固定	釘選此面板	固定此面板
+Load a saved game	保存データを読込	讀取存檔	读取存档
+Nothing is queued for research	研究予定なし	無研究排程	无研究排程
+No market established	市場なし	未設市場	未设市场
+No starbases built	基地なし	未建基地	未建基地
+Open diplomacy with Earth	地球との外交	與地球外交	与地球外交
+Held by force by	武力占拠	遭武力佔據	遭武力占据
+Holds the ground	地上を確保	控制地面	控制地面
+Leader	指導者	領袖	领袖
+Martian Restoration Administration	火星復興庁	火星復興管理局	火星复兴管理局
+Military junta	軍事政権	軍政府	军政府
+Northern Federal Command	北方連邦司令部	北方聯邦司令部	北方联邦司令部
+Constitutional monarchy	立憲君主制	君主立憲制	君主立宪制
+Democratic republic	民主共和制	民主共和國	民主共和国
+Federal republic	連邦共和制	聯邦共和國	联邦共和国
+Command Economy	指令経済	計畫經濟	计划经济
+Corporatist	協調組合主義	統合主義	统合主义
+Interventionism	介入主義	干預主義	干预主义
+Laissez-Faire	自由放任	自由放任	自由放任
+State directs production	国家指導生産	國家主導生產	国家主导生产
+Private owners self-optimize	私的最適化	私人自主優化	私人自主优化
+Closed Borders	国境閉鎖	封閉邊境	封闭边境
+Open Borders	国境開放	開放邊境	开放边境
+Controlled Migration	移民管理	管制移民	管制移民
+Encouraged Migration	移民奨励	鼓勵移民	鼓励移民
+Free Emigration	出国自由	自由移出	自由移出
+Restricted Emigration	出国制限	限制移出	限制移出
+Emigration Forbidden	出国禁止	禁止移出	禁止移出
+Closed to Foreign Capital	外資閉鎖	拒絕外資	拒绝外资
+Open to Foreign Capital	外資開放	開放外資	开放外资
+War taxes	戦時税	戰爭稅	战争税
+Bloated reserves	準備過剰	儲備過剩	储备过剩
+Critical debt	債務危機	債務危急	债务危急
+Economic warning signs	経済警報	經濟警訊	经济警讯
+Extremely high deficit	極度の赤字	赤字極高	赤字极高
+Fiscal crisis	財政危機	財政危機	财政危机
+Industry starved of inputs	原料枯渇	產業缺料	产业缺料
+Inflation critical	物価危機	通膨危急	通胀危急
+Negative real growth	実質マイナス成長	實質負成長	实际负增长
+Favorable	良好	有利	有利
+Costs	費用	花費	花费
+FLEET COMMS	艦隊通信	艦隊通訊	舰队通讯
+OFFLINE	途絶	離線	离线
+LOCK-ON	追尾	鎖定	锁定
+You	貴国	你	你
+you	貴国	你	你
+capital	首都	首都	首都
+Sovereign	主権者	主權者	主权者
+Imperial Palace	皇宮	皇宮	皇宫
+LOCK-ON ON	追尾 入	鎖定 開	锁定 开
+LOCK-ON OFF	追尾 切	鎖定 關	锁定 关
+Mare Frigoris	寒冷の海	冷海	冷海
+Rare Metal Mines	希少金属鉱山	稀有金屬礦	稀有金属矿
+level	段階	級	级
+# --- Months (chart axes)
+Jan	1月	1月	1月
+Feb	2月	2月	2月
+Mar	3月	3月	3月
+Apr	4月	4月	4月
+May	5月	5月	5月
+Jun	6月	6月	6月
+Jul	7月	7月	7月
+Aug	8月	8月	8月
+Sep	9月	9月	9月
+Oct	10月	10月	10月
+Nov	11月	11月	11月
+Dec	12月	12月	12月
+# --- Complex economy, central bank, politics
+Addis Ababa	アディスアベバ	阿迪斯阿貝巴	亚的斯亚贝巴
+Athabasca	アサバスカ	阿薩巴斯卡	阿萨巴斯卡
+Pilbara Iron Mines	ピルバラ鉄鉱山	皮爾巴拉鐵礦	皮尔巴拉铁矿
+Anlo	アンロ	安洛	安洛
+Delkysen	デルキセン	德基森	德基森
+Isroky	イスロキ	伊斯羅基	伊斯罗基
+Sensorsor	センソルソル	森索索	森索索
+Redmines	赤鉱	赤礦	赤矿
+Admin & defense	行政・防衛	行政與國防	行政与国防
+Agriculture	農業	農業	农业
+Ambitious	野心家	野心勃勃	野心勃勃
+Greedy	強欲	貪婪	贪婪
+Shrewd	抜け目なし	精明	精明
+Ruthless	冷酷	冷酷	冷酷
+Cautious	慎重	謹慎	谨慎
+Appointed by Government	政府任命	政府任命	政府任命
+Appointed by Head of State	元首任命	元首任命	元首任命
+Appointed by Legislature	議会任命	議會任命	议会任命
+Axiomatic	公理派	公理派	公理派
+Bank-independent	銀行独立	銀行獨立	银行独立
+Bureaucracy	官僚機構	官僚體系	官僚体系
+Buy	購入	買入	买入
+Sell	売却	賣出	卖出
+Central Bank Board	中央銀行理事会	央行理事會	央行理事会
+Central Bank Governor	中央銀行総裁	央行總裁	央行行长
+Central Bank Mandate	中央銀行使命	央行職責	央行职责
+Central Bank Status	中央銀行地位	央行地位	央行地位
+Chemicals & Materials	化学・素材	化學與材料	化学与材料
+Cohorts	集団	群體	群体
+Comfortable	快適	寬裕	宽裕
+Modest	質素	小康	小康
+Poor	貧困	貧窮	贫穷
+Destitute	極貧	赤貧	赤贫
+Prosperous	裕福	富裕	富裕
+Construction Sectors	建設部門	建設部門	建设部门
+Construction funding	建設資金	建設資金	建设资金
+Consumer Manufacturing	消費財製造	消費品製造	消费品制造
+Corporate & Government	企業・政府	企業與政府	企业与政府
+Credibility	信認	信譽	信誉
+Independence	独立性	獨立性	独立性
+Govt. pressure	政府圧力	政府壓力	政府压力
+Currency Band	変動幅	匯率區間	汇率区间
+Currency Stability	通貨安定	貨幣穩定	货币稳定
+Debt interest	債務利息	債務利息	债务利息
+Decentralized Banking System	分権銀行制度	分散銀行體系	分散银行体系
+Direct Monetary Financing	直接財政融資	直接貨幣融資	直接货币融资
+Earth market	地球市場	地球市場	地球市场
+Mars market	火星市場	火星市場	火星市场
+Exchange-Rate Regime	為替制度	匯率制度	汇率制度
+Exchange-Rate Stability	為替安定	匯率穩定	汇率稳定
+Extraction	採掘	開採	开采
+Federal Reserve System	連邦準備制度	聯邦準備制度	联邦储备制度
+Finance Ministry	財務省	財政部	财政部
+Financial Stability	金融安定	金融穩定	金融稳定
+First Bank of Mars	火星第一銀行	火星第一銀行	火星第一银行
+Fixed Exchange Rate	固定相場	固定匯率	固定汇率
+Fixed Independent Term	固定任期	固定獨立任期	固定独立任期
+Foreign bond law	外債法	外債法	外债法
+Found a private corporation	民間企業設立	成立民營企業	成立民营企业
+Found a state corporation	国営企業設立	成立國營企業	成立国营企业
+Free Float	完全変動	自由浮動	自由浮动
+Full Employment	完全雇用	充分就業	充分就业
+Government / Treasury	政府/国庫	政府/國庫	政府/国库
+Government Debt Financing	国債引受	政府債務融資	政府债务融资
+Government Debt Support	国債支援	政府債務支持	政府债务支持
+Government Financing / Development	政府融資・開発	政府融資與開發	政府融资与开发
+Government-Controlled State Bank	政府管理国営銀行	政府控制國家銀行	政府控制国家银行
+Governor Appointment	総裁任命	總裁任命	行长任命
+Hard Peg	固定為替	硬釘住	硬钉住
+Heavy Industry	重工業	重工業	重工业
+Highly Independent Central Bank	高度独立中央銀行	高度獨立央行	高度独立央行
+Independent Central Bank	独立中央銀行	獨立央行	独立央行
+Independent Monetary Policy Committee	独立金融政策委員会	獨立貨幣政策委員會	独立货币政策委员会
+Human	人類	人類	人类
+Terran	地球人	地球人	地球人
+Industrialists	産業資本家	實業家	实业家
+Intelligentsia	知識層	知識分子	知识分子
+Interest groups on Earth	地球の利益団体	地球利益團體	地球利益团体
+Interest groups on Mars	火星の利益団体	火星利益團體	火星利益团体
+Interest rates vs inflation	金利と物価	利率與通膨	利率与通胀
+Investor	投資家	投資者	投资者
+Imperial Reserve of Mars	火星帝国準備銀行	火星帝國儲備銀行	火星帝国储备银行
+Imperial Standard Credit	帝国標準信用	帝國標準信用	帝国标准信用
+ISC	帝信	帝信	帝信
+Issue bonds	債券発行	發行債券	发行债券
+Joint Government/Legislative	政府・議会共同	政府與議會共同	政府与议会共同
+Labor	労働	勞工	劳工
+Luna Financial District	月面金融街	月球金融區	月球金融区
+Mars Financial District	火星金融街	火星金融區	火星金融区
+Managed Float	管理変動	管理浮動	管理浮动
+Martian Buddhist	火星仏教	火星佛教	火星佛教
+Old-Earth Theravada	旧地球上座部	舊地球上座部	旧地球上座部
+Money supply & credit	通貨供給と信用	貨幣供給與信用	货币供给与信用
+Monetary Policy Authority	金融政策当局	貨幣政策當局	货币政策当局
+Multiple Mandate	複数使命	多重職責	多重职责
+National Bank with Regional Branches	地方支店付国立銀行	設分行之國家銀行	设分行之国家银行
+Nationalize	国有化	國有化	国有化
+Privatize	民営化	私有化	私有化
+No Central Bank	中央銀行なし	無央行	无央行
+Non-affiliated	無所属	無黨派	无党派
+Occupations (class)	職業(階級)	職業(階級)	职业(阶级)
+Organizational Structure	組織構造	組織結構	组织结构
+Pension — Basic	年金:基礎	退休金:基本	退休金:基本
+Pension	年金	退休金	退休金
+Basic	基礎	基本	基本
+Per ISC	ISCあたり	每ISC	每ISC
+Political	政治	政治	政治
+Price Stability	物価安定	物價穩定	物价稳定
+Private Corporations	民間企業	民營企業	民营企业
+State-Owned Corporations	国営企業	國營企業	国营企业
+Professional	専門職	專業	专业
+Technical	技術職	技術	技术
+Subsistence	自給	自給	自给
+Prohibited	禁止	禁止	禁止
+Restricted	制限	限制	限制
+Rec	推奨	建議	建议
+Reserve targets on Mars	火星の備蓄目標	火星儲備目標	火星储备目标
+Set a reserve target	備蓄目標設定	設定儲備目標	设定储备目标
+Revenue vs spending (per year)	歳入と歳出(年)	收支(年)	收支(年)
+Rights & freedoms	権利と自由	權利與自由	权利与自由
+Secondary Market Only	流通市場のみ	僅次級市場	仅二级市场
+Share IED	株式IED	股份IED	股份IED
+Single National Bank	単一国立銀行	單一國家銀行	单一国家银行
+Staggered Board Terms	任期分散	交錯任期	交错任期
+State Central Bank	国立中央銀行	國家央行	国家央行
+State stake	国家持分	國家持股	国家持股
+Stockpile purchases	備蓄購入	儲備採購	储备采购
+Subsidies	補助金	補貼	补贴
+Tharsis Mercantile	タルシス商会	塔爾西斯商行	塔尔西斯商行
+Total spending	歳出総額	總支出	总支出
+Trade Unions	労働組合	工會	工会
+Transport	輸送	運輸	运输
+Treasury Banking Office	国庫銀行局	國庫銀行局	国库银行局
+Vehicles & Craft	車両・航空機	車輛與飛行器	车辆与飞行器
+LRD	LRD	LRD	LRD
+ORD	ORD	ORD	ORD
+VNC	VNC	VNC	VNC
+IED	IED	IED	IED
+Surplus piling up	過剰生産	生產過剩	生产过剩

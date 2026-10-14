@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { wasDrag } from './dragGuard'
 import { useStarbaseActivityKey } from '../hooks/useStarbaseActivity'
 import { SHIP_ICON_SIZE, ShipIcon, roleOfClass } from './ShipIcon'
@@ -251,7 +252,7 @@ function OwnStarbaseRow({ starbase }: { starbase: { readySimDays: number; integr
   const building = simDays < starbase.readySimDays
   return (
     <div className="inspect-row">
-      <span className="inspect-label">Your Starbase</span>
+      <span className="inspect-label"><Bi en="Your Starbase" /></span>
       <span className="inspect-value">{building ? `Building (${Math.ceil(starbase.readySimDays - simDays)}d left)` : `Holding — ${Math.round(starbase.integrity)} integrity`}</span>
     </div>
   )
@@ -741,15 +742,15 @@ export function InterstellarScene() {
           <DraggableWindow title={selectedStar.name} memoryKey="star" onClose={() => selectInView(null)}>
             {/* The same compact layout as a star in the system view: type, radius, then the door in. */}
             <div className="inspect-row">
-              <span className="inspect-label">Type</span>
-              <span className="inspect-value">Star</span>
+              <span className="inspect-label"><Bi en="Type" /></span>
+              <span className="inspect-value"><Bi en="Star" /></span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Radius</span>
+              <span className="inspect-label"><Bi en="Radius" /></span>
               <span className="inspect-value">{Math.round(selectedStar.radiusKm).toLocaleString()} km</span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Distance</span>
+              <span className="inspect-label"><Bi en="Distance" /></span>
               <span className="inspect-value">
                 {selectedStar.distanceLy.toFixed(2)} ly from {home ? 'Sol' : "the neighborhood's centre"}
               </span>
@@ -760,12 +761,12 @@ export function InterstellarScene() {
                 return (
                   <>
                     <div className="inspect-row">
-                      <span className="inspect-label">System</span>
+                      <span className="inspect-label"><Bi en="System" /></span>
                       <span className="inspect-value">Unexplored: send a ship there</span>
                     </div>
                     {unidentifiedBaseStars.has(selectedStar.id) && (
                       <div className="inspect-row">
-                        <span className="inspect-label">Starbase</span>
+                        <span className="inspect-label"><Bi en="Starbase" /></span>
                         <span className="inspect-value">Detected — owner unknown</span>
                       </div>
                     )}
@@ -775,8 +776,8 @@ export function InterstellarScene() {
               if (claim.kind === 'unclaimed') {
                 return (
                   <div className="inspect-row">
-                    <span className="inspect-label">Owner</span>
-                    <span className="inspect-value">Unclaimed</span>
+                    <span className="inspect-label"><Bi en="Owner" /></span>
+                    <span className="inspect-value"><Bi en="Unclaimed" /></span>
                   </div>
                 )
               }
@@ -793,7 +794,7 @@ export function InterstellarScene() {
               }
               return (
                 <div className="inspect-row">
-                  <span className="inspect-label">Contested by</span>
+                  <span className="inspect-label"><Bi en="Contested by" /></span>
                   <span className="inspect-value">
                     {claim.countryIds.map((id, i) => (
                       <span key={id} style={{ color: ownerInfoOf(id)?.color }}>
@@ -812,7 +813,7 @@ export function InterstellarScene() {
               if (!intel.known(selectedStar.id) && progress.done === 0) return null
               return (
                 <div className="inspect-row">
-                  <span className="inspect-label">Survey</span>
+                  <span className="inspect-label"><Bi en="Survey" /></span>
                   <span className="inspect-value">
                     {progress.total > 0 && progress.done === progress.total ? `Fully surveyed (${progress.total} bodies)` : `${progress.done} / ${progress.total} bodies`}
                   </span>
@@ -831,11 +832,11 @@ export function InterstellarScene() {
                   disabled={!intel.known(selectedStar.id)}
                   title={intel.known(selectedStar.id) ? undefined : 'Unexplored: one of your ships has to enter it first'}
                 >
-                  Detailed View
+                  <Bi en="Detailed View" />
                 </button>
               )
             ) : (
-              <div className="inspect-status">No system data available</div>
+              <div className="inspect-status"><Bi en="No system data available" /></div>
             )}
             <div className="inspect-divider" />
             {(() => {

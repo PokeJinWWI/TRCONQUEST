@@ -1,3 +1,4 @@
+import { Bi } from '../Bi'
 import { useState } from 'react'
 import { RECIPES, DISTRICT_TYPES, DISTRICT_LABELS, districtOfRecipe, buildingGroup, type DistrictType } from '../../economy/recipes'
 import { canBuild, districtUsage, estimateConstructionCost, estimateWorldGdp, TICKS_PER_YEAR } from '../../economy/economyTick'
@@ -46,12 +47,12 @@ export function ComplexWorldSummary({ world }: { world: World }) {
   return (
     <div className="pl-summary">
       <div className="pl-stat-grid">
-        <div className="pl-stat"><span>Population</span><b>{formatPop(pop)}</b></div>
-        <div className="pl-stat" title="This world's output per year at current prices"><span>GDP / yr</span><b>{formatIED(estimateWorldGdp(world) * TICKS_PER_YEAR, ownerRate)}</b></div>
-        <div className="pl-stat" title="People employed / jobs posted"><span>Employed</span><b>{formatPop(employed)} / {formatPop(jobs)}</b></div>
-        <div className="pl-stat" title="District levels developed / the land this world has"><span>Land used</span><b>{districtLevelsTotal(world)} / {landOfWorld(world)}</b></div>
-        <div className="pl-stat"><span>Buildings</span><b>{world.buildings.length}</b></div>
-        <div className="pl-stat"><span>Queued</span><b>{world.constructionQueue.length}</b></div>
+        <div className="pl-stat"><span><Bi en="Population" /></span><b>{formatPop(pop)}</b></div>
+        <div className="pl-stat" title="This world's output per year at current prices"><span><Bi en="GDP / yr" /></span><b>{formatIED(estimateWorldGdp(world) * TICKS_PER_YEAR, ownerRate)}</b></div>
+        <div className="pl-stat" title="People employed / jobs posted"><span><Bi en="Employed" /></span><b>{formatPop(employed)} / {formatPop(jobs)}</b></div>
+        <div className="pl-stat" title="District levels developed / the land this world has"><span><Bi en="Land used" /></span><b>{districtLevelsTotal(world)} / {landOfWorld(world)}</b></div>
+        <div className="pl-stat"><span><Bi en="Buildings" /></span><b>{world.buildings.length}</b></div>
+        <div className="pl-stat"><span><Bi en="Queued" /></span><b>{world.constructionQueue.length}</b></div>
       </div>
     </div>
   )
@@ -226,7 +227,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
             })()}
             {d === 'urban' && (
               <div className="pl-foreign">
-                <div className="abs-dim">Foreign embassies & firms</div>
+                <div className="abs-dim"><Bi en="Foreign embassies & firms" /></div>
                 <ForeignHoldingsRow bodyName={world.name} playerId={playerId} />
               </div>
             )}
@@ -252,7 +253,7 @@ export function ComplexDistrictsTab({ playerId, world, country }: { playerId: st
 
       {world.constructionQueue.length > 0 && (
         <div className="pl-queue">
-          <div className="econ-subtitle">Construction here</div>
+          <div className="econ-subtitle"><Bi en="Construction here" /></div>
           {world.constructionQueue.map((o) => (
             <div key={o.id} className="abs-order">
               <span>

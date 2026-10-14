@@ -1,3 +1,5 @@
+import { RenameField } from '../components/NativeName'
+import { Bi } from '../components/Bi'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useEffect, useMemo, useState } from 'react'
 import { destinationLabel } from './shipPhysics'
@@ -196,12 +198,12 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
               {byFleet.length > 1 && byFleet[0][0] === fleetId && <span className="fleet-lead-tag" title="A merge gathers the other fleets onto this one; it keeps doing what it is doing"> · on top</span>}
               {byFleet.length > 1 && byFleet[0][0] !== fleetId && (
                 <button type="button" className="ship-panel-unfollow-btn" onClick={() => makeLead(fleetId)} title="Put this fleet on top: the others merge onto it">
-                  Make top
+                  <Bi en="Make top" />
                 </button>
               )}
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Moves at</span>
+              <span className="inspect-label"><Bi en="Moves at" /></span>
               <span className="inspect-value">{fleetPaceLabel(fleetMembers)}</span>
             </div>
             {members.map((m) => (
@@ -218,7 +220,7 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
           <div className="inspect-divider" />
           <ShipDriveSelector ships={mine} />
           <div className="inspect-row">
-            <span className="inspect-label">Stance (all yours)</span>
+            <span className="inspect-label"><Bi en="Stance (all yours)" /></span>
           </div>
           <div className="dip-actions">
             {COMBAT_STANCES.filter((st) => strategyListed(st, researched)).map((stance) => {
@@ -235,7 +237,7 @@ function SelectionGroupPanel({ initialOffset, anchor }: ShipPanelProps) {
             <>
               <div className="dip-actions">
                 <button type="button" className="detail-view-btn" disabled={!merge.ok} onClick={handleMerge} title={merge.ok ? 'The other fleets fly to the fleet on top and join it; it keeps doing what it is doing' : merge.reason}>
-                  Merge onto the top fleet
+                  <Bi en="Merge onto the top fleet" />
                 </button>
               </div>
               {!merge.ok && <div className="ship-panel-hint">{merge.reason}.</div>}
@@ -403,13 +405,24 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
 
   return (
     <DraggableWindow title={ship.name} memoryKey="ship" onClose={() => selectShip(null)} initialOffset={initialOffset} anchor={anchor}>
+      <div className="inspect-row">
+        <span className="inspect-label"><Bi en="Name" /></span>
+        <span className="inspect-value">
+          <RenameField name={ship.name} nativeKey={`ship:${ship.id}`} canRename={owned} onRename={(name) => useShipStore.getState().renameShip(ship.id, name)} />
+        </span>
+      </div>
       {/* Only shown once there's an actual fleet to talk about — a solo
           hull's own name already says everything this row would. */}
       {fleetMates.length > 1 && (
         <div className="inspect-row">
-          <span className="inspect-label">Fleet</span>
+          <span className="inspect-label"><Bi en="Fleet" /></span>
           <span className="inspect-value">
-            {fleet?.name ?? 'Fleet'} ({fleetMates.length})
+            {fleet ? (
+              <RenameField name={fleet.name} nativeKey={`fleet:${fleet.id}`} canRename={owned} onRename={(name) => useFleetStore.getState().renameFleet(fleet.id, name.trim().slice(0, 40))} />
+            ) : (
+              'Fleet'
+            )}{' '}
+            ({fleetMates.length})
             <div className="ship-panel-fleet-roster">
               {fleetMates.map((mate) => (
                 <span key={mate.id} className="ship-panel-fleet-mate-row">
@@ -459,35 +472,35 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
       )}
       {owned && mergeableFleetId && (
         <div className="inspect-row">
-          <span className="inspect-label">Nearby</span>
+          <span className="inspect-label"><Bi en="Nearby" /></span>
           <span className="inspect-value">
             Another fleet is here
             <button type="button" className="ship-panel-unfollow-btn" onClick={() => mergeFleets(ship.fleetId, mergeableFleetId)}>
-              Merge Fleets
+              <Bi en="Merge Fleets" />
             </button>
           </span>
         </div>
       )}
       <div className="inspect-row">
-        <span className="inspect-label">Class</span>
+        <span className="inspect-label"><Bi en="Class" /></span>
         <span className="inspect-value">{shipClass?.name ?? 'Unknown'}</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Owner</span>
+        <span className="inspect-label"><Bi en="Owner" /></span>
         <span className="inspect-value">
           {ownerDisplay(ship.ownerId).name}{' '}
           <span style={{ color: RELATION_COLORS[relation] }}>({RELATION_LABELS[relation]})</span>
         </span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Drives</span>
+        <span className="inspect-label"><Bi en="Drives" /></span>
         <span className="inspect-value">
           Reaction{shipClass ? `, ${shipClass.ftlDrives.map(describeFtlDrive).join(', ')}` : ''}
         </span>
       </div>
       {cooldownParts.length > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Cooldowns</span>
+          <span className="inspect-label"><Bi en="Cooldowns" /></span>
           <span className="inspect-value">{cooldownParts.join(' · ')}</span>
         </div>
       )}
@@ -498,7 +511,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
           from every peaceful ship's panel. */}
       {warpRisk !== undefined && warpRisk > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Warp Risk</span>
+          <span className="inspect-label"><Bi en="Warp Risk" /></span>
           <span className="inspect-value ship-panel-combat">{formatPercent(warpRisk)} (elevated)</span>
         </div>
       )}
@@ -538,7 +551,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
             {followedShip?.name ?? 'Unknown fleet'}
             {owned && (
               <button type="button" className="ship-panel-unfollow-btn" onClick={() => setFollowing(ship.id, null)}>
-                Stop
+                <Bi en="Stop" />
               </button>
             )}
           </span>
@@ -573,14 +586,14 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
             />
           ))}
           <div className="inspect-row">
-            <span className="inspect-label">Armament</span>
+            <span className="inspect-label"><Bi en="Armament" /></span>
             <span className="inspect-value">
               {combatProfile.weapons.length > 0 ? summarizeWeapons(combatProfile) : 'Unarmed'}
             </span>
           </div>
           {combatProfile.defenses.pointDefenseRating > 0 && (
             <div className="inspect-row">
-              <span className="inspect-label">Point Defense</span>
+              <span className="inspect-label"><Bi en="Point Defense" /></span>
               <span className="inspect-value">{formatPercent(combatProfile.defenses.pointDefenseRating)} intercept</span>
             </div>
           )}
@@ -623,7 +636,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
       {engagement && (
         <>
           <div className="inspect-row">
-            <span className="inspect-label">Engagement</span>
+            <span className="inspect-label"><Bi en="Engagement" /></span>
             <span className={`inspect-value${engagementContested ? ' ship-panel-combat' : ''}`}>
               {engagementContested ? 'In combat at' : 'In the arena at'} {engagement.locationLabel}
               {/* The way into the arena. Offered rather than forced — the
@@ -652,7 +665,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
               narrower, live-contact count, and works for a selected enemy
               ship too, not just an owned one. */}
           <div className="inspect-row">
-            <span className="inspect-label">Engaged Against</span>
+            <span className="inspect-label"><Bi en="Engaged Against" /></span>
             <span className="inspect-value">
               {activelyEngaged ? (
                 <>
@@ -674,7 +687,7 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
       )}
       {charge && (
         <div className="inspect-row">
-          <span className="inspect-label">FTL Charge</span>
+          <span className="inspect-label"><Bi en="FTL Charge" /></span>
           <span className="inspect-value ship-panel-combat">
             {charge.kind === 'hyperdrive' ? 'Hyperdrive' : 'Warp'} spooling — {chargeSecondsLeft.toFixed(1)}s (weapons offline)
           </span>
@@ -683,14 +696,14 @@ function SingleShipPanel({ onGoTo, goToPending, initialOffset, anchor }: ShipPan
       <div className="inspect-divider" />
       {displayDelayDays > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Signal Delay</span>
+          <span className="inspect-label"><Bi en="Signal Delay" /></span>
           <span className="inspect-value ship-panel-comms-delay" title="FTL comms haven't caught up — status below is from that long ago, not live.">
             {formatCommsDelay(displayDelayDays)}
           </span>
         </div>
       )}
       <div className="inspect-row">
-        <span className="inspect-label">Current Action</span>
+        <span className="inspect-label"><Bi en="Current Action" /></span>
       </div>
       <div className="ship-panel-status">{statusText}</div>
       {owned && ((ship.orderQueue?.length ?? 0) > 0 || (ship.pendingQueueAdds?.length ?? 0) > 0) && (

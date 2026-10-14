@@ -1,0 +1,421 @@
+/* The NERV theme (Neon Genesis Evangelion operations screens): black panels, MAGI orange
+   frames and text, terminal green for whatever is active or selected, red for alerts. A pure
+   reskin of the Default theme: every rule here is under html[data-theme='nerv'], so Default is
+   untouched. Most of the look comes from redefining the theme tokens (index.css :root); the rest
+   is dressing: square corners, condensed type, honeycomb and crosshair textures, hazard stripes.
+   Relation colours (own / allied / neutral / hostile) and nation colours are NOT themed. */
+@import './nervFonts.css';
+
+html[data-theme='nerv'] {
+  --accent-rgb: 255, 153, 0;
+  --accent-soft-rgb: 255, 184, 77;
+  --ink-rgb: 255, 196, 120;
+  --panel-rgb: 6, 3, 0;
+  --panel-deep-rgb: 3, 2, 0;
+  --panel-raised-rgb: 14, 7, 0;
+  --panel-hover-rgb: 34, 17, 0;
+  --text-bright-rgb: 255, 226, 186;
+  --ok-rgb: 57, 255, 20;
+  --warn-rgb: 255, 176, 0;
+  --danger-rgb: 255, 43, 29;
+  --caution-rgb: 255, 210, 0;
+  --accent: #ff9900;
+  --accent-soft: #ffb84d;
+  --text: #e8d9c4;
+  --text-bright: #ffe2ba;
+  --text-cool: #e3ddd4;
+  --text-toast: #ffe9cc;
+  --strong: #ffd9a8;
+  --danger: #ff2b1d;
+  --warn: #ffb000;
+  --caution: #ffd200;
+  --ok: #39ff14;
+  --page-bg: #000;
+  --nerv-green: #39ff14;
+  --nerv-red: #ff2b1d;
+  --nerv-cyan: #00f6ff;
+  --font-ui: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-display: 'Oswald', 'Arial Narrow', sans-serif;
+  --font-mono: 'Fira Code', 'Courier New', monospace;
+  --font-native: 'Noto Sans JP', sans-serif;
+  --font-native-display: 'Noto Serif JP', serif;
+  --nerv-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='17.32' height='30'%3E%3Cpath d='M8.66 0L17.32 5V15L8.66 20L0 15V5Z M8.66 20V30' fill='none' stroke='%23ff9900' stroke-opacity='0.07' stroke-width='0.7'/%3E%3C/svg%3E");
+  --nerv-hazard: repeating-linear-gradient(-45deg, #000 0 8px, var(--nerv-red) 8px 16px);
+}
+html[data-theme='nerv'][data-script='zh-Hant'] {
+  --font-native: 'Noto Sans TC', sans-serif;
+  --font-native-display: 'Noto Serif TC', serif;
+}
+html[data-theme='nerv'][data-script='zh-Hans'] {
+  --font-native: 'Noto Sans SC', sans-serif;
+  --font-native-display: 'Noto Serif SC', serif;
+}
+
+/* --- Type ---------------------------------------------------------------------------- */
+html[data-theme='nerv'] body {
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
+}
+html[data-theme='nerv'] :is(.hud-title, .draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-title, .main-menu-subtitle, .confirm-title, .econ-subtitle, .outliner-section-title, .action-dock-header, .nav-custom-title) {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  text-shadow: none;
+}
+html[data-theme='nerv'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .situations-type-label) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+html[data-theme='nerv'] :is(.fiscal-ind-val, .resource-value, .resource-delta, .situations-count, .situation-badge-count, .time-clock, .inspect-value) {
+  font-family: var(--font-mono);
+}
+
+/* --- Square, outlined chrome ------------------------------------------------------- */
+html[data-theme='nerv'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .outliner-filter-pill, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn) {
+  border-radius: 0 !important;
+}
+html[data-theme='nerv'] .hud-bar {
+  background: linear-gradient(rgba(26, 12, 0, 0.92), rgba(0, 0, 0, 0.92));
+}
+html[data-theme='nerv'] .hud-top {
+  border-bottom: 1px solid var(--accent);
+}
+html[data-theme='nerv'] .hud-bottom {
+  border-top: 1px solid var(--accent);
+}
+html[data-theme='nerv'] :is(.nav-sidebar, .outliner) {
+  background: rgba(3, 2, 0, 0.94) var(--nerv-hex);
+  border-color: var(--accent);
+}
+
+/* Windows: a thin double frame, a solid orange title bar, honeycomb behind the content. */
+html[data-theme='nerv'] .draggable-window {
+  border: 1px solid var(--accent);
+  outline: 1px solid rgba(var(--accent-rgb), 0.35);
+  outline-offset: 3px;
+  background: rgba(0, 0, 0, 0.94) var(--nerv-hex);
+  box-shadow: 0 0 0 1px #000, 0 10px 30px rgba(0, 0, 0, 0.7);
+}
+html[data-theme='nerv'] .draggable-window-titlebar {
+  background: var(--accent);
+  color: #000;
+  border-bottom: none;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+html[data-theme='nerv'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: #000;
+}
+
+/* Buttons and tabs: outlined orange tiles; active = solid terminal green with black text;
+   disabled = dim red with a slash. */
+html[data-theme='nerv'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
+  color: var(--accent);
+}
+html[data-theme='nerv'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--strong);
+}
+html[data-theme='nerv'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: var(--nerv-green);
+  border-color: var(--nerv-green);
+  color: #000;
+  box-shadow: none;
+  text-shadow: none;
+}
+html[data-theme='nerv'] button:disabled:not(.situations-icon) {
+  color: rgba(var(--danger-rgb), 0.55);
+  border-color: rgba(var(--danger-rgb), 0.35);
+  background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(var(--danger-rgb), 0.08) 6px 8px);
+}
+
+/* Outliner/list selection reads as MAGI-green. */
+html[data-theme='nerv'] .outliner-entry.selected .outliner-entry-name {
+  color: var(--nerv-green);
+}
+
+/* --- HUD ------------------------------------------------------------------------------ */
+html[data-theme='nerv'] .hud-title {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+/* The date as a red segmented readout with an INTERNAL tag (the show's internal clock). */
+html[data-theme='nerv'] .time-date {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--nerv-red);
+  text-shadow: 0 0 8px rgba(var(--danger-rgb), 0.55);
+  letter-spacing: 0.04em;
+}
+html[data-theme='nerv'] .time-controls::before {
+  content: 'INTERNAL';
+  font: 600 9px/1 var(--font-display);
+  letter-spacing: 0.12em;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 3px 4px;
+  margin-right: 8px;
+}
+html[data-theme='nerv'] .time-mode-btn {
+  font-family: var(--font-display);
+  border-radius: 0;
+}
+
+/* --- Alerts ----------------------------------------------------------------------------- */
+html[data-theme='nerv'] .dip-toast {
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+/* A danger toast is a red plate between hazard bands. */
+html[data-theme='nerv'] .dip-toast.sev-danger {
+  background: var(--nerv-red);
+  color: #000;
+  border: none;
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 14px 12px;
+  position: relative;
+}
+html[data-theme='nerv'] .dip-toast.sev-danger::before,
+html[data-theme='nerv'] .dip-toast.sev-danger::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7px;
+  background: var(--nerv-hazard);
+}
+html[data-theme='nerv'] .dip-toast.sev-danger::before {
+  top: 0;
+}
+html[data-theme='nerv'] .dip-toast.sev-danger::after {
+  bottom: 0;
+}
+html[data-theme='nerv'] .dip-toast.sev-warning {
+  border-color: var(--warn);
+  border-left-color: var(--warn);
+}
+
+html[data-theme='nerv'] .confirm-box {
+  background: rgba(0, 0, 0, 0.96) var(--nerv-hex);
+  border: 1px solid var(--accent);
+  outline: 1px solid rgba(var(--accent-rgb), 0.35);
+  outline-offset: 3px;
+}
+html[data-theme='nerv'] .confirm-title {
+  background: var(--accent);
+  color: #000;
+  margin: -16px -18px 12px;
+  padding: 6px 18px;
+}
+
+/* Situations: status boards; the top-bar badge as a segmented counter. */
+html[data-theme='nerv'] .situations-type {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='nerv'] .sev-danger {
+  --sev-color: var(--nerv-red);
+}
+html[data-theme='nerv'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='nerv'] .sev-info {
+  --sev-color: var(--accent);
+}
+html[data-theme='nerv'] .situation-badge {
+  border-radius: 0;
+  background: #000;
+  font-family: var(--font-mono);
+}
+html[data-theme='nerv'] .situation-badge.sev-danger {
+  background: var(--nerv-red);
+  color: #000;
+}
+html[data-theme='nerv'] .situation-badge.sev-danger .situation-badge-icon {
+  background: #000;
+  color: var(--nerv-red);
+}
+html[data-theme='nerv'] .situation-badge-icon {
+  border-radius: 0;
+}
+
+/* --- Native-script labels (components/Bi.tsx) ---------------------------------------------- */
+.native {
+  display: none;
+}
+html[data-theme='nerv'] .native {
+  display: inline;
+  margin-left: 0.4em;
+  font-family: var(--font-native);
+  font-weight: 900;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  opacity: 0.9;
+}
+html[data-theme='nerv'] :is(.draggable-window-titlebar, .hud-title, .nav-nation-name, .main-menu-title, .confirm-title, .dip-toast.sev-danger) .native {
+  font-family: var(--font-native-display);
+}
+
+/* --- Motion -------------------------------------------------------------------------------- */
+/* Windows snap on with a short flicker; new alerts flash; a faint CRT scanline over the HUD. */
+@keyframes nerv-flicker {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  45% { opacity: 0.3; }
+  60%, 100% { opacity: 1; }
+}
+@keyframes nerv-flash {
+  0%, 100% { filter: none; }
+  50% { filter: brightness(1.8); }
+}
+html[data-theme='nerv'][data-motion='full'] :is(.draggable-window, .confirm-box) {
+  animation: nerv-flicker 0.16s steps(4) 1;
+}
+html[data-theme='nerv'][data-motion='full'] .dip-toast.sev-danger {
+  animation: nerv-flash 0.22s steps(2) 3;
+}
+html[data-theme='nerv'][data-motion='full'] #app-root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9000;
+  background: repeating-linear-gradient(transparent 0 2px, rgba(0, 0, 0, 0.14) 2px 3px);
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme='nerv'] *,
+  html[data-theme='nerv'] #app-root::after {
+    animation: none !important;
+  }
+  html[data-theme='nerv'] #app-root::after {
+    display: none;
+  }
+}
+
+/* Labels the game builds from data, found by components/NativeAnnotator.tsx. */
+html[data-theme='nerv'] [data-native]::after {
+  content: attr(data-native);
+  margin-left: 0.4em;
+  font-family: var(--font-native);
+  font-weight: 900;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  opacity: 0.9;
+}
+
+/* Alt-click a label to type its native text (components/NativeAnnotator.tsx). */
+html[data-theme='nerv'] .native-label-editor {
+  position: fixed;
+  z-index: 99999;
+  width: 240px;
+  background: #000;
+  border: 1px solid var(--accent);
+  outline: 1px solid rgba(var(--accent-rgb), 0.35);
+  outline-offset: 2px;
+  padding: 6px 8px;
+  font-family: var(--font-ui);
+  color: var(--text);
+}
+html[data-theme='nerv'] .native-label-editor-title {
+  font: 600 12px var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+html[data-theme='nerv'] .native-label-editor input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0a0500;
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
+  color: var(--text-bright);
+  font: 900 15px var(--font-native);
+  padding: 3px 6px;
+}
+html[data-theme='nerv'] .native-label-editor-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(var(--accent-rgb), 0.7);
+}
+html[data-theme='nerv'] .native-label-editor-hint button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  font: inherit;
+  cursor: var(--cursor-pointer);
+}
+
+/* Native labels inside SVG charts and the tech tree (components/Bi.tsx useNativeText). */
+html[data-theme='nerv'] :is(.tchart-native, .tech-tree-native) {
+  font-family: var(--font-native);
+  font-weight: 900;
+}
+html[data-theme='nerv'] .tech-tree-native {
+  font-size: 9px;
+  fill: var(--accent);
+  opacity: 0.85;
+}
+
+/* The date the East Asian way, set vertically beside the English date (components/TimeControls.tsx). */
+.time-date-native {
+  display: none;
+}
+html[data-theme='nerv'] .time-date-native {
+  display: inline-block;
+  writing-mode: vertical-rl;
+  /* Digits stand upright in the column like the kanji, not turned on their side. */
+  text-orientation: upright;
+  font: 900 8px/1.1 var(--font-native);
+  letter-spacing: -0.04em;
+  color: var(--nerv-red);
+  text-shadow: 0 0 6px rgba(var(--danger-rgb), 0.5);
+  letter-spacing: 0.02em;
+  max-height: 50px;
+  margin: 0 4px 0 -2px;
+  border-left: 1px solid rgba(var(--accent-rgb), 0.5);
+  padding-left: 3px;
+}
+
+/* Translated descriptions under the English (components/NativeAnnotator.tsx, TooltipLayer). */
+html[data-theme='nerv'] [data-native-desc]::after {
+  content: attr(data-native-desc);
+  display: block;
+  margin-top: 0.35em;
+  font-family: var(--font-native);
+  font-weight: 400;
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+.game-tooltip-native {
+  display: none;
+}
+html[data-theme='nerv'] .game-tooltip-native {
+  display: block;
+  white-space: pre-line;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(var(--accent-rgb), 0.3);
+  font-family: var(--font-native);
+  font-weight: 400;
+  opacity: 0.85;
+}

@@ -1,3 +1,5 @@
+import { findStar } from '../data/starData'
+import { notifyOwner } from '../scene/notify'
 import { useEffect } from 'react'
 import { loseShipToJump } from '../scene/jumpLoss'
 import { useGameTimeStore } from '../state/gameTimeStore'
@@ -66,6 +68,12 @@ export function advanceSurveyJob(ship: ShipInstance, simDays: number): void {
   switch (step.kind) {
     case 'done':
       setSurveyJob(ship.id, null)
+      // A survey ordered by hand reports back; automated survey runs on without a word.
+      if (!(ship.automations ?? []).includes('survey')) {
+        const at = ship.location.kind === 'orbiting' ? ship.location.bodyName : null
+        const starId = at ? bodyStarId(at) : undefined
+        notifyOwner(ship.ownerId, 'survey-complete', `${ship.name} finished its survey${starId ? ` of ${findStar(starId)?.name ?? starId}` : ''}`, starId ? { starId } : undefined, simDays)
+      }
       return
     case 'wait':
       if (changed(step.job)) setSurveyJob(ship.id, step.job)

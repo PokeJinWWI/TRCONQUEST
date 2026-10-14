@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { MigrationLawsSection } from './MigrationPanels'
 import { ECONOMIC_SYSTEMS, economicSystemDef, FOREIGN_INVESTMENT_POLICIES, foreignInvestmentPolicyDef } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
@@ -24,7 +25,7 @@ export function LawsPanel() {
 
   return (
     <div className="econ-panel">
-      <div className="econ-subtitle">Economic System</div>
+      <div className="econ-subtitle"><Bi en="Economic System" /></div>
       <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
         Current law: <b style={{ color: '#cdeeff' }}>{current.name}</b>. Enacting a new economic system changes how the
         state and private owners share control of industry.
@@ -39,7 +40,7 @@ export function LawsPanel() {
               <div className="laws-option-head">
                 <span className="laws-option-name">{def.name}</span>
                 {active ? (
-                  <span className="laws-option-current">In force</span>
+                  <span className="laws-option-current"><Bi en="In force" /></span>
                 ) : (
                   <button
                     type="button"
@@ -88,7 +89,7 @@ export function LawsPanel() {
               <div className="laws-option-head">
                 <span className="laws-option-name">{def.name}</span>
                 {active ? (
-                  <span className="laws-option-current">In force</span>
+                  <span className="laws-option-current"><Bi en="In force" /></span>
                 ) : (
                   <button
                     type="button"
@@ -118,7 +119,7 @@ export function LawsPanel() {
       {country.foreignInvestmentPolicy === 'approval' && (
         <>
           <label className="econ-control-row" style={{ cursor: 'var(--cursor-pointer)' }} title="When on, incoming foreign investments are approved automatically instead of waiting in the queue below.">
-            <span className="inspect-label">Auto-approve foreign investments</span>
+            <span className="inspect-label"><Bi en="Auto-approve foreign investments" /></span>
             <input type="checkbox" checked={country.foreignInvestmentAutoApprove} onChange={(e) => setForeignInvestmentAutoApprove(country.id, e.target.checked)} />
           </label>
           {country.pendingForeignInvestment.length > 0 && (
@@ -131,7 +132,7 @@ export function LawsPanel() {
                     <span className="econ-build-name">
                       {o.investorName} → {o.shares} shares of {target?.name ?? o.targetCorpId} <span style={{ opacity: 0.6 }}>({o.investorKind === 'state' ? 'foreign government' : 'foreign company'})</span>
                     </span>
-                    <button type="button" className="laws-enact-btn" onClick={() => approveForeignInvestment(country.id, o.id)}>Approve</button>
+                    <button type="button" className="laws-enact-btn" onClick={() => approveForeignInvestment(country.id, o.id)}><Bi en="Approve" /></button>
                     <button type="button" className="econ-build-cancel" onClick={() => rejectForeignInvestment(country.id, o.id)} aria-label="Reject">×</button>
                   </div>
                 )

@@ -5,7 +5,7 @@ import { arc, nodePoint, surfaceMesh } from './surfaceMesh'
 import { lonLatOf } from './mapProjection'
 import { regionAt } from './bodyTopography'
 import { nativeOfName } from '../data/nativeNames'
-import { keyNodeId, nativeFor, usePlaceNameStore } from '../state/placeNameStore'
+import { keyNodeId, usePlaceNameStore } from '../state/placeNameStore'
 import type { BodySurface, KeySlot } from './planetTerrain'
 
 // Names and roles for a world's key nodes. A world's cities are named from its
@@ -29,7 +29,8 @@ export const KEY_HOLD_BONUS = 'Units standing on a key node their nation holds d
 
 export interface KeyName {
   name: string | null // the place's own name, when it has one
-  native?: string // in its own script (Mars's kanji)
+  native?: string // its built-in subscript in traditional characters (Mars's kanji); the player's own per script is placeNameStore.natives[nativeKey]
+  nativeKey?: string // the key its subscript is stored under (components/NativeName.tsx)
   label: string // what to show: "Akakyō (capital)", "Kythera Spaceport", "Rakuyō", or the kind
 }
 
@@ -153,14 +154,12 @@ function compass(from: number, to: number): string {
 
 export function keyNameOf(surface: BodySurface, slot: Pick<KeySlot, 'node' | 'kind'>): KeyName {
   const base = keyNamesOf(surface).get(slot.node) ?? { name: null, label: KEY_KIND_LABEL[slot.kind] }
-  // The player's own name and subscript win.
+  // The player's own name wins; its subscript is looked up per script where it is shown.
   const id = keyNodeId(surface.bodyName, slot.node)
-  const { names, natives } = usePlaceNameStore.getState()
-  const own = names[id]
-  const native = nativeFor(id, base.native, natives)
-  if (!own && native === base.native) return base
+  const own = usePlaceNameStore.getState().names[id]
+  if (!own) return { ...base, nativeKey: id }
   const suffix = base.name && base.label.startsWith(base.name) ? base.label.slice(base.name.length) : ''
-  return { ...base, name: own ?? base.name, native, label: own ? `${own}${suffix}` : base.label }
+  return { ...base, name: own, nativeKey: id, label: `${own}${suffix}` }
 }
 
 // The settlement (not a fortress) nearest a node, within `maxCells` map cells.

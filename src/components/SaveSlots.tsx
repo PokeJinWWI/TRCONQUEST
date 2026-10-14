@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCountry } from '../data/countryData'
 import { applySave, createSave } from '../state/saveGame'
@@ -64,18 +65,18 @@ export function SaveSlots({ canSave, onLoaded }: { canSave: boolean; onLoaded: (
               {slot.label || slot.id} <small>{new Date(slot.savedAt).toLocaleString()} · {(slot.bytes / 1024).toFixed(0)} KB</small>
             </span>
             <button type="button" className="confirm-btn" disabled={busy} onClick={() => run('Loaded.', async () => load(await readSlot(slot.id)))}>
-              Load
+              <Bi en="Load" />
             </button>
             {canSave && (
               <button type="button" className="confirm-btn" disabled={busy} title="Overwrite this slot with the game now" onClick={() => save(slot.id)}>
-                Overwrite
+                <Bi en="Overwrite" />
               </button>
             )}
             <button type="button" className="confirm-btn" disabled={busy} onClick={() => run('Exported.', async () => downloadSave(await readSlot(slot.id), slot.label || slot.id))}>
-              Export
+              <Bi en="Export" />
             </button>
             <button type="button" className="confirm-btn confirm-btn-cancel" disabled={busy} onClick={() => run('Deleted.', () => deleteSlot(slot.id))}>
-              Delete
+              <Bi en="Delete" />
             </button>
           </li>
         ))}
@@ -83,7 +84,7 @@ export function SaveSlots({ canSave, onLoaded }: { canSave: boolean; onLoaded: (
       <div className="save-slot-files">
         {canSave && (
           <button type="button" className="confirm-btn" disabled={busy} onClick={() => run('Exported.', async () => downloadSave(await createSave(describeGame()), describeGame()))}>
-            Export this game to a file
+            <Bi en="Export this game to a file" />
           </button>
         )}
         <button type="button" className="confirm-btn" disabled={busy} onClick={() => fileInput.current?.click()}>

@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { wasDrag } from './dragGuard'
 import { GalaxyMarkers } from './GalaxyMarkers'
 import { useStarbaseActivityKey } from '../hooks/useStarbaseActivity'
@@ -278,7 +279,7 @@ export function GalacticViewScene() {
       {panels.cluster && selected && (
         <DraggableWindow title={selected.name} memoryKey="galaxy-selection" onClose={() => selectInView(null)}>
           <div className="inspect-row">
-            <span className="inspect-label">Distance from core</span>
+            <span className="inspect-label"><Bi en="Distance from core" /></span>
             <span className="inspect-value">{clusterCoreDistanceKly(selected.id).toFixed(1)} kly</span>
           </div>
           <ClusterDistanceRows clusterId={selected.id} homeClusterId={homeClusterId} />
@@ -289,11 +290,11 @@ export function GalacticViewScene() {
               <div className="inspect-status ok">Entering neighborhood…</div>
             ) : (
               <button type="button" className="detail-view-btn" onClick={handleEnterNeighborhood}>
-                Enter Neighborhood
+                <Bi en="Enter Neighborhood" />
               </button>
             )
           ) : (
-            <div className="inspect-status">Not yet charted</div>
+            <div className="inspect-status"><Bi en="Not yet charted" /></div>
           )}
         </DraggableWindow>
       )}

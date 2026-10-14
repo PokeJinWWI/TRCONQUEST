@@ -1,3 +1,4 @@
+import { useNativeText } from './Bi'
 import { usePlayerMaterialMask } from '../hooks/usePlayerMaterialMask'
 import { useMemo, useState } from 'react'
 import type { ResourceId } from '../data/resourceData'
@@ -227,6 +228,8 @@ export function TechTreeGraph({
   onResearch: (nodeId: string) => void
   onClose: () => void
 }) {
+  // NERV: native labels on lanes and nodes (the SVG cannot take <Bi>).
+  const nativeText = useNativeText()
   const [tree, setTree] = useState<TreeChoice>(initialTree)
   // Stacked like a maximized window: the shared counter, raised when clicked.
   const [zIndex, setZIndex] = useState(bringToFrontZIndex)
@@ -288,6 +291,7 @@ export function TechTreeGraph({
             {layout.lanes.map((lane, i) => (
               <text key={i} className="tech-tree-lane-label" x={PADDING} y={Math.max(10, lane.y - 5)}>
                 {mask(lane.name)}
+                {mask(lane.name) === lane.name && nativeText(lane.name) && <tspan className="tech-tree-native"> {nativeText(lane.name)}</tspan>}
               </text>
             ))}
             {layout.nodes.map(({ node, x, y }) => {
@@ -333,6 +337,11 @@ export function TechTreeGraph({
                     {mask(node.name).length > 22 ? `${mask(node.name).slice(0, 21)}…` : mask(node.name)}
                     {node.locked && !isResearched ? ' 🔒' : ''}
                   </text>
+                  {mask(node.name) === node.name && nativeText(node.name) && (
+                    <text x={NODE_WIDTH - 6} y={12} textAnchor="end" className="tech-tree-native">
+                      {nativeText(node.name)}
+                    </text>
+                  )}
                   <text x={8} y={33} className="tech-tree-node-status">
                     {status.length > 26 ? `${status.slice(0, 25)}…` : status}
                   </text>

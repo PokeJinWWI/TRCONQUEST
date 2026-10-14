@@ -1,0 +1,314 @@
+[
+ {
+  "en": "Newtonian trajectory prediction — the ability to accurately calculate stellar body motion, orbital mechanics, and the effect of reaction-drive thrust against them.",
+  "ja": "ニュートン力学による軌道予測。天体の運動、軌道力学、そして反動推進がそれらに及ぼす効果を正確に計算する能力。",
+  "zhHant": "牛頓軌道預測——精確計算天體運動、軌道力學以及反作用推進對其影響的能力。",
+  "zhHans": "牛顿轨道预测——精确计算天体运动、轨道力学以及反作用推进对其影响的能力。"
+ },
+ {
+  "en": "Precise modeling of a body's own gravity well, refined enough to plan a ship's trajectory around it rather than just predicting the body's motion.",
+  "ja": "天体自身の重力井戸を精密にモデル化し、天体の運動を予測するだけでなく、その周囲を回る艦の軌道まで計画できる。",
+  "zhHant": "精密模擬天體自身的重力井，足以規劃艦艇繞行的軌跡，而不只是預測天體運動。",
+  "zhHans": "精密模拟天体自身的重力井，足以规划舰艇绕行的轨迹，而不只是预测天体运动。"
+ },
+ {
+  "en": "Continuous stationkeeping thrust, precisely countering a body's gravity well. A ship can hold any position it chooses instead of settling into a natural orbit — at the real cost, in reaction mass and power, of fighting gravity every second it does.",
+  "ja": "天体の重力井戸を正確に打ち消す持続的な位置保持推力。艦は自然な軌道に落ち着く代わりに任意の位置を保持できるが、その間ずっと重力と戦うため、推進剤と電力という現実の代償を払う。",
+  "zhHant": "持續的定位推力，精確抵銷天體的重力井。艦艇可停留在任意選定位置，而非落入自然軌道——代價是每一秒都在對抗重力，消耗推進劑與電力。",
+  "zhHans": "持续的定位推力，精确抵消天体的重力井。舰艇可停留在任意选定位置，而非落入自然轨道——代价是每一秒都在对抗重力，消耗推进剂与电力。"
+ },
+ {
+  "en": "Building and holding station at real orbital scale, unmanned and unattended — the basis for a Starbase: a permanent claim on a system that needs no world to stand on.",
+  "ja": "実際の軌道規模で、無人のまま構造物を建設し位置を保つ技術。宇宙基地の基礎であり、立つべき世界を必要としない、星系への恒久的な権利主張となる。",
+  "zhHant": "在真實軌道尺度上無人建造並維持站位——星際基地的基礎：無需立足之星即可對星系提出永久主張。",
+  "zhHans": "在真实轨道尺度上无人建造并维持站位——星际基地的基础：无需立足之星即可对星系提出永久主张。"
+ },
+ {
+  "en": "A tether from the ground to orbit — the space elevator. Fuel-free surface↔orbit lift when paired with an orbital-ring tether, and the backbone of a world cheap to supply from space.",
+  "ja": "地表から軌道へ伸びる索、すなわち軌道エレベーター。軌道環の索と組めば燃料なしで地表と軌道を往復でき、宇宙からの補給が安価な世界の基盤となる。",
+  "zhHant": "從地面延伸至軌道的纜繩——太空電梯。與軌道環纜繩結合，地表與軌道之間的運輸無需燃料，是以低成本從太空補給一個世界的骨幹。",
+  "zhHans": "从地面延伸至轨道的缆绳——太空电梯。与轨道环缆绳结合，地表与轨道之间的运输无需燃料，是以低成本从太空补给一个世界的骨干。"
+ },
+ {
+  "en": "Compact fusion plants and field generators for orbital bases: unlocks the Fusion Reactor and Shield Generator modules.",
+  "ja": "軌道基地用の小型核融合炉と力場発生器。核融合炉と遮蔽発生器の区画を解禁する。",
+  "zhHant": "供軌道基地使用的小型核融合發電廠與力場產生器：解鎖核融合反應爐與護盾產生器模組。",
+  "zhHans": "供轨道基地使用的小型核聚变电厂与力场发生器：解锁核聚变反应堆与护盾发生器模组。"
+ },
+ {
+  "en": "Long-range missile batteries for orbital bases: unlocks the Missile Battery module.",
+  "ja": "軌道基地用の長距離誘導弾砲台。誘導弾陣地の区画を解禁する。",
+  "zhHant": "供軌道基地使用的長程飛彈砲台：解鎖飛彈陣地模組。",
+  "zhHans": "供轨道基地使用的远程导弹炮台：解锁导弹阵地模组。"
+ },
+ {
+  "en": "Ring-scale orbital structures: unlocks the Orbital Ring tier (twelve module slots) and the Habitat Ring module. A ring circles a world over its equator.",
+  "ja": "環規模の軌道構造物。軌道環段階(区画枠12)と居住環区画を解禁する。環は赤道上空で世界を一周する。",
+  "zhHant": "環形規模的軌道結構：解鎖軌道環等級（十二個模組槽）與居住環模組。環在赤道上空環繞一個世界。",
+  "zhHans": "环形规模的轨道结构：解锁轨道环等级（十二个模组槽）与居住环模组。环在赤道上空环绕一个世界。"
+ },
+ {
+  "en": "Compressing gas-giant hydrogen into metastable metallic hydrogen — a vast, clean source of rocket fuel skimmed straight from the clouds of a gas giant. Unlocks the Metallic Hydrogen Plant.",
+  "ja": "巨大ガス惑星の水素を圧縮し、準安定な金属水素に変える。ガス惑星の雲から直接すくい取れる、膨大でクリーンなロケット燃料源。金属水素工場を解禁する。",
+  "zhHant": "將氣態巨行星的氫壓縮為亞穩態金屬氫——直接從氣態巨行星雲層汲取的龐大潔淨火箭燃料來源。解鎖金屬氫廠。",
+  "zhHans": "将气态巨行星的氢压缩为亚稳态金属氢——直接从气态巨行星云层汲取的庞大洁净火箭燃料来源。解锁金属氢厂。"
+ },
+ {
+  "en": "Medium hulls with the structure and power for long-range missile racks. Unlocks building the Frigate.",
+  "ja": "長距離誘導弾架を載せる構造と電力を備えた中型船体。フリゲートの建造を解禁する。",
+  "zhHant": "具備長程飛彈架所需結構與電力的中型艦體。解鎖巡防艦建造。",
+  "zhHans": "具备远程导弹架所需结构与电力的中型舰体。解锁护卫舰建造。"
+ },
+ {
+  "en": "Fast escort hulls with room for a dense point-defense fit. Unlocks building the Destroyer.",
+  "ja": "近接防御を密に積める高速護衛船体。駆逐艦の建造を解禁する。",
+  "zhHant": "可密集裝載點防禦的高速護航艦體。解鎖驅逐艦建造。",
+  "zhHans": "可密集装载点防御的高速护航舰体。解锁驱逐舰建造。"
+ },
+ {
+  "en": "Large general-purpose line hulls carrying every direct-fire type. Unlocks building the Cruiser.",
+  "ja": "あらゆる直射兵器を搭載する大型汎用戦列船体。巡洋艦の建造を解禁する。",
+  "zhHant": "搭載各類直射武器的大型通用戰列艦體。解鎖巡洋艦建造。",
+  "zhHans": "搭载各类直射武器的大型通用战列舰体。解锁巡洋舰建造。"
+ },
+ {
+  "en": "Capital-scale hulls with torpedo bays and the armour to survive a fleet action. Unlocks building the Battleship.",
+  "ja": "魚雷発射管と艦隊戦に耐える装甲を持つ主力艦級船体。戦艦の建造を解禁する。",
+  "zhHant": "具備魚雷艙與足以撐過艦隊決戰之裝甲的主力艦級艦體。解鎖戰艦建造。",
+  "zhHans": "具备鱼雷舱与足以撑过舰队决战之装甲的主力舰级舰体。解锁战舰建造。"
+ },
+ {
+  "en": "A navigator that plots every hyperspace jump itself, without a crew to get it wrong. Hyperspace Scouts can be refitted into Turing Scouts: jumps that never fail and a drive that recycles in a week.",
+  "ja": "乗員の失敗なしに、すべての超空間跳躍を自ら計算する航法装置。超空間偵察艇をチューリング偵察艇へ改装でき、跳躍は決して失敗せず、機関は一週間で再充填される。",
+  "zhHant": "自行規劃每次超空間躍遷、不需船員也不會出錯的導航器。超空間偵察艇可改裝為圖靈偵察艇：躍遷永不失敗，引擎一週即可再次使用。",
+  "zhHans": "自行规划每次超空间跃迁、不需船员也不会出错的导航器。超空间侦察艇可改装为图灵侦察艇：跃迁永不失败，引擎一周即可再次使用。"
+ },
+ {
+  "en": "The basic laws of heat and energy transfer.",
+  "ja": "熱とエネルギー移動の基本法則。",
+  "zhHant": "熱與能量傳遞的基本定律。",
+  "zhHans": "热与能量传递的基本定律。"
+ },
+ {
+  "en": "Efficient heat dissipation and recapture. Exotic matter's output is effectively infinite, but only as much of it as doesn't leak away as waste heat is actually usable.",
+  "ja": "効率的な放熱と熱回収。異種物質の出力は事実上無限だが、実際に使えるのは廃熱として漏れ出さなかった分だけである。",
+  "zhHant": "高效散熱與熱回收。奇異物質的輸出實際上無窮無盡，但真正可用的只有未以廢熱散失的那一部分。",
+  "zhHans": "高效散热与热回收。奇异物质的输出实际上无穷无尽，但真正可用的只有未以废热散失的那一部分。"
+ },
+ {
+  "en": "Actively suppressing and redirecting a hull's own heat signature.",
+  "ja": "船体自身の熱紋を能動的に抑え、逸らす技術。",
+  "zhHant": "主動抑制並轉移艦體自身的熱訊號。",
+  "zhHans": "主动抑制并转移舰体自身的热信号。"
+ },
+ {
+  "en": "Controlled, gradual extraction from an exotic matter deposit, rather than an uncontrolled release.",
+  "ja": "異種物質鉱床から、制御されない放出ではなく、制御された段階的な採取を行う技術。",
+  "zhHant": "從奇異物質礦藏中受控、漸進地開採，而非失控釋放。",
+  "zhHans": "从奇异物质矿藏中受控、渐进地开采，而非失控释放。"
+ },
+ {
+  "en": "The unified theory of electricity, magnetism, and light.",
+  "ja": "電気、磁気、光の統一理論。",
+  "zhHant": "電、磁與光的統一理論。",
+  "zhHans": "电、磁与光的统一理论。"
+ },
+ {
+  "en": "Coherent, focused beams of energy — the physics behind every laser and beam weapon in service.",
+  "ja": "収束したコヒーレントなエネルギー光線。あらゆるレーザーとビーム兵器の背後にある物理。",
+  "zhHant": "相干、聚焦的能量光束——所有現役雷射與光束武器背後的物理。",
+  "zhHans": "相干、聚焦的能量光束——所有现役激光与光束武器背后的物理。"
+ },
+ {
+  "en": "Deflector fields — a standing electromagnetic barrier that absorbs incoming energy before it reaches the hull.",
+  "ja": "偏向場。到達前に入射エネルギーを吸収する、常在の電磁障壁。",
+  "zhHant": "偏導力場——在能量抵達艦體前將其吸收的常駐電磁屏障。",
+  "zhHans": "偏导力场——在能量抵达舰体前将其吸收的常驻电磁屏障。"
+ },
+ {
+  "en": "Fast-tracking, short-range interception fire, purpose-built to shoot down incoming missiles and torpedoes.",
+  "ja": "飛来する誘導弾と魚雷を撃ち落とすために作られた、高速追尾の短距離迎撃射撃。",
+  "zhHant": "專為擊落來襲飛彈與魚雷而設計的高速追蹤短程攔截火力。",
+  "zhHans": "专为击落来袭导弹与鱼雷而设计的高速追踪短程拦截火力。"
+ },
+ {
+  "en": "Long-range electromagnetic detection, and the countermeasures built to blind it.",
+  "ja": "長距離電磁探知と、それを盲目にするための対抗手段。",
+  "zhHant": "長程電磁偵測，以及為使其失明而研發的反制手段。",
+  "zhHans": "远程电磁侦测，以及为使其失明而研发的反制手段。"
+ },
+ {
+  "en": "A reflective hull finish that scatters a portion of incoming laser fire — a direct, narrow counter to Directed Energy Weapons, and useful cover against passive optical detection besides.",
+  "ja": "入射するレーザーの一部を散乱させる反射性の船体塗装。指向性エネルギー兵器への直接的で限定的な対抗策であり、受動光学探知からの隠れ蓑にもなる。",
+  "zhHant": "能散射部分來襲雷射的反射性艦體塗層——對定向能武器直接而有限的反制，也有助於躲避被動光學偵測。",
+  "zhHans": "能散射部分来袭激光的反射性舰体涂层——对定向能武器直接而有限的反制，也有助于躲避被动光学侦测。"
+ },
+ {
+  "en": "Orbital collector arrays at a stellar scale — the electromagnetic and structural engineering behind a Dyson swarm.",
+  "ja": "恒星規模の軌道集光アレイ。ダイソン群の背後にある電磁・構造工学。",
+  "zhHant": "恆星尺度的軌道收集陣列——戴森群背後的電磁與結構工程。",
+  "zhHans": "恒星尺度的轨道收集阵列——戴森群背后的电磁与结构工程。"
+ },
+ {
+  "en": "The study of living systems — anatomy, genetics, and the chemistry that drives them.",
+  "ja": "生命系の研究。解剖学、遺伝学、そしてそれを動かす化学。",
+  "zhHant": "生命系統的研究——解剖學、遺傳學，以及驅動它們的化學。",
+  "zhHans": "生命系统的研究——解剖学、遗传学，以及驱动它们的化学。"
+ },
+ {
+  "en": "Directly editing genetic code — hardier colonists and crops engineered for conditions Earth life never evolved for.",
+  "ja": "遺伝暗号を直接編集する技術。地球の生命が適応したことのない環境に合わせて設計された、より頑健な入植者と作物。",
+  "zhHant": "直接編輯遺傳密碼——為地球生命從未演化過的環境而設計的更強韌殖民者與作物。",
+  "zhHans": "直接编辑遗传密码——为地球生命从未演化过的环境而设计的更强韧殖民者与作物。"
+ },
+ {
+  "en": "The biology of non-terrestrial life — how organisms that evolved elsewhere differ from Earth's own, and what that means for habitability and first contact.",
+  "ja": "地球外生命の生物学。他所で進化した生物が地球の生物とどう違い、それが居住性と最初の接触に何を意味するか。",
+  "zhHant": "非地球生命的生物學——在別處演化的生物與地球生物有何不同，以及這對宜居度與第一次接觸意味著什麼。",
+  "zhHans": "非地球生命的生物学——在别处演化的生物与地球生物有何不同，以及这对宜居度与第一次接触意味着什么。"
+ },
+ {
+  "en": "Special and general relativity — how mass, energy, and spacetime itself relate.",
+  "ja": "特殊・一般相対性理論。質量、エネルギー、そして時空そのものがどう関係するか。",
+  "zhHant": "狹義與廣義相對論——質量、能量與時空本身如何相互關聯。",
+  "zhHans": "狭义与广义相对论——质量、能量与时空本身如何相互关联。"
+ },
+ {
+  "en": "The theoretical basis for a warp drive: using exotic matter to warp space itself rather than moving through it.",
+  "ja": "歪曲航法の理論的基礎。空間の中を移動するのではなく、異種物質で空間そのものを歪める。",
+  "zhHant": "曲速引擎的理論基礎：利用奇異物質扭曲空間本身，而非在其中移動。",
+  "zhHans": "曲速引擎的理论基础：利用奇异物质扭曲空间本身，而非在其中移动。"
+ },
+ {
+  "en": "FTL signal relays, riding the same exotic-matter warp field a warp drive does — order and report transit times measured in days rather than years.",
+  "ja": "歪曲航法と同じ異種物質の歪曲場に乗る超光速通信中継。命令と報告の伝達時間は年ではなく日で測られる。",
+  "zhHant": "乘著與曲速引擎相同之奇異物質曲速場的超光速訊號中繼——命令與報告的傳遞時間以日而非年計。",
+  "zhHans": "乘着与曲速引擎相同之奇异物质曲速场的超光速信号中继——命令与报告的传递时间以日而非年计。"
+ },
+ {
+  "en": "The physics of the very small.",
+  "ja": "極微の世界の物理学。",
+  "zhHant": "極微世界的物理學。",
+  "zhHans": "极微世界的物理学。"
+ },
+ {
+  "en": "Computation exploiting superposition and entanglement — a real leap in processing efficiency.",
+  "ja": "重ね合わせともつれを利用する計算。処理効率の本物の飛躍。",
+  "zhHant": "利用疊加與糾纏的運算——處理效率的真正飛躍。",
+  "zhHans": "利用叠加与纠缠的运算——处理效率的真正飞跃。"
+ },
+ {
+  "en": "The structure of the atom and its nucleus.",
+  "ja": "原子とその原子核の構造。",
+  "zhHant": "原子及其原子核的結構。",
+  "zhHans": "原子及其原子核的结构。"
+ },
+ {
+  "en": "Energy release from nuclear reactions — a real efficiency gain over chemical or purely electromagnetic power.",
+  "ja": "核反応によるエネルギー放出。化学的・純電磁的な電力を上回る本物の効率向上。",
+  "zhHant": "核反應釋放的能量——相較化學或純電磁電力的實質效率提升。",
+  "zhHans": "核反应释放的能量——相较化学或纯电磁电力的实质效率提升。"
+ },
+ {
+  "en": "Steady, low-maintenance power from radioactive decay — ideal for anything that has to run unattended for a long time.",
+  "ja": "放射性崩壊による安定した低整備の電力。長期間無人で動き続けるべきものに最適。",
+  "zhHant": "來自放射性衰變的穩定、低維護電力——最適合必須長期無人運作的設備。",
+  "zhHans": "来自放射性衰变的稳定、低维护电力——最适合必须长期无人运作的设备。"
+ },
+ {
+  "en": "The physics of exotic matter itself — matter with a mass-energy conversion ratio far beyond anything normal matter can achieve.",
+  "ja": "異種物質そのものの物理学。通常物質では到底及ばない質量エネルギー変換比を持つ物質。",
+  "zhHant": "奇異物質本身的物理學——其質能轉換比遠超任何普通物質。",
+  "zhHans": "奇异物质本身的物理学——其质能转换比远超任何普通物质。"
+ },
+ {
+  "en": "The theoretical existence of dimensions beyond the familiar four.",
+  "ja": "見慣れた四次元を超える次元の理論的存在。",
+  "zhHant": "超越熟知四維之外的維度在理論上的存在。",
+  "zhHans": "超越熟知四维之外的维度在理论上的存在。"
+ },
+ {
+  "en": "The physics of hyperspace — a dimension outside the normal universe where time passes faster, reachable only by burning hyperium. Derived from first principles it is the work of centuries; a nation holding hyperium can instead study the real thing and skip most of it.",
+  "ja": "超空間の物理学。時間がより速く流れる通常宇宙の外の次元で、超空間鉱を燃やしてのみ到達できる。第一原理から導けば数世紀の仕事だが、超空間鉱を持つ国は実物を研究して大半を省略できる。",
+  "zhHant": "超空間的物理學——一個位於正常宇宙之外、時間流逝更快的維度，唯有燃燒超空間礦才能抵達。從第一原理推導需要數百年；持有超空間礦的國家則可研究實物，省去大半功夫。",
+  "zhHans": "超空间的物理学——一个位于正常宇宙之外、时间流逝更快的维度，唯有燃烧超空间矿才能抵达。从第一原理推导需要数百年；持有超空间矿的国家则可研究实物，省去大半功夫。"
+ },
+ {
+  "en": "Manufacturing hyperium from exotic matter, rather than relying on rare natural deposits: Hyperium Refineries burn exotic matter to make it. Needs a stock of hyperium to work from, which it does not use up.",
+  "ja": "希少な天然鉱床に頼らず、異種物質から超空間鉱を製造する。超空間鉱精製所が異種物質を燃やしてそれを作る。作業には超空間鉱の在庫が必要だが、それは消費されない。",
+  "zhHant": "以奇異物質製造超空間礦，而非依賴稀少的天然礦藏：超空間礦精煉廠燃燒奇異物質來生產。需要一批超空間礦作為基礎，但不會消耗它。",
+  "zhHans": "以奇异物质制造超空间矿，而非依赖稀少的天然矿藏：超空间矿精炼厂燃烧奇异物质来生产。需要一批超空间矿作为基础，但不会消耗它。"
+ },
+ {
+  "en": "Entangled hyperspace relays — a message departs and arrives in the same instant, anywhere. The end of the light-speed leash on command.",
+  "ja": "もつれた超空間中継。どこであれ、通信は出発と同時に到着する。指揮を縛る光速の鎖の終わり。",
+  "zhHant": "糾纏的超空間中繼——訊息在出發的同一瞬間抵達任何地方。指揮不再受光速束縛。",
+  "zhHans": "纠缠的超空间中继——信息在出发的同一瞬间抵达任何地方。指挥不再受光速束缚。"
+ },
+ {
+  "en": "Something beyond every known field above — not yet understood, and not yet reachable.",
+  "ja": "既知のあらゆる分野の彼方にある何か。まだ理解されておらず、まだ手が届かない。",
+  "zhHant": "超越上述所有已知領域的某種事物——尚未被理解，也尚無法觸及。",
+  "zhHans": "超越上述所有已知领域的某种事物——尚未被理解，也尚无法触及。"
+ },
+ {
+  "en": "A second independent power bus and load-balancing grid — lets a hull run meaningfully more equipment at once without browning out.",
+  "ja": "独立した第二の電力母線と負荷分散網。電圧低下なしに、船体がより多くの装備を同時に動かせる。",
+  "zhHant": "第二條獨立電力匯流排與負載平衡電網——讓艦體能同時運轉更多裝備而不致電壓不足。",
+  "zhHans": "第二条独立电力汇流排与负载平衡电网——让舰体能同时运转更多装备而不致电压不足。"
+ },
+ {
+  "en": "Redundant capacitor banks and finer-grained load balancing across the grid — real headroom for a heavier, more power-hungry loadout.",
+  "ja": "冗長化した蓄電器群と、網全体のより細かな負荷分散。より重く電力を食う装備への本物の余裕。",
+  "zhHant": "冗餘電容組與更精細的全網負載平衡——為更重、更耗電的配置提供真正的餘裕。",
+  "zhHans": "冗余电容组与更精细的全网负载平衡——为更重、更耗电的配置提供真正的余裕。"
+ },
+ {
+  "en": "A hull-spanning smart grid, the practical ceiling of what a single reactor core can feed — even so, the biggest weapons in service still don't come cheap.",
+  "ja": "船体全体に張り巡らせた賢い電力網。単一の炉心が賄える実用上の上限だが、それでも最大の兵器は依然として安くない。",
+  "zhHant": "遍布艦體的智慧電網，是單一反應爐核心所能供應的實際上限——即便如此，最強的現役武器依然代價不菲。",
+  "zhHans": "遍布舰体的智能电网，是单一反应堆核心所能供应的实际上限——即便如此，最强的现役武器依然代价不菲。"
+ },
+ {
+  "en": "Building the theory into hardware: field generators and exotic-matter handling small and robust enough to fit a ship. Every warp ship of the nation warps at this tier.",
+  "ja": "理論を装置へ。艦に収まるほど小さく頑丈な力場発生器と異種物質の取扱い。国のすべての歪曲艦がこの段階で航行する。",
+  "zhHant": "將理論化為硬體：小巧堅固到能裝上艦艇的力場產生器與奇異物質處理設備。國家所有曲速艦皆以此等級航行。",
+  "zhHans": "将理论化为硬件：小巧坚固到能装上舰艇的力场发生器与奇异物质处理设备。国家所有曲速舰皆以此等级航行。"
+ },
+ {
+  "en": "A faster warp field: every warp ship of the nation upgrades at once, no refit. Consumes exotic matter.",
+  "ja": "より速い歪曲場。国のすべての歪曲艦が改装なしで一斉に向上する。異種物質を消費する。",
+  "zhHant": "更快的曲速場：國家所有曲速艦同時升級，無需改裝。消耗奇異物質。",
+  "zhHans": "更快的曲速场：国家所有曲速舰同时升级，无需改装。消耗奇异物质。"
+ },
+ {
+  "en": "The hyperdrive every human hull is built around: short jumps through hyperspace, burning hyperium, with a real chance of being lost.",
+  "ja": "人類のあらゆる船体が前提とする超空間航法。超空間鉱を燃やして超空間を短く跳躍するが、失われる危険は現実にある。",
+  "zhHant": "人類所有艦體賴以建造的超空間引擎：燃燒超空間礦、短距躍遷穿越超空間，確實有失蹤的風險。",
+  "zhHans": "人类所有舰体赖以建造的超空间引擎：燃烧超空间矿、短距跃迁穿越超空间，确实有失踪的风险。"
+ },
+ {
+  "en": "Longer, far safer jumps for every hyperdrive ship of the nation, no refit. Consumes hyperium.",
+  "ja": "国のすべての超空間艦に、改装なしでより長く、はるかに安全な跳躍を。超空間鉱を消費する。",
+  "zhHant": "國家所有超空間艦皆獲得更長、更安全的躍遷，無需改裝。消耗超空間礦。",
+  "zhHans": "国家所有超空间舰皆获得更长、更安全的跃迁，无需改装。消耗超空间矿。"
+ },
+ {
+  "en": "Mining rigs and refineries for the rare hyperium deposits some worlds near Sol hold: draws hyperium from the deposits on bodies the nation owns, until they run dry.",
+  "ja": "太陽近傍のいくつかの世界にある希少な超空間鉱床のための採掘装置と精製所。国が所有する天体の鉱床から、枯渇するまで超空間鉱を採る。",
+  "zhHant": "為太陽附近部分星球上稀有超空間礦藏而設的採礦設備與精煉廠：從本國擁有之天體的礦藏開採超空間礦，直到枯竭。",
+  "zhHans": "为太阳附近部分星球上稀有超空间矿藏而设的采矿设备与精炼厂：从本国拥有之天体的矿藏开采超空间矿，直到枯竭。"
+ },
+ {
+  "en": "Drawing exotic matter from the few, small deposits some worlds near Sol hold: draws exotic matter from the deposits on bodies the nation owns, until they run dry.",
+  "ja": "太陽近傍のいくつかの世界にある少数の小さな鉱床から異種物質を採る。国が所有する天体の鉱床から、枯渇するまで採取する。",
+  "zhHant": "從太陽附近部分星球上少數小型礦藏汲取奇異物質：從本國擁有之天體的礦藏開採，直到枯竭。",
+  "zhHans": "从太阳附近部分星球上少数小型矿藏汲取奇异物质：从本国拥有之天体的矿藏开采，直到枯竭。"
+ },
+ {
+  "en": "A single drive module carrying both a hyperdrive and a warp drive: a hull that warps while it can and jumps when it must.",
+  "ja": "超空間航法と歪曲航法を併せ持つ単一の推進区画。歪曲できるうちは歪曲し、必要なら跳躍する船体。",
+  "zhHant": "同時搭載超空間引擎與曲速引擎的單一推進模組：能曲速時曲速，必要時躍遷的艦體。",
+  "zhHans": "同时搭载超空间引擎与曲速引擎的单一推进模组：能曲速时曲速，必要时跃迁的舰体。"
+ }
+]

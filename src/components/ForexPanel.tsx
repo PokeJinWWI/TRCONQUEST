@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { getCountry } from '../data/countryData'
@@ -24,7 +25,7 @@ export function ForexPanel() {
 
   return (
     <div className="econ-panel">
-      <div className="econ-subtitle">Foreign Exchange</div>
+      <div className="econ-subtitle"><Bi en="Foreign Exchange" /></div>
       <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
         1 IED = the International Earth Dollar, issued by the Central Bank of Earth — the common reference. A higher rate is a stronger currency.
         {home ? ` Prices are also shown in your ${home.code}.` : ''}
@@ -32,11 +33,11 @@ export function ForexPanel() {
       <table className="fx-table">
         <thead>
           <tr>
-            <th>Nation</th>
-            <th>Currency</th>
+            <th><Bi en="Nation" /></th>
+            <th><Bi en="Currency" /></th>
             <th style={{ textAlign: 'right' }}>Rate (E$)</th>
             {home && <th style={{ textAlign: 'right' }}>Per {home.code}</th>}
-            <th>Regime</th>
+            <th><Bi en="Regime" /></th>
             <th style={{ textAlign: 'right' }}>FX reserves</th>
           </tr>
         </thead>

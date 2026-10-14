@@ -202,3 +202,8 @@ export function glossaryLookup(text: string): GlossaryEntry | undefined {
   const raw = text.toLowerCase().replace(/\s+/g, ' ').trim()
   return INDEX.get(raw) ?? INDEX.get(normalizeTerm(text))
 }
+
+// Every entry (the term and its explanation), e.g. for the translation tools in scripts/i18n.
+export function glossaryEntries(): readonly { term: string; text: string }[] {
+  return ENTRIES
+}

@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { SiteChooser } from './planet/SiteChooser'
 import { Fragment, useMemo, useState } from 'react'
 import { RECIPES, getMethod, BUREAUCRACY_OUTPUT, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
@@ -89,7 +90,7 @@ export function BuildingDetail({
 
       <div className="bld-detail-cols">
         <div className="bld-detail-col">
-          <div className="bld-detail-h econ-neg">Inputs / tick</div>
+          <div className="bld-detail-h econ-neg"><Bi en="Inputs / tick" /></div>
           {method.inputs.length === 0 ? (
             <div className="bld-detail-none">none</div>
           ) : (
@@ -102,7 +103,7 @@ export function BuildingDetail({
           )}
         </div>
         <div className="bld-detail-col">
-          <div className="bld-detail-h econ-pos">Outputs / tick</div>
+          <div className="bld-detail-h econ-pos"><Bi en="Outputs / tick" /></div>
           {method.outputs.length === 0 ? (
             <div className="bld-detail-none">{bureaucracy ? `${(bureaucracy * b.level * t).toFixed(0)} bureaucracy` : 'none (overhead)'}</div>
           ) : (
@@ -115,7 +116,7 @@ export function BuildingDetail({
           )}
         </div>
         <div className="bld-detail-col">
-          <div className="bld-detail-h">Employment</div>
+          <div className="bld-detail-h"><Bi en="Employment" /></div>
           {method.jobs.map((j) => {
             const posted = j.count * b.level * JOB_SCALE
             const filled = posted * t
@@ -139,7 +140,7 @@ export function BuildingDetail({
                 return (
                   <div className="bld-detail-line" key={o.good}>
                     <span>{GOODS[o.good].label} reserve</span>
-                    <span className="econ-pos">Unlimited (unsurveyed deposit)</span>
+                    <span className="econ-pos"><Bi en="Unlimited (unsurveyed deposit)" /></span>
                   </div>
                 )
               }
@@ -172,7 +173,7 @@ export function BuildingDetail({
             className="econ-control-row"
             title="A standing per-tick treasury payment funding this building's production — a real, ongoing budget cost."
           >
-            <span className="inspect-label">Subsidize/tick</span>
+            <span className="inspect-label"><Bi en="Subsidize/tick" /></span>
             <span className="econ-control">
               <button type="button" onClick={() => setSubsidyForBuilding(country.id, world.id, b.id, subsidy - 20)}>
                 −
@@ -197,7 +198,7 @@ export function BuildingDetail({
                 />
                 <span className="bld-xfer-of">/ {b.level}</span>
                 <button type="button" className="bld-xfer-all" onClick={() => setXferInput(b.level)}>
-                  All
+                  <Bi en="All" />
                 </button>
               </span>
               <button
@@ -237,7 +238,7 @@ export function BuildingDetail({
                 />
                 <span className="bld-xfer-of">/ {b.level}</span>
                 <button type="button" className="bld-xfer-all" onClick={() => setXferInput(b.level)}>
-                  All
+                  <Bi en="All" />
                 </button>
               </span>
               <button
@@ -378,14 +379,14 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
         <table className="econ-table">
           <thead>
             <tr>
-              <th>Building</th>
-              <th>Lvl</th>
-              <th>Owner</th>
-              <th>Method</th>
-              <th>Output</th>
-              <th>Run</th>
-              <th>Jobs</th>
-              <th>Profit</th>
+              <th><Bi en="Building" /></th>
+              <th><Bi en="Lvl" /></th>
+              <th><Bi en="Owner" /></th>
+              <th><Bi en="Method" /></th>
+              <th><Bi en="Output" /></th>
+              <th><Bi en="Run" /></th>
+              <th><Bi en="Jobs" /></th>
+              <th><Bi en="Profit" /></th>
             </tr>
           </thead>
           <tbody>

@@ -1,3 +1,5 @@
+import { Bi } from './Bi'
+import { NamedBi, NativeNameInput } from './NativeName'
 import { useState } from 'react'
 import { useWorkspaceStore, type TabSnapshot } from '../state/workspaceStore'
 import type { ViewLevel } from '../state/viewStore'
@@ -40,18 +42,21 @@ function Tab({ tab, active, showClose }: { tab: TabSnapshot; active: boolean; sh
   }
 
   if (editing) {
+    const keys = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') commitRename()
+      if (e.key === 'Escape') setEditing(false)
+    }
+    // Saved when focus leaves both boxes (the name and, in NERV, its subscript).
     return (
-      <input
-        className="tab-bar-tab-rename"
-        autoFocus
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commitRename}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commitRename()
-          if (e.key === 'Escape') setEditing(false)
+      <span
+        className="tab-bar-tab-rename-wrap"
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commitRename()
         }}
-      />
+      >
+        <input className="tab-bar-tab-rename" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={keys} />
+        <NativeNameInput nativeKey={`tab:${tab.id}`} onKeyDown={keys} />
+      </span>
     )
   }
 
@@ -67,7 +72,9 @@ function Tab({ tab, active, showClose }: { tab: TabSnapshot; active: boolean; sh
       }}
       title="Double-click to rename"
     >
-      <span>{tab.name ?? autoTabLabel(tab)}</span>
+      <span>
+        {tab.name ? <NamedBi en={tab.name} nativeKey={`tab:${tab.id}`} /> : <Bi en={autoTabLabel(tab)} />}
+      </span>
       {showClose && (
         <span
           className="tab-bar-tab-close"

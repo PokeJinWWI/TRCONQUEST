@@ -1,3 +1,4 @@
+import { useSceneColors } from './themeColors'
 import { useEffect, useMemo } from 'react'
 import { Line } from '@react-three/drei'
 import { DataTexture, FloatType, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from 'three'
@@ -65,6 +66,7 @@ void main() {
 `
 
 export function FlatMapSurface({ nodeAt, version, glow = COAST_UNIFORM, bodyName }: { nodeAt: (node: number) => HoloNode; version: unknown; glow?: number[]; bodyName?: string }) {
+  const colors = useSceneColors()
   const { texture, rows } = useNodeTexture(nodeAt, version)
   const picture = useBodyPicture(bodyName)
   const lookup = useMemo(() => {
@@ -124,7 +126,7 @@ export function FlatMapSurface({ nodeAt, version, glow = COAST_UNIFORM, bodyName
           [-w, h, 0.02],
           [-w, -h, 0.02],
         ]}
-        color="#6fe3ff"
+        color={colors.frame}
         lineWidth={1.5}
         transparent
         opacity={0.7}

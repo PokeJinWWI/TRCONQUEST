@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { usePlayerTech } from '../hooks/usePlayerTech'
 import { type ShipInstance } from '../state/shipStore'
 import { queueFreeFlight } from './commsVisual'
@@ -14,8 +15,8 @@ export function ShipFreeFlightToggle({ ship }: { ship: ShipInstance }) {
   if (!hasFreeFlightTech(researched)) {
     return (
       <div className="inspect-row" title={NEEDS_TIP}>
-        <span className="inspect-label">Flight</span>
-        <span className="inspect-value">Orbital (needs Free-Flight Maneuvering)</span>
+        <span className="inspect-label"><Bi en="Flight" /></span>
+        <span className="inspect-value"><Bi en="Orbital (needs Free-Flight Maneuvering)" /></span>
       </div>
     )
   }
@@ -23,7 +24,7 @@ export function ShipFreeFlightToggle({ ship }: { ship: ShipInstance }) {
   const pending = ship.pendingFreeFlight
   return (
     <div className="inspect-row">
-      <span className="inspect-label">Free Flight</span>
+      <span className="inspect-label"><Bi en="Free Flight" /></span>
       <span className="inspect-value ship-automation">
         <button type="button" className={`nav-subtab${on ? ' active' : ''}`} onClick={() => queueFreeFlight(ship, true)} title={ON_TIP}>
           On

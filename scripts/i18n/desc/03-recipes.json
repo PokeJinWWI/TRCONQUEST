@@ -1,0 +1,638 @@
+[
+ {
+  "en": "Clean baseline power from sunlight — no fuel, modest output. Bootstraps the grid.",
+  "ja": "日光によるクリーンな基礎電力。燃料不要、出力は控えめ。電力網の立ち上げ役。",
+  "zhHant": "來自陽光的潔淨基載電力——無需燃料，產出適中。電網的起步之源。",
+  "zhHans": "来自阳光的洁净基载电力——无需燃料，产出适中。电网的起步之源。"
+ },
+ {
+  "en": "Burns coal for reliable bulk electricity, with water for cooling.",
+  "ja": "石炭を燃やして安定した大量の電力を生む。冷却に水を使う。",
+  "zhHant": "燃燒煤炭提供穩定的大量電力，以水冷卻。",
+  "zhHans": "燃烧煤炭提供稳定的大量电力，以水冷却。"
+ },
+ {
+  "en": "Enormous clean output from rare metals and electrical machinery, with coolant water — but a specialist workforce.",
+  "ja": "希少金属と電気機械、冷却水から莫大でクリーンな出力を生む。ただし専門職の労働力が要る。",
+  "zhHant": "以稀有金屬與電機、冷卻水產生龐大潔淨電力——但需要專業人員。",
+  "zhHans": "以稀有金属与电机、冷却水产生庞大洁净电力——但需要专业人员。"
+ },
+ {
+  "en": "Labor-intensive extraction. No power needed.",
+  "ja": "労働集約的な採掘。電力不要。",
+  "zhHant": "勞力密集的開採。無需電力。",
+  "zhHans": "劳力密集的开采。无需电力。"
+ },
+ {
+  "en": "Drills and haulers double output, running on power and tools.",
+  "ja": "掘削機と運搬車で産出が倍に。電力と工具で動く。",
+  "zhHant": "鑽機與運輸車讓產量加倍，需電力與工具。",
+  "zhHans": "钻机与运输车让产量加倍，需电力与工具。"
+ },
+ {
+  "en": "Pick-and-cart coal digging. No power needed.",
+  "ja": "つるはしと台車の石炭採掘。電力不要。",
+  "zhHant": "鎬與推車式的採煤。無需電力。",
+  "zhHans": "镐与推车式的采煤。无需电力。"
+ },
+ {
+  "en": "Cutting machines lift output sharply on grid power and mining machinery.",
+  "ja": "切羽採炭機が電力と採掘機械で産出を大きく高める。",
+  "zhHant": "採煤機以電網電力與採礦機械大幅提升產量。",
+  "zhHans": "采煤机以电网电力与采矿机械大幅提升产量。"
+ },
+ {
+  "en": "Simple pumping of accessible crude.",
+  "ja": "取り出しやすい原油を単純に汲み上げる。",
+  "zhHant": "單純抽取容易取得的原油。",
+  "zhHans": "单纯抽取容易取得的原油。"
+ },
+ {
+  "en": "Powered rigs and heavy machinery reach far more crude.",
+  "ja": "動力掘削装置と重機で、はるかに多くの原油に届く。",
+  "zhHant": "動力鑽井與重型機械能觸及遠更多的原油。",
+  "zhHans": "动力钻井与重型机械能触及远更多的原油。"
+ },
+ {
+  "en": "Painstaking manual extraction of scarce metals.",
+  "ja": "希少金属の骨の折れる手作業採取。",
+  "zhHant": "以艱辛的手工開採稀缺金屬。",
+  "zhHans": "以艰辛的手工开采稀缺金属。"
+ },
+ {
+  "en": "Powered refining more than doubles yield of rare metals.",
+  "ja": "動力精製で希少金属の収量が二倍以上に。",
+  "zhHant": "動力精煉讓稀有金屬產量增加一倍以上。",
+  "zhHans": "动力精炼让稀有金属产量增加一倍以上。"
+ },
+ {
+  "en": "Copper and nickel from open-pit ore — the base metals, as co-products of one mine.",
+  "ja": "露天掘りの鉱石から銅とニッケル。一つの鉱山の副産物としての卑金属。",
+  "zhHant": "從露天礦石取得銅與鎳——同一礦場共生的基本金屬。",
+  "zhHans": "从露天矿石取得铜与镍——同一矿场共生的基本金属。"
+ },
+ {
+  "en": "Powered crushing and flotation lift the yield of copper and nickel.",
+  "ja": "動力破砕と浮遊選鉱で銅とニッケルの収量が上がる。",
+  "zhHant": "動力碎礦與浮選提高銅與鎳的產量。",
+  "zhHans": "动力碎矿与浮选提高铜与镍的产量。"
+ },
+ {
+  "en": "Aluminium ore, titanium sands and lithium brine — the light metals, from one works.",
+  "ja": "アルミ鉱石、チタン砂、リチウム塩水。一つの工場から得る軽金属。",
+  "zhHant": "鋁礦、鈦砂與鋰鹽水——同一工廠產出的輕金屬。",
+  "zhHans": "铝矿、钛砂与锂盐水——同一工厂产出的轻金属。"
+ },
+ {
+  "en": "Electrolysis and powered processing raise the yield of all three light metals, on heavy power.",
+  "ja": "電気分解と動力処理で三種の軽金属すべての収量が上がる。大電力が要る。",
+  "zhHant": "電解與動力處理提升三種輕金屬的產量，耗電量大。",
+  "zhHans": "电解与动力处理提升三种轻金属的产量，耗电量大。"
+ },
+ {
+  "en": "Skims and compresses gas-giant hydrogen into metastable metallic hydrogen — an enormous, clean source of rocket fuel. A late-game megastructure-tier work.",
+  "ja": "巨大ガス惑星の水素をすくい取って圧縮し、準安定な金属水素にする。莫大でクリーンなロケット燃料源。終盤の巨大構造物級の施設。",
+  "zhHant": "汲取並壓縮氣態巨行星的氫，製成亞穩態金屬氫——龐大潔淨的火箭燃料來源。後期巨型結構等級的設施。",
+  "zhHans": "汲取并压缩气态巨行星的氢，制成亚稳态金属氢——庞大洁净的火箭燃料来源。后期巨型结构等级的设施。"
+ },
+ {
+  "en": "Condenses and holds exotic matter in magnetic-confinement lattices — the stuff that threads a warp field. Enormous power for a trickle of output; the feedstock of every warp drive.",
+  "ja": "磁気閉じ込め格子で異種物質を凝縮し保持する。歪曲場を通す物質。わずかな産出に莫大な電力。あらゆる歪曲航法の原料。",
+  "zhHant": "以磁約束晶格凝聚並保存奇異物質——編織曲速場的材料。消耗龐大電力卻僅有涓滴產出；每具曲速引擎的原料。",
+  "zhHans": "以磁约束晶格凝聚并保存奇异物质——编织曲速场的材料。消耗庞大电力却仅有涓滴产出；每具曲速引擎的原料。"
+ },
+ {
+  "en": "Breeds and stabilises hyperium from rare feedstock and vast power — the fuel a hyperdrive folds space with. Rarer and dearer than exotic matter; a handful a month from a whole plant.",
+  "ja": "希少な原料と莫大な電力から超空間鉱を育成し安定させる。超空間航法が空間を折る燃料。異種物質より希少で高価。工場一つで月に一握り。",
+  "zhHant": "以稀有原料與龐大電力培育並穩定超空間礦——超空間引擎摺疊空間的燃料。比奇異物質更稀有昂貴；整座工廠每月僅產少許。",
+  "zhHans": "以稀有原料与庞大电力培育并稳定超空间矿——超空间引擎折叠空间的燃料。比奇异物质更稀有昂贵；整座工厂每月仅产少许。"
+ },
+ {
+  "en": "Collects and treats surface water — rivers, lakes and reservoirs — into clean supply. Cheap to run, the backbone of a world's water.",
+  "ja": "河川、湖、貯水池の地表水を集めて浄化する。運営費が安く、世界の水の柱。",
+  "zhHant": "收集並處理河川、湖泊與水庫的地表水，供應潔淨用水。營運成本低，是一個世界用水的支柱。",
+  "zhHans": "收集并处理河流、湖泊与水库的地表水，供应洁净用水。运营成本低，是一个世界用水的支柱。"
+ },
+ {
+  "en": "Pumps groundwater from aquifers — more power than surface treatment, but it works where there is no river to draw on.",
+  "ja": "帯水層から地下水を汲み上げる。地表水処理より電力を食うが、引く川がない所でも使える。",
+  "zhHant": "從含水層抽取地下水——比地表水處理更耗電，但在沒有河流可取水之處也能運作。",
+  "zhHans": "从含水层抽取地下水——比地表水处理更耗电，但在没有河流可取水之处也能运作。"
+ },
+ {
+  "en": "Turns seawater into fresh water on heavy power. Expensive, but a world covered in sea can water itself without a drop of rain.",
+  "ja": "大電力で海水を真水に変える。高価だが、海に覆われた世界は雨一滴なしで水を賄える。",
+  "zhHant": "以大量電力將海水轉為淡水。昂貴，但海洋覆蓋的世界不需一滴雨也能自給用水。",
+  "zhHans": "以大量电力将海水转为淡水。昂贵，但海洋覆盖的世界不需一滴雨也能自给用水。"
+ },
+ {
+  "en": "Mines frozen volatiles — surface and subsurface water ice — and melts them into supply. The way an airless, frozen world or an outer moon waters itself; energy-hungry, but it needs neither rivers nor a sea.",
+  "ja": "凍った揮発性物質(地表と地下の水氷)を採掘し、溶かして供給する。大気のない凍った世界や外側の衛星が水を得る方法。電力を食うが、川も海もいらない。",
+  "zhHant": "開採凍結的揮發物——地表與地下的水冰——融化後供應。無大氣的冰凍世界或外側衛星取水之道；耗電，但不需河流也不需海洋。",
+  "zhHans": "开采冻结的挥发物——地表与地下的水冰——融化后供应。无大气的冰冻世界或外侧卫星取水之道；耗电，但不需河流也不需海洋。"
+ },
+ {
+  "en": "Axes and saws. No power needed.",
+  "ja": "斧とのこぎり。電力不要。",
+  "zhHant": "斧與鋸。無需電力。",
+  "zhHans": "斧与锯。无需电力。"
+ },
+ {
+  "en": "Powered harvesters and tools nearly double the cut.",
+  "ja": "動力伐採機と工具で伐採量がほぼ倍に。",
+  "zhHant": "動力採伐機與工具讓伐木量近乎加倍。",
+  "zhHans": "动力采伐机与工具让伐木量近乎加倍。"
+ },
+ {
+  "en": "Manual phosphate rock extraction.",
+  "ja": "手作業による燐鉱石の採掘。",
+  "zhHant": "手工開採磷礦石。",
+  "zhHans": "手工开采磷矿石。"
+ },
+ {
+  "en": "Powered strip mining doubles output, on excavating tools and grid power.",
+  "ja": "動力露天採掘で産出が倍に。掘削工具と電力で動く。",
+  "zhHant": "動力露天開採讓產量加倍，需挖掘工具與電網電力。",
+  "zhHans": "动力露天开采让产量加倍，需挖掘工具与电网电力。"
+ },
+ {
+  "en": "Manual sulfur extraction from surface deposits. No power needed.",
+  "ja": "地表鉱床からの手作業の硫黄採取。電力不要。",
+  "zhHant": "從地表礦床手工採硫。無需電力。",
+  "zhHans": "从地表矿床手工采硫。无需电力。"
+ },
+ {
+  "en": "Superheated water and powered pumps double sulfur yield.",
+  "ja": "過熱水と動力ポンプで硫黄の収量が倍に。",
+  "zhHant": "過熱水與動力泵讓硫磺產量加倍。",
+  "zhHans": "过热水与动力泵让硫磺产量加倍。"
+ },
+ {
+  "en": "Hand-felled hardwood from a separate, slower-growing stand than the timber camps. No power needed.",
+  "ja": "木材伐採所とは別の、成長の遅い林から手で伐る硬材。電力不要。",
+  "zhHant": "從生長較慢、與木材營地分開的林地手工伐取硬木。無需電力。",
+  "zhHans": "从生长较慢、与木材营地分开的林地手工伐取硬木。无需电力。"
+ },
+ {
+  "en": "Powered harvesters lift the cut of high-grade hardwood.",
+  "ja": "動力伐採機が高級硬材の伐採量を引き上げる。",
+  "zhHant": "動力採伐機提高高級硬木的伐取量。",
+  "zhHans": "动力采伐机提高高级硬木的伐取量。"
+ },
+ {
+  "en": "Hands and simple tools. Employs many, needs no inputs.",
+  "ja": "手と簡単な道具。多くを雇い、投入は不要。",
+  "zhHant": "人手與簡單工具。僱用眾多人力，無需投入。",
+  "zhHans": "人手与简单工具。雇用众多人力，无需投入。"
+ },
+ {
+  "en": "Fertilizer, tools, water and power raise yields with fewer, more skilled hands.",
+  "ja": "肥料、工具、水、電力で、少数の熟練した手で収量を上げる。",
+  "zhHant": "肥料、工具、水與電力，以更少但更熟練的人手提高收成。",
+  "zhHans": "肥料、工具、水与电力，以更少但更熟练的人手提高收成。"
+ },
+ {
+  "en": "Traditional flooded-paddy cultivation. Labor-heavy, no inputs.",
+  "ja": "伝統的な水田耕作。労働集約的で投入不要。",
+  "zhHant": "傳統水田耕作。勞力密集，無需投入。",
+  "zhHans": "传统水田耕作。劳力密集，无需投入。"
+ },
+ {
+  "en": "Fertilizer, tools, flood water and pumps lift yields.",
+  "ja": "肥料、工具、灌漑水、ポンプで収量が上がる。",
+  "zhHant": "肥料、工具、灌溉水與水泵提升產量。",
+  "zhHans": "肥料、工具、灌溉水与水泵提升产量。"
+ },
+ {
+  "en": "Herds fed on feed grain, tended by hand.",
+  "ja": "飼料穀物で育て、手で世話する家畜の群れ。",
+  "zhHant": "以飼料穀物餵養、人工照料的畜群。",
+  "zhHans": "以饲料谷物喂养、人工照料的畜群。"
+ },
+ {
+  "en": "Feedlots and powered handling raise more stock on more feed.",
+  "ja": "肥育場と動力化された取扱いで、より多くの飼料からより多くの家畜を育てる。",
+  "zhHant": "育肥場與動力化處理，以更多飼料養出更多牲畜。",
+  "zhHans": "育肥场与动力化处理，以更多饲料养出更多牲畜。"
+ },
+ {
+  "en": "Stacked, climate-controlled grain growing — high yield in little space, on power, water and fertilizer. The backbone of food security on marginal worlds.",
+  "ja": "積層型の空調制御された穀物栽培。狭い場所で高い収量を、電力、水、肥料で。辺境の世界の食料安全保障の柱。",
+  "zhHant": "層疊式、氣候控制的穀物種植——以電力、水與肥料在小空間獲得高產量。貧瘠世界糧食安全的支柱。",
+  "zhHans": "层叠式、气候控制的谷物种植——以电力、水与肥料在小空间获得高产量。贫瘠世界粮食安全的支柱。"
+ },
+ {
+  "en": "Small boats and nets. Employs many, needs no inputs.",
+  "ja": "小舟と網。多くを雇い、投入は不要。",
+  "zhHant": "小船與漁網。僱用眾多人力，無需投入。",
+  "zhHans": "小船与渔网。雇用众多人力，无需投入。"
+ },
+ {
+  "en": "Powered trawlers and processing raise the catch, on fuel and heavier gear.",
+  "ja": "動力トロール船と加工で漁獲が上がる。燃料と重い漁具を使う。",
+  "zhHant": "動力拖網船與加工提高漁獲，需燃料與更重的漁具。",
+  "zhHans": "动力拖网船与加工提高渔获，需燃料与更重的渔具。"
+ },
+ {
+  "en": "A fleet of ocean-going boats works the coast and the open sea, landing fish at the wharves. The boats are consumed as they wear out and are replaced — a world with sea turns ships into food.",
+  "ja": "外航漁船の船団が沿岸と外洋で漁をし、魚を岸壁に揚げる。船は老朽化すれば消費され置き換えられる。海のある世界は船を食料に変える。",
+  "zhHant": "遠洋漁船隊在沿岸與公海作業，將漁獲卸於碼頭。船隻耗損後會被消耗並替換——有海的世界把船變成糧食。",
+  "zhHans": "远洋渔船队在沿岸与公海作业，将渔获卸于码头。船只耗损后会被消耗并替换——有海的世界把船变成粮食。"
+ },
+ {
+  "en": "Hand-cut sugarcane. Labor-heavy, no inputs.",
+  "ja": "手で刈るサトウキビ。労働集約的で投入不要。",
+  "zhHant": "手工收割甘蔗。勞力密集，無需投入。",
+  "zhHans": "手工收割甘蔗。劳力密集，无需投入。"
+ },
+ {
+  "en": "Fertilizer, tools and power lift the cane yield.",
+  "ja": "肥料、工具、電力でサトウキビの収量が上がる。",
+  "zhHant": "肥料、工具與電力提高甘蔗產量。",
+  "zhHans": "肥料、工具与电力提高甘蔗产量。"
+ },
+ {
+  "en": "Hand-picked coffee cherries. Labor-heavy, no inputs.",
+  "ja": "手摘みの珈琲の実。労働集約的で投入不要。",
+  "zhHant": "手工採摘咖啡果。勞力密集，無需投入。",
+  "zhHans": "手工采摘咖啡果。劳力密集，无需投入。"
+ },
+ {
+  "en": "Fertilizer, tools and power raise coffee yields.",
+  "ja": "肥料、工具、電力で珈琲の収量が上がる。",
+  "zhHant": "肥料、工具與電力提高咖啡產量。",
+  "zhHans": "肥料、工具与电力提高咖啡产量。"
+ },
+ {
+  "en": "Hand-picked tea leaf. Labor-heavy, no inputs.",
+  "ja": "手摘みの茶葉。労働集約的で投入不要。",
+  "zhHant": "手工採摘茶葉。勞力密集，無需投入。",
+  "zhHans": "手工采摘茶叶。劳力密集，无需投入。"
+ },
+ {
+  "en": "Fertilizer, tools and power raise tea yields.",
+  "ja": "肥料、工具、電力で茶の収量が上がる。",
+  "zhHant": "肥料、工具與電力提高茶葉產量。",
+  "zhHans": "肥料、工具与电力提高茶叶产量。"
+ },
+ {
+  "en": "Smelts iron ore with coal into steel, driven by heavy plant machinery.",
+  "ja": "鉄鉱石を石炭で製錬して鋼にする。重い工場機械で動く。",
+  "zhHant": "以煤冶煉鐵礦成鋼，由重型廠房機械驅動。",
+  "zhHans": "以煤冶炼铁矿成钢，由重型厂房机械驱动。"
+ },
+ {
+  "en": "Coal-free arc smelting — trades the blast furnace's mechanical plant for heavy electrical equipment (transformers, electrodes), on much more power.",
+  "ja": "石炭を使わない電炉製錬。高炉の機械設備を重電機器(変圧器、電極)に置き換え、はるかに多くの電力で動く。",
+  "zhHant": "不用煤的電弧冶煉——以重型電氣設備（變壓器、電極）取代高爐的機械廠房，耗電遠更多。",
+  "zhHans": "不用煤的电弧冶炼——以重型电气设备（变压器、电极）取代高炉的机械厂房，耗电远更多。"
+ },
+ {
+  "en": "Blends copper, aluminium, nickel, titanium and lithium into high-performance alloys — the metal that ships, aircraft and vehicles are built from.",
+  "ja": "銅、アルミ、ニッケル、チタン、リチウムを高性能合金に配合する。艦、航空機、車両の素材となる金属。",
+  "zhHant": "將銅、鋁、鎳、鈦與鋰調配成高性能合金——建造艦艇、飛機與車輛的金屬。",
+  "zhHans": "将铜、铝、镍、钛与锂调配成高性能合金——建造舰艇、飞机与车辆的金属。"
+ },
+ {
+  "en": "Cuts timber into lumber on powered saws.",
+  "ja": "動力のこぎりで原木を製材にする。",
+  "zhHant": "以動力鋸將原木切成木材。",
+  "zhHans": "以动力锯将原木切成木材。"
+ },
+ {
+  "en": "Refines crude oil into fuel.",
+  "ja": "原油を燃料に精製する。",
+  "zhHant": "將原油精煉成燃料。",
+  "zhHans": "将原油精炼成燃料。"
+ },
+ {
+  "en": "Refines crude oil and chemicals into cryogenic rocket propellant — the fuel that spaceport launches and rockets burn. Drawn from oil directly, so it does not compete with the fuel market.",
+  "ja": "原油と化学品を極低温ロケット推進剤に精製する。宇宙港の打ち上げとロケットが燃やす燃料。原油から直接引くので燃料市場と競合しない。",
+  "zhHant": "將原油與化學品精煉成低溫火箭推進劑——太空港發射與火箭所燃燒的燃料。直接取自原油，因此不與燃料市場競爭。",
+  "zhHans": "将原油与化学品精炼成低温火箭推进剂——太空港发射与火箭所燃烧的燃料。直接取自原油，因此不与燃料市场竞争。"
+ },
+ {
+  "en": "Cracks oil into industrial chemicals in machinery-driven plant, with process water.",
+  "ja": "機械駆動の工場で原油を工業化学品に分解する。工程水を使う。",
+  "zhHant": "在機械驅動的廠房中以製程用水將石油裂解為工業化學品。",
+  "zhHans": "在机械驱动的厂房中以工艺用水将石油裂解为工业化学品。"
+ },
+ {
+  "en": "Combines phosphate and chemicals into fertilizer for farms.",
+  "ja": "燐と化学品を農場用の肥料に合成する。",
+  "zhHant": "將磷礦與化學品合成為農用肥料。",
+  "zhHans": "将磷矿与化学品合成为农用肥料。"
+ },
+ {
+  "en": "Turns chemicals into industrial and military explosives.",
+  "ja": "化学品を工業用・軍用の爆薬にする。",
+  "zhHant": "將化學品製成工業與軍用炸藥。",
+  "zhHans": "将化学品制成工业与军用炸药。"
+ },
+ {
+  "en": "Etches rare metals and chemicals into semiconductors — power-hungry, specialist, machinery-intensive.",
+  "ja": "希少金属と化学品から半導体を焼き付ける。電力を食い、専門的で、機械集約的。",
+  "zhHant": "以稀有金屬與化學品蝕刻製成半導體——耗電、專業、機械密集。",
+  "zhHans": "以稀有金属与化学品蚀刻制成半导体——耗电、专业、机械密集。"
+ },
+ {
+  "en": "Forms steel into the tools nearly every industry and mechanized worker runs on.",
+  "ja": "鋼をほぼすべての産業と機械化労働者が使う工具に成形する。",
+  "zhHant": "將鋼鍛造成幾乎所有產業與機械化勞工所依賴的工具。",
+  "zhHans": "将钢锻造成几乎所有产业与机械化劳工所依赖的工具。"
+ },
+ {
+  "en": "Steel and tools into the general industrial machinery that runs mills, plants and factories.",
+  "ja": "鋼と工具から、製造所や工場を動かす一般産業機械を作る。",
+  "zhHant": "以鋼與工具製造驅動工廠與廠房的通用工業機械。",
+  "zhHans": "以钢与工具制造驱动工厂与厂房的通用工业机械。"
+ },
+ {
+  "en": "Steel, machinery and engines into the heavy machinery that drives deep extraction, the heaviest industry and major construction.",
+  "ja": "鋼、機械、機関から、深部採掘、最重工業、大規模建設を動かす重機械を作る。",
+  "zhHant": "以鋼、機械與引擎製造驅動深層開採、最重工業與大型建設的重型機械。",
+  "zhHans": "以钢、机械与引擎制造驱动深层开采、最重工业与大型建设的重型机械。"
+ },
+ {
+  "en": "Motors, generators and drives from steel and electronics — the electrical machinery power plants and advanced factories need.",
+  "ja": "鋼と電子機器から電動機、発電機、駆動装置。発電所と先進工場に必要な電気機械。",
+  "zhHant": "以鋼與電子產品製造馬達、發電機與驅動器——發電廠與先進工廠所需的電機。",
+  "zhHans": "以钢与电子产品制造马达、发电机与驱动器——发电厂与先进工厂所需的电机。"
+ },
+ {
+  "en": "High-tolerance instruments and machine tools from electrical machinery, electronics and rare metals — for the most advanced industry.",
+  "ja": "電気機械、電子機器、希少金属から高精度の計器と工作機械。最先端の産業のために。",
+  "zhHant": "以電機、電子產品與稀有金屬製造高精度儀器與工具機——供最先進的產業使用。",
+  "zhHans": "以电机、电子产品与稀有金属制造高精度仪器与工具机——供最先进的产业使用。"
+ },
+ {
+  "en": "Builds electronics from semiconductors, steel and electrical machinery.",
+  "ja": "半導体、鋼、電気機械から電子機器を作る。",
+  "zhHant": "以半導體、鋼與電機製造電子產品。",
+  "zhHans": "以半导体、钢与电机制造电子产品。"
+ },
+ {
+  "en": "Mills grains into packaged groceries — a simple, robust processed-food supply.",
+  "ja": "穀物を挽いて包装食品にする。単純で頑健な加工食品の供給。",
+  "zhHant": "將穀物碾製為包裝食品——簡單穩健的加工食品供應。",
+  "zhHans": "将谷物碾制为包装食品——简单稳健的加工食品供应。"
+ },
+ {
+  "en": "A varied grocery line from grains and livestock — more processed food per plant, on a bigger line.",
+  "ja": "穀物と家畜からの多彩な食品ライン。より大きなラインで工場あたりの加工食品が増える。",
+  "zhHant": "以穀物與牲畜製作的多樣食品線——生產線更大，每座廠的加工食品更多。",
+  "zhHans": "以谷物与牲畜制作的多样食品线——生产线更大，每座厂的加工食品更多。"
+ },
+ {
+  "en": "Turns steel and tools into everyday consumer goods — a simple, robust supply.",
+  "ja": "鋼と工具を日用の消費財にする。単純で頑健な供給。",
+  "zhHant": "將鋼與工具製成日常消費品——簡單穩健的供應。",
+  "zhHans": "将钢与工具制成日常消费品——简单稳健的供应。"
+ },
+ {
+  "en": "Steel and lumber for finer goods, on heavier tooling than the basic line.",
+  "ja": "基本ラインより重い工具で、鋼と製材から上質な品を。",
+  "zhHant": "以鋼與木材製作更精緻的商品，使用比基本線更重的工具。",
+  "zhHans": "以钢与木材制作更精致的商品，使用比基本线更重的工具。"
+ },
+ {
+  "en": "Robotic assembly lines raise throughput and skill demand, on heavy machinery and much more power.",
+  "ja": "自動組立ラインが処理量と技能需要を引き上げる。重機械とはるかに多くの電力で動く。",
+  "zhHant": "機器人組裝線提高產能與技能需求，需重型機械與遠更多的電力。",
+  "zhHans": "机器人组装线提高产能与技能需求，需重型机械与远更多的电力。"
+ },
+ {
+  "en": "Electronics and consumer goods into luxuries for the wealthy.",
+  "ja": "電子機器と消費財から富裕層向けの奢侈品を作る。",
+  "zhHant": "以電子產品與消費品為富人製作奢侈品。",
+  "zhHans": "以电子产品与消费品为富人制作奢侈品。"
+ },
+ {
+  "en": "Lumber and hardwood worked into household furniture.",
+  "ja": "製材と硬材を家庭用家具に加工する。",
+  "zhHant": "將木材與硬木加工成家用家具。",
+  "zhHans": "将木材与硬木加工成家用家具。"
+ },
+ {
+  "en": "Adds glass and consumer fittings for finer furniture, on heavier tooling.",
+  "ja": "より重い工具で硝子と消費財の部品を加え、上質な家具に。",
+  "zhHant": "加入玻璃與消費性配件，以更重的工具製作更精緻的家具。",
+  "zhHans": "加入玻璃与消费性配件，以更重的工具制作更精致的家具。"
+ },
+ {
+  "en": "Processes livestock into meat for the food chain.",
+  "ja": "家畜を食肉に加工して食料連鎖へ送る。",
+  "zhHant": "將牲畜加工成肉品送入食物鏈。",
+  "zhHans": "将牲畜加工成肉品送入食物链。"
+ },
+ {
+  "en": "Wool and synthetic fibre spun, woven and dyed into cloth and clothing.",
+  "ja": "羊毛と合成繊維を紡ぎ、織り、染めて布と衣服にする。",
+  "zhHant": "將羊毛與合成纖維紡、織、染成布料與衣物。",
+  "zhHans": "将羊毛与合成纤维纺、织、染成布料与衣物。"
+ },
+ {
+  "en": "Synthesizes chemicals into dyes for textiles and luxury goods.",
+  "ja": "化学品から繊維と奢侈品用の染料を合成する。",
+  "zhHant": "以化學品合成紡織品與奢侈品用的染料。",
+  "zhHans": "以化学品合成纺织品与奢侈品用的染料。"
+ },
+ {
+  "en": "Melts phosphate-bearing mineral feedstock into glass.",
+  "ja": "燐を含む鉱物原料を溶かして硝子にする。",
+  "zhHant": "熔化含磷的礦物原料製成玻璃。",
+  "zhHans": "熔化含磷的矿物原料制成玻璃。"
+ },
+ {
+  "en": "Contractors, cranes and crews. Produces the construction capacity that builds everything on this world — build more to build faster. Consumes some upkeep; the bulk materials are consumed by the projects themselves.",
+  "ja": "請負業者、クレーン、作業班。この世界のあらゆるものを建てる建設能力を生む。増やすほど速く建つ。多少の維持費を使い、大量の資材は各事業自体が消費する。",
+  "zhHant": "承包商、起重機與施工隊。產生建造此世界一切的建設產能——建得越多，蓋得越快。需少量維護；大宗材料由各工程本身消耗。",
+  "zhHans": "承包商、起重机与施工队。产生建造此世界一切的建设产能——建得越多，盖得越快。需少量维护；大宗材料由各工程本身消耗。"
+ },
+ {
+  "en": "Fires coal-heated kilns to produce cement and concrete — the bulk material almost every construction consumes.",
+  "ja": "石炭焚きの窯でセメントとコンクリートを作る。ほぼすべての建設が消費するバルク資材。",
+  "zhHant": "以燃煤窯爐生產水泥與混凝土——幾乎所有建設都會消耗的大宗材料。",
+  "zhHans": "以燃煤窑炉生产水泥与混凝土——几乎所有建设都会消耗的大宗材料。"
+ },
+ {
+  "en": "Pulps timber and hardwood with chemicals into paper.",
+  "ja": "原木と硬材を化学品でパルプにし、紙にする。",
+  "zhHant": "以化學品將原木與硬木製漿造紙。",
+  "zhHans": "以化学品将原木与硬木制浆造纸。"
+ },
+ {
+  "en": "Steel, alloys, engines and electronics into ocean-going ships for planetary logistics.",
+  "ja": "鋼、合金、機関、電子機器から惑星物流用の外航船を作る。",
+  "zhHant": "以鋼、合金、引擎與電子產品製造行星物流用的遠洋船。",
+  "zhHans": "以钢、合金、引擎与电子产品制造行星物流用的远洋船。"
+ },
+ {
+  "en": "Steel, alloys, precision machinery, electronics, heavy machinery and engines into spaceships — expensive, low-throughput, late-game capital construction.",
+  "ja": "鋼、合金、精密機械、電子機器、重機械、機関から宇宙船を作る。高価で処理量が少ない、終盤の資本財建設。",
+  "zhHant": "以鋼、合金、精密機械、電子產品、重型機械與引擎製造太空船——昂貴、產量低的後期資本建設。",
+  "zhHans": "以钢、合金、精密机械、电子产品、重型机械与引擎制造太空船——昂贵、产量低的后期资本建设。"
+ },
+ {
+  "en": "Alloys, rocket fuel, precision machinery, explosives and electronics into rockets for spaceport-tier logistics — the boosters come fuelled.",
+  "ja": "合金、推進剤、精密機械、爆薬、電子機器から宇宙港級の物流用ロケットを作る。ブースターは燃料充填済み。",
+  "zhHant": "以合金、火箭燃料、精密機械、炸藥與電子產品製造太空港等級物流用火箭——助推器出廠即已加注。",
+  "zhHans": "以合金、火箭燃料、精密机械、炸药与电子产品制造太空港等级物流用火箭——助推器出厂即已加注。"
+ },
+ {
+  "en": "Builds engines from steel and machinery — the powerplant of vehicles and heavy machinery.",
+  "ja": "鋼と機械から機関を作る。車両と重機械の動力源。",
+  "zhHant": "以鋼與機械製造引擎——車輛與重型機械的動力來源。",
+  "zhHans": "以钢与机械制造引擎——车辆与重型机械的动力来源。"
+ },
+ {
+  "en": "Steel, alloys, engines and electronics into automobiles for the population.",
+  "ja": "鋼、合金、機関、電子機器から人々のための自動車を作る。",
+  "zhHant": "以鋼、合金、引擎與電子產品為人民製造汽車。",
+  "zhHans": "以钢、合金、引擎与电子产品为人民制造汽车。"
+ },
+ {
+  "en": "Heavy rolling stock from steel, alloys, engines and heavy machinery — the backbone of railways.",
+  "ja": "鋼、合金、機関、重機械から重い車両を作る。鉄道の柱。",
+  "zhHant": "以鋼、合金、引擎與重型機械製造重型車輛——鐵路的骨幹。",
+  "zhHans": "以钢、合金、引擎与重型机械制造重型车辆——铁路的骨干。"
+ },
+ {
+  "en": "Aircraft from alloys, steel, engines, electronics and electrical machinery — lightweight airframes for spaceports and the wealthy.",
+  "ja": "合金、鋼、機関、電子機器、電気機械から航空機を作る。宇宙港と富裕層のための軽量機体。",
+  "zhHant": "以合金、鋼、引擎、電子產品與電機製造飛機——供太空港與富人使用的輕量機身。",
+  "zhHans": "以合金、钢、引擎、电子产品与电机制造飞机——供太空港与富人使用的轻量机身。"
+ },
+ {
+  "en": "Basic roads and utilities connecting the planet — modest infrastructure and freight capacity.",
+  "ja": "惑星を結ぶ基本的な道路と公共設備。控えめな社会基盤と貨物容量。",
+  "zhHant": "連接行星的基本道路與公用設施——適度的基礎設施與貨運量。",
+  "zhHans": "连接行星的基本道路与公用设施——适度的基础设施与货运量。"
+ },
+ {
+  "en": "Locomotives and rail move people and freight across the planet — strong infrastructure and freight capacity.",
+  "ja": "機関車と鉄道が惑星中で人と貨物を運ぶ。強力な社会基盤と貨物容量。",
+  "zhHant": "機車與鐵路在行星上運送人員與貨物——強大的基礎設施與貨運量。",
+  "zhHans": "机车与铁路在行星上运送人员与货物——强大的基础设施与货运量。"
+ },
+ {
+  "en": "Aircraft and orbital lift connect the world off-planet — balanced launch and interstellar freight capacity.",
+  "ja": "航空機と軌道揚力が世界を惑星外と結ぶ。打ち上げと恒星間貨物の能力の釣り合い。",
+  "zhHant": "飛機與軌道升力將世界與外界相連——發射與星際貨運量兼顧。",
+  "zhHans": "飞机与轨道升力将世界与外界相连——发射与星际货运量兼顾。"
+ },
+ {
+  "en": "Heavy rocketry maximises surface↔orbit LAUNCH capacity at the cost of interstellar freight.",
+  "ja": "重ロケットで地表と軌道間の打ち上げ能力を最大化する。恒星間貨物は犠牲になる。",
+  "zhHant": "重型火箭將地表與軌道間的發射量最大化，代價是星際貨運量。",
+  "zhHans": "重型火箭将地表与轨道间的发射量最大化，代价是星际货运量。"
+ },
+ {
+  "en": "A merchant-marine berth: maximises INTERSTELLAR freight (trade between stars) at the cost of raw lift.",
+  "ja": "商船隊の停泊所。単純な揚力を犠牲に、恒星間貨物(星々の間の交易)を最大化する。",
+  "zhHant": "商船隊泊位：以原始升力為代價，將星際貨運（恆星間貿易）最大化。",
+  "zhHans": "商船队泊位：以原始升力为代价，将星际货运（恒星间贸易）最大化。"
+ },
+ {
+  "en": "A ground anchor and climber station for a tether to orbit — fuel-free lift when paired with an orbital tether above.",
+  "ja": "軌道への索の地上基部と昇降機駅。上空の軌道索と組めば燃料なしの揚力。",
+  "zhHant": "通往軌道之纜繩的地面錨座與爬升站——與上空軌道纜繩配對時可無燃料升空。",
+  "zhHans": "通往轨道之缆绳的地面锚座与爬升站——与上空轨道缆绳配对时可无燃料升空。"
+ },
+ {
+  "en": "Docks and ocean-going ships carry freight along a world’s coasts and across its seas — strong infrastructure and freight capacity, on a world with sea.",
+  "ja": "港と外航船が世界の沿岸と海を越えて貨物を運ぶ。海のある世界での強力な社会基盤と貨物容量。",
+  "zhHant": "碼頭與遠洋船沿著世界海岸與跨越海洋運送貨物——在有海的世界提供強大的基礎設施與貨運量。",
+  "zhHans": "码头与远洋船沿着世界海岸与跨越海洋运送货物——在有海的世界提供强大的基础设施与货运量。"
+ },
+ {
+  "en": "A dense urban core of roads, transit and commerce. Automobiles and power keep a city moving and trading — it runs on the cars its people drive.",
+  "ja": "道路、交通、商業が密集する都心。自動車と電力が都市の移動と交易を保つ。住民の乗る車で動く。",
+  "zhHant": "道路、交通與商業密集的都市核心。汽車與電力讓城市持續運轉與交易——靠市民所開的車子運行。",
+  "zhHans": "道路、交通与商业密集的都市核心。汽车与电力让城市持续运转与交易——靠市民所开的车子运行。"
+ },
+ {
+  "en": "Technicians and physicians providing basic healthcare from medical supplies.",
+  "ja": "医療用品で基礎的な医療を提供する技師と医師。",
+  "zhHant": "以醫療用品提供基本醫療的技術人員與醫師。",
+  "zhHans": "以医疗用品提供基本医疗的技术人员与医师。"
+ },
+ {
+  "en": "A specialist hospital delivering far more healthcare from chemicals and power.",
+  "ja": "化学品と電力で、はるかに多くの医療を提供する専門病院。",
+  "zhHant": "以化學品與電力提供遠更多醫療服務的專科醫院。",
+  "zhHans": "以化学品与电力提供远更多医疗服务的专科医院。"
+ },
+ {
+  "en": "Educators providing schooling — raises the population it serves.",
+  "ja": "教育を提供する教育者。担当する人口を向上させる。",
+  "zhHant": "提供教育的教師——提升其服務的人口。",
+  "zhHans": "提供教育的教师——提升其服务的人口。"
+ },
+ {
+  "en": "Lecture halls, graduate schools and research institutes together. The grandest seat of learning — above all it drives the sciences, the largest broad source of research a world can build, and publishes its work as online services.",
+  "ja": "講堂、大学院、研究所を一体に。最も壮大な学府。何よりも科学を推し進め、世界が建てられる最大の幅広い研究源であり、成果を通信網として公開する。",
+  "zhHant": "講堂、研究所與研究院匯集一處。最宏偉的學府——首要推動科學，是一個世界能建造的最大綜合研究來源，並以網路服務發表成果。",
+  "zhHans": "讲堂、研究生院与研究院汇集一处。最宏伟的学府——首要推动科学，是一个世界能建造的最大综合研究来源，并以网络服务发表成果。"
+ },
+ {
+  "en": "Particle accelerators, cryostats and theory groups pushing the physical sciences — the strongest single source of Physics research.",
+  "ja": "粒子加速器、極低温槽、理論班が物理科学を推し進める。物理研究の最強の単一源。",
+  "zhHant": "粒子加速器、低溫恆溫器與理論團隊推進物理科學——最強的單一物理研究來源。",
+  "zhHans": "粒子加速器、低温恒温器与理论团队推进物理科学——最强的单一物理研究来源。"
+ },
+ {
+  "en": "Test rigs, prototyping shops and materials labs turning theory into hardware — the strongest single source of Engineering research.",
+  "ja": "試験装置、試作工房、材料研究所が理論を装置に変える。工学研究の最強の単一源。",
+  "zhHant": "試驗台、原型工坊與材料實驗室將理論化為硬體——最強的單一工程研究來源。",
+  "zhHans": "试验台、原型工坊与材料实验室将理论化为硬件——最强的单一工程研究来源。"
+ },
+ {
+  "en": "Economists, sociologists and policy scholars studying how societies work — the strongest single source of Society research.",
+  "ja": "社会の仕組みを研究する経済学者、社会学者、政策研究者。社会研究の最強の単一源。",
+  "zhHant": "研究社會如何運作的經濟學家、社會學家與政策學者——最強的單一社會研究來源。",
+  "zhHans": "研究社会如何运作的经济学家、社会学家与政策学者——最强的单一社会研究来源。"
+ },
+ {
+  "en": "Shops, repairs and everyday services staffed by the working class.",
+  "ja": "労働者階級が働く商店、修理、日常サービス。",
+  "zhHant": "由勞工階級經營的商店、維修與日常服務。",
+  "zhHans": "由劳工阶级经营的商店、维修与日常服务。"
+ },
+ {
+  "en": "Artists and craftspeople producing culture and art for a comfortable population.",
+  "ja": "芸術家と職人が、豊かな人々のために文化と芸術を生む。",
+  "zhHant": "藝術家與工匠為生活寬裕的人們創作文化與藝術。",
+  "zhHans": "艺术家与工匠为生活宽裕的人们创作文化与艺术。"
+ },
+ {
+  "en": "Electronics and power running the online services pops and businesses rely on.",
+  "ja": "人々と企業が頼る通信網サービスを、電子機器と電力で運営する。",
+  "zhHant": "以電子產品與電力運行人民與企業所依賴的網路服務。",
+  "zhHans": "以电子产品与电力运行人民与企业所依赖的网络服务。"
+ },
+ {
+  "en": "Management, administration and overhead. Grows as the company grows.",
+  "ja": "経営、管理、間接費。企業の成長とともに大きくなる。",
+  "zhHant": "管理、行政與經常開支。隨公司成長而擴大。",
+  "zhHans": "管理、行政与经常开支。随公司成长而扩大。"
+ },
+ {
+  "en": "Banks, exchanges and brokerages. A lean overhead — the financial district earns its keep MANAGING the country's investment pool (a fee on the capital it stewards), not from this building.",
+  "ja": "銀行、取引所、証券会社。身軽な間接費。金融街はこの建物からではなく、国の投資資金を運用すること(管理する資本への手数料)で稼ぐ。",
+  "zhHant": "銀行、交易所與經紀商。精簡的經常開支——金融區靠管理國家投資池（對所管資本收取費用）賺錢，而非靠這棟建築。",
+  "zhHans": "银行、交易所与经纪商。精简的经常开支——金融区靠管理国家投资池（对所管资本收取费用）赚钱，而非靠这栋建筑。"
+ },
+ {
+  "en": "Clerks and administrators producing the bureaucratic capacity the state runs on.",
+  "ja": "国家を動かす官僚的能力を生む事務員と行政官。",
+  "zhHant": "產生國家運作所需官僚產能的文員與行政人員。",
+  "zhHans": "产生国家运作所需官僚产能的文员与行政人员。"
+ },
+ {
+  "en": "A vast department generating far more bureaucratic capacity — at a far greater cost.",
+  "ja": "はるかに多くの官僚的能力を生む巨大な省庁。その代償もはるかに大きい。",
+  "zhHant": "產生遠更多官僚產能的龐大部門——代價也遠更高。",
+  "zhHans": "产生远更多官僚产能的庞大部门——代价也远更高。"
+ }
+]

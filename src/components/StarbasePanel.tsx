@@ -1,3 +1,5 @@
+import { NativeNameInput, useNativeName } from './NativeName'
+import { Bi } from './Bi'
 import { DraggableWindow } from './DraggableWindow'
 import { useStarbaseStore } from '../state/starbaseStore'
 import { useStarbasePanelStore } from '../state/starbasePanelStore'
@@ -26,6 +28,8 @@ export function StarbasePanel() {
   const [message, setMessage] = useState<string | null>(null)
   const sb = starbases.find((s) => s.id === openId)
   const researched = useTechStore((st) => st.stateFor(sb?.ownerId ?? '').researched)
+  // The station's own subscript, if the player gave one (hook before the early return).
+  const stationNative = useNativeName(`station:${sb?.id ?? ''}`) || undefined
   if (!sb) return null
 
   const sim = useGameTimeStore.getState().simDays
@@ -49,51 +53,52 @@ export function StarbasePanel() {
   }
 
   return (
-    <DraggableWindow title={`${title} — ${tierDef.label}`} memoryKey="starbase" onClose={() => useStarbasePanelStore.getState().close()}>
+    <DraggableWindow title={`${title} — ${tierDef.label}`} titleNative={stationNative} memoryKey="starbase" onClose={() => useStarbasePanelStore.getState().close()}>
       <div className="dip-list">
         <div className="dip-card">
           <div className="dip-card-head">
             <span className="dip-swatch" style={{ background: ownerDisplay(sb.ownerId).color }} />
             <span className="dip-card-name">{tierDef.label}</span>
-            {!active && <span className="dip-status">Under construction</span>}
+            {!active && <span className="dip-status"><Bi en="Under construction" /></span>}
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Owner</span>
+            <span className="inspect-label"><Bi en="Owner" /></span>
             <span className="inspect-value">{ownerDisplay(sb.ownerId).name}{own ? ' (you)' : ''}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Integrity</span>
+            <span className="inspect-label"><Bi en="Integrity" /></span>
             <span className="inspect-value">{Math.round(sb.integrity)} / {starbaseMaxIntegrity(sb)}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Firepower</span>
+            <span className="inspect-label"><Bi en="Firepower" /></span>
             <span className="inspect-value">{starbaseFirepower(sb) || 'None'}</span>
           </div>
           <div className="inspect-row" title="Every module draws power; solar arrays and fusion reactors add to the hull's own supply. A module the supply cannot cover goes offline (the newest first).">
-            <span className="inspect-label">Power</span>
+            <span className="inspect-label"><Bi en="Power" /></span>
             <span className={`inspect-value${power.demand > power.supply ? ' econ-neg' : ''}`}>{power.demand} of {power.supply} used</span>
           </div>
           {sb.zone && (
             <div className="inspect-row">
-              <span className="inspect-label">Orbit</span>
+              <span className="inspect-label"><Bi en="Orbit" /></span>
               <span className="inspect-value">{sb.zone.replace('~', ' · ')}</span>
             </div>
           )}
           {own && (
             <div className="inspect-row">
-              <span className="inspect-label">Name</span>
+              <span className="inspect-label"><Bi en="Name" /></span>
               <input className="ground-key-name-input" value={sb.name ?? ''} maxLength={40} placeholder={title} onChange={(e) => useStarbaseStore.getState().renameStation(sb.id, e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+              <NativeNameInput nativeKey={`station:${sb.id}`} onKeyDown={(e) => e.stopPropagation()} />
             </div>
           )}
           <div className="inspect-row">
-            <span className="inspect-label">Module slots</span>
+            <span className="inspect-label"><Bi en="Module slots" /></span>
             <span className="inspect-value">{modules.length} / {tierDef.moduleSlots}</span>
           </div>
         </div>
 
         <div className="dip-card">
           <div className="dip-card-head">
-            <span className="dip-card-name">Modules</span>
+            <span className="dip-card-name"><Bi en="Modules" /></span>
           </div>
           {STARBASE_MODULE_ORDER.map((m) => {
             const count = modules.filter((x) => x === m).length

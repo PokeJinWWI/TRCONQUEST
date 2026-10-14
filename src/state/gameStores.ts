@@ -10,6 +10,8 @@ import { useAiStore } from '../ai/aiStore'
 import { useAbstractEconomyStore } from './abstractEconomyStore'
 import { useArmyStore } from './armyStore'
 import { useBattleStore } from './battleStore'
+import { useSituationStore } from './situationStore'
+import { useSituationSnoozeStore } from './situationSnoozeStore'
 import { useBombardmentStore } from './bombardmentStore'
 import { useCivicStore, useCivicDetailStore } from './civicStore'
 import { useUnrestStore } from './unrestStore'
@@ -32,7 +34,7 @@ import { useHoldingsStore } from './holdingsStore'
 import { useHyperlaneStore } from './hyperlaneStore'
 import { useJurisdictionStore } from './jurisdictionStore'
 import { useLocationStore } from './locationStore'
-import { usePlaceNameStore } from './placeNameStore'
+import { migratePlaceNames, usePlaceNameStore } from './placeNameStore'
 import { useInfrastructureStore } from './infrastructureStore'
 import { useInternationalOrgStore } from './internationalOrgStore'
 import { useMapModeStore } from './mapModeStore'
@@ -116,7 +118,8 @@ export const STORE_REGISTRY: StoreEntry[] = [
   game('colonies', useColonyStore),
   game('deposits', useDepositStore),
   // v2: player-given site names (v1 saves have none).
-  game('placeNames', usePlaceNameStore),
+  // v3: subscripts per script (Japanese / Traditional / Simplified).
+  game('placeNames', usePlaceNameStore, { version: 3, migrate: (saved) => migratePlaceNames(saved) }),
   game('locations', useLocationStore, { version: 2, migrate: (saved) => dropEarthSites({ names: {}, ...(saved as object) }) }),
   game('jurisdiction', useJurisdictionStore),
   // v2: district levels per site, seeded bodies, auto-seed flag (v1 saves keep their `placed`). v3: Earth's sites moved (hand-placed).
@@ -146,6 +149,7 @@ export const STORE_REGISTRY: StoreEntry[] = [
   }),
   game('armies', useArmyStore),
   game('battles', useBattleStore),
+  game('situationSnooze', useSituationSnoozeStore),
   game('combat', useCombatStore),
   game('diplomacy', useDiplomacyStore),
   game('subjects', useSubjectStore),
@@ -161,6 +165,7 @@ export const STORE_REGISTRY: StoreEntry[] = [
   game('tech', useTechStore),
   game('terrain', useTerrainStore),
   ui('observer', useObserverStore),
+  ui('situations', useSituationStore),
   ui('civicDetail', useCivicDetailStore),
   ui('lens', useLensStore),
   ui('windowLayout', useWindowLayoutStore),
@@ -178,6 +183,9 @@ export const STORE_REGISTRY: StoreEntry[] = [
 export const UNREGISTERED_STORES: Record<string, string> = {
   settingsStore: 'player preferences, kept across games',
   customButtonStore: 'quick buttons, saved in localStorage',
+  situationPrefsStore: 'Situations preferences, saved in localStorage',
+  sidePanelStore: 'side panel widths, saved in localStorage',
+  themeStore: 'UI theme, saved in localStorage',
   menuStore: 'escape-menu open state',
   hoverTipStore: 'hover tooltip',
   buildingDetailStore: 'open detail panel',

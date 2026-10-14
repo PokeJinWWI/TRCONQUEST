@@ -1,3 +1,6 @@
+import { NamedBi } from './NativeName'
+import { Bi } from './Bi'
+import { SidePanelResizer } from './SidePanelResizer'
 import { useMemo, useState } from 'react'
 import { shipPlaceLabel } from '../scene/shipPhysics'
 import { isCivilianClass } from '../scene/fleetRules'
@@ -49,6 +52,8 @@ interface OutlinerEntry {
    * handleFleetClick). A fleet's own id isn't a ship id, so this is what
    * lets the row still resolve to something ShipPanel can inspect. */
   leadShipId?: string
+  // A renamable thing's subscript key (a fleet or a lone ship): its own native label, not the dictionary's.
+  nativeKey?: string
   /** Moon entries only — the planet whose satellite view holds it. */
   parentPlanet?: string
   /** Colony entries only — the system the world is in. */
@@ -138,7 +143,7 @@ function useFleetEntries(): OutlinerEntry[] {
       const name = members.length > 1 ? `${fleet?.name ?? 'Fleet'} (${members.length})` : members[0].name
       // Civilians never share a fleet with warships (fleetRules), so the lead
       // ship says which tab the whole row belongs on.
-      return { key: fleetId, name, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id, civilian: isCivilianClass(members[0].classId), detail: shipPlaceLabel(members[0]) }
+      return { key: fleetId, name, nativeKey: members.length > 1 ? `fleet:${fleetId}` : `ship:${members[0].id}`, color: RELATION_COLORS.own, kind: 'ship' as const, leadShipId: members[0].id, civilian: isCivilianClass(members[0].classId), detail: shipPlaceLabel(members[0]) }
     })
   }, [ships, fleets, playerCountryId])
 }
@@ -260,7 +265,7 @@ function ArmiesSection() {
       </button>
       {!collapsed &&
         (total === 0 ? (
-          <div className="outliner-empty">No army raised</div>
+          <div className="outliner-empty"><Bi en="No army raised" /></div>
         ) : (
           <ul className="outliner-list">
             {groups.map((g) => (
@@ -360,7 +365,7 @@ function BattlesSection() {
       </button>
       {!collapsed &&
         (battles.length === 0 ? (
-          <div className="outliner-empty">Not in any battle or contest</div>
+          <div className="outliner-empty"><Bi en="Not in any battle or contest" /></div>
         ) : (
           <ul className="outliner-list">
             {battles.map((b) => (
@@ -421,7 +426,7 @@ function OutlinerSection({
         aria-expanded={!collapsed}
       >
         <span className={`outliner-section-caret${collapsed ? ' collapsed' : ''}`}>▾</span>
-        {title}
+        <Bi en={title} />
       </button>
       {!collapsed && tabs && (
         <div className="outliner-subtabs" role="tablist">
@@ -434,7 +439,7 @@ function OutlinerSection({
               className={`outliner-subtab${t.id === activeTab ? ' active' : ''}`}
               onClick={() => onTab?.(t.id)}
             >
-              {t.label}
+              <Bi en={t.label} />
               {t.count > 0 ? ` (${t.count})` : ''}
             </button>
           ))}
@@ -461,7 +466,9 @@ function OutlinerSection({
                 }
               >
                 <OutlinerIcon color={entry.color} kind={entry.kind} />
-                <span className="outliner-entry-name">{entry.name}</span>
+                <span className="outliner-entry-name">
+                  {entry.nativeKey ? <NamedBi en={entry.name} nativeKey={entry.nativeKey} /> : <Bi en={entry.name} />}
+                </span>
                 {entry.detail && <span className="outliner-entry-detail" title={entry.detail}>{entry.detail}</span>}
               </li>
             ))}
@@ -603,6 +610,7 @@ export function Outliner() {
 
   return (
     <div className={`outliner${collapsed ? ' collapsed' : ''}`}>
+      <SidePanelResizer panel="outliner" />
       <button
         type="button"
         className="outliner-toggle"
@@ -612,7 +620,7 @@ export function Outliner() {
         {collapsed ? '‹' : '›'}
       </button>
       <div className="outliner-content">
-        <div className="outliner-title">Outliner</div>
+        <div className="outliner-title"><Bi en="Outliner" /></div>
 
         {/* Always here, whichever tab is open: it filters every list. */}
         <input
@@ -625,7 +633,7 @@ export function Outliner() {
         <div className="outliner-tabs" role="tablist">
           {OUTLINER_TABS.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`outliner-tab${tab === t.id ? ' active' : ''}`} title={t.tip} onClick={() => setTab(t.id)}>
-              {t.label}
+              <Bi en={t.label} />
             </button>
           ))}
         </div>
@@ -641,7 +649,7 @@ export function Outliner() {
                   className={`outliner-filter-pill${visibleKinds.has(kind) ? ' active' : ''}`}
                   onClick={() => toggleKind(kind)}
                 >
-                  {label}
+                  <Bi en={label} />
                 </button>
               ))}
             </div>

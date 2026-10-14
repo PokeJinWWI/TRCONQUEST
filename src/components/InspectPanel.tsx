@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useState } from 'react'
 import type { InspectableBody } from '../scene/inspectableBody'
 import { estimateHabitability, estimateSize, PLANET_CLASS_LABELS } from '../scene/bodyStats'
@@ -90,7 +91,7 @@ function ColonyRow({ bodyName }: { bodyName: string }) {
   const patrolled = colony.orbitSecureSinceSimDays === null ? 0 : Math.min(COLONY_PATROL_DAYS, Math.floor(simDays - colony.orbitSecureSinceSimDays))
   return (
     <div className="inspect-row">
-      <span className="inspect-label">Colony</span>
+      <span className="inspect-label"><Bi en="Colony" /></span>
       <span
         className="inspect-value"
         title={
@@ -175,12 +176,12 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
   return (
     <>
       <div className="inspect-row">
-        <span className="inspect-label">Type</span>
+        <span className="inspect-label"><Bi en="Type" /></span>
         <span className="inspect-value">{KIND_LABEL[body.kind]}</span>
       </div>
       {owner && (
         <div className="inspect-row">
-          <span className="inspect-label" title="The recognized sovereign of this world. Who holds it by force, who owns what stands on it and who holds its orbit are on the Territory tab.">Sovereign</span>
+          <span className="inspect-label" title="The recognized sovereign of this world. Who holds it by force, who owns what stands on it and who holds its orbit are on the Territory tab."><Bi en="Sovereign" /></span>
           <span className="inspect-value" style={{ color: owner.color }}>
             {owner.name}
           </span>
@@ -189,7 +190,7 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
       {owner && <ColonyRow bodyName={body.name} />}
       {occupier && (
         <div className="inspect-row">
-          <span className="inspect-label">Controller</span>
+          <span className="inspect-label"><Bi en="Controller" /></span>
           <span className="inspect-value" style={{ color: occupier.color }}>
             {occupier.name} (occupied)
           </span>
@@ -205,12 +206,12 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
         )
       })}
       <div className="inspect-row">
-        <span className="inspect-label">Radius</span>
+        <span className="inspect-label"><Bi en="Radius" /></span>
         <span className="inspect-value">{Math.round(body.radiusKm).toLocaleString()} km</span>
       </div>
       {body.kind === 'planet' && body.orbitAU !== undefined && (
         <div className="inspect-row">
-          <span className="inspect-label">Orbit</span>
+          <span className="inspect-label"><Bi en="Orbit" /></span>
           <span className="inspect-value">
             {body.orbitAU.toFixed(2)} AU · {body.orbitPeriodYears?.toFixed(2)} yr
           </span>
@@ -218,13 +219,13 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
       )}
       {body.orbitPeriodDays !== undefined && (
         <div className="inspect-row">
-          <span className="inspect-label">Orbital period</span>
+          <span className="inspect-label"><Bi en="Orbital period" /></span>
           <span className="inspect-value">{body.orbitPeriodDays.toFixed(2)} days</span>
         </div>
       )}
       {body.moonCount !== undefined && (
         <div className="inspect-row">
-          <span className="inspect-label">Moons</span>
+          <span className="inspect-label"><Bi en="Moons" /></span>
           <span className="inspect-value">{body.moonCount}</span>
         </div>
       )}
@@ -240,21 +241,21 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
           <div className="inspect-divider" />
           {body.planetClass && (
             <div className="inspect-row">
-              <span className="inspect-label">Class</span>
+              <span className="inspect-label"><Bi en="Class" /></span>
               <span className="inspect-value">{PLANET_CLASS_LABELS[body.planetClass]}</span>
             </div>
           )}
           <div className="inspect-row">
-            <span className="inspect-label">Size class</span>
+            <span className="inspect-label"><Bi en="Size class" /></span>
             <span className="inspect-value">{size.label}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Districts</span>
+            <span className="inspect-label"><Bi en="Districts" /></span>
             <span className="inspect-value">{size.districts}</span>
           </div>
           {habitability && (
             <div className="inspect-row">
-              <span className="inspect-label">Habitability</span>
+              <span className="inspect-label"><Bi en="Habitability" /></span>
               <span className="inspect-value">
                 {habitability.label} ({habitability.pct}%)
               </span>
@@ -270,7 +271,7 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
           Armies tab). */}
       {body.kind !== 'star' && groundSurface(body.name, useTerritoryStore.getState().bodyOwner) && (
         <button type="button" className="detail-view-btn" onClick={() => useViewStore.getState().enterGround(body.name)}>
-          Ground Map
+          <Bi en="Ground Map" />
         </button>
       )}
 

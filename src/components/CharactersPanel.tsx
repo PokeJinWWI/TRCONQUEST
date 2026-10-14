@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { formatIED } from '../economy/format'
@@ -31,23 +32,23 @@ function CharacterDetail({ character }: { character: Character }) {
       </div>
       <div className="char-detail-rows">
         <div className="inspect-row">
-          <span className="inspect-label">Age</span>
+          <span className="inspect-label"><Bi en="Age" /></span>
           <span className="inspect-value">{character.age}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">House</span>
+          <span className="inspect-label"><Bi en="House" /></span>
           <span className="inspect-value">{family?.name ?? '—'}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Culture</span>
+          <span className="inspect-label"><Bi en="Culture" /></span>
           <span className="inspect-value">{culture}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Faith</span>
+          <span className="inspect-label"><Bi en="Faith" /></span>
           <span className="inspect-value">{religion}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Wealth</span>
+          <span className="inspect-label"><Bi en="Wealth" /></span>
           <span className="inspect-value">{formatIED(character.wealth)}</span>
         </div>
       </div>
@@ -104,7 +105,7 @@ export function CharactersPanel({ subcategory }: { subcategory: string | null })
   if (subcategory === 'Families') {
     return (
       <div className="econ-panel">
-        <div className="econ-subtitle">Families</div>
+        <div className="econ-subtitle"><Bi en="Families" /></div>
         {families.length === 0 ? (
           <div className="nav-placeholder">No families of note.</div>
         ) : (
@@ -136,7 +137,7 @@ export function CharactersPanel({ subcategory }: { subcategory: string | null })
   const selected = characters.find((c) => c.id === selectedId) ?? characters[0]
   return (
     <div className="econ-panel">
-      <div className="econ-subtitle">Characters</div>
+      <div className="econ-subtitle"><Bi en="Characters" /></div>
       <div className="char-list">
         {characters.map((c) => (
           <button

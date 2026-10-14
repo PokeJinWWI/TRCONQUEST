@@ -1,3 +1,4 @@
+import { notifyOwner } from '../scene/notify'
 import { useEffect } from 'react'
 import { playerContests, playerGroundBattles, playerSpaceBattles, playerTerrainBattles, type PlayerBattle } from '../scene/battleList'
 import { useArmyStore } from '../state/armyStore'
@@ -10,6 +11,9 @@ import { useTerrainStore } from '../state/terrainStore'
 import { useGameTimeStore } from '../state/gameTimeStore'
 import { engagementKnownToPlayer } from '../scene/commsVisual'
 import { engagedUnitIds } from '../scene/terrainWar'
+
+const battleLabel = (b: PlayerBattle) => `${b.kind === 'space' ? 'Space battle' : 'Ground battle'} at ${b.place}`
+const battlePlace = (b: PlayerBattle) => (b.bodyName ? { bodyName: b.bodyName } : b.starId ? { starId: b.starId } : undefined)
 
 const keyOf = (battles: PlayerBattle[]) => battles.map((b) => `${b.key}@${b.starId ?? ''}`).join('|')
 
@@ -30,7 +34,17 @@ export function refreshBattles(): void {
     ...playerGroundBattles(armies, playerId, engaged),
     ...playerContests(armies, playerId, undefined, engaged),
   ]
-  if (keyOf(next) !== keyOf(useBattleStore.getState().battles)) useBattleStore.getState().setBattles(next)
+  const prev = useBattleStore.getState().battles
+  if (keyOf(next) === keyOf(prev)) return
+  useBattleStore.getState().setBattles(next)
+  if (!playerId) return
+  // A fight the player learns of, or that ends, is news. By place, not key: a ground fight turns into
+  // a terrain battle and back under a new key, and that is still the same fight.
+  const placeKey = (b: PlayerBattle) => `${b.kind === 'space' ? 'space' : 'ground'}@${b.bodyName ?? b.place}`
+  const before = new Set(prev.map(placeKey))
+  const after = new Set(next.map(placeKey))
+  for (const b of next) if (!before.has(placeKey(b))) notifyOwner(playerId, 'battle-started', `${battleLabel(b)} has begun`, battlePlace(b))
+  for (const b of prev) if (!after.has(placeKey(b))) notifyOwner(playerId, 'battle-ended', `${battleLabel(b)} is over`, battlePlace(b))
 }
 
 export function useBattleTracker() {

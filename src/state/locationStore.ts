@@ -1,5 +1,4 @@
 import { nativeOfName } from '../data/nativeNames'
-import { nativeFor } from './placeNameStore'
 import { create } from 'zustand'
 import { setCustomSites } from '../scene/customSites'
 import { bodyOfLocation, locationById, type DevLocation } from '../scene/locations'
@@ -103,7 +102,8 @@ export function siteName(siteId: string, names = useLocationStore.getState().nam
   return names[siteId] ?? locationById(siteId)?.name ?? siteId.slice(siteId.lastIndexOf('#') + 1)
 }
 
-// The subscript beside a site's name: the player's own, else the built-in one for Earth's Chinese places.
-export function siteNative(siteId: string): string | undefined {
-  return nativeFor(siteId, nativeOfName(locationById(siteId)?.name))
+// The built-in subscript of a site (traditional characters; Earth's Chinese places), shown in the NERV
+// theme unless the player gave its own (components/NativeName.tsx).
+export function siteNativeBuiltIn(siteId: string): string | undefined {
+  return nativeOfName(locationById(siteId)?.name)
 }

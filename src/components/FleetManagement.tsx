@@ -1,3 +1,5 @@
+import { NamedBi, NativeNameInput, RenameField } from './NativeName'
+import { Bi } from './Bi'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useMemo, useState } from 'react'
 import {
@@ -164,7 +166,13 @@ function FleetManager() {
                 {expanded ? '▾' : '▸'}
               </button>
               <span className="fleet-group-header">
-                {fleets.find((f) => f.id === fleetId)?.name ?? 'Fleet'} · {members.length} ship{members.length === 1 ? '' : 's'}
+                <RenameField
+                  name={fleets.find((f) => f.id === fleetId)?.name ?? 'Fleet'}
+                  nativeKey={`fleet:${fleetId}`}
+                  canRename={members.some((m) => m.ownerId === playerCountryId)}
+                  onRename={(name) => useFleetStore.getState().renameFleet(fleetId, name.trim().slice(0, 40))}
+                />{' '}
+                · {members.length} ship{members.length === 1 ? '' : 's'}
               </span>
               <FleetFreeFlightToggle ships={members} />
               <FleetExploreToggle ships={members} />
@@ -185,9 +193,11 @@ function FleetManager() {
                     onClick={() => selectShip(ship.id)}
                   >
                     <div className="fleet-row-head">
-                      <span className="fleet-row-name">{ship.name}</span>
+                      <span className="fleet-row-name">
+                        <NamedBi en={ship.name} nativeKey={`ship:${ship.id}`} />
+                      </span>
                       <span className="fleet-row-class">{shipClass?.name ?? 'Unknown'}</span>
-                      {engagedIds.has(ship.id) && <span className="combat-roster-tag">IN COMBAT</span>}
+                      {engagedIds.has(ship.id) && <span className="combat-roster-tag"><Bi en="IN COMBAT" /></span>}
                     </div>
                     <div className="fleet-row-bar">
                       <span className="health-bar-track tone-overall combat-roster-bar">
@@ -215,22 +225,22 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
   return (
     <div className="design-detail">
       <div className="inspect-row">
-        <span className="inspect-label">Role</span>
+        <span className="inspect-label"><Bi en="Role" /></span>
         <span className="inspect-value">{SHIP_ROLE_LABELS[shipClass.role]}</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Drives</span>
+        <span className="inspect-label"><Bi en="Drives" /></span>
         <span className="inspect-value">
           Reaction{shipClass.ftlDrives.length ? `, ${shipClass.ftlDrives.map(describeFtlDrive).join(', ')}` : ''}
         </span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Sublight</span>
+        <span className="inspect-label"><Bi en="Sublight" /></span>
         <span className="inspect-value">{profile.maneuverUnitsPerSecond.toFixed(2)} arena units/s</span>
       </div>
 
       <div className="inspect-divider" />
-      <div className="combat-orders-title">Hull</div>
+      <div className="combat-orders-title"><Bi en="Hull" /></div>
       {COMPONENT_KINDS.map((kind) => (
         <div className="inspect-row" key={kind}>
           <span className="inspect-label">{COMPONENT_LABELS[kind]}</span>
@@ -238,17 +248,17 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
         </div>
       ))}
       <div className="inspect-row">
-        <span className="inspect-label">Shields</span>
+        <span className="inspect-label"><Bi en="Shields" /></span>
         <span className="inspect-value">
           {profile.defenses.shieldHp} HP · +{profile.defenses.shieldRegenPerSecond}/s
         </span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Armor</span>
+        <span className="inspect-label"><Bi en="Armor" /></span>
         <span className="inspect-value">{profile.defenses.armorHp} HP</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Point Defense</span>
+        <span className="inspect-label"><Bi en="Point Defense" /></span>
         <span className="inspect-value">
           {profile.defenses.pointDefenseRating > 0
             ? `${Math.round(profile.defenses.pointDefenseRating * 100)}% intercept`
@@ -257,7 +267,7 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
       </div>
 
       <div className="inspect-divider" />
-      <div className="combat-orders-title">Armament</div>
+      <div className="combat-orders-title"><Bi en="Armament" /></div>
       {profile.weapons.length === 0 ? (
         <div className="nav-placeholder">Unarmed.</div>
       ) : (
@@ -265,11 +275,11 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
           <table className="design-table">
             <thead>
               <tr>
-                <th>Mount</th>
-                <th>Type</th>
-                <th>Dmg</th>
-                <th>Rate</th>
-                <th>Range</th>
+                <th><Bi en="Mount" /></th>
+                <th><Bi en="Type" /></th>
+                <th><Bi en="Dmg" /></th>
+                <th><Bi en="Rate" /></th>
+                <th><Bi en="Range" /></th>
               </tr>
             </thead>
             <tbody>
@@ -285,7 +295,7 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
             </tbody>
           </table>
           <div className="inspect-row">
-            <span className="inspect-label">Raw DPS</span>
+            <span className="inspect-label"><Bi en="Raw DPS" /></span>
             <span className="inspect-value" title="Before the defense matrix and before range — comparison only">
               {rawDps(profile).toFixed(1)}
             </span>
@@ -296,7 +306,7 @@ function DesignDetail({ shipClass }: { shipClass: ShipClass }) {
       {types.length > 0 && (
         <>
           <div className="inspect-divider" />
-          <div className="combat-orders-title">Matchups</div>
+          <div className="combat-orders-title"><Bi en="Matchups" /></div>
           {/* The genuinely decision-relevant readout: raw DPS says nothing
               about what a loadout is good *against*, and the counter-matrix
               is what actually decides fights. */}
@@ -393,9 +403,9 @@ function SlotEditor({ design, chassis }: { design: ShipDesign; chassis: HullChas
           Engineering) — the tier picker only ever offers tiers already
           unlocked, same "filter before render" gating every other choice in
           this builder already uses. */}
-      <div className="combat-orders-title">Power Distribution</div>
+      <div className="combat-orders-title"><Bi en="Power Distribution" /></div>
       <div className="inspect-row">
-        <span className="inspect-label">Grid Tier</span>
+        <span className="inspect-label"><Bi en="Grid Tier" /></span>
         <select
           className="slot-select"
           value={design.powerTier}
@@ -409,7 +419,7 @@ function SlotEditor({ design, chassis }: { design: ShipDesign; chassis: HullChas
         </select>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Power Used</span>
+        <span className="inspect-label"><Bi en="Power Used" /></span>
         <span className={`inspect-value${powerUsed > powerBudget ? ' econ-neg' : ''}`}>
           {powerUsed} / {powerBudget}
         </span>
@@ -489,7 +499,7 @@ function ShipBuilder() {
     <div className="designer-layout">
       <div className="designer-list">
         <div className="combat-side">
-          <div className="combat-side-label">Your Designs</div>
+          <div className="combat-side-label"><Bi en="Your Designs" /></div>
           {designs.length === 0 && <div className="ship-panel-hint">No custom designs yet — build one below.</div>}
           {designs.map((d) => (
             <button
@@ -498,7 +508,9 @@ function ShipBuilder() {
               className={`combat-roster-row${d.id === selectedId ? ' selected' : ''}`}
               onClick={() => setSelectedId(d.id)}
             >
-              <span className="combat-roster-name">{d.name}</span>
+              <span className="combat-roster-name">
+                <NamedBi en={d.name} nativeKey={`design:${d.id}`} />
+              </span>
               <span
                 className="builder-delete-btn"
                 role="button"
@@ -518,7 +530,7 @@ function ShipBuilder() {
         <div className="inspect-divider" />
 
         <div className="combat-side">
-          <div className="combat-side-label">New Design</div>
+          <div className="combat-side-label"><Bi en="New Design" /></div>
           <select className="slot-select" value={newChassisId} onChange={(e) => setNewChassisId(e.target.value)}>
             {availableChassis.map((c) => (
               <option key={c.id} value={c.id}>
@@ -534,7 +546,7 @@ function ShipBuilder() {
             onChange={(e) => setNewName(e.target.value)}
           />
           <button type="button" className="builder-create-btn" onClick={handleCreate}>
-            Create Design
+            <Bi en="Create Design" />
           </button>
         </div>
       </div>
@@ -550,14 +562,15 @@ function ShipBuilder() {
               value={selected.name}
               onChange={(e) => renameDesign(selected.id, e.target.value)}
             />
+            <NativeNameInput nativeKey={`design:${selected.id}`} />
             <div className="inspect-row">
-              <span className="inspect-label">Chassis</span>
+              <span className="inspect-label"><Bi en="Chassis" /></span>
               <span className="inspect-value">{selectedChassis.name}</span>
             </div>
             <div className="inspect-divider" />
             <SlotEditor design={selected} chassis={selectedChassis} />
             <div className="inspect-divider" />
-            <div className="combat-orders-title">Computed Stats</div>
+            <div className="combat-orders-title"><Bi en="Computed Stats" /></div>
             <DesignDetail shipClass={builtShipClass} />
             <div className="ship-panel-hint">
               Spawn this design from the Debug Console (` key) — it appears in the Ship Class list alongside the presets.

@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { isNewTabClick, isNewTabContextMenu } from '../scene/selectionInput'
 import { LeadersPanel } from './LeadersPanel'
 import { navyTabOnOpen } from '../state/fleetTabStore'
@@ -32,6 +33,8 @@ import { SandboxPanel } from './SandboxPanel'
 import { usePlayerStore } from '../state/playerStore'
 import { useViewStore } from '../state/viewStore'
 import { getCountry } from '../data/countryData'
+import { SituationsPanel } from './SituationsPanel'
+import { SidePanelResizer } from './SidePanelResizer'
 
 const SANDBOX_CATEGORY = 'Sandbox'
 const MILITARY_CATEGORY = 'Fleet Management'
@@ -43,6 +46,7 @@ const GOVERNMENT_CATEGORY = 'Government'
 const LAWS_SUBCATEGORY = 'Laws'
 const CORPORATIONS_CATEGORY = 'Corporations'
 const MARKETS_CATEGORY = 'Markets'
+export const SITUATIONS_CATEGORY = 'Situations'
 const CENTRAL_BANK_CATEGORY = 'Central Bank'
 const SOCIETY_CATEGORY = 'Society'
 const DEMOGRAPHICS_SUBCATEGORY = 'Demographics'
@@ -57,7 +61,7 @@ interface CategoryDef {
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { name: 'Situations' },
+  { name: SITUATIONS_CATEGORY },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Leaders', 'Laws', 'Institutions'] },
   { name: 'Economy', subcategories: ['Overview', 'Budget', 'Finance', 'Construction', 'Trade', 'Stockpiles', 'Welfare'] },
   { name: MARKETS_CATEGORY, subcategories: ['Market', 'Stock Exchange', 'Bond Market', 'Forex'] },
@@ -75,7 +79,7 @@ const CATEGORIES: CategoryDef[] = [
 // Markets, Central Bank or Corporations, and Economy is one macro panel. The
 // rest of the game (government, tech, society, diplomacy, military…) is unchanged.
 const ABSTRACT_CATEGORIES: CategoryDef[] = [
-  { name: 'Situations' },
+  { name: SITUATIONS_CATEGORY },
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Leaders', 'Laws', 'Institutions'] },
   { name: 'Economy' },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
@@ -115,6 +119,7 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   // Simple mode: the whole Economy category is one macro panel.
   if (abstractEconomy && category.name === ECONOMY_CATEGORY) return <AbstractEconomyPanel />
   if (category.name === SANDBOX_CATEGORY) return <SandboxPanel />
+  if (category.name === SITUATIONS_CATEGORY) return <SituationsPanel />
   // Complex mode: the whole economy on one scrollable page (the other tabs keep the detail).
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Overview') return <EconomyOverview />
   if (category.name === ECONOMY_CATEGORY && subcategory === 'Construction') return <ConstructionPanel />
@@ -139,7 +144,7 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   if (category.name === MILITARY_CATEGORY && subcategory === ARMY_SUBCATEGORY) return <ArmyPanel />
   if (category.name === DIPLOMACY_CATEGORY) return <DiplomacyPanel subcategory={subcategory} />
   if (category.name === 'International Organizations') return <InternationalOrgPanel />
-  return <div className="nav-placeholder">Not yet available</div>
+  return <div className="nav-placeholder"><Bi en="Not yet available" /></div>
 }
 
 // Stellaris-style left-side nation nav — the real selected country's name
@@ -199,7 +204,9 @@ export function NavBar() {
     <>
       <div className={`nav-sidebar${collapsed ? ' collapsed' : ''}`}>
         <div className="nav-sidebar-content">
-          <div className="nav-nation-name">{nationName}</div>
+          <div className="nav-nation-name">
+            <Bi en={nationName} />
+          </div>
           {navHistory.length > 0 && (
             <button type="button" className="nav-back-btn" onClick={() => useViewStore.getState().navBack()} title="Go back to the previous menu (Cmd/Ctrl+Z)">
               ‹ Back
@@ -217,14 +224,16 @@ export function NavBar() {
                   e.preventDefault()
                   handleCategoryClick(category, e)
                 }}
-                title="Ctrl/Cmd-click: open in a new tab"
+                title={`${category.name}\nCtrl/Cmd-click: open in a new tab`}
               >
-                {category.name}
+                <span className="nav-btn-label">
+                  <Bi en={category.name} />
+                </span>
               </button>
             ))}
           </div>
           <div className="nav-custom">
-            <div className="nav-custom-title">Quick buttons</div>
+            <div className="nav-custom-title"><Bi en="Quick buttons" /></div>
             {customButtons.map((b) => {
               const active = activeCategoryName === b.category && activeSubcategory === b.subcategory && (!b.fleetTab || fleetTab === b.fleetTab) && (!b.shipyardTab || shipyardNow === b.shipyardTab)
               return (
@@ -248,7 +257,9 @@ export function NavBar() {
                     if (!b.builtin) removeButton(b.id)
                   }}
                 >
-                  {b.label}
+                  <span className="nav-btn-label">
+                    <Bi en={b.label} />
+                  </span>
                   {!b.builtin && (
                     <span
                       className="nav-custom-remove"
@@ -285,6 +296,7 @@ export function NavBar() {
             )}
           </div>
         </div>
+        <SidePanelResizer panel="nav" />
         <button
           type="button"
           className="nav-sidebar-toggle"
@@ -339,7 +351,7 @@ export function NavBar() {
                         : (openNavyAtDefault(activeCategoryName, sub), setNavCategory(activeCategoryName, sub))
                     }
                   >
-                    {sub}
+                    <Bi en={sub} />
                   </button>
                 ))}
               </div>

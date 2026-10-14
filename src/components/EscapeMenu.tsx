@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { resetGame } from '../scene/gameReset'
 import { useMenuStore } from '../state/menuStore'
 import { SaveSlots } from './SaveSlots'
@@ -30,16 +31,16 @@ export function EscapeMenu() {
           <>
             <div className="escape-menu-buttons">
               <button type="button" className="confirm-btn confirm-btn-go" onClick={close}>
-                Resume
+                <Bi en="Resume" />
               </button>
               <button type="button" className="confirm-btn" onClick={() => setView('saves')}>
-                Save / Load
+                <Bi en="Save / Load" />
               </button>
               <button type="button" className="confirm-btn" onClick={() => setView('settings')}>
-                Settings
+                <Bi en="Settings" />
               </button>
               <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setView('quit')}>
-                Quit to empire select
+                <Bi en="Quit to empire select" />
               </button>
             </div>
             <ul className="confirm-effects escape-menu-keys">
@@ -56,7 +57,7 @@ export function EscapeMenu() {
             <SaveSlots canSave onLoaded={() => useMenuStore.setState({ open: false, view: 'main', pausedByMenu: false })} />
             <div className="confirm-actions">
               <button type="button" className="confirm-btn confirm-btn-go" onClick={() => setView('main')}>
-                Back
+                <Bi en="Back" />
               </button>
             </div>
           </>
@@ -67,7 +68,7 @@ export function EscapeMenu() {
             <SettingsPanel />
             <div className="confirm-actions">
               <button type="button" className="confirm-btn confirm-btn-go" onClick={() => setView('main')}>
-                Back
+                <Bi en="Back" />
               </button>
             </div>
           </>
@@ -78,10 +79,10 @@ export function EscapeMenu() {
             <div className="confirm-body">Unsaved progress is lost. You will return to the empire select screen and start over.</div>
             <div className="confirm-actions">
               <button type="button" className="confirm-btn confirm-btn-cancel" onClick={() => setView('main')}>
-                Cancel
+                <Bi en="Cancel" />
               </button>
               <button type="button" className="confirm-btn confirm-btn-go" onClick={quit}>
-                Quit
+                <Bi en="Quit" />
               </button>
             </div>
           </>

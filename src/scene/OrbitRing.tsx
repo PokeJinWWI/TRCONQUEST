@@ -1,3 +1,4 @@
+import { useSceneColors } from './themeColors'
 import { getOrbitPosition } from './orbitMath'
 
 interface OrbitRingProps {
@@ -7,6 +8,7 @@ interface OrbitRingProps {
 }
 
 export function OrbitRing({ radius, inclinationDeg = 0, ascendingNodeDeg = 0 }: OrbitRingProps) {
+  const colors = useSceneColors()
   const points: number[] = []
   const segments = 128
   for (let i = 0; i <= segments; i++) {
@@ -20,7 +22,7 @@ export function OrbitRing({ radius, inclinationDeg = 0, ascendingNodeDeg = 0 }: 
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[new Float32Array(points), 3]} />
       </bufferGeometry>
-      <lineBasicMaterial color="#7ce8ff" transparent opacity={0.9} />
+      <lineBasicMaterial color={colors.orbit} toneMapped={colors.toneMapped} transparent opacity={0.9} />
     </line>
   )
 }

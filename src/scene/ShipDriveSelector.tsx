@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { usePlayerTech } from '../hooks/usePlayerTech'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
@@ -51,7 +52,7 @@ export function ShipDriveSelector({ ships }: { ships: ShipInstance[] }) {
     <>
     <div className="inspect-row">
       <span className="inspect-label" title="Which drive the ship uses for its next orders (interstellar and between clusters). It stays until you change it.">
-        Drive
+        <Bi en="Drive" />
       </span>
       <span className="inspect-value ship-automation">
         {buttons.map((b) => (

@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { usePlayerTech } from '../hooks/usePlayerTech'
 import { usePlayerResources } from '../hooks/usePlayerResources'
@@ -69,7 +70,7 @@ function ResearchQueue({ queue, researched, points, monthly, free, onRemove }: {
   const have = new Set(researched)
   return (
     <div className="tech-queue">
-      <div className="combat-orders-title">Research queue</div>
+      <div className="combat-orders-title"><Bi en="Research queue" /></div>
       {(['physics', 'society', 'engineering'] as TechCategory[]).map((cat) => {
         const ids = queue.filter((id) => findTech(id)?.category === cat)
         if (ids.length === 0) return null
@@ -166,7 +167,7 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
         </span>
       </div>
       <button type="button" className="tech-tree-view-btn" onClick={() => setShowTree(true)}>
-        Tree View
+        <Bi en="Tree View" />
       </button>
       <ResearchQueue queue={tech.queue ?? []} researched={tech.researched} points={tech.researchPoints} monthly={monthly} free={freeResearchMode} onRemove={(id) => unqueueTech(countryId, id)} />
       {showTree && (
@@ -232,7 +233,7 @@ export function NationTechPanel({ subcategory }: { subcategory: string | null })
                         {isResearched ? 'Researched · click to undo' : freeResearchMode ? 'Research · 0' : `Research · ${node.cost}`}
                       </button>
                     ) : isResearched ? (
-                      <span className="inspect-value econ-pos">Researched</span>
+                      <span className="inspect-value econ-pos"><Bi en="Researched" /></span>
                     ) : eligible ? (
                       <button type="button" className="tech-research-btn" onClick={() => researchNode(countryId, node.id)} title="Research it now">
                         {freeResearchMode ? 0 : node.cost} pts

@@ -1,3 +1,4 @@
+import { Bi } from '../Bi'
 import { useSeededBody } from '../../hooks/useSeededBody'
 import { useMemo, useState } from 'react'
 import { areaView, type AreaSite } from '../../scene/areaView'
@@ -173,7 +174,7 @@ export function AreaView({ bodyName, playerId }: { bodyName: string; playerId: s
       })}
       {view.standalone.length > 0 && (
         <div>
-          <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere">Standalone buildings</div>
+          <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere"><Bi en="Standalone buildings" /></div>
           <div className="pl-district">
             <div className="pl-grid">
               {view.standalone.map((b) => (

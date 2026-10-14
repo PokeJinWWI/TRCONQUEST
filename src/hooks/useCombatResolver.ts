@@ -1,3 +1,4 @@
+import { notifyOwner } from '../scene/notify'
 import { useEffect } from 'react'
 import { loseShipToJump } from '../scene/jumpLoss'
 import { fightPace, paceAfterSpaceFight } from './fightPace'
@@ -215,6 +216,8 @@ export function resolveSpaceCombat(simDays: number): void {
         .filter((owner): owner is string => !!owner && owner !== lost.ownerId)
       const profile = shipCombatProfile(lost)
       if (profile) recordLoss(lost.ownerId, enemies, totalHitPoints(profile))
+      const at = lost.location.kind === 'orbiting' ? lost.location.bodyName : null
+      notifyOwner(lost.ownerId, 'ship-destroyed', `${lost.name} was destroyed in battle${at ? ` at ${at}` : ''}`, at ? { bodyName: at } : undefined, simDays)
     }
     useShipStore.getState().applyCombatDamage(damageToApply, [...destroyed])
   }

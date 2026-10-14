@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { Fragment, useState } from 'react'
 import { goToBody } from '../scene/eventNavigation'
 import { usePlayerStore } from '../state/playerStore'
@@ -174,7 +175,7 @@ function MacroTab({ countryId, s, r }: TabProps) {
             {r.inflationParts.map((p) => (
               <div key={p.label}><span>{p.label}</span><span className={p.value > 0 ? 'econ-neg' : 'econ-pos'}>{p.value > 0 ? '+' : ''}{pct(p.value, 2)}</span></div>
             ))}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 2 }}><span>Heading toward</span><span>{pct(r.inflationTarget, 2)}</span></div>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 2 }}><span><Bi en="Heading toward" /></span><span>{pct(r.inflationTarget, 2)}</span></div>
           </div>
         </>
       )}
@@ -183,11 +184,11 @@ function MacroTab({ countryId, s, r }: TabProps) {
       )}
 
       <div className="cb-facts">
-        <div title="GDP at starting prices — growth here is real: new buildings and a bigger population."><span className="inspect-label">Real GDP</span><span>{formatMoney(s.realGdp)}</span></div>
-        <div title={realGrowth === undefined ? `Needs ${GROWTH_MIN_MONTHS} months of history` : h.length >= 13 ? 'Real GDP vs a year ago' : `Annualized over the last ${h.length - 1} months`}><span className="inspect-label">Real growth</span><span className={realGrowth === undefined ? '' : realGrowth >= 0 ? 'econ-pos' : 'econ-neg'}>{realGrowth === undefined ? '—' : pct(realGrowth, 2)}</span></div>
-        <div title="Cumulative inflation since the game began"><span className="inspect-label">Price level</span><span>{s.priceLevel.toFixed(3)}</span></div>
-        <div title="Output per worker (1.000 at the start). It grows every month — faster the more research your labs do per person — and multiplies everything your buildings and services produce. The main source of long-run growth."><span className="inspect-label">Productivity</span><span>{r.productivity.toFixed(3)} <span className="econ-pos">+{pct(r.productivityGrowth, 1)}/yr</span></span></div>
-        <div><span className="inspect-label">Debt ceiling</span><span>{Math.round(r.debtCeilingPct * 100)}% GDP</span></div>
+        <div title="GDP at starting prices — growth here is real: new buildings and a bigger population."><span className="inspect-label"><Bi en="Real GDP" /></span><span>{formatMoney(s.realGdp)}</span></div>
+        <div title={realGrowth === undefined ? `Needs ${GROWTH_MIN_MONTHS} months of history` : h.length >= 13 ? 'Real GDP vs a year ago' : `Annualized over the last ${h.length - 1} months`}><span className="inspect-label"><Bi en="Real growth" /></span><span className={realGrowth === undefined ? '' : realGrowth >= 0 ? 'econ-pos' : 'econ-neg'}>{realGrowth === undefined ? '—' : pct(realGrowth, 2)}</span></div>
+        <div title="Cumulative inflation since the game began"><span className="inspect-label"><Bi en="Price level" /></span><span>{s.priceLevel.toFixed(3)}</span></div>
+        <div title="Output per worker (1.000 at the start). It grows every month — faster the more research your labs do per person — and multiplies everything your buildings and services produce. The main source of long-run growth."><span className="inspect-label"><Bi en="Productivity" /></span><span>{r.productivity.toFixed(3)} <span className="econ-pos">+{pct(r.productivityGrowth, 1)}/yr</span></span></div>
+        <div><span className="inspect-label"><Bi en="Debt ceiling" /></span><span>{Math.round(r.debtCeilingPct * 100)}% GDP</span></div>
       </div>
 
       <div className="cb-governance" style={{ marginTop: 8 }}>
@@ -195,7 +196,7 @@ function MacroTab({ countryId, s, r }: TabProps) {
       </div>
 
       <div className="econ-control-row">
-        <span className="inspect-label" title="The central bank's stance. Tight money pulls inflation down (−1.5 points) but makes credit dear, slowing construction 10%. Loose money does the opposite.">Monetary stance</span>
+        <span className="inspect-label" title="The central bank's stance. Tight money pulls inflation down (−1.5 points) but makes credit dear, slowing construction 10%. Loose money does the opposite."><Bi en="Monetary stance" /></span>
         <span>
           {MONETARY_STANCES.map((m) => (
             <button key={m} type="button" className={`laws-enact-btn${(s.monetaryStance ?? 'neutral') === m ? ' abs-on' : ''}`} style={{ marginLeft: 4 }} onClick={() => setMonetaryStance(countryId, m)}
@@ -206,7 +207,7 @@ function MacroTab({ countryId, s, r }: TabProps) {
         </span>
       </div>
       <label className="econ-control-row" title="Cover this share of any budget deficit by printing money instead of borrowing. Fast cash, but it fuels inflation and weakens the currency.">
-        <span className="inspect-label">Money creation</span>
+        <span className="inspect-label"><Bi en="Money creation" /></span>
         <span>
           <input type="range" min={0} max={1} step={0.05} value={s.moneyCreation} onChange={(e) => setMoneyCreation(countryId, Number(e.target.value))} />
           <b style={{ marginLeft: 8, color: '#cdeeff' }}>{Math.round(s.moneyCreation * 100)}%</b>
@@ -214,39 +215,39 @@ function MacroTab({ countryId, s, r }: TabProps) {
       </label>
 
       <div className="abs-deficit">
-        <span>Yearly balance</span>
+        <span><Bi en="Yearly balance" /></span>
         <span className={r.balance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.balance)} ({pct(r.deficitPctGdp)} GDP)</span>
       </div>
 
       <div className="abs-budget-cols">
         <div className="abs-budget-col">
           <div className="abs-budget-title econ-neg">Expenditure {formatMoney(r.spending)}</div>
-          <div><span>Military</span><span>{formatMoney(r.expMilitary)}</span></div>
-          <div><span>Civil</span><span>{formatMoney(r.expCivil)}</span></div>
-          <div><span>Welfare</span><span>{formatMoney(r.expWelfare)}</span></div>
-          <div><span>Debt servicing</span><span>{formatMoney(r.expDebt)}</span></div>
-          <div><span>Other</span><span>{formatMoney(r.expOther)}</span></div>
+          <div><span><Bi en="Military" /></span><span>{formatMoney(r.expMilitary)}</span></div>
+          <div><span><Bi en="Civil" /></span><span>{formatMoney(r.expCivil)}</span></div>
+          <div><span><Bi en="Welfare" /></span><span>{formatMoney(r.expWelfare)}</span></div>
+          <div><span><Bi en="Debt servicing" /></span><span>{formatMoney(r.expDebt)}</span></div>
+          <div><span><Bi en="Other" /></span><span>{formatMoney(r.expOther)}</span></div>
         </div>
         <div className="abs-budget-col">
           <div className="abs-budget-title econ-pos">Revenue {formatMoney(r.revenue)}</div>
-          <div><span>Income tax</span><span>{formatMoney(r.revIncome)}</span></div>
-          <div><span>Business tax</span><span>{formatMoney(r.revBusiness)}</span></div>
-          <div><span>Excise</span><span>{formatMoney(r.revExcise)}</span></div>
-          <div><span>Other</span><span>{formatMoney(r.revOther)}</span></div>
+          <div><span><Bi en="Income tax" /></span><span>{formatMoney(r.revIncome)}</span></div>
+          <div><span><Bi en="Business tax" /></span><span>{formatMoney(r.revBusiness)}</span></div>
+          <div><span><Bi en="Excise" /></span><span>{formatMoney(r.revExcise)}</span></div>
+          <div><span><Bi en="Other" /></span><span>{formatMoney(r.revOther)}</span></div>
         </div>
       </div>
 
       <div className="cb-facts" style={{ marginTop: 6 }}>
-        <div><span className="inspect-label">Treasury</span><span>{formatMoney(s.treasury)}</span></div>
-        <div><span className="inspect-label">Reserves</span><span>{formatMoney(s.reserves)}</span></div>
-        <div><span className="inspect-label">National debt</span><span>{formatMoney(s.debt)}</span></div>
-        <div title="Trade settles into the treasury every month (see the Trade tab)"><span className="inspect-label">Trade / mo</span><span className={r.tradeBalance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.tradeBalance)}</span></div>
+        <div><span className="inspect-label"><Bi en="Treasury" /></span><span>{formatMoney(s.treasury)}</span></div>
+        <div><span className="inspect-label"><Bi en="Reserves" /></span><span>{formatMoney(s.reserves)}</span></div>
+        <div><span className="inspect-label"><Bi en="National debt" /></span><span>{formatMoney(s.debt)}</span></div>
+        <div title="Trade settles into the treasury every month (see the Trade tab)"><span className="inspect-label"><Bi en="Trade / mo" /></span><span className={r.tradeBalance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.tradeBalance)}</span></div>
       </div>
       <div className="econ-control-row">
-        <span className="inspect-label">Reserves</span>
+        <span className="inspect-label"><Bi en="Reserves" /></span>
         <span>
-          <button type="button" className="laws-enact-btn" onClick={() => invest(countryId, s.treasury * 0.25)}>Invest</button>{' '}
-          <button type="button" className="laws-enact-btn" onClick={() => payDebt(countryId, s.reserves + s.treasury * 0.25)}>Pay Debt</button>
+          <button type="button" className="laws-enact-btn" onClick={() => invest(countryId, s.treasury * 0.25)}><Bi en="Invest" /></button>{' '}
+          <button type="button" className="laws-enact-btn" onClick={() => payDebt(countryId, s.reserves + s.treasury * 0.25)}><Bi en="Pay Debt" /></button>
         </span>
       </div>
       <label className="econ-control-row" style={{ cursor: 'var(--cursor-pointer)' }} title="Emergency wartime revenue (+25%) at a standing stability cost.">
@@ -258,7 +259,7 @@ function MacroTab({ countryId, s, r }: TabProps) {
         Production — {fmt(r.productionUnits)} PU of factories
       </div>
       <table className="abs-table">
-        <thead><tr><th>Factory</th><th title="Levels built, all worlds">Levels</th><th>Makes /mo</th></tr></thead>
+        <thead><tr><th><Bi en="Factory" /></th><th title="Levels built, all worlds"><Bi en="Levels" /></th><th><Bi en="Makes /mo" /></th></tr></thead>
         <tbody>
           {FACTORY_ROWS.map(({ b, out }) => (
             <tr key={b} title={SIMPLE_BUILDING_DEFS[b].description}>
@@ -270,20 +271,20 @@ function MacroTab({ countryId, s, r }: TabProps) {
         </tbody>
       </table>
       <div className="abs-deficit">
-        <span title="Population-weighted happiness — stability follows it (see Social)">Approval</span>
+        <span title="Population-weighted happiness — stability follows it (see Social)"><Bi en="Approval" /></span>
         <span className={Math.round(r.approval * 100) < 50 ? 'econ-neg' : 'econ-pos'}>{pct(r.approval, 0)}{r.upkeepMet < 0.95 ? ' · shortages!' : ''}</span>
       </div>
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Policy</div>
       <label className="econ-control-row">
-        <span className="inspect-label">Tax rate</span>
+        <span className="inspect-label"><Bi en="Tax rate" /></span>
         <span>
           <input type="range" min={0} max={0.5} step={0.01} value={s.taxRate} onChange={(e) => setTaxRate(countryId, Number(e.target.value))} />
           <b style={{ marginLeft: 8, color: '#cdeeff' }}>{Math.round(s.taxRate * 100)}%</b>
         </span>
       </label>
       <div className="econ-control-row">
-        <span className="inspect-label" title="Market: +production, faster construction, −stability, lower tax yield. Corporatist: balanced. Planned: −production, +stability, higher tax yield.">Economy type</span>
+        <span className="inspect-label" title="Market: +production, faster construction, −stability, lower tax yield. Corporatist: balanced. Planned: −production, +stability, higher tax yield."><Bi en="Economy type" /></span>
         <span>
           {ECONOMY_TYPES.map((t) => (
             <button key={t} type="button" className={`laws-enact-btn${s.economyType === t ? ' abs-on' : ''}`} style={{ marginLeft: 4 }} onClick={() => setEconomyType(countryId, t)}>
@@ -317,10 +318,10 @@ function IndustryTab({ countryId, s, r }: TabProps) {
 
   return (
     <>
-      <div className="econ-subtitle">Goods</div>
+      <div className="econ-subtitle"><Bi en="Goods" /></div>
       <table className="abs-table">
         <thead>
-          <tr><th>Good</th><th>Stock</th><th title="Produced − used by industry − consumed by the population ± trade">Net/mo</th></tr>
+          <tr><th><Bi en="Good" /></th><th><Bi en="Stock" /></th><th title="Produced − used by industry − consumed by the population ± trade"><Bi en="Net/mo" /></th></tr>
         </thead>
         <tbody>
           {SIMPLE_GOODS.map((g) => (
@@ -334,10 +335,10 @@ function IndustryTab({ countryId, s, r }: TabProps) {
       </table>
 
       <div className="cb-facts" style={{ marginTop: 6 }}>
-        <div title="Industrial capacity from factories"><span className="inspect-label">Production Units</span><span>{fmt(r.productionUnits)}</span></div>
-        <div title={`How well buildings' inputs (upkeep) are supplied — the worst one. A building short of one of its own inputs slows down.${r.inputShortages.length ? `\nShort: ${r.inputShortages.map((g) => SIMPLE_GOOD_NAMES[g]).join(', ')}` : ''}`}><span className="inspect-label">Inputs supplied</span><span className={r.inputSatisfaction < 0.95 ? 'econ-neg' : ''}>{pct(r.inputSatisfaction, 0)}</span></div>
-        <div title="From the civilian share of production — spent on the queue below"><span className="inspect-label">Construction</span><span>{fmt(r.constructionPoints)}/mo</span></div>
-        <div title="Output multiplier from stability and economy type"><span className="inspect-label">Efficiency</span><span>{pct(r.efficiency, 0)}</span></div>
+        <div title="Industrial capacity from factories"><span className="inspect-label"><Bi en="Production Units" /></span><span>{fmt(r.productionUnits)}</span></div>
+        <div title={`How well buildings' inputs (upkeep) are supplied — the worst one. A building short of one of its own inputs slows down.${r.inputShortages.length ? `\nShort: ${r.inputShortages.map((g) => SIMPLE_GOOD_NAMES[g]).join(', ')}` : ''}`}><span className="inspect-label"><Bi en="Inputs supplied" /></span><span className={r.inputSatisfaction < 0.95 ? 'econ-neg' : ''}>{pct(r.inputSatisfaction, 0)}</span></div>
+        <div title="From the civilian share of production — spent on the queue below"><span className="inspect-label"><Bi en="Construction" /></span><span>{fmt(r.constructionPoints)}/mo</span></div>
+        <div title="Output multiplier from stability and economy type"><span className="inspect-label"><Bi en="Efficiency" /></span><span>{pct(r.efficiency, 0)}</span></div>
       </div>
 
       <div className="econ-control-row">
@@ -447,16 +448,16 @@ function SocialTab({ countryId, s, r }: TabProps) {
   return (
     <>
       <div className="cb-facts">
-        <div><span className="inspect-label">Population</span><span>{formatPop(r.population)}</span></div>
-        <div title="Share of the population that works"><span className="inspect-label">Workforce</span><span>{formatPop(r.workforce)}</span></div>
-        <div title="Jobs your buildings offer"><span className="inspect-label">Jobs</span><span>{formatPop(r.jobs)}</span></div>
-        <div title="Workers without a job — build more to employ them"><span className="inspect-label">Unemployed</span><span className={r.workforce > r.jobs ? 'econ-neg' : ''}>{formatPop(Math.max(0, r.workforce - r.jobs))}</span></div>
-        <div title="Comfort, services and leisure: supplied / needed, all worlds. Each world's shortfall costs its people happiness; a surplus adds a little. Build Entertainment Centers, Commercial Zones or Clinics in Urban districts."><span className="inspect-label">Amenities</span><span className={r.amenities.ratio < 0.95 ? 'econ-neg' : 'econ-pos'}>{fmt(r.amenities.supply)} / {fmt(r.amenities.need)}</span></div>
+        <div><span className="inspect-label"><Bi en="Population" /></span><span>{formatPop(r.population)}</span></div>
+        <div title="Share of the population that works"><span className="inspect-label"><Bi en="Workforce" /></span><span>{formatPop(r.workforce)}</span></div>
+        <div title="Jobs your buildings offer"><span className="inspect-label"><Bi en="Jobs" /></span><span>{formatPop(r.jobs)}</span></div>
+        <div title="Workers without a job — build more to employ them"><span className="inspect-label"><Bi en="Unemployed" /></span><span className={r.workforce > r.jobs ? 'econ-neg' : ''}>{formatPop(Math.max(0, r.workforce - r.jobs))}</span></div>
+        <div title="Comfort, services and leisure: supplied / needed, all worlds. Each world's shortfall costs its people happiness; a surplus adds a little. Build Entertainment Centers, Commercial Zones or Clinics in Urban districts."><span className="inspect-label"><Bi en="Amenities" /></span><span className={r.amenities.ratio < 0.95 ? 'econ-neg' : 'econ-pos'}>{fmt(r.amenities.supply)} / {fmt(r.amenities.need)}</span></div>
       </div>
 
       <div className="econ-subtitle" style={{ marginTop: 10 }}>Strata</div>
       <table className="abs-table">
-        <thead><tr><th>Stratum</th><th>People</th><th title="Monthly upkeep per billion: food / consumer goods / electronics">Upkeep /B</th><th>Happiness</th></tr></thead>
+        <thead><tr><th><Bi en="Stratum" /></th><th><Bi en="People" /></th><th title="Monthly upkeep per billion: food / consumer goods / electronics"><Bi en="Upkeep /B" /></th><th><Bi en="Happiness" /></th></tr></thead>
         <tbody>
           {STRATA.map((st) => {
             const sr = r.strata[st]
@@ -473,7 +474,7 @@ function SocialTab({ countryId, s, r }: TabProps) {
                   <tr>
                     <td colSpan={4}>
                       <div className="abs-budget-col abs-parts">
-                        <div><span>Base</span><span>50</span></div>
+                        <div><span><Bi en="Base" /></span><span>50</span></div>
                         {sr.parts.map((p) => (
                           <div key={p.label}><span>{p.label}</span><span className={p.value > 0 ? 'econ-pos' : 'econ-neg'}>{signed(p.value * 100, 0)}</span></div>
                         ))}
@@ -488,7 +489,7 @@ function SocialTab({ countryId, s, r }: TabProps) {
       </table>
 
       <div className="abs-deficit">
-        <span title="Population-weighted happiness">Approval</span>
+        <span title="Population-weighted happiness"><Bi en="Approval" /></span>
         <span className={Math.round(r.approval * 100) < 50 ? 'econ-neg' : 'econ-pos'}>{pct(r.approval, 0)}</span>
       </div>
       <div className="cb-governance"><Meter label="Stability" value={s.stability} /></div>
@@ -499,7 +500,7 @@ function SocialTab({ countryId, s, r }: TabProps) {
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Pop upkeep (per month)</div>
       <table className="abs-table">
-        <thead><tr><th>Good</th><th>Wanted</th><th>Got</th><th>Met</th></tr></thead>
+        <thead><tr><th><Bi en="Good" /></th><th><Bi en="Wanted" /></th><th><Bi en="Got" /></th><th><Bi en="Met" /></th></tr></thead>
         <tbody>
           {NEED_GOODS.map((g) => {
             const n = r.needs[g]
@@ -519,7 +520,7 @@ function SocialTab({ countryId, s, r }: TabProps) {
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Welfare</div>
       <label className="econ-control-row" title="Pensions, healthcare, housing support — costs budget; makes every stratum happier (the unemployed most) and speeds population growth.">
-        <span className="inspect-label">Welfare level</span>
+        <span className="inspect-label"><Bi en="Welfare level" /></span>
         <span>
           <input type="range" min={0} max={1} step={0.05} value={s.welfare} onChange={(e) => setWelfare(countryId, Number(e.target.value))} />
           <b style={{ marginLeft: 8, color: '#cdeeff' }}>{Math.round(s.welfare * 100)}%</b>
@@ -574,12 +575,12 @@ function TradeTab({ countryId, s, r }: TabProps) {
       </div>
       <TimeChart title="Exchange rate (E$ per unit)" endTick={tick} format={(v) => v.toFixed(2)} series={[{ label: s.currency.code, color: '#6fe3ff', values: h.map((p) => p.rate) }]} tip="How many Earth Dollars one unit of your currency buys. Higher = stronger: imports get cheaper, exports earn less." />
       <div className="cb-facts">
-        <div title="Where fundamentals are pulling the rate: low inflation, stability, low debt and a trade surplus strengthen it"><span className="inspect-label">Fundamentals</span><span className={fund >= rate ? 'econ-pos' : 'econ-neg'}>{fund.toFixed(3)} {fund >= rate ? '▲' : '▼'}</span></div>
-        <div><span className="inspect-label">Imports / mo</span><span>{formatMoney(r.importCost)}</span></div>
-        <div><span className="inspect-label">Exports / mo</span><span>{formatMoney(r.exportRevenue)}</span></div>
-        <div><span className="inspect-label">Trade balance</span><span className={r.tradeBalance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.tradeBalance)}/mo</span></div>
+        <div title="Where fundamentals are pulling the rate: low inflation, stability, low debt and a trade surplus strengthen it"><span className="inspect-label"><Bi en="Fundamentals" /></span><span className={fund >= rate ? 'econ-pos' : 'econ-neg'}>{fund.toFixed(3)} {fund >= rate ? '▲' : '▼'}</span></div>
+        <div><span className="inspect-label"><Bi en="Imports / mo" /></span><span>{formatMoney(r.importCost)}</span></div>
+        <div><span className="inspect-label"><Bi en="Exports / mo" /></span><span>{formatMoney(r.exportRevenue)}</span></div>
+        <div><span className="inspect-label"><Bi en="Trade balance" /></span><span className={r.tradeBalance >= 0 ? 'econ-pos' : 'econ-neg'}>{formatMoney(r.tradeBalance)}/mo</span></div>
         <div title="Trade capacity: what your spaceports can move a month, bought and sold together, in E$ of goods at base value. Short of rockets or spaceships they carry less; with no spaceport you trade nothing. Build spaceports (urban district) for more.">
-          <span className="inspect-label">Spaceports</span>
+          <span className="inspect-label"><Bi en="Spaceports" /></span>
           <span className={traded > r.tradeCapacity * 0.95 ? 'econ-neg' : undefined}>{Math.round(traded).toLocaleString()} / {Math.round(r.tradeCapacity).toLocaleString()} E$</span>
         </div>
       </div>
@@ -590,7 +591,7 @@ function TradeTab({ countryId, s, r }: TabProps) {
       </div>
       <table className="abs-table">
         <thead>
-          <tr><th>Good</th><th>Stock</th><th title="Import price / export price per unit, in your currency">Buy / Sell</th><th>Order/mo</th><th title="How much of the order went through last month">Filled</th></tr>
+          <tr><th><Bi en="Good" /></th><th><Bi en="Stock" /></th><th title="Import price / export price per unit, in your currency"><Bi en="Buy / Sell" /></th><th><Bi en="Order/mo" /></th><th title="How much of the order went through last month"><Bi en="Filled" /></th></tr>
         </thead>
         <tbody>
           {SIMPLE_GOODS.map((g: SimpleGood) => {
@@ -622,7 +623,7 @@ function TradeTab({ countryId, s, r }: TabProps) {
 
       <div className="econ-subtitle" style={{ marginTop: 12 }}>Nations</div>
       <table className="abs-table">
-        <thead><tr><th>Nation</th><th>Currency</th><th title="GDP converted to E$ at today's rate">GDP (E$)</th></tr></thead>
+        <thead><tr><th><Bi en="Nation" /></th><th><Bi en="Currency" /></th><th title="GDP converted to E$ at today's rate">GDP (E$)</th></tr></thead>
         <tbody>
           {Object.values(all).map((n) => (
             <tr key={n.countryId} className={n.countryId === countryId ? 'abs-me' : ''}>

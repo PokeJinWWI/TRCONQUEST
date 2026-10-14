@@ -1,3 +1,5 @@
+import { useThemeStore } from '../state/themeStore'
+import { Bi } from './Bi'
 import {
   formatClockTime,
   formatDate,
@@ -32,6 +34,8 @@ export function TimeControls() {
   const setMode = useGameTimeStore((s) => s.setMode)
 
   const date = simDaysToDate(simDays)
+  const nerv = useThemeStore((st) => st.theme === 'nerv')
+  const script = useThemeStore((st) => st.script)
   const multipliers = speedMultipliersFor(mode)
 
   return (
@@ -44,6 +48,14 @@ export function TimeControls() {
         {formatDate(date)}
         {mode === 'tactical' && <span className="time-clock">{formatClockTime(simDays)}</span>}
       </span>
+      {/* NERV: the same date the East Asian way, set vertically beside the English (themes/nerv.css). */}
+      {nerv && (
+        <span className="time-date-native" lang={script} aria-hidden>
+          {date.getUTCFullYear()}年
+          <br />
+          {date.getUTCMonth() + 1}月{date.getUTCDate()}日
+        </span>
+      )}
       {/* Pick the pace directly — a click on a mode goes straight to it, so
           strategic is always one click away, whatever the game switched to. */}
       <span className="time-modes" role="group" aria-label="Time pace">
@@ -56,7 +68,7 @@ export function TimeControls() {
             aria-pressed={mode === m}
             title={MODE_TITLES[m]}
           >
-            {MODE_LABELS[m]}
+            <Bi en={MODE_LABELS[m]} />
           </button>
         ))}
       </span>

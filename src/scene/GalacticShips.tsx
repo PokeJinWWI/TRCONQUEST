@@ -1,3 +1,4 @@
+import { useSceneColors } from './themeColors'
 // Ships in the galactic view: the player's own ships out between clusters (a marker
 // each fleet, riding its live position, with its order drawn as a line) and a
 // presence badge on the Solar Neighbourhood for the ones inside it (all of them
@@ -38,6 +39,7 @@ const resolveGalacticStart = (ship: ShipInstance, simDays: number) => galacticPo
 const resolveGalacticTarget = (destination: MoveDestination) => galacticDestinationPosition(destination)
 
 export function GalacticShips() {
+  const colors = useSceneColors()
   const ships = useShipStore((s) => s.ships)
   const selectShip = useShipStore((s) => s.selectShip)
   const playerId = usePlayerStore((s) => s.selectedCountryId)
@@ -66,7 +68,7 @@ export function GalacticShips() {
           <bufferGeometry>
             <bufferAttribute attach="attributes-position" args={[laneSegments, 3]} />
           </bufferGeometry>
-          <lineBasicMaterial color="#7ce8ff" transparent opacity={0.9} />
+          <lineBasicMaterial color={colors.lane} toneMapped={colors.toneMapped} transparent opacity={0.9} />
         </lineSegments>
       )}
       {outClusters.map((cluster) => (

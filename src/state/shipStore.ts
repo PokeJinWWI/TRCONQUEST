@@ -477,6 +477,8 @@ interface ShipState {
   removeShip: (id: string) => void
   // Resets the selection to just this ship (or clears it).
   selectShip: (id: string | null) => void
+  // The player renames a ship of theirs (empty keeps the old name).
+  renameShip: (id: string, name: string) => void
   // Adds the ship to the selection (making it primary), or removes it if it
   // was already selected.
   toggleShipSelection: (id: string) => void
@@ -673,6 +675,11 @@ export const useShipStore = create<ShipState>((set) => ({
   // (shipPhysics.planMove refuses to plan a move for a non-player ship) —
   // see planMove's own doc comment.
   selectShip: (id) => set({ selectedShipId: id, selectedShipIds: id ? [id] : [] }),
+  renameShip: (id, name) => {
+    const trimmed = name.trim().slice(0, 40)
+    if (!trimmed) return
+    set((s) => ({ ships: s.ships.map((sh) => (sh.id === id ? { ...sh, name: trimmed } : sh)) }))
+  },
   toggleShipSelection: (id) =>
     set((s) => {
       if (s.selectedShipIds.includes(id)) {

@@ -1,3 +1,6 @@
+import { NamedBi } from './NativeName'
+import { keyNodeId } from '../state/placeNameStore'
+import { Bi } from './Bi'
 import { DraggableWindow } from './DraggableWindow'
 import { ownerDisplay } from '../data/countryRoster'
 import { useCivicDetailStore, useCivicStore } from '../state/civicStore'
@@ -30,16 +33,16 @@ export function CivicBuildingWindow() {
           </div>
         </div>
         <div className="abs-dim" style={{ marginBottom: 8 }}>{c.description}</div>
-        <div className="inspect-row"><span className="inspect-label">Stands in</span><span className="inspect-value">{c.place}{c.native ? ` ${c.native}` : ''}</span></div>
-        {c.siteId && <div className="inspect-row"><span className="inspect-label">Settlement site</span><span className="inspect-value">{c.siteId}</span></div>}
+        <div className="inspect-row"><span className="inspect-label"><Bi en="Stands in" /></span><span className="inspect-value"><NamedBi en={c.place} nativeKey={keyNodeId(open.bodyName, c.node)} builtIn={c.native} /></span></div>
+        {c.siteId && <div className="inspect-row"><span className="inspect-label"><Bi en="Settlement site" /></span><span className="inspect-value">{c.siteId}</span></div>}
         <div className="inspect-row" title="Who holds the key node it stands on right now">
-          <span className="inspect-label">Held by</span>
+          <span className="inspect-label"><Bi en="Held by" /></span>
           <span className="inspect-value" style={{ color: heldBy ? ownerDisplay(heldBy).color : undefined }}>
             {heldBy ? ownerDisplay(heldBy).name : 'nobody'}
             {captured && <span className="econ-neg"> (captured)</span>}
           </span>
         </div>
-        <div className="inspect-row"><span className="inspect-label">Key node</span><span className="inspect-value">{c.role}</span></div>
+        <div className="inspect-row"><span className="inspect-label"><Bi en="Key node" /></span><span className="inspect-value">{c.role}</span></div>
         <div className="inspect-status">Takes no district slot and costs nothing to keep. It cannot be demolished: it changes hands with its key node.</div>
       </div>
     </DraggableWindow>

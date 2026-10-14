@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useMemo } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
@@ -94,7 +95,7 @@ export function DemographicsPanel() {
         </span>
       </div>
 
-      <div className="econ-subtitle">Standard of living</div>
+      <div className="econ-subtitle"><Bi en="Standard of living" /></div>
       {buckets.map((b, i) => (
         <Bar key={b.label} label={b.label} value={bucketPop[i]} total={total} color={b.color} right={formatPop(bucketPop[i])} />
       ))}

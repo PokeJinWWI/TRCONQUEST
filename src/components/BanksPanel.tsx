@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerEconomy } from '../hooks/usePlayerEconomy'
 import { formatIED } from '../economy/format'
@@ -23,7 +24,7 @@ export function BanksPanel() {
   if (mine.length === 0) {
     return (
       <div className="econ-panel">
-        <div className="econ-subtitle">Commercial Banks</div>
+        <div className="econ-subtitle"><Bi en="Commercial Banks" /></div>
         <div className="ship-panel-hint">This nation has no commercial banks.</div>
       </div>
     )
@@ -31,7 +32,7 @@ export function BanksPanel() {
 
   return (
     <div className="econ-panel">
-      <div className="econ-subtitle">Commercial Banks</div>
+      <div className="econ-subtitle"><Bi en="Commercial Banks" /></div>
       <div className="ship-panel-hint" style={{ marginBottom: 8 }}>
         Distinct institutions with their own balance sheets. They lend within the central bank’s reserve requirement and
         their own capital — steer them through monetary policy (Government → Institutions), not directly.
@@ -39,10 +40,10 @@ export function BanksPanel() {
 
       {money && (
         <div className="cb-facts" style={{ marginBottom: 10 }}>
-          <div><span className="inspect-label">System deposits</span><span>{fmt(money.deposits)}</span></div>
-          <div><span className="inspect-label">System loans</span><span>{fmt(money.loans)}</span></div>
-          <div><span className="inspect-label">System capital</span><span>{fmt(money.bankCapital)}</span></div>
-          <div><span className="inspect-label">Discount borrowing</span><span>{fmt(money.cbBorrowings)}</span></div>
+          <div><span className="inspect-label"><Bi en="System deposits" /></span><span>{fmt(money.deposits)}</span></div>
+          <div><span className="inspect-label"><Bi en="System loans" /></span><span>{fmt(money.loans)}</span></div>
+          <div><span className="inspect-label"><Bi en="System capital" /></span><span>{fmt(money.bankCapital)}</span></div>
+          <div><span className="inspect-label"><Bi en="Discount borrowing" /></span><span>{fmt(money.cbBorrowings)}</span></div>
         </div>
       )}
 
@@ -60,16 +61,16 @@ export function BanksPanel() {
             </div>
             <div className="bank-sheet">
               <div className="bank-col">
-                <div className="bank-col-title">Assets</div>
-                <div><span>Reserves</span><span>{fmt(b.reserves)}</span></div>
-                <div><span>Loans</span><span>{fmt(b.loans)}</span></div>
-                <div><span>Securities</span><span>{fmt(b.securities)}</span></div>
+                <div className="bank-col-title"><Bi en="Assets" /></div>
+                <div><span><Bi en="Reserves" /></span><span>{fmt(b.reserves)}</span></div>
+                <div><span><Bi en="Loans" /></span><span>{fmt(b.loans)}</span></div>
+                <div><span><Bi en="Securities" /></span><span>{fmt(b.securities)}</span></div>
               </div>
               <div className="bank-col">
-                <div className="bank-col-title">Liabilities</div>
-                <div><span>Deposits</span><span>{fmt(b.deposits)}</span></div>
-                <div><span>CB borrowing</span><span>{fmt(b.cbBorrowings)}</span></div>
-                <div><span>Capital</span><span>{fmt(cap)}</span></div>
+                <div className="bank-col-title"><Bi en="Liabilities" /></div>
+                <div><span><Bi en="Deposits" /></span><span>{fmt(b.deposits)}</span></div>
+                <div><span><Bi en="CB borrowing" /></span><span>{fmt(b.cbBorrowings)}</span></div>
+                <div><span><Bi en="Capital" /></span><span>{fmt(cap)}</span></div>
               </div>
             </div>
             <div className="bank-foot">

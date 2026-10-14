@@ -1,3 +1,7 @@
+import { useThemeStore } from '../state/themeStore'
+import { descriptionOf } from '../i18n/descriptionLookup'
+import { nativeOf } from '../i18n/native'
+import { labelKey } from '../i18n/labelText'
 import { useEffect, useRef, useState } from 'react'
 import { glossaryLookup, type GlossaryEntry } from '../data/glossary'
 
@@ -89,6 +93,22 @@ export function resolveTooltip(start: TipNode | null): TooltipSource | null {
   if (titleEl && glossEl) for (let a: TipNode | null = titleEl; a; a = a.parentElement) if (a === glossEl) anchor = glossEl
   const title = titleEl ? titleOf(titleEl) : null
   return { anchor, titleEl, title, entry: entry && entry.text !== title ? entry : null }
+}
+
+// NERV: a tooltip's native translation under it, line by line (a whole translated description, or
+// a short label from the dictionary); lines with no translation are left out.
+function NativeTipText({ text }: { text: string }) {
+  const nerv = useThemeStore((s) => s.theme === 'nerv')
+  const script = useThemeStore((s) => s.script)
+  if (!nerv) return null
+  const whole = descriptionOf(text, script)
+  const lines = whole ? [whole] : text.split('\n').map((l) => descriptionOf(l, script) ?? (labelKey(l) ? nativeOf(labelKey(l), script) : undefined)).filter((l): l is string => !!l)
+  if (lines.length === 0) return null
+  return (
+    <div className="game-tooltip-native" lang={script}>
+      {lines.join('\n')}
+    </div>
+  )
 }
 
 export function TooltipLayer() {
@@ -221,9 +241,11 @@ export function TooltipLayer() {
       style={{ left: pos?.left ?? tip.x + 14, top: pos?.top ?? tip.y + 18, visibility: pos ? 'visible' : 'hidden' }}
     >
       {tip.title && <div className="game-tooltip-text">{tip.title}</div>}
+      {tip.title && <NativeTipText text={tip.title} />}
       {tip.entry && (
         <div className={tip.title ? 'game-tooltip-gloss with-title' : 'game-tooltip-gloss'}>
           <b>{tip.entry.term}</b> — {tip.entry.text}
+          <NativeTipText text={tip.entry.text} />
         </div>
       )}
     </div>

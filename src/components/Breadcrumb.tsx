@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useViewStore } from '../state/viewStore'
 import { combatPlaceOf, useCombatStore } from '../state/combatStore'
 
@@ -15,11 +16,11 @@ export function Breadcrumb() {
   return (
     <nav className="breadcrumb">
       <button type="button" className="crumb" onClick={enterGalactic} disabled={level === 'galactic'} title="Zoom out to the whole galaxy">
-        GALAXY
+        <Bi en="GALAXY" />
       </button>
       <span className="crumb-sep">›</span>
       <button type="button" className="crumb" onClick={() => enterInterstellar()} disabled={level === 'interstellar'} title="Zoom out to the local neighbourhood of stars">
-        INTERSTELLAR
+        <Bi en="INTERSTELLAR" />
       </button>
       {(level === 'system' || level === 'satellite' || level === 'combat' || level === 'ground' || level === 'terrain') && (
         <>
@@ -31,7 +32,7 @@ export function Breadcrumb() {
             disabled={level === 'system'}
             title="Back to this star system"
           >
-            SYSTEM
+            <Bi en="SYSTEM" />
           </button>
         </>
       )}
@@ -39,7 +40,7 @@ export function Breadcrumb() {
         <>
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb" disabled={level === 'satellite'} onClick={exitGround} title="Back to the planet from orbit">
-            SATELLITE
+            <Bi en="SATELLITE" />
           </button>
         </>
       )}
@@ -47,7 +48,7 @@ export function Breadcrumb() {
         <>
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb" disabled={level === 'ground'} onClick={exitTerrain}>
-            GROUND
+            <Bi en="GROUND" />
           </button>
         </>
       )}
@@ -55,7 +56,7 @@ export function Breadcrumb() {
         <>
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb crumb-combat" disabled>
-            TERRAIN
+            <Bi en="TERRAIN" />
           </button>
         </>
       )}
@@ -67,7 +68,7 @@ export function Breadcrumb() {
         <>
           <span className="crumb-sep">›</span>
           <button type="button" className="crumb crumb-combat" disabled>
-            COMBAT
+            <Bi en="COMBAT" />
           </button>
         </>
       )}

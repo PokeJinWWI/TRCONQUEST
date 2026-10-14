@@ -27,7 +27,8 @@ import type { World } from '../economy/economyTypes'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useResourceStore } from '../state/resourceStore'
 import { useTechStore } from '../state/techStore'
-import { useShipStore, pristineCombatState } from '../state/shipStore'
+import { useShipStore, pristineCombatState, type ShipInstance } from '../state/shipStore'
+import { notifyOwner } from './notify'
 import { useShipyardStore, type ShipBuildOrder } from '../state/shipyardStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
 import { DEFAULT_SHIP_ORBIT_PERIOD_DAYS } from './shipPhysics'
@@ -243,7 +244,11 @@ export function advanceShipyard(country: Pick<Country, 'id' | 'capitalStarId' | 
   for (const done of step.completed) {
     if (done.upgradeShipId) finishUpgrade(done)
     else if (done.repairShipId) finishRepair(done)
-    else spawnBuiltShip(done, country)
+    else {
+      const id = spawnBuiltShip(done, country)
+      const name = id ? useShipStore.getState().ships.find((s) => s.id === id)?.name : null
+      if (name) notifyOwner(country.id, 'ship-built', `${name} is ready at ${country.capitalBodyName}`, { bodyName: country.capitalBodyName }, done.finishSimDays ?? simDays)
+    }
   }
 }
 
@@ -262,7 +267,10 @@ function finishUpgrade(order: ShipBuildOrder): void {
   const classId = bestLevelClass(order.classId, useTechStore.getState().stateFor(ship.ownerId).researched, resolveShipClass)
   const name = upgradedName(ship.name, resolveShipClass(ship.classId)?.name ?? '', resolveShipClass(classId)?.name ?? '')
   useShipStore.setState((s) => ({ ships: s.ships.map((sh) => (sh.id === ship.id ? { ...sh, classId, name, upgrading: undefined } : sh)) }))
+  notifyOwner(ship.ownerId, 'ship-upgraded', `${name} has been upgraded to ${resolveShipClass(classId)?.name ?? classId}`, shipPlace(ship))
 }
+
+const shipPlace = (ship: { location: ShipInstance['location'] }) => (ship.location.kind === 'orbiting' ? { bodyName: ship.location.bodyName } : undefined)
 
 // A repair finished: the ship is a pristine hull of its class again and free to move.
 function finishRepair(order: ShipBuildOrder): void {
@@ -270,6 +278,7 @@ function finishRepair(order: ShipBuildOrder): void {
   const shipClass = ship ? resolveShipClass(ship.classId) : null
   if (!ship || !shipClass) return
   useShipStore.setState((s) => ({ ships: s.ships.map((sh) => (sh.id === ship.id ? { ...sh, combat: pristineCombatState(shipClass.combat), drift: null, upgrading: undefined } : sh)) }))
+  notifyOwner(ship.ownerId, 'ship-repaired', `${ship.name} is repaired`, shipPlace(ship))
 }
 
 let spawnCounter = 0

@@ -1,3 +1,4 @@
+import { Bi } from '../Bi'
 import { useState } from 'react'
 import { useAbstractEconomyStore, stockOf, buildingTechBlock } from '../../state/abstractEconomyStore'
 import { useTerritoryStore } from '../../state/territoryStore'
@@ -71,15 +72,15 @@ export function SimpleWorldSummary({ bodyName }: { bodyName: string }) {
   return (
     <div className="pl-summary">
       <div className="pl-stat-grid">
-        <div className="pl-stat" title="People living here"><span>Population</span><b>{formatPop(w.population)}</b></div>
-        <div className="pl-stat" title="Workers available / jobs offered here"><span>Workers / jobs</span><b>{formatPop(worldWorkforce(w))} / {formatPop(worldJobs(w))}</b></div>
-        <div className={`pl-stat${unemployed > worldWorkforce(w) * 0.06 ? ' warn' : ''}`} title="Workers without a job here"><span>Unemployed</span><b>{formatPop(unemployed)}</b></div>
-        <div className={`pl-stat${staffing < 1 ? ' warn' : ''}`} title="Share of this world's jobs that can be filled"><span>Staffed</span><b>{pct(staffing)}</b></div>
-        <div className="pl-stat" title="District levels developed / the land this world has for them"><span>Land used</span><b>{districtLevelsTotal(w)} / {landOf(w)}</b></div>
-        {nation && <div className="pl-stat" title="National stability (it follows approval)"><span>Stability</span><b>{pct(nation.stability)}</b></div>}
+        <div className="pl-stat" title="People living here"><span><Bi en="Population" /></span><b>{formatPop(w.population)}</b></div>
+        <div className="pl-stat" title="Workers available / jobs offered here"><span><Bi en="Workers / jobs" /></span><b>{formatPop(worldWorkforce(w))} / {formatPop(worldJobs(w))}</b></div>
+        <div className={`pl-stat${unemployed > worldWorkforce(w) * 0.06 ? ' warn' : ''}`} title="Workers without a job here"><span><Bi en="Unemployed" /></span><b>{formatPop(unemployed)}</b></div>
+        <div className={`pl-stat${staffing < 1 ? ' warn' : ''}`} title="Share of this world's jobs that can be filled"><span><Bi en="Staffed" /></span><b>{pct(staffing)}</b></div>
+        <div className="pl-stat" title="District levels developed / the land this world has for them"><span><Bi en="Land used" /></span><b>{districtLevelsTotal(w)} / {landOf(w)}</b></div>
+        {nation && <div className="pl-stat" title="National stability (it follows approval)"><span><Bi en="Stability" /></span><b>{pct(nation.stability)}</b></div>}
         {r && r.amenities.need > 0 && (
           <div className={`pl-stat${r.amenities.ratio < 1 ? ' warn' : ''}`} title="Amenities here: supplied / needed. The city provides some; Entertainment Centers, Commercial Zones and Clinics add more. A shortfall makes this world's people unhappy, a surplus a little happier.">
-            <span>Amenities</span><b>{num(r.amenities.supply)} / {num(r.amenities.need)}</b>
+            <span><Bi en="Amenities" /></span><b>{num(r.amenities.supply)} / {num(r.amenities.need)}</b>
           </div>
         )}
       </div>
@@ -175,14 +176,14 @@ function SimpleBuildingDetail({ w, b, countryId, canBuild, onBuild, onClose }: {
       </div>
       <div className="pl-detail-desc">{def.description}</div>
       <div className="pl-stat-grid">
-        <div className="pl-stat" title="Jobs per level, and who fills them"><span>Jobs / level</span><b>{def.jobs}M {def.stratum}</b></div>
-        <div className={`pl-stat${staffing < 1 ? ' warn' : ''}`} title="Share of this world's jobs that can be filled"><span>Staffed</span><b>{pct(staffing)}</b></div>
-        <div className="pl-stat" title="Construction points to build one level"><span>Build cost</span><b>{def.cost} CP</b></div>
-        {def.pu ? <div className="pl-stat" title="Production Units per level: factory capacity"><span>Capacity</span><b>{def.pu} PU</b></div> : null}
-        {def.popGrowth ? <div className="pl-stat" title="Extra yearly population growth on this world per level"><span>Pop growth</span><b>+{pct(def.popGrowth, 1)}/yr</b></div> : null}
+        <div className="pl-stat" title="Jobs per level, and who fills them"><span><Bi en="Jobs / level" /></span><b>{def.jobs}M {def.stratum}</b></div>
+        <div className={`pl-stat${staffing < 1 ? ' warn' : ''}`} title="Share of this world's jobs that can be filled"><span><Bi en="Staffed" /></span><b>{pct(staffing)}</b></div>
+        <div className="pl-stat" title="Construction points to build one level"><span><Bi en="Build cost" /></span><b>{def.cost} CP</b></div>
+        {def.pu ? <div className="pl-stat" title="Production Units per level: factory capacity"><span><Bi en="Capacity" /></span><b>{def.pu} PU</b></div> : null}
+        {def.popGrowth ? <div className="pl-stat" title="Extra yearly population growth on this world per level"><span><Bi en="Pop growth" /></span><b>+{pct(def.popGrowth, 1)}/yr</b></div> : null}
       </div>
       <table className="abs-table pl-detail-table">
-        <thead><tr><th></th><th title="The building's base figure for one level">Base / level</th><th title="All of them here, this month, after staffing, bonuses and shortages">All here /mo</th><th title="Their share of this world's total">Share</th></tr></thead>
+        <thead><tr><th></th><th title="The building's base figure for one level"><Bi en="Base / level" /></th><th title="All of them here, this month, after staffing, bonuses and shortages"><Bi en="All here /mo" /></th><th title="Their share of this world's total"><Bi en="Share" /></th></tr></thead>
         <tbody>
           {outputs.map(([p, n]) => {
             const got = br?.output[p] ?? 0
@@ -397,7 +398,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
                 <span>Deconstructing a level: {Math.round((t.progress / teardownCost(t)) * 100)}% left</span>
                 {canBuild && (
                   <button type="button" className="laws-enact-btn" title="Stop it: the level stays" onClick={() => countryId && cancelOrder(countryId, t.id)}>
-                    Cancel deconstruction
+                    <Bi en="Cancel deconstruction" />
                   </button>
                 )}
               </div>
@@ -493,7 +494,7 @@ export function SimpleDistrictsTab({ countryId, bodyName, only }: { countryId: s
 
       {only && q.length > 0 && (
         <>
-          <div className="econ-subtitle">Construction here</div>
+          <div className="econ-subtitle"><Bi en="Construction here" /></div>
           {queueList}
         </>
       )}
@@ -517,9 +518,9 @@ export function SimplePopulationTab({ bodyName }: { bodyName: string }) {
   return (
     <div className="pl-pop">
       <div className="pl-stat-grid">
-        <div className="pl-stat"><span>Population</span><b>{formatPop(w.population)}</b></div>
-        <div className="pl-stat" title="Share of people in the labour force"><span>Workforce</span><b>{formatPop(worldWorkforce(w))}</b></div>
-        <div className="pl-stat"><span>Jobs</span><b>{formatPop(worldJobs(w))}</b></div>
+        <div className="pl-stat"><span><Bi en="Population" /></span><b>{formatPop(w.population)}</b></div>
+        <div className="pl-stat" title="Share of people in the labour force"><span><Bi en="Workforce" /></span><b>{formatPop(worldWorkforce(w))}</b></div>
+        <div className="pl-stat"><span><Bi en="Jobs" /></span><b>{formatPop(worldJobs(w))}</b></div>
       </div>
       <div className="econ-subtitle" style={{ marginTop: 8 }}>Strata</div>
       {rows.map((row) => {

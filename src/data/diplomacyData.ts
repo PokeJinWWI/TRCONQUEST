@@ -82,6 +82,45 @@ export type DiplomacyEventKind =
   | 'order-refused'
   // A ship lost in a hyperspace jump (scene/jumpLoss.ts); a click goes to where it was headed.
   | 'ship-lost'
+  // The player's yard finished a hull / an upgrade / a repair (scene/shipyardLogic.advanceShipyard).
+  | 'ship-built'
+  | 'ship-upgraded'
+  | 'ship-repaired'
+  // A survey job finished its last body (hooks/useSurveyResolver).
+  | 'survey-complete'
+  // A space fight the player is in began / ended (hooks/useCombatResolver), or a ship of theirs died in one.
+  | 'battle-started'
+  | 'battle-ended'
+  | 'ship-destroyed'
+  // An army finished recruiting (state/armyStore).
+  | 'army-ready'
+  // The research queue ran out (state/techStore.processQueue).
+  | 'research-queue-empty'
+  // A natural deposit ran dry (scene/extraction).
+  | 'deposit-exhausted'
+
+// How loud a notification is: its toast's colour, and (in a theme) its plate.
+export type EventSeverity = 'info' | 'warning' | 'danger'
+export const EVENT_SEVERITY: Partial<Record<DiplomacyEventKind, EventSeverity>> = {
+  'war-declared': 'danger',
+  'body-occupied': 'danger',
+  'bombardment': 'danger',
+  'ship-attacked': 'danger',
+  'ship-lost': 'danger',
+  'ship-destroyed': 'danger',
+  'battle-started': 'danger',
+  'installation-destroyed': 'warning',
+  'treaty-broken': 'warning',
+  'colony-abandoned': 'warning',
+  'encroachment': 'warning',
+  'territorial-incident': 'warning',
+  'migration-wave': 'warning',
+  'order-refused': 'warning',
+  'peace-offered': 'warning',
+  'research-queue-empty': 'warning',
+  'deposit-exhausted': 'warning',
+}
+export const eventSeverity = (kind: DiplomacyEventKind): EventSeverity => EVENT_SEVERITY[kind] ?? 'info'
 
 export interface DiplomacyEvent {
   id: string
@@ -155,7 +194,7 @@ export const OPINION_ON_ENCROACHMENT = -20
 export const OPINION_ON_DISPUTED_BUILD = -10
 
 // How many diplomacy events the log keeps.
-export const MAX_DIPLOMACY_EVENTS = 60
+export const MAX_DIPLOMACY_EVENTS = 200
 
 // Order-independent key for a pair of nations.
 export function pairKey(a: string, b: string): string {

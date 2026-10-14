@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { DraggableWindow } from './DraggableWindow'
 import { useGoodDetailStore } from '../state/goodDetailStore'
 import { useBuildingDetailStore } from '../state/buildingDetailStore'
@@ -71,11 +72,11 @@ export function GoodDetailPanel() {
             </div>
 
             <div className="good-stat-grid">
-              <div className="pl-stat"><span>Avg price</span><b>{formatIEDPrice(summary.avgPrice, rate)}</b></div>
-              <div className="pl-stat" title="Across your worlds, per tick"><span>Supply</span><b>{summary.totalSupply.toFixed(0)}</b></div>
-              <div className="pl-stat"><span>Demand</span><b>{summary.totalDemand.toFixed(0)}</b></div>
-              <div className="pl-stat" title="Produced by your buildings, per tick"><span>Produced</span><b>{summary.totalProduced.toFixed(0)}</b></div>
-              <div className="pl-stat" title="Used by your buildings, per tick"><span>Industry use</span><b>{summary.totalConsumed.toFixed(0)}</b></div>
+              <div className="pl-stat"><span><Bi en="Avg price" /></span><b>{formatIEDPrice(summary.avgPrice, rate)}</b></div>
+              <div className="pl-stat" title="Across your worlds, per tick"><span><Bi en="Supply" /></span><b>{summary.totalSupply.toFixed(0)}</b></div>
+              <div className="pl-stat"><span><Bi en="Demand" /></span><b>{summary.totalDemand.toFixed(0)}</b></div>
+              <div className="pl-stat" title="Produced by your buildings, per tick"><span><Bi en="Produced" /></span><b>{summary.totalProduced.toFixed(0)}</b></div>
+              <div className="pl-stat" title="Used by your buildings, per tick"><span><Bi en="Industry use" /></span><b>{summary.totalConsumed.toFixed(0)}</b></div>
             </div>
 
             {priceHistory && priceHistory.length > 1 && (
@@ -88,12 +89,12 @@ export function GoodDetailPanel() {
               />
             )}
 
-            <div className="econ-subtitle">Trade policy</div>
+            <div className="econ-subtitle"><Bi en="Trade policy" /></div>
             <PolicyRow label="Import tariff" value={tariff} set={(v) => countryId && setTariff(countryId, good, v)} tip="A tax on this good bought from foreign sellers (not shared-market partners) — revenue to your treasury, but it raises the landed price." />
             <PolicyRow label="Import subvention" value={impSub} set={(v) => countryId && setImportSubvention(countryId, good, v)} tip="Your treasury subsidises imports of this good, lowering its landed price — for a good you are short of." />
             <PolicyRow label="Export subvention" value={expSub} set={(v) => countryId && setExportSubvention(countryId, good, v)} tip="Your treasury subsidises your exports of this good, making them cheaper abroad." />
 
-            <div className="econ-subtitle">Producers</div>
+            <div className="econ-subtitle"><Bi en="Producers" /></div>
             {summary.producers.length === 0 ? (
               <div className="bld-detail-none">No buildings of yours make this.</div>
             ) : (
@@ -124,7 +125,7 @@ export function GoodDetailPanel() {
                 <div className="econ-subtitle">Consumers — population</div>
                 {summary.popConsumerWorlds.map((w) => (
                   <div className="good-flow-row" key={`pop${w.worldId}`}>
-                    <span className="good-flow-name">Households</span>
+                    <span className="good-flow-name"><Bi en="Households" /></span>
                     <span className="good-flow-where abs-dim">{w.worldName}</span>
                     <span className="good-flow-amt abs-dim">{(w.population / 1000).toFixed(2)}B people</span>
                   </div>
@@ -132,7 +133,7 @@ export function GoodDetailPanel() {
               </>
             )}
 
-            <div className="econ-subtitle">Price by planet</div>
+            <div className="econ-subtitle"><Bi en="Price by planet" /></div>
             {summary.perWorld.map((w) => (
               <div className="good-flow-row" key={`w${w.worldId}`}>
                 <span className="good-flow-name">{w.worldName}</span>

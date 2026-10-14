@@ -1,7 +1,10 @@
+import { Bi } from './Bi'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { COUNTRIES, getCountry } from '../data/countryData'
 import { STRATEGIC_AI_COUNTRY_IDS, ownerDisplay } from '../data/countryRoster'
-import { TRUCE_DAYS, VASSALIZE_SCORE, type DiplomacyEvent, type PeaceTerms, type War } from '../data/diplomacyData'
+import { TRUCE_DAYS, VASSALIZE_SCORE, eventSeverity, type DiplomacyEvent, type PeaceTerms, type War } from '../data/diplomacyData'
+import { eventReachesPlayer } from '../scene/notificationFilter'
+import { useSituationPrefsStore } from '../state/situationPrefsStore'
 import { TOAST_MS, goToEvent, tickToasts, type Toast } from '../scene/eventNavigation'
 import { bindsForeignPolicy, paysTribute, SUBJECT_OFFER_MIN_POWER_RATIO, type SubjectType } from '../data/subjectData'
 import { useDiplomacyStore, relationIn, warBetweenIn } from '../state/diplomacyStore'
@@ -85,7 +88,7 @@ function RelationsTab() {
             <span className="dip-card-name">{mine.name} (You)</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Capital</span>
+            <span className="inspect-label"><Bi en="Capital" /></span>
             <span className="inspect-value">{mine.capitalBodyName}</span>
           </div>
         </div>
@@ -103,17 +106,17 @@ function RelationsTab() {
               <span className={`dip-status ${rel.status === 'war' ? 'war' : ''}`}>{status}</span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Opinion of you</span>
+              <span className="inspect-label"><Bi en="Opinion of you" /></span>
               <span className={`inspect-value ${rel.opinion < 0 ? 'econ-neg' : rel.opinion > 0 ? 'econ-pos' : ''}`}>{Math.round(rel.opinion)}</span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Fleet strength</span>
+              <span className="inspect-label"><Bi en="Fleet strength" /></span>
               <span className="inspect-value">
                 {Math.round(power.get(c.id) ?? 0).toLocaleString()} <span className="dip-muted">(yours {Math.round(power.get(playerId) ?? 0).toLocaleString()})</span>
               </span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Government</span>
+              <span className="inspect-label"><Bi en="Government" /></span>
               <span className="inspect-value">{c.government ?? (ai ? 'AI empire' : 'Dormant')}</span>
             </div>
           </div>
@@ -279,35 +282,35 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
           <span className={`dip-status ${rel.status === 'war' ? 'war' : ''}`}>{rel.status === 'war' ? 'At war' : truceLeft > 0 ? `Truce · ${truceLeft}d` : 'Peace'}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Opinion of you</span>
+          <span className="inspect-label"><Bi en="Opinion of you" /></span>
           <span className={`inspect-value ${rel.opinion < 0 ? 'econ-neg' : rel.opinion > 0 ? 'econ-pos' : ''}`}>{Math.round(rel.opinion)}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Fleet strength</span>
+          <span className="inspect-label"><Bi en="Fleet strength" /></span>
           <span className="inspect-value">
             {Math.round(power.get(id) ?? 0).toLocaleString()} <span className="dip-muted">(yours {Math.round(power.get(playerId) ?? 0).toLocaleString()})</span>
           </span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Government</span>
+          <span className="inspect-label"><Bi en="Government" /></span>
           <span className="inspect-value">{getCountry(id)?.government ?? (ai ? 'AI empire' : 'Dormant')}</span>
         </div>
         {theyAreMySubject && (
           <div className="inspect-row">
-            <span className="inspect-label">Status</span>
+            <span className="inspect-label"><Bi en="Status" /></span>
             <span className="inspect-value">Your {theyAreMySubject.type}</span>
           </div>
         )}
         {iAmTheirSubject && (
           <div className="inspect-row">
-            <span className="inspect-label">Status</span>
-            <span className="inspect-value">You are their subject</span>
+            <span className="inspect-label"><Bi en="Status" /></span>
+            <span className="inspect-value"><Bi en="You are their subject" /></span>
           </div>
         )}
         {!war && rel.status !== 'war' && !inAnyHierarchy && (
           <div className="dip-actions">
             <button type="button" className="detail-view-btn danger" disabled={truceLeft > 0} title={truceLeft > 0 ? 'A truce is still in effect' : undefined} onClick={() => declare('limited')}>
-              Declare War
+              <Bi en="Declare War" />
             </button>
             <button
               type="button"
@@ -316,7 +319,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
               title={truceLeft > 0 ? 'A truce is still in effect' : undefined}
               onClick={() => declare('skirmish')}
             >
-              Start Skirmish
+              <Bi en="Start Skirmish" />
             </button>
           </div>
         )}
@@ -326,7 +329,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
 
       <div className="dip-card">
         <div className="dip-card-head">
-          <span className="dip-card-name">Treaties</span>
+          <span className="dip-card-name"><Bi en="Treaties" /></span>
         </div>
         {ours.length === 0 && <div className="inspect-status">None in effect.</div>}
         {ours.map((t) => (
@@ -359,7 +362,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
                   <div key={i} className="inspect-row">
                     <span className="inspect-value">{describeArticle(a, playerId, nameOf)}</span>
                     <button type="button" className="detail-view-btn danger" onClick={() => setPending(pending.filter((_, j) => j !== i))}>
-                      Remove
+                      <Bi en="Remove" />
                     </button>
                   </div>
                 ))}
@@ -489,7 +492,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
                 }
                 onClick={addArticle}
               >
-                Add Article
+                <Bi en="Add Article" />
               </button>
             </div>
             {pending.length > 0 && (
@@ -520,7 +523,7 @@ function CountryProfile({ id, playerId, onBack }: { id: string; playerId: string
       {canSubjugate && (
         <div className="dip-card">
           <div className="dip-card-head">
-            <span className="dip-card-name">Offer Subjection</span>
+            <span className="dip-card-name"><Bi en="Offer Subjection" /></span>
           </div>
           <div className="inspect-status">
             You are at least {SUBJECT_OFFER_MIN_POWER_RATIO}× their fleet strength — they may accept becoming your subject.
@@ -593,7 +596,7 @@ function WarCard({ war, viewerId }: { war: War; viewerId: string }) {
         <Swatch id={them} />
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Since</span>
+        <span className="inspect-label"><Bi en="Since" /></span>
         <span className="inspect-value">
           {formatDate(war.startedSimDays)} · {nameOf(war.attackerId)} attacked
         </span>
@@ -611,7 +614,7 @@ function WarCard({ war, viewerId }: { war: War; viewerId: string }) {
         <span className="inspect-value">{theyHold.length ? theyHold.join(', ') : '—'}</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Exhaustion</span>
+        <span className="inspect-label"><Bi en="Exhaustion" /></span>
         <span className="inspect-value">
           {Math.round(warExhaustion(war, me, day))}% · them {Math.round(warExhaustion(war, them, day))}%
         </span>
@@ -670,7 +673,7 @@ function WarsTab() {
       ))}
       {others.length > 0 && (
         <>
-          <div className="army-group-label">Other wars</div>
+          <div className="army-group-label"><Bi en="Other wars" /></div>
           {others.map((w) => (
             <WarCard key={w.id} war={w} viewerId={playerId} />
           ))}
@@ -754,21 +757,21 @@ function MyProfile({ playerId, onBack }: { playerId: string; onBack: () => void 
           <span className="dip-card-name">{mine?.name ?? playerId}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Capital</span>
+          <span className="inspect-label"><Bi en="Capital" /></span>
           <span className="inspect-value">{mine?.capitalBodyName ?? '—'}</span>
         </div>
       </div>
 
-      <div className="army-group-label">Wars</div>
+      <div className="army-group-label"><Bi en="Wars" /></div>
       {myWars.length === 0 && <div className="inspect-status">At peace with everyone.</div>}
       {myWars.map((w) => (
         <WarCard key={w.id} war={w} viewerId={playerId} />
       ))}
 
-      <div className="army-group-label">Treaties</div>
+      <div className="army-group-label"><Bi en="Treaties" /></div>
       <TreatyList playerId={playerId} />
 
-      <div className="army-group-label">Subjects</div>
+      <div className="army-group-label"><Bi en="Subjects" /></div>
       <SubjectsTab />
     </div>
   )
@@ -810,7 +813,7 @@ function SubjectsTab() {
             <span className="dip-card-name">Subject of {nameOf(myOverlord.suzerainId)}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Status</span>
+            <span className="inspect-label"><Bi en="Status" /></span>
             <span className="inspect-value">
               {myOverlord.type} {bindsForeignPolicy(myOverlord.type) ? '(no independent foreign policy)' : ''}
             </span>
@@ -826,17 +829,17 @@ function SubjectsTab() {
             <span className="dip-status">{sub.type}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Since</span>
+            <span className="inspect-label"><Bi en="Since" /></span>
             <span className="inspect-value">{formatDate(sub.sinceSimDays)}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Market</span>
+            <span className="inspect-label"><Bi en="Market" /></span>
             <span className="inspect-value">{sub.separateMarket ? 'Separate' : 'Shared with you'}</span>
           </div>
           {paysTribute(sub.type) && (
             <div className="inspect-row">
-              <span className="inspect-label">Tribute</span>
-              <span className="inspect-value">Paid monthly</span>
+              <span className="inspect-label"><Bi en="Tribute" /></span>
+              <span className="inspect-value"><Bi en="Paid monthly" /></span>
             </div>
           )}
           <div className="dip-actions">
@@ -855,14 +858,14 @@ function SubjectsTab() {
               {sub.separateMarket ? 'Share market' : 'Grant separate market'}
             </button>
             <button type="button" className="detail-view-btn danger" onClick={() => grantIndependence(sub.subjectId, day)}>
-              Grant Independence
+              <Bi en="Grant Independence" />
             </button>
           </div>
         </div>
       ))}
       <div className="dip-card">
         <div className="dip-card-head">
-          <span className="dip-card-name">Release a world as a new subject</span>
+          <span className="dip-card-name"><Bi en="Release a world as a new subject" /></span>
         </div>
         {releasable.length === 0 ? (
           <div className="inspect-status">You have no world you can release (your capital can't be released).</div>
@@ -894,7 +897,7 @@ function SubjectsTab() {
                 onChange={(e) => setReleaseName(e.target.value)}
               />
               <button type="button" className="detail-view-btn" disabled={!releaseBody || !releaseName.trim()} onClick={doRelease}>
-                Release
+                <Bi en="Release" />
               </button>
             </div>
           </>
@@ -954,7 +957,7 @@ function TradePolicyTab() {
     <div className="dip-list">
       <div className="dip-card">
         <div className="dip-card-head">
-          <span className="dip-card-name">Embargoes</span>
+          <span className="dip-card-name"><Bi en="Embargoes" /></span>
         </div>
         <div className="inspect-status">A blanket embargo stops all trade with a nation; a shared market with it waives your tariffs.</div>
         {COUNTRIES.filter((c) => c.id !== playerId).map((c) => {
@@ -985,8 +988,8 @@ function TradePolicyTab() {
         <div className="inspect-status">Tariff: import tax (revenue to you). Import subvention: you subsidise bringing a good in. Export subvention: you subsidise selling it abroad.</div>
         <div className="trade-policy-grid">
           <div className="trade-policy-row trade-policy-head">
-            <span>Good</span>
-            <span>Tariff</span>
+            <span><Bi en="Good" /></span>
+            <span><Bi en="Tariff" /></span>
             <span>Import sub.</span>
             <span>Export sub.</span>
           </div>
@@ -1057,8 +1060,11 @@ export function DiplomacyToast() {
     const idx = events.findIndex((e) => e.id === seen.current)
     const fresh = events.slice(idx + 1)
     seen.current = last.id
-    if (fresh.length === 0) return
-    setToasts((t) => [...t, ...fresh.map((e) => ({ id: e.id, remainingMs: TOAST_MS, event: e, color: colorOf(e.countryIds[0] ?? '') }))].slice(-MAX_TOASTS))
+    const playerId = usePlayerStore.getState().selectedCountryId
+    const filter = useSituationPrefsStore.getState().toastFilter
+    const shown = fresh.filter((e) => eventReachesPlayer(e, playerId, filter))
+    if (shown.length === 0) return
+    setToasts((t) => [...t, ...shown.map((e) => ({ id: e.id, remainingMs: TOAST_MS, event: e, color: colorOf(e.countryIds[0] ?? '') }))].slice(-MAX_TOASTS))
   }, [events])
 
   // A real-time clock (setInterval, not the game's), standing still while paused.
@@ -1076,7 +1082,7 @@ export function DiplomacyToast() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="dip-toast"
+          className={`dip-toast sev-${eventSeverity(t.event.kind)}`}
           style={{ borderLeftColor: t.color }}
           title="Click to go there · right-click to dismiss"
           onClick={() => {

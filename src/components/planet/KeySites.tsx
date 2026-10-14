@@ -1,3 +1,6 @@
+import { NamedBi } from '../NativeName'
+import { keyNodeId } from '../../state/placeNameStore'
+import { Bi } from '../Bi'
 import { useEffect, useMemo, useState } from 'react'
 import { DEFENSE_DEFS, MILITARY_KINDS, type DefenseKind } from '../../data/defenseData'
 import { RESOURCE_TYPES, type ResourceId } from '../../data/resourceData'
@@ -35,7 +38,7 @@ export function useKeyBuildings(bodyName: string): KeyBuilding[] {
 
 function tooltip(k: KeyBuilding): string {
   const holder = k.holder ? ownerDisplay(k.holder).name : 'nobody'
-  return `${k.name}\n${k.description}\n${k.building ? 'Under construction.' : `Key node: ${k.place}${k.native ? ` ${k.native}` : ''} · held by ${holder}${k.captured ? ' (captured)' : ''}`}\n${k.role}\nTakes no district slot; can't be demolished.`
+  return `${k.name}\n${k.description}\n${k.building ? 'Under construction.' : `Key node: ${k.place} · held by ${holder}${k.captured ? ' (captured)' : ''}`}\n${k.role}\nTakes no district slot; can't be demolished.`
 }
 
 // The civic buildings (the Senate House, the landmarks, each city's municipal government building, a colony's station): REAL
@@ -51,7 +54,7 @@ export function useCivicBuildings(bodyName: string): CivicBuilding[] {
 
 function CivicTile({ bodyName, c, holder }: { bodyName: string; c: CivicBuilding; holder: { id?: string; captured: boolean } }) {
   return (
-    <button type="button" className={`pl-tile pl-key-tile${holder.captured ? ' captured' : ''}`} title={`${c.name}\n${c.description}\nKey node: ${c.place}${c.native ? ` ${c.native}` : ''}\n${c.role}`} onClick={() => useCivicDetailStore.getState().openBuilding(bodyName, c.id)}>
+    <button type="button" className={`pl-tile pl-key-tile${holder.captured ? ' captured' : ''}`} title={`${c.name}\n${c.description}\nKey node: ${c.place}\n${c.role}`} onClick={() => useCivicDetailStore.getState().openBuilding(bodyName, c.id)}>
       <PlanetIcon id={KEY_BUILDING_ICON[c.kind]} size={22} />
       <span className="pl-tile-name">{c.name}</span>
       {holder.captured && holder.id && <span className="pl-key-flag" style={{ background: ownerDisplay(holder.id).color }} />}
@@ -89,7 +92,7 @@ export function CoreCard({ bodyName }: { bodyName: string }) {
     <div className="pl-district pl-district-c-core">
       <div className="pl-district-head" title="Government buildings: the seat of government, its landmarks and each city's municipal building. They take no slot, cost nothing to keep and cannot be demolished; the node they stand on is a key node in a ground war.">
         <PlanetIcon id="civic" size={20} />
-        <span className="pl-district-name">Core District</span>
+        <span className="pl-district-name"><Bi en="Core District" /></span>
         <span className="pl-district-slots">{list.length} building{list.length === 1 ? '' : 's'}</span>
       </div>
       <div className="pl-grid">
@@ -133,7 +136,9 @@ export function MilitaryTiles({ bodyName, playerId, canBuild, slots, grouped }: 
             <div key={i.id} className={`pl-tile${building ? ' queued' : ''}${captured ? ' captured' : ''}`}
               title={`${label}\n${def.description}\n${building ? `Under construction — ready in ${Math.ceil(i.readySimDays - simDays)} days` : `Integrity ${Math.round(i.integrity)} / ${def.integrity}`} · held by ${holder ? ownerDisplay(holder).name : 'nobody'}${captured ? ' (captured)' : ''}`}>
               <PlanetIcon id={i.kind} size={22} />
-              <span className="pl-tile-name">{label}{nativeOfName(label) ? <sub className="abs-dim"> {nativeOfName(label)}</sub> : null}</span>
+              <span className="pl-tile-name">
+                <NamedBi en={label} nativeKey={keyNodeId(bodyName, i.node)} builtIn={nativeOfName(label)} />
+              </span>
               {captured && <span className="pl-key-flag" style={{ background: ownerDisplay(holder!).color }} />}
               <span className="pl-tile-bar"><span style={{ width: `${Math.max(0, Math.min(1, i.integrity / def.integrity)) * 100}%` }} /></span>
             </div>
@@ -186,7 +191,8 @@ export function KeySitesList({ bodyName }: { bodyName: string }) {
               {k.captured && <span className="econ-neg"> · captured</span>}
             </div>
             <div className="abs-dim">
-              {k.kind === 'landmark' ? `At ${k.place}` : k.place}{k.native ? ` ${k.native}` : ''} · held by{' '}
+              {k.kind === 'landmark' ? 'At ' : ''}
+              <NamedBi en={k.place} nativeKey={keyNodeId(bodyName, k.node)} builtIn={k.native} /> · held by{' '}
               <span style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined }}>{k.holder ? ownerDisplay(k.holder).name : 'nobody'}</span>
             </div>
           </div>

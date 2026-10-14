@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { GOODS, GOOD_IDS } from '../economy/goods'
@@ -36,7 +37,7 @@ export function TradePanel() {
         </span>
       </div>
 
-      <div className="econ-subtitle">Imports by world</div>
+      <div className="econ-subtitle"><Bi en="Imports by world" /></div>
       {owned.map((w) => {
         const imports = GOOD_IDS.filter((g) => (w.importStock[g] ?? 0) > 0.5)
         return (

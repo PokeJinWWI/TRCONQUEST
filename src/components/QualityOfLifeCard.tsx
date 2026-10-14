@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useMemo } from 'react'
 import { useSeededBody } from '../hooks/useSeededBody'
 import { nationQualityOfLifeNow, qualityOfLifeNow } from '../scene/qualityOfLifeNow'
@@ -31,7 +32,7 @@ export function QualityOfLifeCard({ bodyName }: { bodyName: string }) {
   return (
     <div className="qol-card">
       <div className="inspect-divider" />
-      <div className="inspect-label" title="How pleasant this world is to live on, apart from what its people can buy. Shown beside the standard of living; it is not part of it.">Quality of life</div>
+      <div className="inspect-label" title="How pleasant this world is to live on, apart from what its people can buy. Shown beside the standard of living; it is not part of it."><Bi en="Quality of life" /></div>
       <Rows rows={rows} />
     </div>
   )
@@ -43,7 +44,7 @@ export function NationQualityOfLifeCard({ nationId }: { nationId: string }) {
   return (
     <div className="qol-card">
       <div className="inspect-divider" />
-      <div className="inspect-label" title="The nation's worlds averaged by population. Shown beside the standard of living; it is not part of it.">Quality of life (nation)</div>
+      <div className="inspect-label" title="The nation's worlds averaged by population. Shown beside the standard of living; it is not part of it."><Bi en="Quality of life (nation)" /></div>
       <Rows rows={rows} />
     </div>
   )

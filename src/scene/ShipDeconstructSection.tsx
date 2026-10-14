@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useArmyStore } from '../state/armyStore'
@@ -21,7 +22,7 @@ export function ShipDeconstructSection({ ship }: { ship: ShipInstance }) {
     const left = deconstructionRemaining(job, simDays)
     return (
       <div className="inspect-row">
-        <span className="inspect-label">Deconstructing</span>
+        <span className="inspect-label"><Bi en="Deconstructing" /></span>
         <span className="inspect-value">
           <span className="fleet-row-bar">
             <span className="health-bar-track tone-overall combat-roster-bar" title={`${Math.max(0, job.finishSimDays - simDays).toFixed(1)} days left`}>
@@ -30,7 +31,7 @@ export function ShipDeconstructSection({ ship }: { ship: ShipInstance }) {
             <span className="combat-roster-pct">{Math.round(left * 100)}%</span>
           </span>
           <button type="button" className="ship-panel-unfollow-btn" onClick={() => useShipDeconstructionStore.getState().cancel(ship.id)} title="Stop: the ship stays as it is now">
-            Cancel
+            <Bi en="Cancel" />
           </button>
         </span>
       </div>
@@ -40,7 +41,7 @@ export function ShipDeconstructSection({ ship }: { ship: ShipInstance }) {
   const days = deconstructionDays(shipClass)
   return (
     <div className="inspect-row">
-      <span className="inspect-label">Deconstruct</span>
+      <span className="inspect-label"><Bi en="Deconstruct" /></span>
       <span className="inspect-value">
         <button
           type="button"

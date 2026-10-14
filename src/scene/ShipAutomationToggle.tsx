@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { resolveShipClass } from '../state/shipClassResolver'
 import { useShipStore, type ShipInstance } from '../state/shipStore'
 import { AUTOMATION_LABELS, automationsFor, type Automation } from './automation'
@@ -32,7 +33,7 @@ export function ShipAutomationToggle({ ship }: { ship: ShipInstance }) {
   return (
     <>
       <div className="inspect-row">
-        <span className="inspect-label">Automation</span>
+        <span className="inspect-label"><Bi en="Automation" /></span>
         <span className="inspect-value ship-automation">
           <button type="button" className={`nav-subtab${active.length === 0 ? ' active' : ''}`} onClick={() => setAutomation(ship.id, null)} title="Turn every automation off: the ship waits for your orders">
             Off
@@ -46,7 +47,7 @@ export function ShipAutomationToggle({ ship }: { ship: ShipInstance }) {
       </div>
       {modes.includes('explore') && (
         <div className="inspect-row">
-          <span className="inspect-label" title="How far Auto-explore goes. Interstellar is the default">Explore scope</span>
+          <span className="inspect-label" title="How far Auto-explore goes. Interstellar is the default"><Bi en="Explore scope" /></span>
           <span className="inspect-value ship-automation">
             {EXPLORE_SCOPES.map((sc) => (
               <button key={sc} type="button" className={`nav-subtab${(ship.exploreScope ?? DEFAULT_EXPLORE_SCOPE) === sc ? ' active' : ''}`} onClick={() => setScope(ship.id, sc)} title={EXPLORE_SCOPE_TIPS[sc]}>

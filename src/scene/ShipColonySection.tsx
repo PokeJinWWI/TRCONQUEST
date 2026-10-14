@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { COLONY_FOUNDING_DAYS, COLONY_PATROL_DAYS } from '../data/colonyData'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useColonyStore } from '../state/colonyStore'
@@ -28,15 +29,15 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
     return (
       <>
         <div className="inspect-row">
-          <span className="inspect-label">Settlers</span>
+          <span className="inspect-label"><Bi en="Settlers" /></span>
           <span className="inspect-value">{ship.settlers ? `${Math.round(ship.settlers)} million aboard` : 'None aboard'}</span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Founding</span>
+          <span className="inspect-label"><Bi en="Founding" /></span>
           <span className="inspect-value">
             A colony on {ship.founding.bodyName}: {days} / {COLONY_FOUNDING_DAYS} days
             <button type="button" className="ship-panel-unfollow-btn" onClick={() => useShipStore.getState().setFounding(ship.id, null)}>
-              Stop
+              <Bi en="Stop" />
             </button>
           </span>
         </div>
@@ -55,12 +56,12 @@ export function ShipColonySection({ ship }: { ship: ShipInstance }) {
   return (
     <>
       <div className="inspect-row">
-        <span className="inspect-label">Settlers</span>
+        <span className="inspect-label"><Bi en="Settlers" /></span>
         <span className="inspect-value">{ship.settlers ? `${Math.round(ship.settlers)} million aboard` : 'None aboard'}</span>
       </div>
       {pending && (
         <div className="inspect-row">
-          <span className="inspect-label">On arrival</span>
+          <span className="inspect-label"><Bi en="On arrival" /></span>
           <span className="inspect-value">Found a colony on {pending}</span>
         </div>
       )}

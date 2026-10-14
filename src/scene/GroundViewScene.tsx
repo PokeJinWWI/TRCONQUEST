@@ -1,3 +1,4 @@
+import { useSceneColors } from './themeColors'
 import { wasDrag } from './dragGuard'
 import { cityOfNode, KEY_HOLD_BONUS, KEY_ROLE, keyNameOf } from './keyNames'
 import { regionAt } from './bodyTopography'
@@ -309,6 +310,7 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
 // Changing density redraws this and changes what a click snaps to — nothing
 // on the ground moves.
 function SurfaceGrid() {
+  const colors = useSceneColors()
   const density = useGroundViewStore((s) => s.density)
   const flat = useGroundViewStore((s) => s.projection === 'flat')
   const mesh = surfaceMesh()
@@ -357,10 +359,10 @@ function SurfaceGrid() {
   return (
     <group>
       <lineSegments geometry={edges}>
-        <lineBasicMaterial color="#6fe3ff" transparent opacity={GRID_OPACITY[density]} />
+        <lineBasicMaterial color={colors.grid} toneMapped={colors.toneMapped} transparent opacity={GRID_OPACITY[density]} />
       </lineSegments>
       <points geometry={points}>
-        <pointsMaterial color="#6fe3ff" size={flat ? 3 : density === 'fine' ? 0.035 : 0.06} sizeAttenuation={!flat} transparent opacity={flat ? 0.5 : 0.7} />
+        <pointsMaterial color={colors.gridPoint} toneMapped={colors.toneMapped} size={flat ? 3 : density === 'fine' ? 0.035 : 0.06} sizeAttenuation={!flat} transparent opacity={flat ? 0.5 : 0.7} />
       </points>
     </group>
   )
@@ -482,7 +484,7 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
           <div key={slot.node} ref={(el) => { refs.current[i] = el }} style={{ position: 'absolute', left: 0, top: 0, display: 'none' }}>
             <div
               className="ground-key"
-              title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}\n\n${KEY_ROLE[slot.kind]}\n${KEY_HOLD_BONUS}`}
+              title={`${kn.label}${region ? ` · ${region}` : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}\n\n${KEY_ROLE[slot.kind]}\n${KEY_HOLD_BONUS}`}
             >
               <div className="ground-key-marker" style={{ borderColor: color, color }}>
                 {KEY_GLYPHS[slot.kind]}

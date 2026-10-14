@@ -1,3 +1,4 @@
+import { Bi } from '../Bi'
 import { useMemo } from 'react'
 import { STARS } from '../../data/starData'
 import { systemView } from '../../scene/territoryView'
@@ -21,19 +22,19 @@ export function SystemTerritoryRows({ starName }: { starName: string }) {
     <>
       <div className="inspect-divider" />
       <div className="inspect-row" title="The recognized system-wide sovereign. A Starbase is a foothold, never a title.">
-        <span className="inspect-label">System governed by</span>
+        <span className="inspect-label"><Bi en="System governed by" /></span>
         <span className="inspect-value">{view.sovereign ?? 'nobody'}</span>
       </div>
       <div className="inspect-status">{view.note}</div>
       {view.claimants.length > 0 && (
         <div className="inspect-row" title="Provisional claims on the whole system">
-          <span className="inspect-label">Claimed by</span>
+          <span className="inspect-label"><Bi en="Claimed by" /></span>
           <span className="inspect-value">{view.claimants.join(', ')}</span>
         </div>
       )}
       {view.presence.length > 0 && (
         <div className="inspect-row" title="Finished Starbases here: a logistical and military foothold with no sovereignty">
-          <span className="inspect-label">Starbases of</span>
+          <span className="inspect-label"><Bi en="Starbases of" /></span>
           <span className="inspect-value">{view.presence.join(', ')}</span>
         </div>
       )}

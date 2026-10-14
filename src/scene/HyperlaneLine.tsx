@@ -1,3 +1,4 @@
+import { useSceneColors } from './themeColors'
 interface HyperlaneLineProps {
   from: [number, number, number]
   to: [number, number, number]
@@ -9,6 +10,7 @@ interface HyperlaneLineProps {
 // hue) specifically so it reads clearly against the dark interstellar
 // background — a dimmer, unrelated color proved hard to actually see there.
 export function HyperlaneLine({ from, to }: HyperlaneLineProps) {
+  const colors = useSceneColors()
   const points = new Float32Array([...from, ...to])
 
   return (
@@ -16,7 +18,7 @@ export function HyperlaneLine({ from, to }: HyperlaneLineProps) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[points, 3]} />
       </bufferGeometry>
-      <lineBasicMaterial color="#7ce8ff" transparent opacity={0.9} />
+      <lineBasicMaterial color={colors.lane} toneMapped={colors.toneMapped} transparent opacity={0.9} />
     </line>
   )
 }

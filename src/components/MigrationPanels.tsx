@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useMemo } from 'react'
 import { EMIGRATION_POLICIES, EMIGRATION_POLICY_DEFS, MIGRATION_POLICIES, MIGRATION_POLICY_DEFS, type EmigrationPolicy, type MigrationPolicy } from '../economy/migrationRules'
 import { lawsOfNation, useMigrationStore } from '../state/migrationStore'
@@ -27,7 +28,7 @@ export function MigrationLawsSection({ nationId }: { nationId: string }) {
               <div className="laws-option-head">
                 <span className="laws-option-name">{def.name}</span>
                 {active ? (
-                  <span className="laws-option-current">In force</span>
+                  <span className="laws-option-current"><Bi en="In force" /></span>
                 ) : (
                   <button type="button" className="laws-enact-btn" onClick={() => requestConfirm({ title: `Enact ${def.name}?`, body: def.description, effects: [], confirmLabel: 'Enact', onConfirm: () => setImmigration(id) })}>
                     Enact
@@ -47,7 +48,7 @@ export function MigrationLawsSection({ nationId }: { nationId: string }) {
             <div key={id} className={`laws-option${active ? ' active' : ''}`}>
               <div className="laws-option-head">
                 <span className="laws-option-name">{def.name}</span>
-                {active ? <span className="laws-option-current">In force</span> : <button type="button" className="laws-enact-btn" onClick={() => setEmigration(id)}>Enact</button>}
+                {active ? <span className="laws-option-current"><Bi en="In force" /></span> : <button type="button" className="laws-enact-btn" onClick={() => setEmigration(id)}><Bi en="Enact" /></button>}
               </div>
               <div className="laws-option-desc">{def.description}</div>
             </div>
@@ -72,10 +73,10 @@ export function MigrationCard({ bodyName }: { bodyName: string }) {
   return (
     <div className="migration-card">
       <div className="inspect-divider" />
-      <div className="inspect-label" title="People move from where life is worse to where it is better. A world's pull is the sum of these terms (Simple mode has no standard of living).">Migration</div>
+      <div className="inspect-label" title="People move from where life is worse to where it is better. A world's pull is the sum of these terms (Simple mode has no standard of living)."><Bi en="Migration" /></div>
       {view && (
         <>
-          <div className="inspect-row" title="Weighted sum of the terms below: higher draws people in"><span className="inspect-label">Attraction</span><span className="inspect-value">{Math.round(view.total * 100)}%</span></div>
+          <div className="inspect-row" title="Weighted sum of the terms below: higher draws people in"><span className="inspect-label"><Bi en="Attraction" /></span><span className="inspect-value">{Math.round(view.total * 100)}%</span></div>
           {view.terms.map((t) => (
             <div key={t.label} className="inspect-row" title={t.note}>
               <span className="inspect-label">  {t.label}</span>

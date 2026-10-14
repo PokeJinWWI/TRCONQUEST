@@ -1,3 +1,4 @@
+import { Bi } from './components/Bi'
 import { useRef } from 'react'
 import { ActionBar } from './components/ActionBar'
 import { Breadcrumb } from './components/Breadcrumb'
@@ -12,6 +13,7 @@ import { MainMenu } from './components/MainMenu'
 import { NavBar } from './components/NavBar'
 import { Outliner } from './components/Outliner'
 import { FiscalIndicators } from './components/FiscalIndicators'
+import { SituationBadge } from './components/SituationBadge'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { EscapeMenu } from './components/EscapeMenu'
 import { useKeyboardControls } from './hooks/useKeyboardControls'
@@ -35,6 +37,7 @@ import { useSurveyResolver } from './hooks/useSurveyResolver'
 import { useBombardmentResolver } from './hooks/useBombardmentResolver'
 import { useHoldingsResolver } from './hooks/useHoldingsResolver'
 import { useCommsResolver } from './hooks/useCommsResolver'
+import { useSituationTracker } from './hooks/useSituationTracker'
 import { useBattleTracker } from './hooks/useBattleTracker'
 import { useShipyardResolver } from './hooks/useShipyardResolver'
 import { useShipDeconstructionResolver } from './hooks/useShipDeconstructionResolver'
@@ -117,6 +120,8 @@ function App() {
   // Which battles the player is in — the Outliner's list and the combat
   // indicators on every map level.
   useBattleTracker()
+  // The Situations panel's alerts (scene/situations.ts), once per sim day.
+  useSituationTracker()
   // Escape (menu) and Space (pause).
   useKeyboardControls()
   // The capital's shipyard, and the placeholder resource supply it builds from
@@ -152,8 +157,11 @@ function App() {
   return (
     <div id="app-root">
       <header ref={topBarRef} className="hud-bar hud-top">
-        <span className="hud-title">TERRA RELICTA: CONQUEST</span>
+        <span className="hud-title">
+          <Bi en="TERRA RELICTA: CONQUEST" />
+        </span>
         <FiscalIndicators />
+        <SituationBadge />
         <HudCenterSwap />
         <div className="hud-top-right">
           <LockOnToggle />

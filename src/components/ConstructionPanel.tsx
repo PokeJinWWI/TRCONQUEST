@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { SiteChooser } from './planet/SiteChooser'
 import { usePlayerStore } from '../state/playerStore'
 import { useState } from 'react'
@@ -86,11 +87,11 @@ export function ConstructionPanel() {
         Construction funding
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Government pool (treasury)</span>
+        <span className="inspect-label"><Bi en="Government pool (treasury)" /></span>
         <span className="inspect-value">{fmt(country.treasury)}</span>
       </div>
       <div className="inspect-row" title="The private sector's pooled capital — a slice of company profits, managed by the financial sector — that finances PRIVATE construction.">
-        <span className="inspect-label">Private investment pool</span>
+        <span className="inspect-label"><Bi en="Private investment pool" /></span>
         <span className="inspect-value">{fmt(country.investmentPool)}</span>
       </div>
 

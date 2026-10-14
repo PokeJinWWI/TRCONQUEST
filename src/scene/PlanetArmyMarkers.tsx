@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { useEffect, useMemo } from 'react'
 import { Html } from '@react-three/drei'
 import { Color, ShaderMaterial, SRGBColorSpace, Vector2 } from 'three'
@@ -141,7 +142,7 @@ export function PlanetGroundHud({ bodyName }: { bodyName: string }) {
       )}
       {battle && <GroundBattleSummary battle={battle} />}
       <button type="button" className="detail-view-btn planet-ground-hud-btn" onClick={() => useViewStore.getState().enterGround(bodyName)}>
-        Open ground map
+        <Bi en="Open ground map" />
       </button>
     </div>
   )

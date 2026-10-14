@@ -1,3 +1,5 @@
+import { NamedBi, NativeNameInput } from '../NativeName'
+import { Bi } from '../Bi'
 import { useMemo, useState } from 'react'
 import { useSeededBody } from '../../hooks/useSeededBody'
 import { connectSite } from '../../scene/aiDevelopment'
@@ -11,8 +13,7 @@ import { developmentView, type AreaRow } from '../../scene/territoryView'
 import { useCivicStore } from '../../state/civicStore'
 import { PlanetIcon } from './PlanetIcons'
 import { useInfrastructureStore } from '../../state/infrastructureStore'
-import { useLocationStore, siteNative } from '../../state/locationStore'
-import { usePlaceNameStore } from '../../state/placeNameStore'
+import { useLocationStore, siteNativeBuiltIn } from '../../state/locationStore'
 import { useEconomyStore, worldByName } from '../../state/economyStore'
 import { useBuildingDetailStore } from '../../state/buildingDetailStore'
 import { RECIPES } from '../../economy/recipes'
@@ -33,18 +34,15 @@ const HOLDS_LABEL: Record<string, string> = {
 function RenamableName({ id, name, canRename }: { id: string; name: string; canRename: boolean }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(name)
-  const [nativeDraft, setNativeDraft] = useState('')
-  usePlaceNameStore((s) => s.natives[id])
-  const native = siteNative(id)
-  const sub = native ? <sub className="abs-dim" style={{ marginLeft: 4 }}>{native}</sub> : null
+  const builtIn = siteNativeBuiltIn(id)
+  const shown = <NamedBi en={name} nativeKey={id} builtIn={builtIn} />
   if (!editing) {
     return canRename ? (
-      <button type="button" className="good-flow-link" style={{ width: 'auto', textAlign: 'left' }} title="Click to rename it and edit its subscript" onClick={() => { setDraft(name); setNativeDraft(native ?? ''); setEditing(true) }}>{name}{sub}</button>
-    ) : <>{name}{sub}</>
+      <button type="button" className="good-flow-link" style={{ width: 'auto', textAlign: 'left' }} title="Click to rename it" onClick={() => { setDraft(name); setEditing(true) }}>{shown}</button>
+    ) : shown
   }
   const commit = () => {
     useLocationStore.getState().renameSite(id, draft)
-    usePlaceNameStore.getState().setNative(id, nativeDraft)
     syncCivicHalls(id.slice(0, id.lastIndexOf('#')))
     setEditing(false)
   }
@@ -56,7 +54,7 @@ function RenamableName({ id, name, canRename }: { id: string; name: string; canR
   return (
     <span>
       <input className="ground-key-name-input" autoFocus value={draft} maxLength={40} onChange={(e) => setDraft(e.target.value)} onKeyDown={keys} />
-      <input className="ground-key-name-input" value={nativeDraft} maxLength={40} placeholder="subscript" title="The little subscript beside the name: Chinese, or anything you like. Empty hides it." onChange={(e) => setNativeDraft(e.target.value)} onKeyDown={keys} />
+      <NativeNameInput nativeKey={id} builtIn={builtIn} onKeyDown={keys} />
       <button type="button" className="ground-key-rename" onClick={commit} title="Save (an empty name goes back to the generated one)">✓</button>
     </span>
   )
@@ -102,7 +100,7 @@ function AreaCard({ a, bodyName, onConnect }: { a: AreaRow; bodyName: string; on
           {a.captured && <span className="pl-output-chip pl-chip-warn" title="An enemy's ground forces hold part of this area: what stands there makes nothing for its owner">held by the enemy</span>}
           {cutOff && !a.captured && <span className="pl-output-chip pl-chip-warn" title="Share of its output that reaches a hub">{pct(a.access!)} access</span>}
           {a.mine && cutOff && a.worstPart && (
-            <button type="button" className="pl-develop" title="Build the cheapest route to the nearest hub it can reach" onClick={() => onConnect(a.worstPart!)}>Connect</button>
+            <button type="button" className="pl-develop" title="Build the cheapest route to the nearest hub it can reach" onClick={() => onConnect(a.worstPart!)}><Bi en="Connect" /></button>
           )}
         </div>
       )}
@@ -162,9 +160,9 @@ export function DevelopmentTab({ bodyName }: { bodyName: string }) {
   return (
     <div className="pl-districts development-tab">
       <div className="pl-stat-grid">
-        <div className="pl-stat" title="Connected urban ground: towns that grow into each other become one"><span>Urban areas</span><b>{urban.length}</b></div>
-        <div className="pl-stat"><span>Urban people</span><b>{urban.reduce((n, a) => n + (a.urban?.population ?? 0), 0)}M</b></div>
-        <div className="pl-stat"><span>Other areas</span><b>{view.areas.length - urban.length}</b></div>
+        <div className="pl-stat" title="Connected urban ground: towns that grow into each other become one"><span><Bi en="Urban areas" /></span><b>{urban.length}</b></div>
+        <div className="pl-stat"><span><Bi en="Urban people" /></span><b>{urban.reduce((n, a) => n + (a.urban?.population ?? 0), 0)}M</b></div>
+        <div className="pl-stat"><span><Bi en="Other areas" /></span><b>{view.areas.length - urban.length}</b></div>
       </div>
       {colony && colony.stage === 'micro' && owners[bodyName] === playerId && (
         <div className="abs-dim pl-land" title="A micro-colony can develop only this many district levels until an armed patrol holds its orbit long enough (see the Control tab)">
@@ -185,7 +183,7 @@ export function DevelopmentTab({ bodyName }: { bodyName: string }) {
       })}
       {view.standalone.length > 0 && (
         <div>
-          <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere">Standalone buildings</div>
+          <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere"><Bi en="Standalone buildings" /></div>
           <div className="pl-district">
             <div className="pl-grid">
               {view.standalone.map((b) => (
@@ -200,7 +198,7 @@ export function DevelopmentTab({ bodyName }: { bodyName: string }) {
       )}
       {rural.length > 0 && (
         <div>
-          <div className="econ-subtitle" title="Buildings that stand on their own ground, outside any district. One inside an area counts as part of it; a platform at sea can be reached only from orbit.">Outside the districts</div>
+          <div className="econ-subtitle" title="Buildings that stand on their own ground, outside any district. One inside an area counts as part of it; a platform at sea can be reached only from orbit."><Bi en="Outside the districts" /></div>
           <div className="pl-district">
             {rural.map((r) => (
               <div key={r.id} className="inspect-row" title={r.sea ? 'A platform at sea: no army can reach it, only orbital control takes it' : 'A key node of the ground map'}>
@@ -213,7 +211,7 @@ export function DevelopmentTab({ bodyName }: { bodyName: string }) {
       )}
       {view.routes.length > 0 && (
         <div>
-          <div className="econ-subtitle" title="Routes carry freight from areas to hubs; unpaid upkeep puts one in disrepair (half capacity)">Routes</div>
+          <div className="econ-subtitle" title="Routes carry freight from areas to hubs; unpaid upkeep puts one in disrepair (half capacity)"><Bi en="Routes" /></div>
           <div className="pl-district">
             {view.routes.map((r) => (
               <div key={r.id} className="inspect-row" title={r.between}>

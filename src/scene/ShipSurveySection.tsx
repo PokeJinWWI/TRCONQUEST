@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { resolveShipClass } from '../state/shipClassResolver'
 import type { ShipInstance } from '../state/shipStore'
@@ -53,23 +54,23 @@ export function ShipSurveySection({ ship }: { ship: ShipInstance }) {
   return (
     <>
       <div className="inspect-row">
-        <span className="inspect-label">Survey</span>
+        <span className="inspect-label"><Bi en="Survey" /></span>
         <span className="inspect-value">{text}</span>
       </div>
       {working && (
         <div className="inspect-row">
-          <span className="inspect-label">Working</span>
+          <span className="inspect-label"><Bi en="Working" /></span>
           <span className="inspect-value">
             {working}
             <button type="button" className="ship-panel-unfollow-btn" onClick={() => setSurveyJob(ship.id, null)}>
-              Stop
+              <Bi en="Stop" />
             </button>
           </span>
         </div>
       )}
       {pendingSurvey && (
         <div className="inspect-row">
-          <span className="inspect-label">Order</span>
+          <span className="inspect-label"><Bi en="Order" /></span>
           <span className="inspect-value">Survey in transit ({Math.max(0, Math.ceil(pendingSurvey.arrivesSimDays - simDays))}d)</span>
         </div>
       )}

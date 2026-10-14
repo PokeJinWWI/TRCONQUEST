@@ -1,0 +1,404 @@
+[
+ {
+  "en": "Powers ship systems, orbital infrastructure, and most other production. The most universally consumed resource.",
+  "ja": "艦の機器、軌道インフラ、その他ほとんどの生産を動かす。最も広く消費される資源。",
+  "zhHant": "驅動艦艇系統、軌道基礎設施及大部分生產。用途最廣的資源。",
+  "zhHans": "驱动舰艇系统、轨道基础设施及大部分生产。用途最广的资源。"
+ },
+ {
+  "en": "Raw material extracted from planets and asteroids — the basic input for construction, industry, and alloy production.",
+  "ja": "惑星や小惑星から採掘される原料。建設、工業、合金生産の基本的な投入物。",
+  "zhHant": "從行星與小行星開採的原料——建設、工業與合金生產的基本投入。",
+  "zhHans": "从行星与小行星开采的原料——建设、工业与合金生产的基本投入。"
+ },
+ {
+  "en": "Feeds a population. A sustained shortage starves colonies; a surplus supports growth.",
+  "ja": "人口を養う。長く不足すれば植民地は飢え、余れば成長を支える。",
+  "zhHant": "養活人口。長期短缺會讓殖民地挨餓；有餘則支撐成長。",
+  "zhHans": "养活人口。长期短缺会让殖民地挨饿；有余则支撑增长。"
+ },
+ {
+  "en": "Manufactured products a population consumes to stay content — insufficient supply drags down happiness and stability.",
+  "ja": "人々が満足を保つために消費する工業製品。供給不足は幸福度と安定を下げる。",
+  "zhHant": "人口為保持滿足而消費的工業製品——供應不足會拖累幸福度與穩定。",
+  "zhHans": "人口为保持满足而消费的工业制品——供应不足会拖累幸福度与稳定。"
+ },
+ {
+  "en": "Refined from minerals — the structural material every ship hull and starbase is actually built from.",
+  "ja": "鉱物から精錬される。あらゆる艦の船体と宇宙基地の実際の構造材。",
+  "zhHant": "由礦物精煉而成——所有艦體與星際基地實際使用的結構材料。",
+  "zhHans": "由矿物精炼而成——所有舰体与星际基地实际使用的结构材料。"
+ },
+ {
+  "en": "Circuits, computers and sensors — consumed by research labs and wanted by the population. Produced only in Simple mode.",
+  "ja": "回路、計算機、探知器。研究所で消費され、人々も求める。簡易モードでのみ生産される。",
+  "zhHant": "電路、電腦與感測器——研究室會消耗，人口也需要。僅在簡易模式中生產。",
+  "zhHans": "电路、电脑与传感器——研究室会消耗，人口也需要。仅在简易模式中生产。"
+ },
+ {
+  "en": "A rare form of matter with a higher mass-energy conversion rate than normal matter — fuels warp drives and their onboard systems.",
+  "ja": "通常物質より高い質量エネルギー変換率を持つ希少な物質。歪曲航法とその搭載系統の燃料。",
+  "zhHant": "一種質能轉換率高於普通物質的稀有物質——曲速引擎及其艦載系統的燃料。",
+  "zhHans": "一种质能转换率高于普通物质的稀有物质——曲速引擎及其舰载系统的燃料。"
+ },
+ {
+  "en": "Extremely rare, yields effectively infinite energy, and can't be subdivided — fuels hyperdrives, making every hyperdrive-equipped hull valuable in its own right.",
+  "ja": "極めて希少で、事実上無限のエネルギーを生み、分割できない。超空間航法の燃料であり、超空間機関を積む船体はそれだけで価値がある。",
+  "zhHant": "極其稀有，能產生近乎無限的能量，且無法分割——超空間引擎的燃料，使每艘配備超空間引擎的艦體本身就價值不菲。",
+  "zhHans": "极其稀有，能产生近乎无限的能量，且无法分割——超空间引擎的燃料，使每艘配备超空间引擎的舰体本身就价值不菲。"
+ },
+ {
+  "en": "Civilian freighters and liners: the merchant fleet that carries trade between worlds and nations, worked from spaceports.",
+  "ja": "民間の貨物船と客船。宇宙港を拠点に、世界と国の間で交易を運ぶ商船隊。",
+  "zhHant": "民用貨船與客輪：以太空港為據點，在世界與國家之間運送貿易的商船隊。",
+  "zhHans": "民用货船与客轮：以太空港为据点，在世界与国家之间运送贸易的商船队。"
+ },
+ {
+  "en": "Launch vehicles and boosters that lift cargo from a spaceport to orbit, where the freighters take it on.",
+  "ja": "宇宙港から軌道まで貨物を打ち上げる発射機とブースター。そこで貨物船が引き継ぐ。",
+  "zhHant": "將貨物從太空港送上軌道的運載火箭與助推器，由貨船在軌道接手。",
+  "zhHans": "将货物从太空港送上轨道的运载火箭与助推器，由货船在轨道接手。"
+ },
+ {
+  "en": "Rare, one-off materials that do not yet warrant their own dedicated category.",
+  "ja": "まだ独自の分類に値しない、希少で一点物の素材。",
+  "zhHant": "尚不足以自成一類的稀有、單一材料。",
+  "zhHans": "尚不足以自成一类的稀有、单一材料。"
+ },
+ {
+  "en": "Political reach: spent to found colonies on new worlds. Every nation earns a little each month, up to a limit of 1,000. It cannot be traded or seized.",
+  "ja": "政治的影響力。新たな世界への植民に使う。どの国も毎月少しずつ得て、上限は1,000。取引も奪取もできない。",
+  "zhHant": "政治影響力：用於在新世界建立殖民地。每個國家每月獲得少許，上限1,000。不可交易或奪取。",
+  "zhHans": "政治影响力：用于在新世界建立殖民地。每个国家每月获得少许，上限1,000。不可交易或夺取。"
+ },
+ {
+  "en": "Build and repair ships in this system; capacity scales with the base tier.",
+  "ja": "この星系で艦を建造・修理する。能力は基地の段階に応じて増える。",
+  "zhHant": "在此星系建造與修理艦艇；產能隨基地等級提升。",
+  "zhHans": "在此星系建造与修理舰艇；产能随基地等级提升。"
+ },
+ {
+  "en": "Guns that return fire on warships besieging the base, and extra armour.",
+  "ja": "基地を包囲する軍艦に反撃する砲と、追加装甲。",
+  "zhHant": "向圍攻基地之戰艦還擊的火砲，以及額外裝甲。",
+  "zhHans": "向围攻基地之战舰还击的火炮，以及额外装甲。"
+ },
+ {
+  "en": "Long-range missiles: heavier return fire on besiegers than a gun battery.",
+  "ja": "長距離誘導弾。砲台より重い反撃を包囲者に浴びせる。",
+  "zhHant": "長程飛彈：比砲台更猛烈地還擊圍攻者。",
+  "zhHans": "远程导弹：比炮台更猛烈地还击围攻者。"
+ },
+ {
+  "en": "A field that soaks up siege damage: more hit points and armour.",
+  "ja": "包囲の損害を吸収する力場。耐久と装甲が増える。",
+  "zhHant": "吸收圍攻傷害的力場：更多生命值與裝甲。",
+  "zhHans": "吸收围攻伤害的力场：更多生命值与装甲。"
+ },
+ {
+  "en": "A merchant-marine berth: adds to the nation’s interstellar freight capacity.",
+  "ja": "商船隊の停泊所。国の恒星間貨物容量を増やす。",
+  "zhHant": "商船隊泊位：增加國家的星際貨運量。",
+  "zhHans": "商船队泊位：增加国家的星际货运量。"
+ },
+ {
+  "en": "The orbital half of a space elevator — pairs with a ground anchor below for huge fuel-free launch.",
+  "ja": "軌道エレベーターの軌道側。地上の基部と組めば、燃料なしで莫大な打ち上げができる。",
+  "zhHant": "太空電梯的軌道端——與下方地面錨座配對，可無燃料大量發射。",
+  "zhHans": "太空电梯的轨道端——与下方地面锚座配对，可无燃料大量发射。"
+ },
+ {
+  "en": "Panels that power the base.",
+  "ja": "基地に電力を供給する太陽電池板。",
+  "zhHant": "為基地供電的太陽能板。",
+  "zhHans": "为基地供电的太阳能板。"
+ },
+ {
+  "en": "A compact reactor: a great deal of power.",
+  "ja": "小型の炉。大量の電力。",
+  "zhHant": "小型反應爐：大量電力。",
+  "zhHans": "小型反应堆：大量电力。"
+ },
+ {
+  "en": "Living quarters on the base: housing for the world below, and a steadier crew.",
+  "ja": "基地の居住区。下の世界の住居となり、乗員も安定する。",
+  "zhHant": "基地上的居住艙：為下方世界提供住房，乘員也更穩定。",
+  "zhHans": "基地上的居住舱：为下方世界提供住房，乘员也更稳定。"
+ },
+ {
+  "en": "A microgravity laboratory: research points each month (Simple mode).",
+  "ja": "微小重力研究所。毎月研究点を生む(簡易モード)。",
+  "zhHant": "微重力實驗室：每月產生研究點數（簡易模式）。",
+  "zhHans": "微重力实验室：每月产生研究点数（简易模式）。"
+ },
+ {
+  "en": "A hyperium-synthesis site: where Hyperium Synthesis turns exotic matter into hyperium, in orbit.",
+  "ja": "超空間鉱合成施設。超空間鉱合成が軌道上で異種物質を超空間鉱に変える場所。",
+  "zhHant": "超空間礦合成站：超空間礦合成在軌道上將奇異物質轉化為超空間礦之處。",
+  "zhHans": "超空间矿合成站：超空间矿合成在轨道上将奇异物质转化为超空间矿之处。"
+ },
+ {
+  "en": "The Emperor’s residence and the seat of the Imperial government, above Akakyō in Xanthe Terra.",
+  "ja": "皇帝の居所にして帝国政府の座。クサンテ大陸の赤京を見下ろす。",
+  "zhHant": "皇帝的居所與帝國政府所在，俯瞰克桑西大陸的赤京。",
+  "zhHans": "皇帝的居所与帝国政府所在，俯瞰克桑西大陆的赤京。"
+ },
+ {
+  "en": "Where the Imperial Diet sits: the Empire’s legislature, advising the throne.",
+  "ja": "帝国議会の議場。玉座に助言する帝国の立法府。",
+  "zhHant": "帝國議會所在：向皇座進言的帝國立法機關。",
+  "zhHans": "帝国议会所在：向皇座进言的帝国立法机关。"
+ },
+ {
+  "en": "The Empire’s great fortress, guarding the capital.",
+  "ja": "首都を守る帝国の大要塞。",
+  "zhHant": "守護首都的帝國大要塞。",
+  "zhHans": "守护首都的帝国大要塞。"
+ },
+ {
+  "en": "The seat of the Republic’s government, in Paphos.",
+  "ja": "パフォスにある共和国政府の座。",
+  "zhHant": "共和國政府所在地，位於帕福斯。",
+  "zhHans": "共和国政府所在地，位于帕福斯。"
+ },
+ {
+  "en": "Where the Republic’s elected assembly meets.",
+  "ja": "共和国の選挙で選ばれた議会が開かれる場所。",
+  "zhHant": "共和國民選議會的開會之處。",
+  "zhHans": "共和国民选议会的开会之处。"
+ },
+ {
+  "en": "The Republic’s citadel, guarding the capital.",
+  "ja": "首都を守る共和国の城塞。",
+  "zhHant": "守護首都的共和國城塞。",
+  "zhHans": "守护首都的共和国城塞。"
+ },
+ {
+  "en": "The seat of the Orion Republic’s government: its vast elected assembly, in Elysion.",
+  "ja": "オリオン共和国政府の座。エリュシオンにある巨大な民選議会。",
+  "zhHant": "獵戶共和國政府所在：位於埃律西昂的龐大民選議會。",
+  "zhHans": "猎户共和国政府所在：位于埃律西昂的庞大民选议会。"
+ },
+ {
+  "en": "The open forum where citizens petition and debate — the heart of Orion’s democracy.",
+  "ja": "市民が請願し議論する開かれた広場。オリオンの民主政の中心。",
+  "zhHant": "市民請願與辯論的開放廣場——獵戶民主的核心。",
+  "zhHans": "市民请愿与辩论的开放广场——猎户民主的核心。"
+ },
+ {
+  "en": "The Republic’s bastion, guarding the capital.",
+  "ja": "首都を守る共和国の稜堡。",
+  "zhHant": "守護首都的共和國堡壘。",
+  "zhHans": "守护首都的共和国堡垒。"
+ },
+ {
+  "en": "The royal palace and seat of the Kingdom’s government, in Bellerive.",
+  "ja": "ベルリーヴにある王宮にして王国政府の座。",
+  "zhHant": "王宮與王國政府所在，位於貝勒里夫。",
+  "zhHans": "王宫与王国政府所在，位于贝勒里夫。"
+ },
+ {
+  "en": "The chamber of the Kingdom’s estates.",
+  "ja": "王国諸身分の議場。",
+  "zhHant": "王國各等級的議事廳。",
+  "zhHans": "王国各等级的议事厅。"
+ },
+ {
+  "en": "The Kingdom’s castle, guarding the capital.",
+  "ja": "首都を守る王国の城。",
+  "zhHant": "守護首都的王國城堡。",
+  "zhHans": "守护首都的王国城堡。"
+ },
+ {
+  "en": "The fortified seat of the military government that rules Earth, in Chicago — the nerve centre of a declining empire.",
+  "ja": "地球を支配する軍事政府の要塞化された本拠。シカゴにある、衰退する帝国の中枢。",
+  "zhHant": "統治地球之軍政府的設防總部，位於芝加哥——一個衰落帝國的神經中樞。",
+  "zhHans": "统治地球之军政府的设防总部，位于芝加哥——一个衰落帝国的神经中枢。"
+ },
+ {
+  "en": "The old imperial assembly, now a rubber stamp for the Command.",
+  "ja": "かつての帝国議会。今は司令部の追認機関にすぎない。",
+  "zhHant": "昔日的帝國議會，如今只是司令部的橡皮圖章。",
+  "zhHans": "昔日的帝国议会，如今只是司令部的橡皮图章。"
+ },
+ {
+  "en": "The hardened command bunker guarding the capital.",
+  "ja": "首都を守る堅固な指揮壕。",
+  "zhHant": "守護首都的強化指揮掩體。",
+  "zhHans": "守护首都的强化指挥掩体。"
+ },
+ {
+  "en": "Builds things: makes the construction points that raise new buildings and district levels. Burns minerals and energy.",
+  "ja": "物を建てる。新たな建物と区画段階を築く建設点を生む。鉱物と電力を消費する。",
+  "zhHant": "負責建造：產生建造新建築與區劃等級的建設點數。消耗礦物與能源。",
+  "zhHans": "负责建造：产生建造新建筑与区划等级的建设点数。消耗矿物与能源。"
+ },
+ {
+  "en": "Military industry: smelts the alloys ships and armies are built from. Its capacity is also what your military budget pays upkeep on.",
+  "ja": "軍需工業。艦と陸軍の材料となる合金を精錬する。その能力が軍事予算の維持費の基準にもなる。",
+  "zhHant": "軍事工業：冶煉建造艦艇與陸軍所需的合金。其產能也是軍事預算維護費的計算基準。",
+  "zhHans": "军事工业：冶炼建造舰艇与陆军所需的合金。其产能也是军事预算维护费的计算基准。"
+ },
+ {
+  "en": "Civilian industries: the everyday goods every stratum wants. Short of them, people grow unhappy.",
+  "ja": "民生工業。どの階層も求める日用品。不足すれば人々は不満を募らせる。",
+  "zhHant": "民用工業：各階層都需要的日用品。短缺時人民會不滿。",
+  "zhHans": "民用工业：各阶层都需要的日用品。短缺时人民会不满。"
+ },
+ {
+  "en": "Circuits and computers — used by research labs and fusion reactors, and wanted by specialists and workers.",
+  "ja": "回路と計算機。研究所と核融合炉で使われ、専門職と労働者も求める。",
+  "zhHant": "電路與電腦——供研究室與核融合反應爐使用，專業人員與勞工也需要。",
+  "zhHans": "电路与电脑——供研究室与核聚变反应堆使用，专业人员与劳工也需要。"
+ },
+ {
+  "en": "Refines hyperium (hyperdrive fuel) from exotic matter (warp fuel), at the one conversion rate. Needs Hyperium Synthesis. Energy hungry; it stops when the exotic matter runs out.",
+  "ja": "異種物質(歪曲燃料)から超空間鉱(超空間燃料)を一定の変換率で精製する。超空間鉱合成が必要。電力を多く食い、異種物質が尽きれば止まる。",
+  "zhHant": "以固定轉換率從奇異物質（曲速燃料）精煉超空間礦（超空間引擎燃料）。需要超空間礦合成。耗電量大；奇異物質耗盡即停止。",
+  "zhHans": "以固定转换率从奇异物质（曲速燃料）精炼超空间矿（超空间引擎燃料）。需要超空间矿合成。耗电量大；奇异物质耗尽即停止。"
+ },
+ {
+  "en": "Builds civilian spaceships — the freighters and liners that spaceports work to carry trade between worlds and nations.",
+  "ja": "民間宇宙船を建造する。宇宙港が世界と国の間の交易に使う貨物船と客船。",
+  "zhHant": "建造民用太空船——太空港用來在世界與國家之間運送貿易的貨船與客輪。",
+  "zhHans": "建造民用太空船——太空港用来在世界与国家之间运送贸易的货船与客轮。"
+ },
+ {
+  "en": "Builds the launch rockets that lift cargo from spaceports to orbit.",
+  "ja": "宇宙港から軌道へ貨物を打ち上げるロケットを建造する。",
+  "zhHant": "建造將貨物從太空港送上軌道的運載火箭。",
+  "zhHans": "建造将货物从太空港送上轨道的运载火箭。"
+ },
+ {
+  "en": "Research into the Physics tree. All research also raises productivity.",
+  "ja": "物理系統の研究。すべての研究は生産性も高める。",
+  "zhHant": "物理樹的研究。所有研究也會提升生產力。",
+  "zhHans": "物理树的研究。所有研究也会提升生产力。"
+ },
+ {
+  "en": "Research into the Society tree. All research also raises productivity.",
+  "ja": "社会系統の研究。すべての研究は生産性も高める。",
+  "zhHant": "社會樹的研究。所有研究也會提升生產力。",
+  "zhHans": "社会树的研究。所有研究也会提升生产力。"
+ },
+ {
+  "en": "Research into the Engineering tree. All research also raises productivity.",
+  "ja": "工学系統の研究。すべての研究は生産性も高める。",
+  "zhHant": "工程樹的研究。所有研究也會提升生產力。",
+  "zhHans": "工程树的研究。所有研究也会提升生产力。"
+ },
+ {
+  "en": "Grows food for the population.",
+  "ja": "人々のために食料を育てる。",
+  "zhHant": "為人口種植糧食。",
+  "zhHans": "为人口种植粮食。"
+ },
+ {
+  "en": "Indoor farming: twice a farm’s food from the same slot, but it runs on energy. For worlds short of room.",
+  "ja": "屋内農業。同じ枠で農場の二倍の食料を得るが、電力で動く。土地の乏しい世界向け。",
+  "zhHant": "室內農業：同一格位可產出農場兩倍的糧食，但需耗電。適合空間不足的世界。",
+  "zhHans": "室内农业：同一格位可产出农场两倍的粮食，但需耗电。适合空间不足的世界。"
+ },
+ {
+  "en": "Extracts minerals — the raw input for industry and construction.",
+  "ja": "鉱物を採掘する。工業と建設の原料。",
+  "zhHant": "開採礦物——工業與建設的原料。",
+  "zhHans": "开采矿物——工业与建设的原料。"
+ },
+ {
+  "en": "Mines far below the crust: twice the minerals from the same slot, for energy.",
+  "ja": "地殻のはるか下で採掘する。同じ枠で二倍の鉱物を、電力と引き換えに。",
+  "zhHant": "深入地殼之下開採：同一格位兩倍礦物，以能源換取。",
+  "zhHans": "深入地壳之下开采：同一格位两倍矿物，以能源换取。"
+ },
+ {
+  "en": "Generates energy for industry, labs, refineries and ships.",
+  "ja": "工業、研究所、精製所、艦のための電力を生む。",
+  "zhHant": "為工業、研究室、精煉廠與艦艇發電。",
+  "zhHans": "为工业、研究室、精炼厂与舰艇发电。"
+ },
+ {
+  "en": "Two and a half times a power plant’s energy from the same slot, run by specialists; needs electronics.",
+  "ja": "同じ枠で発電所の2.5倍の電力。専門職が運転し、電子機器が必要。",
+  "zhHant": "同一格位可產出發電廠2.5倍的能源，由專業人員運轉；需要電子產品。",
+  "zhHans": "同一格位可产出发电厂2.5倍的能源，由专业人员运转；需要电子产品。"
+ },
+ {
+  "en": "Healthcare: provides amenities and makes the population grow faster.",
+  "ja": "医療。生活施設を提供し、人口の増加を早める。",
+  "zhHant": "醫療：提供生活設施並加快人口成長。",
+  "zhHans": "医疗：提供生活设施并加快人口增长。"
+ },
+ {
+  "en": "Theatres, arenas and holo-dramas: plenty of amenities to keep people content.",
+  "ja": "劇場、競技場、立体劇。人々を満足させる豊富な生活施設。",
+  "zhHant": "劇院、競技場與全息劇：大量生活設施，讓人民保持滿足。",
+  "zhHans": "剧院、竞技场与全息剧：大量生活设施，让人民保持满足。"
+ },
+ {
+  "en": "Shops, offices and markets: some amenities and a stream of taxable services output.",
+  "ja": "商店、事務所、市場。いくらかの生活施設と、課税できるサービス産出。",
+  "zhHant": "商店、辦公室與市場：部分生活設施，以及可課稅的服務產出。",
+  "zhHans": "商店、办公室与市场：部分生活设施，以及可课税的服务产出。"
+ },
+ {
+  "en": "Landing fields and orbital lift: the gate for trade with other nations. Each level adds trade capacity and is a key node on the ground map (it takes no district slot); it burns rockets and wears out spaceships.",
+  "ja": "着陸場と軌道揚力。他国との交易の門。段階ごとに交易能力が増え、地上図の要衝となる(区画枠を使わない)。ロケットを燃やし、宇宙船を消耗する。",
+  "zhHant": "起降場與軌道升力：與他國貿易的門戶。每級增加貿易量，並是地面圖上的要地（不佔區劃格位）；消耗火箭並耗損太空船。",
+  "zhHans": "起降场与轨道升力：与他国贸易的门户。每级增加贸易量，并是地面图上的要地（不占区划格位）；消耗火箭并耗损太空船。"
+ },
+ {
+  "en": "Rail and road across the planet: raises the world's infrastructure, and so its MARKET ACCESS — how much of its trade it can actually run.",
+  "ja": "惑星全体の鉄道と道路。世界の社会基盤、つまり市場への接続(実際に回せる交易量)を高める。",
+  "zhHant": "遍布行星的鐵路與道路：提升世界的基礎設施，從而提升其市場通達度——實際能進行多少貿易。",
+  "zhHans": "遍布行星的铁路与道路：提升世界的基础设施，从而提升其市场通达度——实际能进行多少贸易。"
+ },
+ {
+  "en": "A tether to orbit: huge fuel-free LAUNCH capacity when paired with an orbital-ring tether above the world. Needs Orbital Tethers.",
+  "ja": "軌道への索。世界上空の軌道環の索と組めば、燃料なしで莫大な打ち上げ能力。軌道索が必要。",
+  "zhHant": "通往軌道的纜繩：與世界上空的軌道環纜繩配對時，提供龐大的無燃料發射能力。需要軌道纜繩。",
+  "zhHans": "通往轨道的缆绳：与世界上空的轨道环缆绳配对时，提供庞大的无燃料发射能力。需要轨道缆绳。"
+ },
+ {
+  "en": "Factories, foundries and refineries. Every building here makes the others more productive (suppliers, skilled labour, shared logistics), and research parks nearby boost it further.",
+  "ja": "工場、鋳造所、精製所。ここの建物は互いの生産性を高め(供給者、熟練労働、物流の共有)、近くの研究団地がさらに押し上げる。",
+  "zhHant": "工廠、鑄造廠與精煉廠。此處每座建築都讓其他建築更具生產力（供應商、熟練勞工、共享物流），附近的研究園區更能進一步提升。",
+  "zhHans": "工厂、铸造厂与精炼厂。此处每座建筑都让其他建筑更具生产力（供应商、熟练劳工、共享物流），附近的研究园区更能进一步提升。"
+ },
+ {
+  "en": "Universities and research labs. Clustered labs work better together, and each level of research park lifts the industry on the same world.",
+  "ja": "大学と研究所。集まった研究所はよく協働し、研究団地の各段階が同じ世界の工業を押し上げる。",
+  "zhHant": "大學與研究室。聚集的研究室合作更佳，每一級研究園區都會提升同一世界的工業。",
+  "zhHans": "大学与研究室。聚集的研究室合作更佳，每一级研究园区都会提升同一世界的工业。"
+ },
+ {
+  "en": "Farmland, hydroponics and food processing. Farms here share irrigation, storage and markets.",
+  "ja": "農地、水耕、食品加工。ここの農場は灌漑、貯蔵、市場を共有する。",
+  "zhHant": "農田、水耕與食品加工。此處農場共享灌溉、倉儲與市場。",
+  "zhHans": "农田、水耕与食品加工。此处农场共享灌溉、仓储与市场。"
+ },
+ {
+  "en": "Quarries and shafts. Mines here share rail, crushers and smelters.",
+  "ja": "採石場と坑道。ここの鉱山は鉄道、破砕機、製錬所を共有する。",
+  "zhHant": "採石場與礦井。此處礦場共享鐵路、碎礦機與冶煉廠。",
+  "zhHans": "采石场与矿井。此处矿场共享铁路、碎矿机与冶炼厂。"
+ },
+ {
+  "en": "Power stations and grid. Plants here share transmission and maintenance.",
+  "ja": "発電所と送電網。ここの発電所は送電と保守を共有する。",
+  "zhHant": "發電站與電網。此處電廠共享輸電與維護。",
+  "zhHans": "发电站与电网。此处电厂共享输电与维护。"
+ },
+ {
+  "en": "Clinics, entertainment and commerce — the amenities city life needs. Other nations’ embassies and branch offices are housed here too.",
+  "ja": "診療所、娯楽、商業。都市生活に必要な生活施設。他国の大使館と支店もここに入る。",
+  "zhHant": "診所、娛樂與商業——城市生活所需的生活設施。他國的使館與分支機構也設於此。",
+  "zhHans": "诊所、娱乐与商业——城市生活所需的生活设施。他国的使馆与分支机构也设于此。"
+ },
+ {
+  "en": "Fortresses, shield generators and defense batteries — the world’s planetary defenses. Each takes one slot while it stands; build them here or from the Defense tab.",
+  "ja": "要塞、遮蔽発生器、防衛砲台。世界の惑星防衛。立っている間それぞれ一枠を使う。ここか防衛タブから建てる。",
+  "zhHant": "要塞、護盾產生器與防禦砲台——世界的行星防禦。存在期間各佔一格；可在此或在防禦分頁建造。",
+  "zhHans": "要塞、护盾发生器与防御炮台——世界的行星防御。存在期间各占一格；可在此或在防御分页建造。"
+ }
+]

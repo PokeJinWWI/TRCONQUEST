@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { findStar } from '../data/starData'
 import { useViewStore } from '../state/viewStore'
 
@@ -19,5 +20,7 @@ export function LocationLabel() {
         ? `${starName} System — ${selectedBodyName}`
         : `${starName} System`
 
-  return <span className="location-label">{text}</span>
+  return <span className="location-label">
+      <Bi en={text} />
+    </span>
 }

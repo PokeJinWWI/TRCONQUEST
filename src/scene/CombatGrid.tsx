@@ -1,3 +1,4 @@
+import { useSceneColors } from './themeColors'
 import { useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import { BufferGeometry, Float32BufferAttribute, DoubleSide, Vector3 } from 'three'
@@ -18,9 +19,7 @@ import {
 // arena's outer cage (brightest, it's the hard boundary of what's currently
 // in frame).
 
-const LATTICE_COLOR = '#2b6b80'
-const NODE_COLOR = '#7ce8ff'
-const CAGE_COLOR = '#7ce8ff'
+// Lattice, node and cage colours come from the UI theme (scene/themeColors.ts).
 
 // The interior lattice gets fainter as it gets denser — at 'fine' there are
 // 867 lines crossing the view, and at a fixed opacity they'd read as fog
@@ -138,6 +137,7 @@ interface CombatGridProps {
 // CombatViewScene, which offsets the whole arena so the window center sits at
 // the scene origin.
 export function CombatGrid({ center, density, obstacles, span, onPickPoint }: CombatGridProps) {
+  const colors = useSceneColors()
   const lattice = useLatticeGeometry(density, span)
   const nodes = useNodeGeometry(density, span)
   const cage = useCageGeometry(span)
@@ -152,15 +152,15 @@ export function CombatGrid({ center, density, obstacles, span, onPickPoint }: Co
   return (
     <group>
       <lineSegments geometry={lattice}>
-        <lineBasicMaterial color={LATTICE_COLOR} transparent opacity={LATTICE_OPACITY[density]} />
+        <lineBasicMaterial color={colors.lattice} toneMapped={colors.toneMapped} transparent opacity={LATTICE_OPACITY[density]} />
       </lineSegments>
 
       <points geometry={nodes}>
-        <pointsMaterial color={NODE_COLOR} size={NODE_SIZE[density]} transparent opacity={0.55} sizeAttenuation />
+        <pointsMaterial color={colors.latticeNode} toneMapped={colors.toneMapped} size={NODE_SIZE[density]} transparent opacity={0.55} sizeAttenuation />
       </points>
 
       <lineSegments geometry={cage}>
-        <lineBasicMaterial color={CAGE_COLOR} transparent opacity={0.5} />
+        <lineBasicMaterial color={colors.latticeNode} toneMapped={colors.toneMapped} transparent opacity={0.5} />
       </lineSegments>
 
       {/* The celestial bodies sharing the arena. Rendered as a wireframe

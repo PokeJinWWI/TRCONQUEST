@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useThrottledSimDays } from '../hooks/useThrottledSimDays'
 import { useEffect, useMemo, useState } from 'react'
 import { getCountry } from '../data/countryData'
@@ -164,7 +165,7 @@ export function ShipyardPanel() {
           <span className="fleet-row-name">{o.upgradeShipId ? `Upgrade: ${o.upgradeShipName} → ${o.className}` : o.repairShipId ? `Repair: ${o.repairShipName}` : o.className}</span>
           <span className="fleet-row-class">{started ? `${daysLeft.toFixed(1)}d left` : `${o.durationDays}d once a slot frees`}</span>
           <button type="button" className="ship-panel-unfollow-btn" onClick={() => cancelBuild(countryId, o.id)} title="Cancel and refund the full cost">
-            Cancel
+            <Bi en="Cancel" />
           </button>
         </div>
         {started && (
@@ -247,7 +248,7 @@ export function ShipyardPanel() {
                       <span className="fleet-row-name">{j.shipName}</span>
                       <span className="fleet-row-class">{Math.max(0, j.finishSimDays - simDays).toFixed(1)}d left</span>
                       <button type="button" className="ship-panel-unfollow-btn" onClick={() => useShipDeconstructionStore.getState().cancel(j.shipId)} title="Stop: the ship stays as it is now">
-                        Cancel
+                        <Bi en="Cancel" />
                       </button>
                     </div>
                     <div className="fleet-row-bar">

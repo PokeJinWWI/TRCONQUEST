@@ -1,3 +1,5 @@
+import { NamedBi, NativeNameInput } from './NativeName'
+import { Bi } from './Bi'
 import { completeLanding } from '../scene/colonies'
 import { planLanding } from '../scene/landingSite'
 import { useShipStore } from '../state/shipStore'
@@ -120,7 +122,7 @@ function LandingBanner({ bodyName, onCancel, shipId }: { bodyName: string; onCan
       Choose where the Colony Ship lands: click open ground. It becomes an outpost, and a municipal hall once the colony has grown.
       {plan && <div className={`inspect-status ${plan.ok ? 'ok' : ''}`}>{plan.ok ? (plan.adopt ? `Land at ${plan.adopt.name ?? 'the nearby site'}` : 'Found a new settlement here') : plan.reason}</div>}
       <button type="button" className="detail-view-btn" onClick={onCancel}>
-        Cancel
+        <Bi en="Cancel" />
       </button>
     </div>
   )
@@ -145,9 +147,7 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
   // Renaming a spaceport or an installation of your own (the pencil beside it in the list).
   const [renaming, setRenaming] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
-  const [nativeDraft, setNativeDraft] = useState('')
   usePlaceNameStore((s) => s.names)
-  usePlaceNameStore((s) => s.natives)
   useStructureStore((s) => s.ports[bodyName])
   const installations = useDefenseStore((s) => s.installations)
 
@@ -161,18 +161,18 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
   return (
     <DraggableWindow title={`${bodyName} — Ground`} memoryKey="ground" anchor="left" maximizable={false}>
       <div className="inspect-row">
-        <span className="inspect-label">Held by</span>
+        <span className="inspect-label"><Bi en="Held by" /></span>
         <span className="inspect-value" style={{ color: controller ? ownerDisplay(controller).color : undefined }}>
           {controller ? ownerDisplay(controller).name : 'Nobody'}
           {owner && controller && owner !== controller ? ` (owner ${ownerDisplay(owner).name})` : ''}
         </span>
       </div>
       <label className="inspect-row" title="Draw a circle and name for every city on the map. Off: only the capital, spaceports and other key places are marked.">
-        <span className="inspect-label">Show all city circles</span>
+        <span className="inspect-label"><Bi en="Show all city circles" /></span>
         <input type="checkbox" checked={showCities} onChange={(e) => useGroundViewStore.getState().setShowCities(e.target.checked)} />
       </label>
       <div className="inspect-row">
-        <span className="inspect-label">Key nodes</span>
+        <span className="inspect-label"><Bi en="Key nodes" /></span>
         <span className="inspect-value">{keyHolders.length === 0 ? 'None' : `${keyHolders.length}`}</span>
       </div>
       {keyHolders.length > 0 && (
@@ -190,7 +190,6 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                 if (port) renamePort(bodyName, port.id, draft)
                 else if (installation) useDefenseStore.getState().renameInstallation(installation.id, draft)
                 else usePlaceNameStore.getState().setName(keyNodeId(bodyName, k.node), draft)
-                usePlaceNameStore.getState().setNative(keyNodeId(bodyName, k.node), nativeDraft)
                 setRenaming(null)
               }
               return (
@@ -208,13 +207,9 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                       e.stopPropagation()
                     }}
                   />
-                  <input
-                    className="ground-key-name-input"
-                    value={nativeDraft}
-                    maxLength={40}
-                    placeholder="subscript"
-                    title="The little subscript beside the name: Chinese, or anything you like. Empty hides it."
-                    onChange={(e) => setNativeDraft(e.target.value)}
+                  <NativeNameInput
+                    nativeKey={keyNodeId(bodyName, k.node)}
+                    builtIn={kn.native}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') commit()
                       if (e.key === 'Escape') setRenaming(null)
@@ -231,9 +226,11 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                   type="button"
                   className="ground-key-row"
                   onClick={() => useGroundViewStore.getState().focusNode(k.node)}
-                  title={`${kn.label}${kn.native ? ` (${kn.native})` : ''}${region ? ` · ${region}` : ''}${k.operator ? `\nRun by ${k.operator}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
+                  title={`${kn.label}${region ? ` · ${region}` : ''}${k.operator ? `\nRun by ${k.operator}` : ''}\n${KEY_ROLE[k.kind]}\n${KEY_HOLD_BONUS}\n\nClick to look at it on the map.`}
                 >
-                  <span className="ground-key-row-name">{kn.name ?? kn.label}{kn.native ? <sub className="abs-dim"> {kn.native}</sub> : null}</span>
+                  <span className="ground-key-row-name">
+                    <NamedBi en={kn.name ?? kn.label} nativeKey={keyNodeId(bodyName, k.node)} builtIn={kn.native} />
+                  </span>
                   <span className="abs-dim">{[kn.name ? KEY_KIND_LABEL[k.kind] : '', region ?? '', k.operator ? `run by ${k.operator}` : ''].filter(Boolean).join(' · ')}</span>
                   <span className="ground-key-row-holder" style={{ color: k.holder ? ownerDisplay(k.holder).color : undefined }}>{k.holder ? ownerDisplay(k.holder).name : 'nobody'}</span>
                 </button>
@@ -244,7 +241,6 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                     title="Name it"
                     onClick={() => {
                       setDraft(port?.name ?? installation?.name ?? usePlaceNameStore.getState().names[keyNodeId(bodyName, k.node)] ?? (port || installation ? '' : kn.name ?? ''))
-                      setNativeDraft(kn.native ?? '')
                       setRenaming(k.node)
                     }}
                   >
@@ -261,7 +257,7 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
       </div>
 
       <div className="inspect-row">
-        <span className="inspect-label">Map mode</span>
+        <span className="inspect-label"><Bi en="Map mode" /></span>
         <span className="inspect-value combat-density-row">
           <button
             type="button"
@@ -280,7 +276,7 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
       )}
 
       <div className="inspect-row">
-        <span className="inspect-label">Grid</span>
+        <span className="inspect-label"><Bi en="Grid" /></span>
         <span className="inspect-value combat-density-row">
           {GRID_DENSITIES.map((d) => (
             <button key={d} type="button" className={`combat-density-btn${d === density ? ' active' : ''}`} onClick={() => view.setDensity(d)}>
@@ -356,10 +352,10 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
       {mineSelected.length > 0 && (
         <div className="dip-actions">
           <button type="button" className="detail-view-btn" onClick={() => useArmyStore.getState().haltUnits(mineSelected.map((u) => u.id))}>
-            Halt
+            <Bi en="Halt" />
           </button>
           <button type="button" className="detail-view-btn" onClick={() => useArmyStore.getState().targetUnit(mineSelected.map((u) => u.id), null)}>
-            Clear target
+            <Bi en="Clear target" />
           </button>
         </div>
       )}
@@ -423,12 +419,12 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
         <table className="ground-unit-table">
           <thead>
             <tr>
-              <th>Unit</th>
-              <th>Str</th>
-              <th>Atk</th>
-              <th>Def</th>
+              <th><Bi en="Unit" /></th>
+              <th><Bi en="Str" /></th>
+              <th><Bi en="Atk" /></th>
+              <th><Bi en="Def" /></th>
               <th>km/day</th>
-              <th>Range km</th>
+              <th><Bi en="Range km" /></th>
             </tr>
           </thead>
           <tbody>
@@ -459,19 +455,19 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
   return (
     <DraggableWindow title={spec.name} memoryKey="unit" maximizable={false} onClose={() => useGroundViewStore.getState().selectUnits([])}>
       <div className="inspect-row">
-        <span className="inspect-label">Army</span>
+        <span className="inspect-label"><Bi en="Army" /></span>
         <span className="inspect-value" style={{ color: relationColorOf(army.ownerId) }}>
           {ownerDisplay(army.ownerId).name} · {ARMY_KINDS[army.kind].name}
         </span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Personnel</span>
+        <span className="inspect-label"><Bi en="Personnel" /></span>
         <span className="inspect-value">
           {unitPersonnel(unit).toLocaleString()} of {spec.personnel.toLocaleString()}
         </span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Strength</span>
+        <span className="inspect-label"><Bi en="Strength" /></span>
         <span className="inspect-value">
           {Math.ceil(unit.strength)}/{unit.maxStrength}
         </span>
@@ -483,31 +479,31 @@ export function UnitCard({ bodyName, surface }: { bodyName: string; surface: Bod
         </span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Speed (open ground)</span>
+        <span className="inspect-label"><Bi en="Speed (open ground)" /></span>
         <span className="inspect-value">{spec.holdsPosition ? 'Holds position' : `${fmt(openSpeed(unit))} km/day`}</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Range</span>
+        <span className="inspect-label"><Bi en="Range" /></span>
         <span className="inspect-value">{fmt(radToKm(unitRangeRad(unit.type), radius))} km</span>
       </div>
       <div className="inspect-row">
-        <span className="inspect-label">Amphibious</span>
+        <span className="inspect-label"><Bi en="Amphibious" /></span>
         <span className="inspect-value">{spec.amphibious ? 'Yes — can cross oceans' : 'No'}</span>
       </div>
       {mods.length > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Terrain</span>
+          <span className="inspect-label"><Bi en="Terrain" /></span>
           <span className="inspect-value">{mods.join('; ')}</span>
         </div>
       )}
       <div className="inspect-divider" />
       <div className="inspect-row">
-        <span className="inspect-label">Status</span>
+        <span className="inspect-label"><Bi en="Status" /></span>
         <span className="inspect-value">{unitStatus(unit)}</span>
       </div>
       {here && (
         <div className="inspect-row">
-          <span className="inspect-label">Standing on</span>
+          <span className="inspect-label"><Bi en="Standing on" /></span>
           <span className="inspect-value">
             {here.name} ({describeDefense(here.defense)})
           </span>

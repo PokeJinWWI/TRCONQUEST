@@ -1,3 +1,4 @@
+import { Bi } from '../Bi'
 import { useSeededBody } from '../../hooks/useSeededBody'
 import { useMemo, useState } from 'react'
 import { siteChoicesForBuilding, siteChoicesForLevel, type SiteChoice } from '../../scene/siteChoices'
@@ -50,7 +51,7 @@ export function SiteChooser({ request, onChoose, onCancel }: { request: SiteRequ
             Arm the build lens
           </button>
           <button type="button" className="laws-enact-btn" onClick={onCancel}>
-            Cancel
+            <Bi en="Cancel" />
           </button>
         </div>
       </div>
@@ -67,10 +68,10 @@ export function SiteChooser({ request, onChoose, onCancel }: { request: SiteRequ
       </div>
       <div className="pl-chooser-actions">
         <button type="button" className="laws-enact-btn" disabled={!picked} onClick={() => picked && onChoose(picked)}>
-          Build here
+          <Bi en="Build here" />
         </button>
         <button type="button" className="laws-enact-btn" onClick={onCancel}>
-          Cancel
+          <Bi en="Cancel" />
         </button>
       </div>
     </div>

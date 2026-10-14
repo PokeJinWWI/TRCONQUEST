@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { Fragment, useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { useGoodDetailStore } from '../state/goodDetailStore'
@@ -88,10 +89,10 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
         <table className="econ-table">
           <thead>
             <tr>
-              <th>Good</th>
-              <th>Price</th>
-              <th>Supply</th>
-              <th>Demand</th>
+              <th><Bi en="Good" /></th>
+              <th><Bi en="Price" /></th>
+              <th><Bi en="Supply" /></th>
+              <th><Bi en="Demand" /></th>
             </tr>
           </thead>
           <tbody>
@@ -144,7 +145,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
     return (
       <div className="econ-panel">
         <div className="ship-panel-hint" style={{ marginBottom: 6 }}>All flows are per year (the Overview and Finance use the same figures).</div>
-        <div className="econ-subtitle">Revenue (per year)</div>
+        <div className="econ-subtitle"><Bi en="Revenue (per year)" /></div>
         <FiscalRow label="Tax revenue" value={perYear(fiscal?.revenue)} tone="pos" rate={rate} />
         <div className="econ-subtitle" style={{ marginTop: 8 }}>
           Expenditure (per year)
@@ -164,9 +165,9 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
         <FiscalRow label="Private investment pool" value={country.investmentPool} tone="pos" rate={rate} />
 
         <div className="inspect-divider" />
-        <div className="econ-subtitle">Controls</div>
+        <div className="econ-subtitle"><Bi en="Controls" /></div>
         <div className="econ-control-row" title="The income tax rate on all wages and profits — your main revenue lever.">
-          <span className="inspect-label">Income tax</span>
+          <span className="inspect-label"><Bi en="Income tax" /></span>
           <span className="econ-control">
             <button type="button" onClick={() => setTaxRate(country.id, country.taxRate - 0.05)}>
               −
@@ -288,7 +289,7 @@ export function EconomyPanel({ subcategory, worldName, world, country }: Economy
     totalPop > 0 ? allPops.reduce((s, p) => s + p.needsSatisfaction[tier] * p.populationSize, 0) / totalPop : 0
   return (
     <div className="econ-panel">
-      <div className="econ-subtitle">National needs satisfaction</div>
+      <div className="econ-subtitle"><Bi en="National needs satisfaction" /></div>
       {NEED_TIERS.map((tier) => (
         <div className="inspect-row" key={tier}>
           <span className="inspect-label" style={{ textTransform: 'capitalize' }}>

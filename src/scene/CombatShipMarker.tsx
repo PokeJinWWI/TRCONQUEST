@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
@@ -108,12 +109,12 @@ export function CombatShipMarker({ engagementId, shipId, onOrderTarget }: Combat
               single most decision-relevant thing to see from across the
               arena, so it gets its own badge rather than living only in the
               panel. */}
-          {charging && <span className="combat-marker-charging">FTL</span>}
+          {charging && <span className="combat-marker-charging"><Bi en="FTL" /></span>}
           {/* Chaff has to be visible on EVERY hull, not just your own, or it
               isn't counterplay — the response to an enemy raising chaff is to
               close the distance (see combatData's chaffMissChance), and you
               can't decide to do that without being told it's up. */}
-          {chaffed && <span className="combat-marker-chaff">CHAFF</span>}
+          {chaffed && <span className="combat-marker-chaff"><Bi en="CHAFF" /></span>}
           {/* Same visual slot as chaff, one badge per active Tactic (see
               combatData's Tactics section) — visible on every hull, not just
               your own, same "this is counterplay, not a secret" reasoning as

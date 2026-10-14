@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { Fragment, useMemo, useState } from 'react'
 import { CULTURES, RELIGIONS } from '../economy/demographics'
 import { SPECIES_TEMPLATES, NEED_TIERS, type NeedTier } from '../economy/species'
@@ -228,12 +229,12 @@ export function PopsPanel({ worldName, world }: PopsPanelProps) {
         <table className="econ-table">
           <thead>
             <tr>
-              <th>Class</th>
-              <th>Culture</th>
-              <th>Religion</th>
-              <th>Pop</th>
-              <th>SoL</th>
-              <th>Needs</th>
+              <th><Bi en="Class" /></th>
+              <th><Bi en="Culture" /></th>
+              <th><Bi en="Religion" /></th>
+              <th><Bi en="Pop" /></th>
+              <th><Bi en="SoL" /></th>
+              <th><Bi en="Needs" /></th>
             </tr>
           </thead>
           <tbody>

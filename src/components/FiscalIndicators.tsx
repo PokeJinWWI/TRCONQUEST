@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
@@ -50,7 +51,7 @@ export function FiscalIndicators() {
         title="National treasury (negative = overdraft; issue bonds to cover it)"
         onClick={() => setOpenId('treasury')}
       >
-        <span className="fiscal-ind-label">Treasury</span>
+        <span className="fiscal-ind-label"><Bi en="Treasury" /></span>
         <span className={`fiscal-ind-val ${treasury >= 0 ? 'econ-pos' : 'econ-neg'}`}>{fmt(treasury)}</span>
       </button>
       <button
@@ -59,7 +60,7 @@ export function FiscalIndicators() {
         title="Budget balance per month (revenue − spending)"
         onClick={() => setOpenId('balance')}
       >
-        <span className="fiscal-ind-label">Balance</span>
+        <span className="fiscal-ind-label"><Bi en="Balance" /></span>
         <span className={`fiscal-ind-val ${balance >= 0 ? 'econ-pos' : 'econ-neg'}`}>
           {balance >= 0 ? '+' : ''}
           {fmt(balance)}/mo
@@ -69,23 +70,23 @@ export function FiscalIndicators() {
       {openId === 'treasury' && (
         <DraggableWindow title="Treasury" onClose={() => setOpenId(null)} maximizable={false}>
           <div className="inspect-row">
-            <span className="inspect-label">Treasury</span>
+            <span className="inspect-label"><Bi en="Treasury" /></span>
             <span className={`inspect-value${treasury >= 0 ? ' econ-pos' : ' econ-neg'}`}>{fmt(treasury)}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Monthly</span>
+            <span className="inspect-label"><Bi en="Monthly" /></span>
             <span className={`inspect-value${balance >= 0 ? ' econ-pos' : ' econ-neg'}`}>
               {balance >= 0 ? '+' : ''}
               {fmt(balance)}/mo
             </span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Debt</span>
+            <span className="inspect-label"><Bi en="Debt" /></span>
             <span className={`inspect-value${debt > 0 ? ' econ-neg' : ''}`}>{fmt(debt)}</span>
           </div>
           {rating && (
             <div className="inspect-row">
-              <span className="inspect-label">Credit Rating</span>
+              <span className="inspect-label"><Bi en="Credit Rating" /></span>
               <span className="inspect-value">{rating}</span>
             </div>
           )}
@@ -100,18 +101,18 @@ export function FiscalIndicators() {
       {openId === 'balance' && (
         <DraggableWindow title="Balance" onClose={() => setOpenId(null)} maximizable={false}>
           <div className="inspect-row">
-            <span className="inspect-label">Balance</span>
+            <span className="inspect-label"><Bi en="Balance" /></span>
             <span className={`inspect-value${balance >= 0 ? ' econ-pos' : ' econ-neg'}`}>
               {balance >= 0 ? '+' : ''}
               {fmt(balance)}/mo
             </span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Revenue</span>
+            <span className="inspect-label"><Bi en="Revenue" /></span>
             <span className="inspect-value econ-pos">+{fmt(revenue)}/mo</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Expenditure</span>
+            <span className="inspect-label"><Bi en="Expenditure" /></span>
             <span className="inspect-value econ-neg">−{fmt(expenditure)}/mo</span>
           </div>
           <div className="inspect-divider" />

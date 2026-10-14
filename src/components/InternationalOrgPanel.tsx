@@ -1,3 +1,7 @@
+import { SCRIPT_LABELS, useThemeStore } from '../state/themeStore'
+import { usePlaceNameStore } from '../state/placeNameStore'
+import { LABEL_KEY_PREFIX } from './NativeAnnotator'
+import { Bi } from './Bi'
 import { useState } from 'react'
 import { ownerDisplay } from '../data/countryRoster'
 import { ORG_PRESETS, type OrgPillar, type AuthorityModel } from '../data/internationalOrgData'
@@ -39,6 +43,10 @@ export function InternationalOrgPanel() {
   const orgs = useInternationalOrgStore((s) => s.orgs)
   const [presetId, setPresetId] = useState('common-market')
   const [name, setName] = useState('')
+  // Its native-script name (NERV theme): kept as the player's own label for the new name.
+  const [nativeDraft, setNativeDraft] = useState('')
+  const nerv = useThemeStore((s) => s.theme === 'nerv')
+  const script = useThemeStore((s) => s.script)
   const [message, setMessage] = useState<string | null>(null)
   if (!playerId) return null
 
@@ -53,7 +61,9 @@ export function InternationalOrgPanel() {
       return
     }
     store().founded(playerId, presetId, trimmed, useGameTimeStore.getState().simDays)
+    if (nativeDraft.trim()) usePlaceNameStore.getState().setNative(`${LABEL_KEY_PREFIX}${trimmed}`, script, nativeDraft)
     setName('')
+    setNativeDraft('')
     setMessage(`Founded ${trimmed}`)
   }
 
@@ -73,27 +83,27 @@ export function InternationalOrgPanel() {
               <span className="dip-status">{AUTHORITY_LABEL[org.authorityModel]}</span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Leader</span>
+              <span className="inspect-label"><Bi en="Leader" /></span>
               <span className="inspect-value">
                 {nameOf(org.leaderId)}
                 {isLeader ? ' (you)' : ''}
               </span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Founded</span>
+              <span className="inspect-label"><Bi en="Founded" /></span>
               <span className="inspect-value">{formatDate(org.foundedSimDays)}</span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Members</span>
+              <span className="inspect-label"><Bi en="Members" /></span>
               <span className="inspect-value">{org.memberIds.map(nameOf).join(', ')}</span>
             </div>
             <div className="inspect-row">
-              <span className="inspect-label">Pillars</span>
+              <span className="inspect-label"><Bi en="Pillars" /></span>
               <span className="inspect-value">{org.pillars.length > 0 ? org.pillars.map((p) => PILLAR_LABEL[p]).join(', ') : 'None'}</span>
             </div>
             {hasJointCommand && !isLeader && (
               <div className="inspect-row">
-                <span className="inspect-label">Fleet command</span>
+                <span className="inspect-label"><Bi en="Fleet command" /></span>
                 <span className="inspect-value">{org.delegatedCommand[playerId] ? `Delegated to ${nameOf(org.leaderId)}` : 'Kept'}</span>
               </div>
             )}
@@ -110,11 +120,11 @@ export function InternationalOrgPanel() {
               )}
               {isLeader ? (
                 <button type="button" className="detail-view-btn danger" onClick={() => store().disband(org.id)}>
-                  Disband
+                  <Bi en="Disband" />
                 </button>
               ) : (
                 <button type="button" className="detail-view-btn danger" onClick={() => store().leave(org.id, playerId)}>
-                  Leave
+                  <Bi en="Leave" />
                 </button>
               )}
             </div>
@@ -125,7 +135,7 @@ export function InternationalOrgPanel() {
       {joinable.length > 0 && (
         <div className="dip-card">
           <div className="dip-card-head">
-            <span className="dip-card-name">Organizations you could join</span>
+            <span className="dip-card-name"><Bi en="Organizations you could join" /></span>
           </div>
           {joinable.map((org) => (
             <div key={org.id} className="inspect-row">
@@ -133,7 +143,7 @@ export function InternationalOrgPanel() {
                 <Swatch id={org.leaderId} /> {org.name}
               </span>
               <button type="button" className="detail-view-btn" onClick={() => store().join(org.id, playerId)}>
-                Join
+                <Bi en="Join" />
               </button>
             </div>
           ))}
@@ -142,10 +152,10 @@ export function InternationalOrgPanel() {
 
       <div className="dip-card">
         <div className="dip-card-head">
-          <span className="dip-card-name">Found a new organization</span>
+          <span className="dip-card-name"><Bi en="Found a new organization" /></span>
         </div>
         <div className="inspect-row">
-          <span className="inspect-label">Type</span>
+          <span className="inspect-label"><Bi en="Type" /></span>
           <span className="inspect-value">{ORG_PRESETS.find((p) => p.id === presetId)?.pillars.map((p) => PILLAR_LABEL[p]).join(', ') || 'No pillars (custom)'}</span>
         </div>
         <div className="dip-actions">
@@ -157,8 +167,11 @@ export function InternationalOrgPanel() {
             ))}
           </select>
           <input type="text" className="econ-method-select" placeholder="Organization name" value={name} onChange={(e) => setName(e.target.value)} />
+          {nerv && (
+            <input type="text" className="econ-method-select native-name-input" lang={script} placeholder={SCRIPT_LABELS[script]} title="Its native name beside the English" value={nativeDraft} maxLength={40} onChange={(e) => setNativeDraft(e.target.value)} />
+          )}
           <button type="button" className="detail-view-btn" disabled={!name.trim()} onClick={found}>
-            Found
+            <Bi en="Found" />
           </button>
         </div>
       </div>

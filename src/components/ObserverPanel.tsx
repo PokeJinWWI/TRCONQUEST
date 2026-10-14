@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useMemo } from 'react'
 import { DraggableWindow } from './DraggableWindow'
 import { galaxyEmpires } from '../data/generatedEmpires'
@@ -35,22 +36,22 @@ export function ObserverPanel() {
             <div className="inspect-row">
               <span className="inspect-label" style={{ color: e.color }}>{e.name}{e.lore ? ' (lore)' : ''}</span>
               <button type="button" className="detail-view-btn" onClick={() => useViewStore.getState().enterInterstellar(e.clusterId, true)}>
-                Go
+                <Bi en="Go" />
               </button>
             </div>
-            <div className="inspect-row"><span className="inspect-label">Neighbourhood</span><span className="inspect-value">{cluster?.name ?? e.clusterId}</span></div>
+            <div className="inspect-row"><span className="inspect-label"><Bi en="Neighbourhood" /></span><span className="inspect-value">{cluster?.name ?? e.clusterId}</span></div>
             <div className="inspect-row">
               <span className="inspect-label">Systems ({e.ownedStarIds.length})</span>
               <span className="inspect-value">{e.ownedStarIds.map((id) => findStar(id)?.name ?? id).join(', ')}</span>
             </div>
-            <div className="inspect-row"><span className="inspect-label">Influence</span><span className="inspect-value">{num(e.influence)}</span></div>
+            <div className="inspect-row"><span className="inspect-label"><Bi en="Influence" /></span><span className="inspect-value">{num(e.influence)}</span></div>
             <div className="inspect-row" title={[...e.researched].map((t) => TECH_NAME.get(t) ?? t).join(', ')}>
-              <span className="inspect-label">Tech</span>
+              <span className="inspect-label"><Bi en="Tech" /></span>
               <span className="inspect-value">tier {e.techTier} ({e.techTier > HUMAN_BASELINE_TIER ? 'above' : e.techTier === HUMAN_BASELINE_TIER ? 'at' : 'below'} humans) · {e.researched.size} researched</span>
             </div>
             {s && (
               <div className="inspect-row">
-                <span className="inspect-label">Economy</span>
+                <span className="inspect-label"><Bi en="Economy" /></span>
                 <span className="inspect-value">
                   {s.worlds} worlds · pop {num(s.population)}M · GDP {num(s.gdp)}/mo · treasury {num(s.treasury)} · inflation {(s.inflation * 100).toFixed(1)}% · unemployment {(s.unemployment * 100).toFixed(0)}%
                 </span>

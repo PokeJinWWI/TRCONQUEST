@@ -1,3 +1,4 @@
+import { Bi } from '../Bi'
 import { useThrottledSimDays } from '../../hooks/useThrottledSimDays'
 import { useState } from 'react'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS, BUILDABLE_DEFENSE_KINDS, DEFENSE_DEFS, type DefenseKind } from '../../data/defenseData'
@@ -59,9 +60,9 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
   return (
     <div className="pl-defense">
       <div className="pl-stat-grid">
-        <div className="pl-stat" title="Defense installations on this world"><span>Installations</span><b>{here.length}</b></div>
-        <div className={`pl-stat${hostileShips.length > 0 ? ' warn' : ''}`} title="Armed enemy warships orbiting this world"><span>Hostile ships</span><b>{hostileShips.length}</b></div>
-        <div className="pl-stat" title="Ground forces on the surface"><span>Armies</span><b>{garrison.length}</b></div>
+        <div className="pl-stat" title="Defense installations on this world"><span><Bi en="Installations" /></span><b>{here.length}</b></div>
+        <div className={`pl-stat${hostileShips.length > 0 ? ' warn' : ''}`} title="Armed enemy warships orbiting this world"><span><Bi en="Hostile ships" /></span><b>{hostileShips.length}</b></div>
+        <div className="pl-stat" title="Ground forces on the surface"><span><Bi en="Armies" /></span><b>{garrison.length}</b></div>
       </div>
       {byOwner.size > 0 && (
         <div className="pl-output">
@@ -74,7 +75,7 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
       {(devastation > 0 || strikesHere.length > 0) && (
         <div className="pl-bombard">
           <div className="cb-meter" title="Damage from orbital bombardment — it cuts this world's output by up to half, and heals slowly once the bombing stops.">
-            <div className="cb-meter-head"><span>Devastation</span><span className="cb-meter-val">{Math.round(devastation * 100)}%</span></div>
+            <div className="cb-meter-head"><span><Bi en="Devastation" /></span><span className="cb-meter-val">{Math.round(devastation * 100)}%</span></div>
             <div className="cb-meter-track"><div className="cb-meter-fill" style={{ width: `${devastation * 100}%`, background: '#ff6b4a' }} /></div>
           </div>
           {strikesHere.map((st) => (
@@ -97,7 +98,7 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
         </div>
       )}
 
-      <div className="econ-subtitle" title="The buildings that are this world's key nodes: an invader must hold them all to take it">Key sites</div>
+      <div className="econ-subtitle" title="The buildings that are this world's key nodes: an invader must hold them all to take it"><Bi en="Key sites" /></div>
       <KeySitesList bodyName={bodyName} />
 
       <div className="econ-subtitle" style={{ marginTop: 10 }}>Installations</div>

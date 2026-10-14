@@ -1,3 +1,4 @@
+import { Bi } from '../Bi'
 import { useMemo, useState } from 'react'
 import { STARBASE_COST, STARBASE_TIERS } from '../../data/starbaseData'
 import { ownerDisplay } from '../../data/countryRoster'
@@ -78,11 +79,11 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
   return (
     <div className="pl-districts territory-tab">
       <div className="pl-stat-grid">
-        <div className="pl-stat" title="The recognized sovereign: who may make the rules here. Owning a building, a station or a Starbase never confers it."><span>Governed by</span><b>{view.sovereign ? view.sovereign.name : 'Nobody'}</b></div>
-        <div className={`pl-stat${view.groundControl.occupied ? ' warn' : ''}`} title="Who holds the ground by force right now. Occupation is not sovereignty."><span>Ground held by</span><b>{view.groundControl.name}{view.groundControl.occupied ? ' (occ.)' : ''}</b></div>
-        <div className={`pl-stat${view.contested ? ' warn' : ''}`} title={view.contested ? 'Rival claims stand here; building in a dispute is a diplomatic incident' : view.frontier ? 'No one governs here yet: anyone may settle; a provisional claim gives priority' : 'Recognized and undisputed'}><span>Status</span><b>{view.contested ? 'Disputed' : view.frontier ? 'Frontier' : 'Settled'}</b></div>
+        <div className="pl-stat" title="The recognized sovereign: who may make the rules here. Owning a building, a station or a Starbase never confers it."><span><Bi en="Governed by" /></span><b>{view.sovereign ? view.sovereign.name : 'Nobody'}</b></div>
+        <div className={`pl-stat${view.groundControl.occupied ? ' warn' : ''}`} title="Who holds the ground by force right now. Occupation is not sovereignty."><span><Bi en="Ground held by" /></span><b>{view.groundControl.name}{view.groundControl.occupied ? ' (occ.)' : ''}</b></div>
+        <div className={`pl-stat${view.contested ? ' warn' : ''}`} title={view.contested ? 'Rival claims stand here; building in a dispute is a diplomatic incident' : view.frontier ? 'No one governs here yet: anyone may settle; a provisional claim gives priority' : 'Recognized and undisputed'}><span><Bi en="Status" /></span><b>{view.contested ? 'Disputed' : view.frontier ? 'Frontier' : 'Settled'}</b></div>
       </div>
-      <div className="econ-subtitle" title="Everyone with a presence here. Control share blends people, established sites, ground forces and armed ships and stations in orbit; each number is shown so you can see why.">Presence</div>
+      <div className="econ-subtitle" title="Everyone with a presence here. Control share blends people, established sites, ground forces and armed ships and stations in orbit; each number is shown so you can see why."><Bi en="Presence" /></div>
       {control.rows.length === 0 && <div className="inspect-status">Nobody has a presence here.</div>}
       {control.rows.map((r) => (
         <div key={r.id} className="pl-district">
@@ -103,7 +104,7 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
 
       {control.colony && (
         <div>
-          <div className="econ-subtitle" title="A micro-colony becomes a planetary colony once its orbit has been held for a while; its landing grows from an outpost into a municipal government">Your colony</div>
+          <div className="econ-subtitle" title="A micro-colony becomes a planetary colony once its orbit has been held for a while; its landing grows from an outpost into a municipal government"><Bi en="Your colony" /></div>
           <div className="pl-district">
             <Row label="Stage" value={control.colony.stage === 'micro' ? 'Micro-colony' : 'Planetary colony'} />
             {control.colony.stage === 'micro' && <Row label="Orbit held" value={`${Math.floor(control.colony.patrolDays)} / ${control.colony.patrolTarget} days`} tip="An armed ship on patrol in orbit, no hostile warship, nobody contesting the ground: 90 days promotes the colony and lifts its land cap" />}
@@ -115,7 +116,7 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
 
       {control.decisions.length > 0 && (
         <div>
-          <div className="econ-subtitle">Decisions</div>
+          <div className="econ-subtitle"><Bi en="Decisions" /></div>
           {control.decisions.map((d) => (
             <div key={`${d.id}-${d.withId ?? ''}`} className="ship-panel-btn-row">
               <button type="button" className="detail-view-btn" disabled={!!d.block} title={d.block ?? d.detail} onClick={() => decide(d)}>{d.label}</button>
@@ -131,7 +132,7 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
 
       {view.claims.length > 0 && (
         <div>
-          <div className="econ-subtitle">Claims</div>
+          <div className="econ-subtitle"><Bi en="Claims" /></div>
           <div className="pl-district">
             {view.claims.map((c) => (
               <div key={c.id} className="inspect-row" title={`${STATUS_TIP[c.status]}\nBasis: ${c.basis} · ${c.evidence} item${c.evidence === 1 ? '' : 's'} of evidence`}>
@@ -145,7 +146,7 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
 
       {view.enclaves.length > 0 && (
         <div>
-          <div className="econ-subtitle" title="Property of one country on ground another governs: it stays its owner's whatever happens to the sovereignty">Foreign-owned areas</div>
+          <div className="econ-subtitle" title="Property of one country on ground another governs: it stays its owner's whatever happens to the sovereignty"><Bi en="Foreign-owned areas" /></div>
           <div className="pl-district">
             {view.enclaves.map((e) => (
               <Row key={e.siteId} label={siteName(e.siteId)} value={`owned by ${e.owner}`} />
@@ -156,7 +157,7 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
 
       {view.agreements.length > 0 && (
         <div>
-          <div className="econ-subtitle">Agreements and bans in force</div>
+          <div className="econ-subtitle"><Bi en="Agreements and bans in force" /></div>
           <div className="pl-district">
             {view.agreements.map((a) => (
               <div key={a} className="inspect-row">
@@ -167,7 +168,7 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
         </div>
       )}
 
-      <div className="econ-subtitle" title="Three different answers for each orbit: who has the right to govern it, who holds it by force, and who owns what is in it">Orbit</div>
+      <div className="econ-subtitle" title="Three different answers for each orbit: who has the right to govern it, who holds it by force, and who owns what is in it"><Bi en="Orbit" /></div>
       {view.orbit.map((z) => (
         <div key={z.zone} className="pl-district pl-orbit-zone">
           <div className="pl-district-head"><span className="pl-district-name">{z.kind[0].toUpperCase() + z.kind.slice(1)} orbit</span></div>
@@ -198,7 +199,7 @@ export function ControlTab({ bodyName }: { bodyName: string }) {
 
       {view.recent.length > 0 && (
         <div>
-          <div className="econ-subtitle">Recent</div>
+          <div className="econ-subtitle"><Bi en="Recent" /></div>
           <div className="pl-district">
             {view.recent.map((r, i) => (
               <div key={i} className="inspect-status">{r}</div>

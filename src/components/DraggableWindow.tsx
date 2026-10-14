@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { bringToFrontZIndex } from '../state/layering'
@@ -6,6 +7,8 @@ import { DOCKED_WINDOW_KEYS, useWindowLayoutStore, type OpenMode } from '../stat
 
 interface DraggableWindowProps {
   title: string
+  // The title's own native-script label (a renamed thing's subscript); absent = the dictionary's.
+  titleNative?: string
   /** Omit to render a window with no close button — for a panel that *is*
    * the view it lives in (the combat view's order panel), where dismissing it
    * would leave the player in an arena with no way to give orders. */
@@ -76,7 +79,7 @@ const RESIZE_HANDLES: { edges: string; cls: string }[] = [
 // the satellite-view inspection panel and the nav sidebar's category
 // windows — re-centers on whichever body is selected but stays wherever the
 // player last dragged/resized it until they select something else.
-export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, maximizable = true, defaultSize, memoryKey, children }: DraggableWindowProps) {
+export function DraggableWindow({ title, titleNative, onClose, initialOffset, wide, anchor, maximizable = true, defaultSize, memoryKey, children }: DraggableWindowProps) {
   const sizeKey = memoryKey ?? title
   const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   // Collapsed to just its title bar — independent of `onClose`: a window
@@ -535,7 +538,9 @@ export function DraggableWindow({ title, onClose, initialOffset, wide, anchor, m
         onPointerCancel={handleGestureLost}
         onLostPointerCapture={handleGestureLost}
       >
-        <span>{title}</span>
+        <span>
+          <Bi en={title} native={titleNative} />
+        </span>
         <span className="draggable-window-titlebar-controls">
           <button
             type="button"

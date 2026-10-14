@@ -1,0 +1,20 @@
+[
+ {
+  "en": "Each card is a place on {0}. Press + Build here on any of yours: the district it needs is developed for you.",
+  "ja": "各カードは{0}上の場所です。自分のカードで「ここに建設」を押すと、必要な地区が自動的に開発されます。",
+  "zhHant": "每張卡片都是{0}上的一個地點。在你的任何地點按「在此建造」，所需的區域會自動為你開發。",
+  "zhHans": "每张卡片都是{0}上的一个地点。在你的任何地点按“在此建造”，所需的区域会自动为你开发。"
+ },
+ {
+  "en": "Each card is a place on {0}. Press + Build here on any of yours: the district it needs is developed for you. Room for {1} more district levels on this world.",
+  "ja": "各カードは{0}上の場所です。自分のカードで「ここに建設」を押すと、必要な地区が自動的に開発されます。この世界にはあと{1}地区レベル分の余地があります。",
+  "zhHant": "每張卡片都是{0}上的一個地點。在你的任何地點按「在此建造」，所需的區域會自動為你開發。這個世界還有{1}個區域等級的空間。",
+  "zhHans": "每张卡片都是{0}上的一个地点。在你的任何地点按“在此建造”，所需的区域会自动为你开发。这个世界还有{1}个区域等级的空间。"
+ },
+ {
+  "en": "Each card is a place on {0}. Press + Build here on any of yours: the district it needs is developed for you. Room for {1} more district level on this world.",
+  "ja": "各カードは{0}上の場所です。自分のカードで「ここに建設」を押すと、必要な地区が自動的に開発されます。この世界にはあと{1}地区レベル分の余地があります。",
+  "zhHant": "每張卡片都是{0}上的一個地點。在你的任何地點按「在此建造」，所需的區域會自動為你開發。這個世界還有{1}個區域等級的空間。",
+  "zhHans": "每张卡片都是{0}上的一个地点。在你的任何地点按“在此建造”，所需的区域会自动为你开发。这个世界还有{1}个区域等级的空间。"
+ }
+]

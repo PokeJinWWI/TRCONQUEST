@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
 import { sharePrice, corporationValue } from '../economy/economyTick'
@@ -29,7 +30,7 @@ export function StockExchangePanel() {
     <div className="econ-panel">
       <div className="econ-summary">
         <span>
-          <span className="econ-summary-label">Stock Exchange</span> · Treasury {fmt(treasury)}
+          <span className="econ-summary-label"><Bi en="Stock Exchange" /></span> · Treasury {fmt(treasury)}
         </span>
       </div>
       {listed.length === 0 ? (
@@ -38,12 +39,12 @@ export function StockExchangePanel() {
         <table className="econ-table">
           <thead>
             <tr>
-              <th>Corporation</th>
-              <th>Share</th>
-              <th>Value</th>
-              <th>State</th>
-              <th>Float</th>
-              <th>Trade</th>
+              <th><Bi en="Corporation" /></th>
+              <th><Bi en="Share" /></th>
+              <th><Bi en="Value" /></th>
+              <th><Bi en="State" /></th>
+              <th><Bi en="Float" /></th>
+              <th><Bi en="Trade" /></th>
             </tr>
           </thead>
           <tbody>

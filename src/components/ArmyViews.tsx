@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { batteryDenial } from '../state/defenseStore'
 import { useMemo, useState } from 'react'
 import { useArmyStore, canRecruitAt } from '../state/armyStore'
@@ -210,7 +211,7 @@ export function BodyArmies({ bodyName }: { bodyName: string }) {
       ))}
       {groundSurface(bodyName, useTerritoryStore.getState().bodyOwner) && (
         <button type="button" className="detail-view-btn" onClick={() => useViewStore.getState().enterGround(bodyName)}>
-          Open ground map
+          <Bi en="Open ground map" />
         </button>
       )}
       <RecruitButton bodyName={bodyName} />
@@ -253,20 +254,20 @@ export function ArmyPanel() {
   return (
     <div className="army-panel">
       <div className="inspect-row">
-        <span className="inspect-label">Armies</span>
+        <span className="inspect-label"><Bi en="Armies" /></span>
         <span className="inspect-value">
           {mine.length} · strength {Math.round(strength)}
         </span>
       </div>
       {held.length > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Occupying</span>
+          <span className="inspect-label"><Bi en="Occupying" /></span>
           <span className="inspect-value">{held.join(', ')}</span>
         </div>
       )}
       {lost.length > 0 && (
         <div className="inspect-row">
-          <span className="inspect-label">Occupied by enemy</span>
+          <span className="inspect-label"><Bi en="Occupied by enemy" /></span>
           <span className="inspect-value econ-neg">{lost.join(', ')}</span>
         </div>
       )}
@@ -292,7 +293,7 @@ export function ArmyPanel() {
       {mine.length === 0 && <div className="inspect-status">You have no armies.</div>}
 
       <div className="inspect-divider" />
-      <div className="army-group-label">Recruit</div>
+      <div className="army-group-label"><Bi en="Recruit" /></div>
       {recruitSites.map((b) => (
         <div key={b} className="army-group">
           <div className="inspect-row">
@@ -332,7 +333,7 @@ export function TransportCargo({ ship }: { ship: ShipInstance }) {
     <>
       <div className="inspect-divider" />
       <div className="inspect-row">
-        <span className="inspect-label">Cargo</span>
+        <span className="inspect-label"><Bi en="Cargo" /></span>
         <span className="inspect-value">
           {cargo.length}/{capacity} armies
         </span>

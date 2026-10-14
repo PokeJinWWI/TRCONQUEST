@@ -1,3 +1,4 @@
+import { ThemePicker } from './ThemePicker'
 import { LINE_THICKNESS_LABELS, LINE_THICKNESS_OPTIONS, useSettingsStore, type LineThickness } from '../state/settingsStore'
 
 // Player display preferences — shown in the Escape menu (see EscapeMenu.tsx).
@@ -39,6 +40,7 @@ export function SettingsPanel() {
 
   return (
     <>
+      <ThemePicker />
       <ThicknessRow label="Navigation Line Thickness" value={navigationLineThickness} onChange={setNavigationLineThickness} />
       <ThicknessRow label="Army Line Thickness" value={armyLineThickness} onChange={setArmyLineThickness} />
     </>

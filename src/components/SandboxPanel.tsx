@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useState } from 'react'
 import { ARMY_KINDS, type ArmyKind } from '../data/armyData'
 import { ARMY_SCENARIOS, type ArmyScenario } from '../data/armyScenarios'
@@ -150,7 +151,7 @@ export function SandboxPanel() {
       </div>
 
       <div className="inspect-divider" />
-      <div className="army-group-label">Ships</div>
+      <div className="army-group-label"><Bi en="Ships" /></div>
       <select className="slot-select" aria-label="Ship class" value={classId} onChange={(e) => setClassId(e.target.value)}>
         {spawnableClasses.map((c) => (
           <option key={c.id} value={c.id}>
@@ -184,7 +185,7 @@ export function SandboxPanel() {
       </button>
 
       <div className="inspect-divider" />
-      <div className="army-group-label">Armies</div>
+      <div className="army-group-label"><Bi en="Armies" /></div>
       <select className="slot-select" aria-label="Army kind" value={armyKind} onChange={(e) => setArmyKind(e.target.value as ArmyKind)}>
         {(Object.keys(ARMY_KINDS) as ArmyKind[]).map((k) => (
           <option key={k} value={k}>
@@ -208,7 +209,7 @@ export function SandboxPanel() {
       </button>
 
       <div className="inspect-divider" />
-      <div className="army-group-label">Scenarios</div>
+      <div className="army-group-label"><Bi en="Scenarios" /></div>
       <div className="inspect-status">Your side against the pirates. Replaces what's on the board.</div>
       <select className="slot-select" aria-label="Ship scenario" value={shipScenarioId} onChange={(e) => setShipScenarioId(e.target.value)}>
         {(['easy', 'medium', 'hard'] as const).map((tier) => (
@@ -223,7 +224,7 @@ export function SandboxPanel() {
       </select>
       {shipScenario && <div className="inspect-status">{shipScenario.description}</div>}
       <button type="button" className="detail-view-btn sandbox-btn" onClick={handleLoadShipScenario}>
-        Load ship scenario
+        <Bi en="Load ship scenario" />
       </button>
       <select className="slot-select sandbox-gap" aria-label="Army scenario" value={armyScenarioId} onChange={(e) => setArmyScenarioId(e.target.value)}>
         {(['easy', 'medium', 'hard'] as const).map((tier) => (
@@ -238,14 +239,14 @@ export function SandboxPanel() {
       </select>
       {armyScenario && <div className="inspect-status">{armyScenario.description}</div>}
       <button type="button" className="detail-view-btn sandbox-btn" onClick={handleLoadArmyScenario}>
-        Load army scenario
+        <Bi en="Load army scenario" />
       </button>
 
       <div className="inspect-divider" />
-      <div className="army-group-label">Cheats</div>
+      <div className="army-group-label"><Bi en="Cheats" /></div>
       <div className="inspect-status">Spawn anything, grant research, free research — also on the ` (backtick) key.</div>
       <button type="button" className="detail-view-btn sandbox-btn" onClick={() => useDebugConsoleStore.getState().toggle()}>
-        Open cheats console
+        <Bi en="Open cheats console" />
       </button>
 
       <div className="inspect-divider" />

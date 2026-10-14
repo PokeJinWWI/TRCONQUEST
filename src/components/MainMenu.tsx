@@ -1,3 +1,5 @@
+import { Bi } from './Bi'
+import { ThemePicker } from './ThemePicker'
 import { useState } from 'react'
 import { SaveSlots } from './SaveSlots'
 import { COUNTRIES } from '../data/countryData'
@@ -29,10 +31,12 @@ export function MainMenu() {
 
   return (
     <div className="main-menu">
-      <div className="main-menu-title">TERRA RELICTA: CONQUEST</div>
+      <div className="main-menu-title">
+        <Bi en="TERRA RELICTA: CONQUEST" />
+      </div>
 
       {/* Economic model — chosen before the nation, fixed for the game. */}
-      <div className="main-menu-subtitle">Economic model</div>
+      <div className="main-menu-subtitle"><Bi en="Economic model" /></div>
       <div className="main-menu-econ-toggle">
         <button
           type="button"
@@ -40,7 +44,9 @@ export function MainMenu() {
           onClick={() => setEconomyModel('complex')}
           title="A detailed economy: individual pops, markets with prices for dozens of goods, banks, a central bank, corporations and currencies. Deep but demanding."
         >
-          <span className="main-menu-econ-name">Complex mode (mr1noobfatfish’s attempt at economic modeling)</span>
+          <span className="main-menu-econ-name">
+            <Bi en="Complex mode (mr1noobfatfish’s attempt at economic modeling)" native={null} />
+          </span>
           <span className="main-menu-econ-desc">A weird mix-and-mash of game mechanics mr1noobfatfish has observed, to try and make a somewhat realistic and cool economic simulation.</span>
         </button>
         <button
@@ -49,9 +55,14 @@ export function MainMenu() {
           onClick={() => setEconomyModel('abstract')}
           title="A streamlined economy: eight goods, six kinds of building, factories as production units, Stellaris-style pops and happiness, and a simple budget. Easy to read and manage."
         >
-          <span className="main-menu-econ-name">Simple mode</span>
+          <span className="main-menu-econ-name"><Bi en="Simple mode" /></span>
           <span className="main-menu-econ-desc">Simpler and more macro. Lots of stuff was stripped away here, and it makes the game more clear-cut.</span>
         </button>
+      </div>
+
+      <div className="main-menu-subtitle"><Bi en="Interface" /></div>
+      <div className="main-menu-theme">
+        <ThemePicker />
       </div>
 
       <button type="button" className="confirm-btn" onClick={() => setLoading((v) => !v)}>
@@ -59,7 +70,7 @@ export function MainMenu() {
       </button>
       {loading && <SaveSlots canSave={false} onLoaded={() => setLoading(false)} />}
 
-      <div className="main-menu-subtitle">Choose your nation</div>
+      <div className="main-menu-subtitle"><Bi en="Choose your nation" /></div>
       <div className="main-menu-countries">
         {COUNTRIES.map((country) => {
           const capitalStar = STARS.find((s) => s.id === country.capitalStarId)
@@ -73,7 +84,9 @@ export function MainMenu() {
               title={`Play as ${country.name}`}
             >
               <span className="main-menu-country-swatch" style={{ backgroundColor: country.color }} />
-              <span className="main-menu-country-name">{country.name}</span>
+              <span className="main-menu-country-name">
+                <Bi en={country.name} />
+              </span>
               <span className="main-menu-country-capital">
                 Capital: {country.capitalBodyName} · {capitalStar?.name ?? country.capitalStarId}
               </span>
@@ -91,7 +104,7 @@ export function MainMenu() {
           title="No nations and no economy — set up fights and test ships and armies freely"
         >
           <span className="main-menu-country-swatch" style={{ backgroundColor: SANDBOX_PLAYER.color }} />
-          <span className="main-menu-country-name">Sandbox</span>
+          <span className="main-menu-country-name"><Bi en="Sandbox" /></span>
           <span className="main-menu-country-capital">No nations, no economy. Place your own, friendly, neutral and hostile ships and armies.</span>
         </button>
       </div>

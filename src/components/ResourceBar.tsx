@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useState } from 'react'
 import { RESOURCE_TYPES, HUD_RESOURCE_IDS, type ResourceId } from '../data/resourceData'
 import { usePlayerResources } from '../hooks/usePlayerResources'
@@ -74,11 +75,11 @@ export function ResourceBar() {
       {openResource && (
         <DraggableWindow title={openResource.name} memoryKey="resource" onClose={() => setOpenId(null)} maximizable={false}>
           <div className="inspect-row">
-            <span className="inspect-label">Stockpile</span>
+            <span className="inspect-label"><Bi en="Stockpile" /></span>
             <span className="inspect-value">{Math.floor(amounts[openResource.id]).toLocaleString()}</span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Monthly</span>
+            <span className="inspect-label"><Bi en="Monthly" /></span>
             <span
               className={`inspect-value${
                 monthlyDelta[openResource.id] > 0 ? ' econ-pos' : monthlyDelta[openResource.id] < 0 ? ' econ-neg' : ''
@@ -88,7 +89,7 @@ export function ResourceBar() {
             </span>
           </div>
           <div className="inspect-row">
-            <span className="inspect-label">Debt</span>
+            <span className="inspect-label"><Bi en="Debt" /></span>
             {/* A resource going negative — nothing does yet, since no
                 consumption system exists — IS debt: a shortfall the economy
                 is running against rather than a stockpile it holds. Derived
@@ -105,7 +106,7 @@ export function ResourceBar() {
             const noTech = !researched.has(mat.extractionTechId)
             return (
               <div className="inspect-row" title={`Finite natural deposits on bodies you own, drawn at ${EXTRACTION_PER_MONTH} a month each with ${findTech(mat.extractionTechId)?.name ?? 'its Extraction tech'}.`}>
-                <span className="inspect-label">Deposits held</span>
+                <span className="inspect-label"><Bi en="Deposits held" /></span>
                 <span className="inspect-value">
                   {noTech ? `Needs ${findTech(mat.extractionTechId)?.name ?? 'Extraction'} researched` : mine.length === 0 ? 'none on your worlds' : `${mine.length} · ${Math.floor(left)} left · ${(drawn[mat.id] ?? 0).toFixed(1)}/mo`}
                 </span>
@@ -118,7 +119,7 @@ export function ResourceBar() {
             const reason = !researched.has(HYPERIUM_SYNTHESIS_TECH_ID) ? 'Needs Hyperium Synthesis researched' : economyModel === 'abstract' ? 'Hyperium Refineries refine it' : synthesisBlock(researched, amounts.exoticMatter)
             return (
               <div className="inspect-row" title={`${EXOTIC_PER_HYPERIUM} exotic matter makes 1 hyperium. Needs Hyperium Synthesis; ${economyModel === 'abstract' ? 'build Hyperium Refineries (Industrial district).' : `refined monthly, up to ${COMPLEX_REFINERY_LEVELS * HYPERIUM_PER_REFINERY} hyperium a month.`}`}>
-                <span className="inspect-label">Refining to hyperium</span>
+                <span className="inspect-label"><Bi en="Refining to hyperium" /></span>
                 <span className="inspect-value">{reason ?? `${COMPLEX_REFINERY_LEVELS * HYPERIUM_PER_REFINERY * EXOTIC_PER_HYPERIUM} exotic → ${COMPLEX_REFINERY_LEVELS * HYPERIUM_PER_REFINERY} hyperium a month`}</span>
               </div>
             )

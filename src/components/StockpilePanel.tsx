@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useMemo, useState } from 'react'
 import { useEconomyStore } from '../state/economyStore'
 import { usePlayerStore } from '../state/playerStore'
@@ -31,7 +32,7 @@ export function StockpilePanel() {
   return (
     <div className="econ-panel">
       <div className="econ-summary">
-        <span className="econ-summary-label">Strategic Reserves</span>
+        <span className="econ-summary-label"><Bi en="Strategic Reserves" /></span>
         <div className="pops-meta">
           <span>
             World:{' '}
@@ -90,7 +91,7 @@ export function StockpilePanel() {
           onChange={(e) => setPendingAmount(Math.max(0, Number(e.target.value) || 0))}
         />
         <button type="button" className="corp-btn" onClick={() => setStockpileTarget(world.id, pendingGood, pendingAmount)}>
-          Set target
+          <Bi en="Set target" />
         </button>
       </div>
 

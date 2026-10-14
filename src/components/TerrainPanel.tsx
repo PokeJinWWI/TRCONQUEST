@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { ownerDisplay } from '../data/countryRoster'
 import { UNIT_TYPES } from '../data/groundData'
 import { atWar } from '../state/diplomacyStore'
@@ -49,11 +50,11 @@ export function TerrainPanel({ battleId, onRecenter }: { battleId: string; onRec
         The same war, closer: ranges, speeds and damage as on the planetary map, on real ground. Higher ground shoots harder; steep ground slows you.
       </div>
       <button type="button" className="detail-view-btn" onClick={exitTerrain}>
-        Back to the ground map
+        <Bi en="Back to the ground map" />
       </button>
       {onRecenter && (
         <button type="button" className="detail-view-btn" onClick={onRecenter}>
-          Recenter camera
+          <Bi en="Recenter camera" />
         </button>
       )}
       {notice && <div className="inspect-status ok">{notice}</div>}
@@ -90,10 +91,10 @@ export function TerrainPanel({ battleId, onRecenter }: { battleId: string; onRec
       {mineSelected.length > 0 && (
         <div className="dip-actions">
           <button type="button" className="detail-view-btn" onClick={() => useTerrainStore.getState().haltUnits(battleId, mineSelected.map((u) => u.id))}>
-            Halt
+            <Bi en="Halt" />
           </button>
           <button type="button" className="detail-view-btn" onClick={() => useTerrainStore.getState().targetUnits(battleId, mineSelected.map((u) => u.id), null)}>
-            Clear target
+            <Bi en="Clear target" />
           </button>
         </div>
       )}

@@ -1,3 +1,4 @@
+import { Bi } from './Bi'
 import { useMemo } from 'react'
 import { BUILDABLE_DEFENSE_KINDS, DEFENSE_DEFS, type DefenseKind } from '../data/defenseData'
 import { ROUTE_SPECS, type RouteKind } from '../data/infrastructureData'
@@ -27,7 +28,7 @@ export function LensPalette({ bodyName }: { bodyName: string | undefined }) {
     return districtsOfMode(mode).map((d) => ({ district: d, label: districtLabel(mode, d), buildings: buildableIn(mode, d, me) }))
   }, [me, mode])
 
-  if (!bodyName || !me) return <div className="nav-placeholder">No world selected</div>
+  if (!bodyName || !me) return <div className="nav-placeholder"><Bi en="No world selected" /></div>
 
   const pick = (tool: LensTool) => {
     useLensStore.getState().arm(armed && sameTool(armed, tool) ? null : tool)
@@ -47,7 +48,7 @@ export function LensPalette({ bodyName }: { bodyName: string | undefined }) {
       </div>
 
       <div>
-        <div className="lens-group-title">Develop a district level</div>
+        <div className="lens-group-title"><Bi en="Develop a district level" /></div>
         <div className="lens-group">
           {groups.map((g) => {
             const tool: LensTool = { kind: 'level', district: g.district, name: g.label }
@@ -77,7 +78,7 @@ export function LensPalette({ bodyName }: { bodyName: string | undefined }) {
       ))}
 
       <div>
-        <div className="lens-group-title">Defences</div>
+        <div className="lens-group-title"><Bi en="Defences" /></div>
         <div className="lens-group">
           {BUILDABLE_DEFENSE_KINDS.map((k: DefenseKind) => {
             const tool: LensTool = { kind: 'defense', defense: k, name: DEFENSE_DEFS[k].name }
@@ -91,7 +92,7 @@ export function LensPalette({ bodyName }: { bodyName: string | undefined }) {
       </div>
 
       <div>
-        <div className="lens-group-title">Roads and railways</div>
+        <div className="lens-group-title"><Bi en="Roads and railways" /></div>
         <div className="lens-group">
           {(Object.keys(ROUTE_SPECS) as RouteKind[]).map((k) => {
             const tool: LensTool = { kind: 'route', route: k, name: ROUTE_SPECS[k].name }
@@ -105,7 +106,7 @@ export function LensPalette({ bodyName }: { bodyName: string | undefined }) {
       </div>
 
       <div>
-        <div className="lens-group-title">Zoning</div>
+        <div className="lens-group-title"><Bi en="Zoning" /></div>
         <div className="lens-group">
           <button type="button" className={`lens-tool${on({ kind: 'zone', name: 'Zone' })}`} onClick={() => pick({ kind: 'zone', name: 'Zone' })} title="Pick a district, then paint the ground it may grow into. Its room is what its zone holds.">
             Draw a zone
@@ -117,7 +118,7 @@ export function LensPalette({ bodyName }: { bodyName: string | undefined }) {
         <div className="abs-dim" style={{ marginTop: 6 }}>
           Rural land (untouched, in no district): {rural.cells.toLocaleString()} cells, about {Math.round(rural.millions).toLocaleString()}M people on {rural.marks.length} homesteads and farmsteads (one mark for about {MILLION_PEOPLE_PER_MARK}M).{rural.reserved > 0 ? ` ${rural.reserved} cells are kept as nature reserve.` : ''}
         </div>
-        <div className="lens-group-title">Land-use law</div>
+        <div className="lens-group-title"><Bi en="Land-use law" /></div>
         <div className="lens-group">
           {LAND_USE_POLICIES.map((p) => (
             <button key={p} type="button" className={`lens-tool${policy === p ? ' active' : ''}`} title={LAND_USE_TEXT[p]} onClick={() => useZoneStore.getState().setPolicy(me, p)}>

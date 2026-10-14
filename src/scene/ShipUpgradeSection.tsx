@@ -1,3 +1,4 @@
+import { Bi } from '../components/Bi'
 import { getCountry } from '../data/countryData'
 import { MAX_QUEUED_BUILDS } from '../data/shipyardData'
 import { RESOURCE_TYPES, type ResourceId } from '../data/resourceData'
@@ -24,11 +25,11 @@ export function ShipUpgradeSection({ ship }: { ship: ShipInstance }) {
   if (mine) {
     return (
       <div className="inspect-row">
-        <span className="inspect-label">Upgrade</span>
+        <span className="inspect-label"><Bi en="Upgrade" /></span>
         <span className="inspect-value">
           {mine.startedSimDays === null ? `Queued for ${mine.className}` : `Upgrading to ${mine.className}`}
           <button type="button" className="ship-panel-unfollow-btn" onClick={() => useShipyardStore.getState().cancelBuild(ship.ownerId, mine.id)} title="Cancel: the full cost is refunded and the ship is free again">
-            Cancel
+            <Bi en="Cancel" />
           </button>
         </span>
       </div>
@@ -57,7 +58,7 @@ export function ShipUpgradeSection({ ship }: { ship: ShipInstance }) {
   const headed = ship.arrivalCommand?.command.kind === 'upgrade'
   return (
     <div className="inspect-row">
-      <span className="inspect-label">Upgrade</span>
+      <span className="inspect-label"><Bi en="Upgrade" /></span>
       <span className="inspect-value">
         <button
           type="button"
