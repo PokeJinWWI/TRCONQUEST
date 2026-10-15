@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { DEFAULT_MODERN_HUE, DEFAULT_MODERN_PALETTE, MODERN_PALETTE_IDS, clampModernHue, modernPaletteOf, modernTokens, type ModernPaletteId } from '../scene/modernPalette'
 import { DEFAULT_CUSTOM_HUE, DEFAULT_PHOSPHOR, PHOSPHOR_LABELS, clampHue, phosphorOf, phosphorTokens, type PhosphorId } from '../scene/phosphor'
 
 // The UI theme: Default (the original look, English only), NERV (Evangelion-styled, with a
@@ -9,11 +10,11 @@ import { DEFAULT_CUSTOM_HUE, DEFAULT_PHOSPHOR, PHOSPHOR_LABELS, clampHue, phosph
 // Windows 95. All but NERV are English only.
 // A preference, kept across games in localStorage; applied to <html> as data-theme /
 // data-script / data-motion so the stylesheets (index.css and themes/*.css) follow it.
-export type ThemeId = 'default' | 'nerv' | 'ichor' | 'yesteryear' | 'serenity' | 'nirvana' | 'harvest' | 'terminal' | 'win95'
+export type ThemeId = 'default' | 'nerv' | 'ichor' | 'yesteryear' | 'serenity' | 'nirvana' | 'harvest' | 'terminal' | 'modernterminal' | 'win95'
 export type ScriptId = 'ja' | 'zh-Hant' | 'zh-Hans'
 
-export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'NERV', ichor: 'Ichor', yesteryear: 'Yesteryear', serenity: 'Serenity', nirvana: 'Nirvana', harvest: 'Harvest', terminal: 'Terminal', win95: 'Windows 95' }
-export const THEME_IDS: ThemeId[] = ['default', 'nerv', 'ichor', 'yesteryear', 'serenity', 'nirvana', 'harvest', 'terminal', 'win95']
+export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'Mars', ichor: 'Ichor', yesteryear: 'Yesteryear', serenity: 'Serenity', nirvana: 'Nirvana', harvest: 'Harvest', terminal: 'Terminal', modernterminal: 'Colorful Terminal', win95: 'Old Earth' }
+export const THEME_IDS: ThemeId[] = ['default', 'nerv', 'ichor', 'yesteryear', 'serenity', 'nirvana', 'harvest', 'terminal', 'modernterminal', 'win95']
 export const SCRIPT_LABELS: Record<ScriptId, string> = { ja: '日本語', 'zh-Hant': '繁體中文', 'zh-Hans': '简体中文' }
 export const THEME_STORAGE_KEY = 'trc.theme.v1'
 
@@ -36,12 +37,14 @@ export interface ThemePrefs {
   reduceMotion: boolean
   phosphor: PhosphorId
   phosphorHue: number
+  modernPalette: ModernPaletteId
+  modernHue: number
   crt: CrtEffects
   // NERV has the same screen effects as Terminal, all off until chosen.
   nervCrt: CrtEffects
 }
 
-const DEFAULTS: ThemePrefs = { theme: 'default', script: 'ja', reduceMotion: false, phosphor: DEFAULT_PHOSPHOR, phosphorHue: DEFAULT_CUSTOM_HUE, crt: { ...DEFAULT_CRT }, nervCrt: { ...DEFAULT_NERV_CRT } }
+const DEFAULTS: ThemePrefs = { theme: 'default', script: 'ja', reduceMotion: false, phosphor: DEFAULT_PHOSPHOR, phosphorHue: DEFAULT_CUSTOM_HUE, modernPalette: DEFAULT_MODERN_PALETTE, modernHue: DEFAULT_MODERN_HUE, crt: { ...DEFAULT_CRT }, nervCrt: { ...DEFAULT_NERV_CRT } }
 const PHOSPHOR_IDS = Object.keys(PHOSPHOR_LABELS)
 
 export function parseThemePrefs(raw: string | null): ThemePrefs {
@@ -54,6 +57,8 @@ export function parseThemePrefs(raw: string | null): ThemePrefs {
       reduceMotion: typeof v.reduceMotion === 'boolean' ? v.reduceMotion : DEFAULTS.reduceMotion,
       phosphor: PHOSPHOR_IDS.includes(v.phosphor as string) ? (v.phosphor as PhosphorId) : DEFAULTS.phosphor,
       phosphorHue: typeof v.phosphorHue === 'number' ? clampHue(v.phosphorHue) : DEFAULTS.phosphorHue,
+      modernPalette: MODERN_PALETTE_IDS.includes(v.modernPalette as ModernPaletteId) ? (v.modernPalette as ModernPaletteId) : DEFAULTS.modernPalette,
+      modernHue: typeof v.modernHue === 'number' ? clampModernHue(v.modernHue) : DEFAULTS.modernHue,
       crt: Object.fromEntries(CRT_KEYS.map((k) => [k, typeof v.crt?.[k] === 'boolean' ? v.crt[k] : DEFAULT_CRT[k]])) as unknown as CrtEffects,
       nervCrt: Object.fromEntries(CRT_KEYS.map((k) => [k, typeof v.nervCrt?.[k] === 'boolean' ? v.nervCrt[k] : DEFAULT_NERV_CRT[k]])) as unknown as CrtEffects,
     }
@@ -76,6 +81,8 @@ interface ThemeState extends ThemePrefs {
   setReduceMotion: (on: boolean) => void
   setPhosphor: (phosphor: PhosphorId) => void
   setPhosphorHue: (hue: number) => void
+  setModernPalette: (palette: ModernPaletteId) => void
+  setModernHue: (hue: number) => void
   setCrt: (key: keyof CrtEffects, on: boolean) => void
   setNervCrt: (key: keyof CrtEffects, on: boolean) => void
 }
@@ -87,11 +94,15 @@ export const useThemeStore = create<ThemeState>((set) => ({
   setReduceMotion: (reduceMotion) => set({ reduceMotion }),
   setPhosphor: (phosphor) => set({ phosphor }),
   setPhosphorHue: (hue) => set({ phosphorHue: clampHue(hue), phosphor: 'custom' }),
+  setModernPalette: (modernPalette) => set({ modernPalette }),
+  setModernHue: (hue) => set({ modernHue: clampModernHue(hue), modernPalette: 'custom' }),
   setCrt: (key, on) => set((s) => ({ crt: { ...s.crt, [key]: on } })),
   setNervCrt: (key, on) => set((s) => ({ nervCrt: { ...s.nervCrt, [key]: on } })),
 }))
 
 const PHOSPHOR_PROPS = Object.keys(phosphorTokens(phosphorOf('green', 0))).concat('--phosphor-dim-rgb')
+
+const MODERN_PROPS = Object.keys(modernTokens(modernPaletteOf('violet', 0)))
 
 function apply(p: ThemePrefs): void {
   if (typeof document === 'undefined') return
@@ -109,6 +120,14 @@ function apply(p: ThemePrefs): void {
     delete el.dataset.phosphor
     for (const k of PHOSPHOR_PROPS) el.style.removeProperty(k)
   }
+  // Colorful Terminal: the chosen palette as inline tokens.
+  if (p.theme === 'modernterminal') {
+    el.dataset.palette = p.modernPalette
+    for (const [k, v] of Object.entries(modernTokens(modernPaletteOf(p.modernPalette, p.modernHue)))) el.style.setProperty(k, v)
+  } else {
+    delete el.dataset.palette
+    for (const k of MODERN_PROPS) el.style.removeProperty(k)
+  }
   // The screen effects belong to Terminal and NERV (each its own set of switches).
   const fx = p.theme === 'terminal' ? p.crt : p.theme === 'nerv' ? p.nervCrt : null
   for (const k of CRT_KEYS) {
@@ -119,14 +138,14 @@ function apply(p: ThemePrefs): void {
 }
 function persist(s: ThemePrefs): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify({ theme: s.theme, script: s.script, reduceMotion: s.reduceMotion, phosphor: s.phosphor, phosphorHue: s.phosphorHue, crt: s.crt, nervCrt: s.nervCrt }))
+    if (typeof localStorage !== 'undefined') localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify({ theme: s.theme, script: s.script, reduceMotion: s.reduceMotion, phosphor: s.phosphor, phosphorHue: s.phosphorHue, modernPalette: s.modernPalette, modernHue: s.modernHue, crt: s.crt, nervCrt: s.nervCrt }))
   } catch {
     // Storage blocked or full: the theme lasts for the session.
   }
 }
 apply(useThemeStore.getState())
 useThemeStore.subscribe((s, before) => {
-  if (s.theme === before.theme && s.script === before.script && s.reduceMotion === before.reduceMotion && s.phosphor === before.phosphor && s.phosphorHue === before.phosphorHue && s.crt === before.crt && s.nervCrt === before.nervCrt) return
+  if (s.theme === before.theme && s.script === before.script && s.reduceMotion === before.reduceMotion && s.phosphor === before.phosphor && s.phosphorHue === before.phosphorHue && s.modernPalette === before.modernPalette && s.modernHue === before.modernHue && s.crt === before.crt && s.nervCrt === before.nervCrt) return
   apply(s)
   persist(s)
 })

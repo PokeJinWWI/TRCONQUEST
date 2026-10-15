@@ -519,7 +519,8 @@ export function SimplePopulationTab({ bodyName }: { bodyName: string }) {
     <div className="pl-pop">
       <div className="pl-stat-grid">
         <div className="pl-stat"><span><Bi en="Population" /></span><b>{formatPop(w.population)}</b></div>
-        <div className="pl-stat" title="Share of people in the labour force"><span><Bi en="Workforce" /></span><b>{formatPop(worldWorkforce(w))}</b></div>
+        <div className="pl-stat" title="People of working age in work or looking for it. Your workforce laws move this share"><span><Bi en="Workforce" /></span><b>{formatPop(worldWorkforce(w))}</b></div>
+        <div className="pl-stat" title="Children, the elderly and carers: no job, half a worker's needs"><span><Bi en="Dependents" /></span><b>{formatPop(w.population - worldWorkforce(w))}</b></div>
         <div className="pl-stat"><span><Bi en="Jobs" /></span><b>{formatPop(worldJobs(w))}</b></div>
       </div>
       <div className="econ-subtitle" style={{ marginTop: 8 }}>Strata</div>

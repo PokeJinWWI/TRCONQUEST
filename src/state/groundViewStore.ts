@@ -31,6 +31,11 @@ interface GroundViewState {
   // Draw every city's circle and name on the map, not just the capital and the other key places. Off by default.
   showCities: boolean
   setShowCities: (on: boolean) => void
+  // The Ground panel's key-node list: how it is ordered and which type groups are folded up (session only).
+  keySort: 'type' | 'name' | 'holder'
+  setKeySort: (sort: 'type' | 'name' | 'holder') => void
+  keyCollapsed: Record<string, boolean>
+  toggleKeyGroup: (group: string) => void
   // A one-line message from the last click (a refused landing, etc.).
   notice: string | null
   selectUnit: (id: string | null) => void
@@ -47,6 +52,10 @@ interface GroundViewState {
 }
 
 export const useGroundViewStore = create<GroundViewState>((set) => ({
+  keySort: 'type',
+  setKeySort: (keySort) => set({ keySort }),
+  keyCollapsed: {},
+  toggleKeyGroup: (group) => set((st) => ({ keyCollapsed: { ...st.keyCollapsed, [group]: !st.keyCollapsed[group] } })),
   projection: 'globe',
   setProjection: (projection) => set({ projection, hoverNode: null }),
   selectedUnitIds: [],

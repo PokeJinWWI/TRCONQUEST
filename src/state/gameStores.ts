@@ -189,6 +189,7 @@ export const UNREGISTERED_STORES: Record<string, string> = {
   menuStore: 'escape-menu open state',
   hoverTipStore: 'hover tooltip',
   buildingDetailStore: 'open detail panel',
+  standaloneDetailStore: 'open detail panel',
   goodDetailStore: 'open detail panel',
   fleetTabStore: 'which Navy tab is open',
 }

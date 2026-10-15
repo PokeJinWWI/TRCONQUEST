@@ -14,6 +14,9 @@ import { ownerDisplay } from '../data/countryRoster'
 import { useArmyStore } from '../state/armyStore'
 import { LINE_THICKNESS_PX, useSettingsStore } from '../state/settingsStore'
 import { useStructureStore } from '../state/structureStore'
+import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
+import { useEconomyStore } from '../state/economyStore'
+import { installationProgress, pendingBuilds } from './standalone'
 import { RECIPES } from '../economy/recipes'
 import { capturableByGround } from './ruralStructures'
 import { useTerritoryStore } from '../state/territoryStore'
@@ -27,6 +30,7 @@ import { holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
 import { classifyFireLine } from './armyLogic'
 import { bodyGroundInfoAny, TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, nodePoint, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
+import { facesCamera } from './horizon'
 import { HoloGlobe, HoloHalo, type HoloNode } from './HoloGlobe'
 import { hologramTint } from './HoloPlanet'
 import { FlatMapSurface } from './FlatMap'
@@ -131,6 +135,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <KeyNodeMarkers surface={surface} />
           <SeaStructureMarkers surface={surface} />
           <InstallationMarkers bodyName={surface.bodyName} />
+          <ConstructionMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
           <UnitMarkers bodyName={bodyName} />
           <GroundLines bodyName={bodyName} />
@@ -150,11 +155,13 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <KeyNodeMarkers surface={surface} />
           <SeaStructureMarkers surface={surface} />
           <InstallationMarkers bodyName={surface.bodyName} />
+          <ConstructionMarkers bodyName={surface.bodyName} />
           <TerrainBattleChips bodyName={bodyName} />
           <UnitMarkers bodyName={bodyName} />
           <GroundLines bodyName={bodyName} />
           <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitGround} controlsRef={controlsRef} />
           <OrbitControls ref={controlsRef} enablePan={false} enableDamping dampingFactor={0.08} minDistance={MIN_DISTANCE} maxDistance={MAX_DISTANCE} />
+          {import.meta.env.DEV && <DevCameraProbe controlsRef={controlsRef} />}
           <CameraFocus controlsRef={controlsRef} flat={false} />
           <KeyboardPan controlsRef={controlsRef} mode="orbit" />
         </Canvas>
@@ -170,6 +177,17 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
 
 // Swings the camera onto a node when the Ground panel asks (focusRequest):
 // the globe turns to face it at the current distance; the flat map pans to it.
+// Dev only: the camera, its canvas size and the controls on window.__trcScene, so the browser tool can project a node to the screen and
+// compare it with where a marker was drawn (see src/devHooks.ts).
+function DevCameraProbe({ controlsRef }: { controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const camera = useThree((st) => st.camera)
+  const size = useThree((st) => st.size)
+  useEffect(() => {
+    ;(window as unknown as { __trcScene?: unknown }).__trcScene = { camera, canvasSize: size, controls: controlsRef.current, GLOBE_RADIUS }
+  }, [camera, size, controlsRef])
+  return null
+}
+
 function CameraFocus({ controlsRef, flat }: { controlsRef: React.RefObject<OrbitControlsImpl | null>; flat: boolean }) {
   const request = useGroundViewStore((s) => s.focusRequest)
   const camera = useThree((s) => s.camera)
@@ -462,7 +480,7 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
       const el = refs.current[i]
       if (!el) continue
       const p = points[i]
-      const facing = flat || p.x * camera.position.x + p.y * camera.position.y + p.z * camera.position.z > r * 0.2
+      const facing = flat || facesCamera(p, camera.position, r)
       if (!facing) {
         el.style.display = 'none'
         continue
@@ -487,7 +505,7 @@ function KeyNodeMarkers({ surface }: { surface: BodySurface }) {
               title={`${kn.label}${region ? ` · ${region}` : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'}\n\n${KEY_ROLE[slot.kind]}\n${KEY_HOLD_BONUS}`}
             >
               <div className="ground-key-marker" style={{ borderColor: color, color }}>
-                {KEY_GLYPHS[slot.kind]}
+                {slot.kind === 'spaceport' ? <PlanetIcon id="spaceport" size={12} className="ground-key-icon" /> : KEY_GLYPHS[slot.kind]}
               </div>
               <div className="ground-key-name" style={{ color }}>{kn.label}</div>
             </div>
@@ -517,15 +535,47 @@ function InstallationMarkers({ bodyName }: { bodyName: string }) {
           const def = DEFENSE_DEFS[i.kind]
           const p = { x: mesh.positions[i.node * 3], y: mesh.positions[i.node * 3 + 1], z: mesh.positions[i.node * 3 + 2] }
           const building = !isActive(i, simDays)
+          // While it is going up the bar is how far the work is; once built it is the structure's integrity.
+          const done = building ? installationProgress(i.readySimDays, def.buildDays, simDays) : Math.max(0, Math.min(1, i.integrity / def.integrity))
           return (
             <FacingHtml key={i.id} point={p} radius={GLOBE_RADIUS * 1.01}>
-              <div className={`ground-install-marker${building ? ' building' : ''}`} style={{ borderColor: color, color }} title={`${def.name}${building ? ' (under construction)' : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'} · integrity ${Math.round(i.integrity)}/${def.integrity}`}>
+              <div className={`ground-install-marker${building ? ' building' : ''}`} style={{ borderColor: color, color }} title={`${def.name}${building ? ` (under construction: ${Math.round(done * 100)}% built)` : ''} — held by ${holder ? ownerDisplay(holder).name : 'nobody'} · integrity ${Math.round(i.integrity)}/${def.integrity}`}>
                 <PlanetIcon id={i.kind} size={14} />
-                <span className="ground-install-bar"><span style={{ width: `${Math.max(0, Math.min(1, i.integrity / def.integrity)) * 100}%` }} /></span>
+                <span className="ground-install-bar"><span style={{ width: `${done * 100}%` }} /></span>
               </div>
             </FacingHtml>
           )
         })}
+    </>
+  )
+}
+
+// Spaceports and rural structures that are ordered and not built yet: the structure's icon where it will stand, with a bar for how far
+// the work is (scene/standalone.pendingBuilds). Defences going up show the same bar on their own marker above.
+function ConstructionMarkers({ bodyName }: { bodyName: string }) {
+  const ports = useStructureStore((s) => s.ports[bodyName])
+  const rural = useStructureStore((s) => s.rural[bodyName])
+  const worlds = useEconomyStore((s) => s.worlds)
+  const queue = useAbstractEconomyStore((s) => s.byCountry)
+  const owner = useTerritoryStore((s) => s.bodyOwner[bodyName])
+  const day = useGameTimeStore((s) => Math.floor(s.simDays))
+  const mesh = surfaceMesh()
+  const pending = useMemo(() => pendingBuilds(bodyName), [bodyName, ports, rural, worlds, queue, day])
+  const color = owner ? ownerDisplay(owner).color : '#cfd8e3'
+  return (
+    <>
+      {pending.map((b) => {
+        const p = { x: mesh.positions[b.node * 3], y: mesh.positions[b.node * 3 + 1], z: mesh.positions[b.node * 3 + 2] }
+        return (
+          <FacingHtml key={b.id} point={p} radius={GLOBE_RADIUS * 1.01}>
+            <div className="ground-install-marker building ground-build-marker" style={{ borderColor: color, color }} title={`${b.name} (under construction: ${Math.round(b.fraction * 100)}% built)`}>
+              <PlanetIcon id={b.iconId} size={14} />
+              <span className="ground-install-bar"><span style={{ width: `${b.fraction * 100}%` }} /></span>
+              <span className="ground-build-pct">{Math.round(b.fraction * 100)}%</span>
+            </div>
+          </FacingHtml>
+        )
+      })}
     </>
   )
 }
@@ -566,7 +616,7 @@ function FacingHtml({ point, radius, children }: { point: SurfacePoint; radius: 
     if (!g) return
     // On the flat map every point is in view.
     g.position.set(...(flat ? flatPos(point, 0.05) : toVec(point, radius)))
-    const facing = flat || point.x * camera.position.x + point.y * camera.position.y + point.z * camera.position.z > radius * 0.2
+    const facing = flat || facesCamera(point, camera.position, radius)
     if (wrapRef.current) wrapRef.current.style.display = facing ? '' : 'none'
   })
   return (
@@ -658,7 +708,7 @@ function UnitMarker({ unitId, ownerId, type }: { unitId: string; ownerId: string
     const r = GLOBE_RADIUS * 1.015
     if (flat) g.position.set(...flatPos(p, 0.1))
     else g.position.set(p.x * r, p.y * r, p.z * r)
-    const facing = flat || p.x * camera.position.x + p.y * camera.position.y + p.z * camera.position.z > r * 0.2
+    const facing = flat || facesCamera(p, camera.position, r)
     if (wrapRef.current) {
       wrapRef.current.style.display = facing ? '' : 'none'
       // How many listed units share this unit's node, and its place among them

@@ -30,8 +30,8 @@ function check(label: string, cond: boolean, detail = '') {
 }
 
 console.log('\n=== 1. Theme preference ===')
-check('nothing saved = Default, Japanese, full motion', JSON.stringify(parseThemePrefs(null)) === JSON.stringify({ theme: 'default', script: 'ja', reduceMotion: false, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
-check('a saved NERV / Simplified / reduced loads', JSON.stringify(parseThemePrefs('{"theme":"nerv","script":"zh-Hans","reduceMotion":true}')) === JSON.stringify({ theme: 'nerv', script: 'zh-Hans', reduceMotion: true, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
+check('nothing saved = Default, Japanese, full motion', JSON.stringify(parseThemePrefs(null)) === JSON.stringify({ theme: 'default', script: 'ja', reduceMotion: false, phosphor: 'green', phosphorHue: 300, modernPalette: 'violet', modernHue: 200, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
+check('a saved NERV / Simplified / reduced loads', JSON.stringify(parseThemePrefs('{"theme":"nerv","script":"zh-Hans","reduceMotion":true}')) === JSON.stringify({ theme: 'nerv', script: 'zh-Hans', reduceMotion: true, phosphor: 'green', phosphorHue: 300, modernPalette: 'violet', modernHue: 200, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
 check('junk gives the defaults', parseThemePrefs('{{').theme === 'default' && parseThemePrefs('{"theme":"pink","script":"xx"}').script === 'ja')
 
 console.log('\n=== 2. Default is the original look ===')
@@ -248,6 +248,23 @@ console.log('\n=== The header keeps its rows as the game runs ===')
   check('treasury and balance reserve their width', /\.fiscal-ind-treasury\s+\.fiscal-ind-val\s*{[^}]*min-width:\s*\d+ch/.test(app) && /\.fiscal-ind-balance\s+\.fiscal-ind-val\s*{[^}]*min-width:\s*\d+ch/.test(app))
   check('resource value and delta reserve theirs, in tabular figures', /\.resource-value\s*{[^}]*min-width:\s*\d+ch/.test(app) && /\.resource-delta\s*{[^}]*min-width:\s*\d+ch/.test(app) && /\.resource-value\s*{[^}]*tabular-nums/.test(app))
   check('the situation badge count reserves its width', /\.situation-badge-count\s*{[^}]*min-width:\s*\d+ch/.test(app))
+}
+
+console.log('\n=== Colorful Terminal ===')
+{
+  const mp = await import('../src/scene/modernPalette')
+  const css = readFileSync('src/themes/modernterminal.css', 'utf8')
+  check('Colorful Terminal is a theme with its label', THEME_IDS.includes('modernterminal' as never) && THEME_LABELS['modernterminal' as keyof typeof THEME_LABELS] === 'Colorful Terminal')
+  check('every palette gives a full token set with valid colours', mp.MODERN_PALETTE_IDS.every((id) => { const t = mp.modernTokens(mp.modernPaletteOf(id, 120)); return /^#[0-9a-f]{6}$/.test(t['--accent']) && /^#[0-9a-f]{6}$/.test(t['--select']) && t['--accent-rgb'].split(',').length === 3 }))
+  check('the palettes differ from each other', new Set(Object.values(mp.MODERN_PALETTES).map((p) => p.accent + p.select)).size === 7)
+  check('Black is true black with white rules', mp.modernTokens(mp.MODERN_PALETTES.black)['--page-bg'] === '#000000' && mp.MODERN_PALETTES.black.accent === '#ffffff')
+  check('a custom hue wraps and tracks the hue', mp.clampModernHue(725) === 5 && mp.customModernPalette(0).accent !== mp.customModernPalette(180).accent)
+  const saved = parseThemePrefs('{"theme":"modernterminal","modernPalette":"gold","modernHue":-10}')
+  check('a saved palette loads; junk falls back to violet', saved.theme === 'modernterminal' && saved.modernPalette === 'gold' && saved.modernHue === 350 && parseThemePrefs('{"modernPalette":"zzz"}').modernPalette === 'violet')
+  const selectors = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim()).filter(Boolean)
+  check('every rule is scoped to html[data-theme=modernterminal]', selectors.every((sel) => sel.split(/,(?![^(]*\))/).every((part) => part.includes("[data-theme='modernterminal']"))), selectors.filter((sel) => !sel.includes("[data-theme='modernterminal']")).slice(0, 3).join(' | '))
+  check('it names no colour but the alerts and the fixed text-colour set (the rest comes from tokens)', !/#[0-9a-fA-F]{3,6}\b/.test(css.replace(/--(danger|warn|caution|good|ink-\d)[^;]*;/g, '').replace(/#0a0a0b|#000\b/g, '')))
+  check('the 3D line work has an entry', SCENE_COLORS['modernterminal' as keyof typeof SCENE_COLORS] !== undefined)
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

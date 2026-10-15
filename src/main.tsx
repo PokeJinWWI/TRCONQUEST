@@ -8,6 +8,7 @@ import './themes/serenity.css'
 import './themes/nirvana.css'
 import './themes/harvest.css'
 import './themes/terminal.css'
+import './themes/modernterminal.css'
 import './themes/win95.css'
 import '@fontsource/share-tech-mono/latin-400.css'
 // Puts the saved theme on <html> before the first paint.
@@ -16,6 +17,9 @@ import App from './App.tsx'
 import { TooltipLayer } from './components/TooltipLayer'
 import { NativeAnnotator } from './components/NativeAnnotator'
 import { BoxSelectLayer } from './components/BoxSelectLayer'
+
+// Dev only: every store on window.__trc, for the browser tool (src/devHooks.ts). Not in a production build.
+if (import.meta.env.DEV) void import('./devHooks')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

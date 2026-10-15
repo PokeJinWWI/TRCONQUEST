@@ -38,6 +38,12 @@ export function SystemTerritoryRows({ starName }: { starName: string }) {
           <span className="inspect-value">{view.presence.join(', ')}</span>
         </div>
       )}
+      {view.bodies.length > 0 && (
+        <>
+          <div className="inspect-divider" />
+          <div className="inspect-status" title="Who holds title to each world of this system">Who governs each world</div>
+        </>
+      )}
       {view.bodies.map((b) => (
         <div key={b.body} className="inspect-row">
           <span className="inspect-label">{b.body}</span>

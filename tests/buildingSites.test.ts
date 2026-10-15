@@ -6,6 +6,7 @@ import { buildingKey, findBuilding, keyOfBuilding, levelAtSite, levelOf, mergeSi
 import type { Building } from '../src/economy/economyTypes'
 import { resetGame } from '../src/scene/gameReset'
 import { setUpNewGame } from '../src/scene/gameSetup'
+import { STANDALONE_BUILDINGS } from '../src/scene/placement'
 import { ensureSeeded } from '../src/scene/seedPlacementOrders'
 import { useEconomyStore, worldByName } from '../src/state/economyStore'
 import { useGameTimeStore } from '../src/state/gameTimeStore'
@@ -74,7 +75,7 @@ console.log('\n=== 4. In a running Complex game ===')
   const world = () => worldByName(useEconomyStore.getState().worlds, 'Mars')!
   const before = JSON.stringify(world().buildings.map((b) => [b.recipeId, b.level]).sort())
   ensureSeeded('Mars')
-  check('the starting buildings of a seeded world are all placed, one building per place', world().buildings.every((b) => !!b.siteId) && new Set(world().buildings.map(keyOfBuilding)).size === world().buildings.length)
+  check('the starting buildings of a seeded world are all placed (a spaceport stands on its own ground), one building per place', world().buildings.every((b) => !!b.siteId || STANDALONE_BUILDINGS.has(b.recipeId)) && new Set(world().buildings.filter((b) => !STANDALONE_BUILDINGS.has(b.recipeId)).map(keyOfBuilding)).size === world().buildings.filter((b) => !STANDALONE_BUILDINGS.has(b.recipeId)).length)
   const sumLevels = (bs: Building[]) => JSON.stringify(Object.entries(bs.reduce((m, b) => ({ ...m, [b.recipeId]: (m[b.recipeId] ?? 0) + b.level }), {} as Record<string, number>)).sort())
   check('...and the world has exactly the levels it had', sumLevels(world().buildings) === sumLevels(JSON.parse(before).map(([recipeId, level]: [string, number]) => ({ recipeId, level }))))
   // Room for a second urban level: a clinic in each of two places is two buildings.

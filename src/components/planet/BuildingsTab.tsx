@@ -1,24 +1,24 @@
 import { Bi } from '../Bi'
 import { useSeededBody } from '../../hooks/useSeededBody'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { areaView, type AreaDistrict, type AreaSite } from '../../scene/buildingsView'
 import { useAbstractEconomyStore } from '../../state/abstractEconomyStore'
 import { useBuildingDetailStore } from '../../state/buildingDetailStore'
 import { useCivicDetailStore, useCivicStore } from '../../state/civicStore'
 import { useEconomyStore } from '../../state/economyStore'
+import { useStructureStore } from '../../state/structureStore'
 import { useLocationStore } from '../../state/locationStore'
 import { usePlacementStore } from '../../state/placementStore'
 import { isAbstractEconomy } from '../../state/playerStore'
 import type { SimpleBuildingId, SimpleDistrictId } from '../../data/simplisticEconomyData'
-import { RECIPES, DISTRICT_LABELS, buildingGroup, type DistrictType } from '../../economy/recipes'
-import { districtLevels } from '../../economy/districts'
-import { districtSlots, districtsOf } from '../../economy-abstract/abstractEconomy'
+import { RECIPES, DISTRICT_LABELS, type DistrictType } from '../../economy/recipes'
 import { useTerritoryStore } from '../../state/territoryStore'
 import { SIMPLE_BUILDING_DEFS } from '../../data/simplisticEconomyData'
 import { ForeignHoldingsRow } from './ForeignHoldings'
 import { BuildingsPanel } from '../BuildingsPanel'
 import { KEY_BUILDING_ICON } from '../../scene/keyBuildings'
-import { PlanetIcon } from './PlanetIcons'
+import { PlanetIcon, buildingIconId } from './PlanetIcons'
+import { StandaloneSection } from './StandaloneSection'
 
 // The Buildings tab of a world (docs/territorial-design.md section 14): every settlement and site as a card, and in it each district that
 // stands there (Core, Urban, Industrial, ...) with its own buildings. A building belongs to its place: two factories here are one Factory at
@@ -26,7 +26,7 @@ import { PlanetIcon } from './PlanetIcons'
 // Both economies use this tab.
 
 // Complex icons are per building group, Simple's per building.
-const iconOf = (id: string): string => (isAbstractEconomy() ? id : buildingGroup(id))
+const iconOf = (id: string): string => buildingIconId(id)
 
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
@@ -140,9 +140,8 @@ function SiteCard({ s, bodyName, playerId, onMessage, highlight }: { s: AreaSite
   )
 }
 
-// What is not a card: the world's orders (cancel here), the military district (its levels; the installations are on the Defense tab),
-// foreign firms, and, in Complex, ownership / methods / upgrades.
-function Extras({ bodyName, playerId, onMessage }: { bodyName: string; playerId: string | null; onMessage: (m: string | null) => void }) {
+// What is not a card: the world's orders (cancel here), foreign firms, and, in Complex, ownership / methods / upgrades.
+function Extras({ bodyName, playerId }: { bodyName: string; playerId: string | null }) {
   const simple = isAbstractEconomy()
   const owner = useTerritoryStore((s) => s.bodyOwner[bodyName])
   const controller = useTerritoryStore((s) => s.bodyController[bodyName] ?? s.bodyOwner[bodyName])
@@ -151,12 +150,9 @@ function Extras({ bodyName, playerId, onMessage }: { bodyName: string; playerId:
   const world = useEconomyStore((s) => s.worlds.find((w) => w.id === bodyName))
   const country = useEconomyStore((s) => s.countries.find((c) => c.id === world?.ownerId))
   const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
-  const queueDistrictComplex = useEconomyStore((s) => s.queueDistrict)
-  const simpleWorld = useAbstractEconomyStore((s) => s.worlds[bodyName])
   const simpleQueue = useAbstractEconomyStore((s) => (owner ? s.byCountry[owner]?.queue : undefined))
   const teardowns = useAbstractEconomyStore((s) => (owner ? s.byCountry[owner]?.teardowns : undefined))
   const cancelOrder = useAbstractEconomyStore((s) => s.cancelOrder)
-  const queueDistrictSimple = useAbstractEconomyStore((s) => s.queueDistrict)
   const orders: { id: string | number; name: string; pct: number }[] = simple
     ? (simpleQueue ?? []).filter((o) => o.bodyName === bodyName).map((o) => ({ id: o.id, name: o.building ? SIMPLE_BUILDING_DEFS[o.building]?.name ?? o.building : `${o.district} level`, pct: -1 }))
     : (world?.constructionQueue ?? []).map((o) => ({ id: o.id, name: o.district ? `${DISTRICT_LABELS[o.district]} level` : RECIPES[o.recipeId]?.label ?? o.recipeId, pct: o.progress / Math.max(1, o.cost) }))
@@ -164,14 +160,6 @@ function Extras({ bodyName, playerId, onMessage }: { bodyName: string; playerId:
     if (simple) {
       if (playerId) cancelOrder(playerId, id as number)
     } else if (world) cancelConstruction(world.id, id as string)
-  }
-  const military = simple
-    ? simpleWorld ? { level: districtsOf(simpleWorld).military ?? 0, slots: districtSlots(simpleWorld, 'military' as never) } : null
-    : world ? { level: districtLevels(world).military, slots: world.districtCapacity.military } : null
-  const growMilitary = () => {
-    if (!playerId) return
-    const r = simple ? queueDistrictSimple(playerId, bodyName, 'military' as SimpleDistrictId) : queueDistrictComplex(bodyName, 'military')
-    onMessage(r.ok ? null : r.reason)
   }
   const tearing = simple ? (teardowns ?? []).filter((t) => t.bodyName === bodyName) : []
   return (
@@ -194,12 +182,6 @@ function Extras({ bodyName, playerId, onMessage }: { bodyName: string; playerId:
           {canAct && <button type="button" className="laws-enact-btn" title="Stop it" onClick={() => playerId && cancelOrder(playerId, t.id)}><Bi en="Cancel deconstruction" /></button>}
         </div>
       ))}
-      {military && (
-        <div className="pl-site-districts" title="Fortresses, shields and batteries take a Military district slot; they are built on the Defense tab">
-          <span className="pl-site-district"><b>Military district</b> Lv {military.level} <span className="abs-dim">· {military.slots} slots</span></span>
-          {canAct && <button type="button" className="pl-develop" onClick={growMilitary}>+ level</button>}
-        </div>
-      )}
       <div className="pl-foreign">
         <div className="abs-dim"><Bi en="Foreign embassies & firms" /></div>
         <ForeignHoldingsRow bodyName={bodyName} playerId={playerId} />
@@ -223,17 +205,12 @@ export function BuildingsTab({ bodyName, playerId }: { bodyName: string; playerI
   const civic = useCivicStore((s) => s.civic[bodyName])
   const simpleQueue = useAbstractEconomyStore((s) => s.byCountry)
   const complexWorlds = useEconomyStore((s) => s.worlds)
+  const ports = useStructureStore((s) => s.ports)
   const [message, setMessage] = useState<string | null>(null)
   const [highlight, setHighlight] = useState<string | null>(null)
   const ready = useSeededBody(bodyName)
   const rootRef = useRef<HTMLDivElement>(null)
-  const view = useMemo(() => (ready ? areaView(bodyName, playerId) : { bodyName, landLeft: null, sections: [], totals: [], standalone: [], unplaced: [] }), [ready, bodyName, playerId, placed, levels, established, civic, simpleQueue, complexWorlds])
-  // A building chip jumps to the first place that holds it.
-  useEffect(() => {
-    if (!highlight) return
-    const site = view.sections.flatMap((sec) => sec.sites).find((s) => s.buildings.some((b) => b.id === highlight))
-    if (site) rootRef.current?.querySelector(`[data-site="${site.siteId}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [highlight, view])
+  const view = useMemo(() => (ready ? areaView(bodyName, playerId) : { bodyName, landLeft: null, sections: [], totals: [], ports: { rows: [], economy: 0 }, standalone: [], unplaced: [] }), [ready, bodyName, playerId, placed, levels, established, civic, simpleQueue, complexWorlds, ports])
   return (
     <div className="pl-districts pl-area" ref={rootRef}>
       <div className="abs-dim pl-land">
@@ -242,7 +219,7 @@ export function BuildingsTab({ bodyName, playerId }: { bodyName: string; playerI
       </div>
       {view.totals.length > 0 && (
         <details>
-          <summary className="abs-dim" title="Each building over every place it stands in. Press one to find where.">Totals: {view.totals.length} buildings, {view.totals.reduce((n, t) => n + t.levels, 0)} levels</summary>
+          <summary className="abs-dim" title="Each building over every place it stands in. Press one to show only the places that hold it.">Totals: {view.totals.length} buildings, {view.totals.reduce((n, t) => n + t.levels, 0)} levels</summary>
         <div className="pl-site-districts">
           {view.totals.map((t) => (
             <button key={t.id} type="button" className={`pl-develop${highlight === t.id ? ' active' : ''}`} onClick={() => setHighlight(highlight === t.id ? null : t.id)} title={`${t.name}: ${t.levels} level${t.levels === 1 ? '' : 's'} in ${t.places} place${t.places === 1 ? '' : 's'}`}>
@@ -253,10 +230,19 @@ export function BuildingsTab({ bodyName, playerId }: { bodyName: string; playerI
         </details>
       )}
       {message && <div className="econ-neg pl-message">{message}</div>}
+      {highlight && (
+        <div className="pl-site-districts">
+          <span className="abs-dim">Showing only the places that hold {view.totals.find((t) => t.id === highlight)?.name ?? highlight}</span>
+          <button type="button" className="pl-develop" onClick={() => setHighlight(null)}>Show all</button>
+        </div>
+      )}
       {view.sections.map((sec) => {
         const used = (s: AreaSite) => s.districts.some((d) => d.levels > 0 || d.buildings.length > 0) || s.buildings.length > 0 || s.onOrder.length > 0 || s.civic.some((c) => c.kind !== 'cityHall')
-        const active = sec.sites.filter(used)
-        const idle = sec.sites.filter((s) => !used(s))
+        // A building chip filters the cards to the places that hold it.
+        const holds = (s: AreaSite) => !highlight || s.buildings.some((b) => b.id === highlight)
+        const active = sec.sites.filter((s) => used(s) && holds(s))
+        const idle = highlight ? [] : sec.sites.filter((s) => !used(s))
+        if (active.length === 0 && idle.length === 0) return null
         return (
           <div key={sec.kind}>
             <div className="econ-subtitle">{sec.title}</div>
@@ -274,22 +260,8 @@ export function BuildingsTab({ bodyName, playerId }: { bodyName: string; playerI
           </div>
         )
       })}
-      {view.standalone.length > 0 && (
-        <div>
-          <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere"><Bi en="Standalone buildings" /></div>
-          <div className="pl-district">
-            <div className="pl-grid">
-              {view.standalone.map((b) => (
-                <div key={b.id} className="pl-tile" title={`${b.name}: level ${b.count}`}>
-                  <PlanetIcon id={iconOf(b.id)} size={18} />
-                  <span className="pl-tile-name">{b.name} Lv {b.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      <Extras bodyName={bodyName} playerId={playerId} onMessage={setMessage} />
+      <StandaloneSection bodyName={bodyName} playerId={playerId} extra={view.standalone.map((b) => ({ id: b.id, name: b.name, count: b.count, ...(b.buildingId ? { buildingId: b.buildingId } : {}) }))} />
+      <Extras bodyName={bodyName} playerId={playerId} />
       {view.unplaced.length > 0 && (
         <div className="abs-dim" title="Buildings the world has that no site holds (built before sites existed, or that found no developed slot)">
           Not in any place: {view.unplaced.map((b) => `${b.count}× ${b.name}`).join(', ')}

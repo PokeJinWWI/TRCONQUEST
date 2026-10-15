@@ -51,12 +51,13 @@ console.log('\n=== Every build menu asks where ===')
 {
   const strip = (f: string) => readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '')
   const files: [string, RegExp][] = [
-    ['src/components/planet/ComplexPlanetTabs.tsx', /SiteChooser/],
     ['src/components/planet/SimplePlanetTabs.tsx', /SiteChooser/],
     ['src/components/BuildingsPanel.tsx', /SiteChooser/],
     ['src/components/ConstructionPanel.tsx', /SiteChooser/],
   ]
   for (const [f, re] of files) check(`${f.split('/').pop()} uses the chooser`, re.test(strip(f)))
+  // The Buildings tab is built place by place: the card is the place, so it passes its own site and needs no chooser.
+  check('BuildingsTab builds at the place of its card', /s\.siteId/.test(strip('src/components/planet/BuildingsTab.tsx')) && !/queueConstruction\([^)]*\)/.test(strip('src/components/planet/BuildingsTab.tsx').replace(/queueConstruction\(bodyName, id, \{ kind: 'state' \}, s\.siteId\)/g, '')))
   const direct = (f: string) => (strip(f).match(/queueConstruction\([^)]*\)/g) ?? []).filter((c) => !/siteId/.test(c))
   const panel = direct('src/components/ConstructionPanel.tsx')
   const complex = direct('src/components/planet/ComplexPlanetTabs.tsx')

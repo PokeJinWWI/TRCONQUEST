@@ -5,7 +5,7 @@
 // The starting economy was calibrated as it is, so nothing here changes a number in it: the assignment only records where
 // levels and buildings are, and the sites it uses are marked `connected` (their freight is taken to reach the hubs).
 import { siteKindsOfDistrict, districtOfBuilding, isPlacedDistrict, slotsPerLevel, type EconomyMode } from './districtSites'
-import { extractsFrom, siteKindOf, siteKindsFor, slotsUsedBy } from './placement'
+import { STANDALONE_BUILDINGS, extractsFrom, siteKindOf, siteKindsFor, slotsUsedBy } from './placement'
 import type { DevLocation } from './locations'
 import type { LocationKind } from '../data/locationData'
 
@@ -42,7 +42,7 @@ export function assignSeed(input: SeedInput): SeedResult {
     levels[id] = { ...(levels[id] ?? {}), [d]: (levels[id]?.[d] ?? 0) + n }
   }
 
-  const buildings = [...input.buildings].filter((b) => b.count > 0).sort((a, b) => (districtOfBuilding({ mode, id: a.id }) + a.id < districtOfBuilding({ mode, id: b.id }) + b.id ? -1 : 1))
+  const buildings = [...input.buildings].filter((b) => b.count > 0 && !STANDALONE_BUILDINGS.has(b.id)).sort((a, b) => (districtOfBuilding({ mode, id: a.id }) + a.id < districtOfBuilding({ mode, id: b.id }) + b.id ? -1 : 1))
   const districts = Object.keys(input.districts).filter(isPlacedDistrict).sort()
 
   // 1. Levels: each district's levels go to the kinds of site its buildings stand on (in proportion to the slots they need), then fill

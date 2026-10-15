@@ -1174,6 +1174,7 @@ export const ZH_HANT: Record<string, string> = {
   "Tech": "科技",
   "Technical": "技術",
   "Technology": "技術",
+  "Tenkū Kōro": "天空航路",
   "TERRA RELICTA: CONQUEST": "殘存地球：征服",
   "Terra Sabaea": "薩巴大陸",
   "Terra Sirenum": "塞壬大陸",

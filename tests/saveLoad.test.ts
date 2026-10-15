@@ -179,7 +179,7 @@ console.log('\n=== 7. A save from before buildings belonged to a place ===')
   file.stores.economy.data = encode(economy)
   await applySave(file)
   const mars = worldByName(useEconomyStore.getState().worlds, 'Mars')!
-  check('an old save opens with its buildings split where the ledger says', mars.buildings.some((b) => !!b.siteId) && mars.buildings.every((b) => !!b.siteId))
+  check('an old save opens with its buildings split where the ledger says', mars.buildings.some((b) => !!b.siteId) && mars.buildings.every((b) => !!b.siteId || b.recipeId === 'spaceport'))
   check('...and no level was gained or lost', levelsOf() === want)
 }
 

@@ -5,7 +5,7 @@ import { DEFENSE_DEFS, isMilitaryKind, type DefenseKind } from '../data/defenseD
 import { controllerOf } from '../scene/territory'
 import { groundSurface } from '../scene/groundLogic'
 import { holderOfInstallation, hostileBatteries, judgeInstallationNode, placeInstallation, shieldBlocksLanding, withInstallationKeys, type Installation } from '../scene/defenseLogic'
-import { militarySlotsOf, spaceportSitesOf, syncMilitarySlots } from './nationEconomy'
+import { spaceportSitesOf, syncMilitarySlots } from './nationEconomy'
 import { withSpaceportKeys } from '../scene/spaceportSites'
 import { withOutpostKey } from '../scene/colonyLogic'
 import { withAreaKeys } from '../scene/footprintState'
@@ -113,11 +113,7 @@ export function canBuildDefense(countryId: string, bodyName: string, kind: Defen
   const def = DEFENSE_DEFS[kind]
   const here = installations.filter((i) => i.bodyName === bodyName && i.kind === kind).length
   if (here >= def.maxPerWorld) return { ok: false, reason: `At most ${def.maxPerWorld} ${def.name}${def.maxPerWorld === 1 ? '' : 's'} per world` }
-  if (isMilitaryKind(kind)) {
-    const slots = militarySlotsOf(bodyName)
-    if (militaryInUse(bodyName, installations) >= slots)
-      return { ok: false, reason: slots === 0 ? 'Needs a Military district — develop one on this world first' : 'No free Military district slot — develop the Military district another level' }
-  }
+  // No Military district slot is needed: a fortress, shield or battery is an ordinary building that stands anywhere (inside an area or settlement, or on its own).
   if (kind === 'spaceport') {
     const surface = groundSurface(bodyName, bodyOwner)
     if (!surface) return { ok: false, reason: 'No ground to build on' }

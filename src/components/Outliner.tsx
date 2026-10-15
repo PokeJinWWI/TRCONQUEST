@@ -217,7 +217,10 @@ function useStarbaseEntries(): OutlinerEntry[] {
       .map((sb) => {
         const star = findStar(sb.starId)
         const cluster = clusterOfStar(sb.starId)
-        return { key: sb.id, name: star?.name ?? sb.starId, color: star?.color ?? '#ffffff', kind: 'starbase' as const, starId: sb.starId, detail: isHomeCluster(cluster) ? undefined : clusterName(cluster) }
+        // Named for where it stands: a station in orbit says the WORLD (and its orbit), a system station the star's system.
+        const orbit = sb.zone ? sb.zone.split('~') : null
+        const where = orbit ? `${orbit[0]} · ${orbit[1] === 'high' ? 'high' : 'low'} orbit` : `${star?.name ?? sb.starId} system`
+        return { key: sb.id, name: sb.name ?? (orbit ? orbit[0] : star?.name ?? sb.starId), color: star?.color ?? '#ffffff', kind: 'starbase' as const, starId: sb.starId, detail: isHomeCluster(cluster) ? where : `${where} · ${clusterName(cluster)}` }
       })
   }, [selectedCountryId, starbases])
 }

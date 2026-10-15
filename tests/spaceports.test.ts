@@ -39,7 +39,8 @@ console.log('=== 1. How many, and who runs them (Complex) ===')
 {
   for (const w of seedWorlds()) {
     const n = w.buildings.filter((b) => b.recipeId === 'spaceport').length
-    const want = Math.max(1, Math.round((2 * pop(w.id)) / 1000))
+    // A world with hand-placed spaceports (Earth's six) runs exactly those.
+    const want = w.id === 'Earth' ? 6 : Math.max(1, Math.round((2 * pop(w.id)) / 1000))
     check(`${w.name}: ${want} spaceports for ${Math.round(pop(w.id))}M people`, n === want, `${n}`)
   }
   const mars = spaceportSitesOf('Mars')
@@ -83,7 +84,7 @@ console.log('\n=== 5. Simple mode: spaceport levels are the sites, and trade run
 {
   usePlayerStore.setState({ economyModel: 'abstract' })
   for (const [body, seed] of Object.entries(SIMPLE_WORLD_SEEDS)) {
-    const want = Math.max(1, Math.round((2 * seed.population) / 1000))
+    const want = body === 'Earth' ? 6 : Math.max(1, Math.round((2 * seed.population) / 1000))
     check(`${body}: ${want} spaceport levels for ${seed.population}M people`, seed.buildings.spaceport === want, `${seed.buildings.spaceport}`)
   }
   const sites = spaceportSitesOf('Mars')

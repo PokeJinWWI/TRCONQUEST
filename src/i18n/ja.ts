@@ -1174,6 +1174,7 @@ export const JA: Record<string, string> = {
   "Tech": "技術",
   "Technical": "技術職",
   "Technology": "技術",
+  "Tenkū Kōro": "天空航路",
   "TERRA RELICTA: CONQUEST": "テラ・レリクタ：征服",
   "Terra Sabaea": "サバ大陸",
   "Terra Sirenum": "セイレーン大陸",

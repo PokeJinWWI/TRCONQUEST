@@ -24,6 +24,7 @@ import { EconomyOverview } from './EconomyOverview'
 import { CorporationsPanel } from './CorporationsPanel'
 import { StockExchangePanel } from './StockExchangePanel'
 import { DemographicsPanel } from './DemographicsPanel'
+import { CulturePanel, PopulationPanel, ReligionPanel, SocialClassesPanel, SocietyPoliticsPanel, SpeciesPanel } from './SocietyPanels'
 import { CharactersPanel } from './CharactersPanel'
 import { DebtPanel } from './DebtPanel'
 import { ConstructionPanel } from './ConstructionPanel'
@@ -68,7 +69,7 @@ const CATEGORIES: CategoryDef[] = [
   { name: CENTRAL_BANK_CATEGORY, subcategories: ['Overview', 'Monetary Policy', 'Balance Sheet', 'Commercial Banks', 'Currency'] },
   { name: CORPORATIONS_CATEGORY, subcategories: ['State Owned', 'Private', 'Financial Districts'] },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
-  { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
+  { name: 'Society', subcategories: ['Demographics', 'Social classes', 'Population', 'Politics', 'Culture', 'Religion', 'Species'] },
   { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Treaties', 'Subjects', 'Trade Policy', 'Events'] },
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
@@ -83,7 +84,7 @@ const ABSTRACT_CATEGORIES: CategoryDef[] = [
   { name: 'Government', subcategories: ['Government Overview', 'Executive', 'Legislative', 'Judicial', 'Offices', 'Leaders', 'Laws', 'Institutions'] },
   { name: 'Economy' },
   { name: TECHNOLOGY_CATEGORY, subcategories: ['Physics', 'Society', 'Engineering'] },
-  { name: 'Society', subcategories: ['Demographics', 'Culture', 'Religion', 'Species'] },
+  { name: 'Society', subcategories: ['Demographics', 'Social classes', 'Population', 'Politics', 'Culture', 'Religion', 'Species'] },
   { name: DIPLOMACY_CATEGORY, subcategories: ['Relations', 'Wars', 'Treaties', 'Subjects', 'Trade Policy', 'Events'] },
   { name: 'International Organizations' },
   { name: MILITARY_CATEGORY, subcategories: [ARMY_SUBCATEGORY, NAVY_SUBCATEGORY, 'Asymmetric Warfare', 'Mercenaries'] },
@@ -139,6 +140,12 @@ function renderContent(category: CategoryDef, subcategory: string | null, abstra
   if (category.name === GOVERNMENT_CATEGORY && subcategory === 'Leaders') return <LeadersPanel />
   if (category.name === CORPORATIONS_CATEGORY) return <CorporationsPanel subcategory={subcategory} />
   if (category.name === SOCIETY_CATEGORY && subcategory === DEMOGRAPHICS_SUBCATEGORY) return abstractEconomy ? <SimplisticDemographics /> : <DemographicsPanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === 'Social classes') return <SocialClassesPanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === 'Population') return <PopulationPanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === 'Politics') return <SocietyPoliticsPanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === 'Culture') return <CulturePanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === 'Religion') return <ReligionPanel />
+  if (category.name === SOCIETY_CATEGORY && subcategory === 'Species') return <SpeciesPanel />
   if (category.name === CHARACTERS_CATEGORY) return <CharactersPanel subcategory={subcategory} />
   if (category.name === MILITARY_CATEGORY && subcategory === NAVY_SUBCATEGORY) return <FleetManagement />
   if (category.name === MILITARY_CATEGORY && subcategory === ARMY_SUBCATEGORY) return <ArmyPanel />

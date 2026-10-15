@@ -148,5 +148,22 @@ console.log('\n=== 6. Save and load ===')
   resetGame()
 }
 
+console.log('\n=== 9. A spaceport stands on its own ===')
+{
+  for (const model of ['abstract', 'complex'] as const) {
+    resetGame()
+    usePlayerStore.setState({ selectedCountryId: MARS, sandbox: false, economyModel: model })
+    const ref = model === 'abstract' ? simple('spaceport') : complex('spaceport')
+    const clinic = model === 'abstract' ? simple('entertainmentCenter') : complex('clinic')
+    const noSite = 'Mars#infrastructure-999'
+    const port = planPlacement(MARS, 'Mars', ref, noSite)
+    check(`${model}: a spaceport is accepted with no site at all, and books none`, port.ok && !port.site)
+    check(`${model}: any other building still needs a real site`, !planPlacement(MARS, 'Mars', clinic, noSite).ok)
+    const open = planPlacement(MARS, 'Mars', ref)
+    check(`${model}: even with sites about a spaceport books none: it is a key node on its own ground`, open.ok && !open.site)
+  }
+  resetGame()
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll placement checks passed')
 process.exit(failures ? 1 : 0)

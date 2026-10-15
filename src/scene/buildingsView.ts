@@ -22,6 +22,8 @@ import { districtOfBuilding, isPlacedDistrict, siteKindsOfDistrict, slotsPerLeve
 import { accessOnBody, capturedBy } from './infrastructureOrders'
 import { locationsOf, type DevLocation } from './locations'
 import { developedSlotsAt, districtUsedAt, ensureSeededFor, levelRoomAt } from './placementOrders'
+import { STANDALONE_BUILDINGS } from './placement'
+import { portList, type PortList } from './portList'
 import { siteLabel } from './siteChoices'
 import { buildingTotals, placedBuildings } from './placedBuildings'
 
@@ -76,6 +78,8 @@ export interface AreaView {
   sections: { kind: DevLocation['kind']; title: string; sites: AreaSite[] }[]
   // Per building, its levels over every place: "Factory: 4 levels in 2 places".
   totals: { id: string; name: string; levels: number; places: number }[]
+  // The world's spaceports, one row per key node.
+  ports: PortList
   // Buildings standing outside every area (a spaceport out in the open): just buildings.
   standalone: AreaBuilding[]
   // Buildings the world has that no site holds (built before sites, or that found none).
@@ -139,7 +143,7 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
   const rowsAt = (siteId: string) => {
     const by = new Map<string, AreaBuilding>()
     for (const r of rows) {
-      if (r.siteId !== siteId) continue
+      if (r.siteId !== siteId || STANDALONE_BUILDINGS.has(r.id)) continue
       const had = by.get(r.id)
       by.set(r.id, had ? { ...had, count: had.count + r.level } : { id: r.id, name: buildingName(m, r.id), count: r.level, district: districtOfBuilding({ mode: m, id: r.id }), ...(r.buildingId ? { buildingId: r.buildingId } : {}) })
     }
@@ -226,8 +230,13 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
     .filter((sec) => sec.sites.length > 0)
   const unplacedBy = new Map<string, number>()
   for (const r of rows) if (r.siteId === null) unplacedBy.set(r.id, (unplacedBy.get(r.id) ?? 0) + r.level)
+  // A spaceport stands on its own ground and is listed by its key nodes (scene/portList.ts), never as missing or standalone here.
+  for (const id of STANDALONE_BUILDINGS) {
+    unplacedBy.delete(id)
+    standaloneBy.delete(id)
+  }
   const unplaced = [...unplacedBy].map(([id, count]) => ({ id, name: buildingName(m, id), count, district: districtOfBuilding({ mode: m, id }) }))
   const totals = buildingTotals(rows).map((t) => ({ ...t, name: buildingName(m, t.id) }))
   void slotsPerLevel
-  return { bodyName, landLeft, sections, totals, standalone: [...standaloneBy.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), unplaced }
+  return { bodyName, landLeft, sections, totals, ports: portList(bodyName), standalone: [...standaloneBy.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), unplaced }
 }

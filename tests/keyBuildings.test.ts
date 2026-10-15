@@ -103,16 +103,13 @@ for (const mode of ['complex', 'abstract'] as const) {
   const inUse = () => (mode === 'complex' ? districtUsage(useEconomyStore.getState().worlds.find((w) => w.name === 'Venus')!).military : buildingsInDistrict(useAbstractEconomyStore.getState().worlds.Venus, 'military'))
   check(`${label}: the capital starts with a Military level holding its fortress and battery`, militarySlotsOf('Venus') > 0 && militaryInUse('Venus', useDefenseStore.getState().installations) === 2)
   check(`${label}: the economy counts them in the Military district`, inUse() === 2, `${inUse()}`)
-  // Fill the district, then one more is refused.
+  // No Military district is needed: defences stand anywhere, limited only by the per-world cap of each kind.
   let built = 0
-  for (const kind of ['defenseBattery', 'defenseBattery', 'shieldGenerator', 'fortress'] as const) {
-    if (militaryInUse('Venus', useDefenseStore.getState().installations) >= militarySlotsOf('Venus')) break
-    if (useDefenseStore.getState().build(VENUS, 'Venus', kind, 0).ok) built++
-  }
-  const full = militaryInUse('Venus', useDefenseStore.getState().installations) >= militarySlotsOf('Venus')
+  for (const kind of ['defenseBattery', 'defenseBattery', 'shieldGenerator', 'fortress'] as const) if (useDefenseStore.getState().build(VENUS, 'Venus', kind, 0).ok) built++
+  check(`${label}: defences are built with no Military slot free (${built} built)`, built > 0)
   const refused = canBuildDefense(VENUS, 'Venus', 'shieldGenerator', useDefenseStore.getState().installations)
-  check(`${label}: a full (or per-world-capped) district refuses more`, !refused.ok && /Military|At most/.test((refused as { reason: string }).reason), `${built} built, ${full ? 'full' : 'capped'}: ${(refused as { reason?: string }).reason}`)
-  check(`${label}: a spaceport needs no Military slot (and Venus has one)`, !canBuildDefense(VENUS, 'Venus', 'spaceport', useDefenseStore.getState().installations).ok && /already has a spaceport/.test((canBuildDefense(VENUS, 'Venus', 'spaceport', useDefenseStore.getState().installations) as { reason: string }).reason))
+  check(`${label}: a per-world cap still refuses more`, !refused.ok && /At most/.test((refused as { reason: string }).reason), (refused as { reason?: string }).reason)
+  check(`${label}: a second spaceport installation is refused (Venus has one)`, !canBuildDefense(VENUS, 'Venus', 'spaceport', useDefenseStore.getState().installations).ok && /already has a spaceport/.test((canBuildDefense(VENUS, 'Venus', 'spaceport', useDefenseStore.getState().installations) as { reason: string }).reason))
   // Destroyed defenses free their slots.
   useDefenseStore.getState().setInstallations(useDefenseStore.getState().installations.map((i) => (i.bodyName === 'Venus' ? { ...i, integrity: 0 } : i)))
   check(`${label}: destroyed defenses free their slots`, militaryInUse('Venus', useDefenseStore.getState().installations) === 0 && inUse() === 0)

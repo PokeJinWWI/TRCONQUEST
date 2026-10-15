@@ -14,7 +14,7 @@ export type OrderResult = { ok: true } | { ok: false; reason: string }
 const queueLength = (bodyName: string): number => worldByName(useEconomyStore.getState().worlds, bodyName)?.constructionQueue.length ?? 0
 
 // One more `buildingId` on `siteId`, ordered by the player's nation `builderId`.
-export function orderBuildingAt(builderId: string, bodyName: string, buildingId: string, siteId: string): OrderResult {
+export function orderBuildingAt(builderId: string, bodyName: string, buildingId: string, siteId?: string): OrderResult {
   const plan = planPlacement(builderId, bodyName, refOf(buildingId), siteId)
   if (!plan.ok) return plan
   if (isAbstractEconomy()) {

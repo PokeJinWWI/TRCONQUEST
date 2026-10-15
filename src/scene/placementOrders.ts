@@ -17,7 +17,7 @@ import { economyModel } from '../state/playerStore'
 import { useTerritoryStore } from '../state/territoryStore'
 import { accessOnBody } from './infrastructureOrders'
 import { locationsOf, type DevLocation } from './locations'
-import { physicalFit, pickSite, siteKindOf, siteKindsFor, slotsUsedBy, type BuildingRef } from './placement'
+import { STANDALONE_BUILDINGS, physicalFit, pickSite, siteKindOf, siteKindsFor, slotsUsedBy, type BuildingRef } from './placement'
 import { decideConstructionNow } from './sovereignty'
 import { INDUSTRY_SHARE_OF_SETTLEMENT, districtOfBuilding, isPlacedDistrict, siteKindsOfDistrict, slotsPerLevel } from './districtSites'
 import { ensureSeeded } from './seedPlacementOrders'
@@ -194,6 +194,12 @@ export function judgeSiteForLevel(builderId: string, bodyName: string, district:
 // both the law and the ground allow. A body with no sites at all (nothing generated) has no
 // placement to make and the order goes ahead as it always did.
 export function planPlacement(builderId: string, bodyName: string, ref: BuildingRef, siteId?: string): PlacementPlan {
+  // A standalone building (a spaceport) stands on its own ground: no site is booked and no room is needed (scene/portList.ts lists them).
+  if (STANDALONE_BUILDINGS.has(ref.id)) return { ok: true }
+  return planSited(builderId, bodyName, ref, siteId)
+}
+
+function planSited(builderId: string, bodyName: string, ref: BuildingRef, siteId?: string): PlacementPlan {
   // A rural structure (a space-elevator anchor) stands on a node of its own: scene/ruralOrders places it, no site is booked.
   if (isRural(ref.id)) return { ok: true }
   const sites = locationsOf(bodyName)

@@ -7,7 +7,7 @@ export function labelKey(text: string): string | null {
   t = t.replace(/^[+▸▾›‹·•]\s*/, '').replace(/\s*[×x]\s?\d+$/, '').replace(/\s*\(\d+\)$/, '').replace(/:$/, '').trim()
   t = t.replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF★☆✓✎]/gu, '').trim()
   if (!/[A-Za-z]/.test(t)) return null
-  // Already carries its own script ("Tenkū Kōro 天空航路").
+  // Already carries its own script (a player-typed "Name 名前").
   if (/[\u3040-\u30ff\u4e00-\u9fff]/.test(t)) return null
   // A sentence (ends with a full stop, or has one inside) is prose, not a label.
   if (/[.!?]$|[.!?]\s+[A-Z]/.test(t)) return null

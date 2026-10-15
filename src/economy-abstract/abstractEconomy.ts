@@ -33,6 +33,7 @@
 // Pure and headless (no store/DOM). The store (state/abstractEconomyStore.ts)
 // holds the states, syncs the stockpile and advances it monthly.
 
+import { LITERACY_DRIFT_RATE, REFERENCE_LITERACY, driftWorkforceShare, literacyResearchFactor, nationIdealWorkforceShare, nationLiteracyTarget, needsFactor, workforceShareOf, type PopLaws } from '../economy/popRules'
 import { UNREST_HAPPINESS_CAP, UNREST_HAPPINESS_PER_POINT } from '../data/demolitionData'
 import {
   ACADEMIC_TO_INDUSTRIAL,
@@ -79,6 +80,8 @@ export type Stockpile = Record<SimpleGood, number>
 export interface WorldState {
   bodyName: string
   population: number // millions
+  // The share of these people in the workforce (economy/popRules.ts); absent = the reference share.
+  workforceShare?: number
   buildings: BuildingLevels
   // District levels built, per district (see SIMPLE_DISTRICT_DEFS). Optional: a
   // world without it is treated as having just enough districts to house its
@@ -180,6 +183,10 @@ export interface AbstractEconomyState {
   // which way the nation's spaceports specialise — balanced, lift, or merchant
   // marine. Absent = 'standard'. Reshapes launch vs interstellarTransport.
   spaceportMethod?: SimpleSpaceportMethod
+  // Laws on who works (economy/popRules.ts). Absent = the defaults (the reference workforce).
+  popLaws?: Partial<PopLaws>
+  // The nation's literacy (economy/popRules.ts): moves toward what its laws allow and scales its research. Absent = the reference.
+  literacy?: number
 }
 
 export type SimpleSpaceportMethod = 'standard' | 'launch-complex' | 'interstellar-port'
@@ -195,7 +202,8 @@ const SIMPLE_SPACEPORT_INTERSTELLAR: Record<SimpleSpaceportMethod, number> = { s
 export const SEZ_TRADE_BONUS = 0.25
 
 // --- Balance constants ---------------------------------------------------------
-const WORKFORCE_SHARE = 0.42 // share of a world's population in the labour force (the rest: children, retirees, carers)
+// The share of a world's population in the labour force (the rest: children, retirees, carers) is economy/popRules: the reference share
+// unless the nation's laws have moved it.
 export const MAX_CP_PER_ORDER = 40 // one project can absorb at most this per month
 // --- Pops: strata, upkeep, happiness (Stellaris-style) ---------------------------
 // Everyone belongs to a stratum by the job their household works: WORKERS
@@ -314,7 +322,7 @@ export function worldJobs(w: WorldState): number {
   return jobs
 }
 export function worldWorkforce(w: WorldState): number {
-  return w.population * WORKFORCE_SHARE
+  return w.population * workforceShareOf(w)
 }
 // Fraction of its jobs a world can fill (1 = fully staffed).
 export function worldStaffing(w: WorldState): number {
@@ -661,6 +669,9 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
       else produced[prod as SimpleGood] += scale * n
     }
   }
+  // Literate people do more research (neutral at the reference literacy).
+  const literacyFactor = literacyResearchFactor(s.literacy)
+  if (literacyFactor !== 1) for (const t of Object.keys(researchByTree) as TechCategory[]) researchByTree[t] *= literacyFactor
   const research = researchByTree.physics + researchByTree.society + researchByTree.engineering
   const amenitiesRatio = population > 0 ? amenitySupplyWeighted / population : 1
 
@@ -706,11 +717,14 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
     unemployed: unemployedWorkers * perWorker,
   }
 
+  // Dependents need half what a worker does: a nation with a bigger workforce needs more per head (1 at the reference share).
+  const totalPeople = worlds.reduce((n, w) => n + w.population, 0)
+  const needsScale = totalPeople > 0 ? worlds.reduce((n, w) => n + w.population * needsFactor(workforceShareOf(w)), 0) / totalPeople : 1
   // Pop upkeep comes out of what's left; a shortage is shared by everyone.
   const needs = Object.fromEntries(NEED_GOODS.map((g) => [g, { demand: 0, got: 0 }])) as Record<NeedGood, { demand: number; got: number }>
   const goodSatisfaction = {} as Record<NeedGood, number>
   for (const g of NEED_GOODS) {
-    for (const st of STRATA) needs[g].demand += stratumPop[st] * POP_UPKEEP[st][g]
+    for (const st of STRATA) needs[g].demand += stratumPop[st] * POP_UPKEEP[st][g] * needsScale
     const avail = Math.max(0, stock[g] + produced[g] - used[g] + traded[g])
     needs[g].got = Math.min(needs[g].demand, avail)
     consumed[g] = needs[g].got
@@ -857,6 +871,11 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
 
 // Annual productivity growth from a month's research and the population
 // (millions) — see PRODUCTIVITY_*.
+// A nation's yearly population growth (before clinics): fed people grow with their approval and welfare, an underfed population starves.
+export function popGrowthPerYear(approval: number, welfare: number, foodSatisfaction: number): number {
+  return foodSatisfaction >= 0.95 ? POP_GROWTH * (0.5 + approval) * (1 + 0.3 * clamp(welfare, 0, 1)) : -STARVATION * (1 - foodSatisfaction)
+}
+
 export function productivityGrowthFor(researchPerMonth: number, populationMillions: number): number {
   const perBillion = populationMillions > 0 ? researchPerMonth / (populationMillions / 1000) : 0
   return PRODUCTIVITY_BASE + (PRODUCTIVITY_RESEARCH_MAX * perBillion) / (perBillion + PRODUCTIVITY_RESEARCH_HALF)
@@ -940,14 +959,16 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
   }
 
   // Population, per world.
-  const growth = (POP_GROWTH * (0.5 + r.approval) * (1 + 0.3 * clamp(s.welfare, 0, 1))) / TICKS_PER_YEAR
-  const starve = (STARVATION * (1 - r.foodSatisfaction)) / TICKS_PER_YEAR
-  const popFactor = 1 + (r.foodSatisfaction >= 0.95 ? growth : -starve)
+  const popFactor = 1 + popGrowthPerYear(r.approval, s.welfare, r.foodSatisfaction) / TICKS_PER_YEAR
   const nextWorlds = [...byName.values()].map((w) => {
     // Clinics add their own growth on their world (only while the people are fed).
     let clinic = 0
     if (r.foodSatisfaction >= 0.95) for (const b of SIMPLE_BUILDINGS) clinic += (w.buildings[b] ?? 0) * (SIMPLE_BUILDING_DEFS[b].popGrowth ?? 0)
-    return { ...w, population: Math.max(0, w.population * (popFactor + (clinic * worldStaffing(w)) / TICKS_PER_YEAR)) }
+    const ideal = nationIdealWorkforceShare(s.popLaws)
+    const share = workforceShareOf(w)
+    const nextShare = driftWorkforceShare(share, ideal)
+    const workforceShare = w.workforceShare === undefined && nextShare === share ? undefined : nextShare
+    return { ...w, population: Math.max(0, w.population * (popFactor + (clinic * worldStaffing(w)) / TICKS_PER_YEAR)), ...(workforceShare !== undefined ? { workforceShare } : {}) }
   })
 
   // Stability eases toward its target.
@@ -973,8 +994,12 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
   const fund = fundamentalRate(s, r)
   const currency = { ...s.currency, rate: clamp(s.currency.rate + (fund - s.currency.rate) * FX_SPEED, 0.05, 10) }
 
+  const literacyNow = s.literacy ?? REFERENCE_LITERACY
+  const literacyNext = literacyNow + LITERACY_DRIFT_RATE * (nationLiteracyTarget(s.popLaws) - literacyNow)
+  const literacy = s.literacy === undefined && Math.abs(literacyNext - literacyNow) < 1e-12 ? undefined : literacyNext
   const state: AbstractEconomyState = {
     ...s,
+    ...(literacy !== undefined ? { literacy } : {}),
     productivity: r.productivity * (1 + r.productivityGrowth / TICKS_PER_YEAR),
     population: r.population,
     gdp: r.gdp,

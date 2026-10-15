@@ -79,13 +79,13 @@ console.log('\n=== 1. A save from before the territorial model ===')
 
 console.log('\n=== 2. Versions ===')
 {
-  check('the envelope is version 2, and a version-1 file is accepted', SAVE_VERSION === 2)
+  check('the envelope is version 3, and a version-1 file is accepted', SAVE_VERSION === 3)
   resetGame()
   const file = JSON.parse(JSON.stringify(await createSave('v')))
   await applySave({ ...file, version: 1 })
   check('a file from the first save format loads', true)
   let err = ''
-  try { await applySave({ ...file, version: 3 }) } catch (e) { err = e instanceof SaveError ? e.message : String(e) }
+  try { await applySave({ ...file, version: SAVE_VERSION + 1 }) } catch (e) { err = e instanceof SaveError ? e.message : String(e) }
   check('a file from a newer build is refused with a readable message', /newer version/.test(err), err)
   // Store migrations chain, one version at a time.
   const entry = STORE_REGISTRY.find((e) => e.key === 'gameTime')!

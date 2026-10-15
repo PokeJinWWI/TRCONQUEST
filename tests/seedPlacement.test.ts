@@ -1,3 +1,4 @@
+import { STANDALONE_BUILDINGS } from '../src/scene/placement'
 // A new game's starting districts and buildings stand on sites (scene/seedPlacement.ts, seedPlacementOrders.ts, placement.ts):
 // every starting building has a site, every level a place, the numbers of the economy do not move, and from then on
 // a building needs a developed slot at the site it is built on.
@@ -84,7 +85,7 @@ for (const model of ['abstract', 'complex'] as const) {
     const counts = worldBuildings(b, mode)
     const placed: Record<string, number> = {}
     for (const [id, row] of Object.entries(usePlacementStore.getState().placed)) if (id.startsWith(`${b}#`)) for (const [bid, n] of Object.entries(row)) placed[bid] = (placed[bid] ?? 0) + n
-    check(`${b}: the buildings placed are exactly the buildings it has`, counts.every((c) => (placed[c.id] ?? 0) === c.count))
+    check(`${b}: the buildings placed are exactly the buildings it has (spaceports stand on their own, in no site)`, counts.filter((c) => !STANDALONE_BUILDINGS.has(c.id)).every((c) => (placed[c.id] ?? 0) === c.count) && counts.filter((c) => STANDALONE_BUILDINGS.has(c.id)).every((c) => (placed[c.id] ?? 0) === 0))
   }
   check('the sites used are the nation\'s, marked connected', locationsOf('Mars').filter((s) => usePlacementStore.getState().levels[s.id]).every((s) => siteOwner(s.id) === MARS && useLocationStore.getState().established[s.id]?.connected !== false))
   syncSiteAccess()

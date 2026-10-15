@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { BOMBARD_STANCES, BOMBARD_STANCE_DESCRIPTIONS, BOMBARD_STANCE_LABELS, BUILDABLE_DEFENSE_KINDS, DEFENSE_DEFS, type DefenseKind } from '../../data/defenseData'
 import { RESOURCE_TYPES, type ResourceId } from '../../data/resourceData'
 import { ownerDisplay } from '../../data/countryRoster'
-import { useDefenseStore, canBuildDefense, militaryInUse } from '../../state/defenseStore'
+import { useDefenseStore, canBuildDefense } from '../../state/defenseStore'
 import { useTerritoryStore } from '../../state/territoryStore'
 import { useArmyStore } from '../../state/armyStore'
 import { useShipStore } from '../../state/shipStore'
@@ -17,8 +17,8 @@ import { canBombard } from '../../scene/bombardment'
 import { queueBombard } from '../../scene/commsVisual'
 import { controllerOf } from '../../scene/territory'
 import { PlanetIcon } from './PlanetIcons'
+import { chooseDefenseSite } from '../../scene/standalone'
 import { KeySitesList } from './KeySites'
-import { militarySlotsOf } from '../../state/nationEconomy'
 
 // The planet screen's Defense tab (both economy modes): the world's defense
 // installations (status, integrity, who holds them — they can be captured),
@@ -28,7 +28,6 @@ const RESOURCE_NAME = Object.fromEntries(RESOURCE_TYPES.map((r) => [r.id, r.name
 
 export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId: string | null }) {
   const installations = useDefenseStore((s) => s.installations)
-  const build = useDefenseStore((s) => s.build)
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const controllers = useTerritoryStore((s) => s.bodyController)
   const holders = useTerritoryStore((s) => s.nodeHolders)
@@ -53,7 +52,8 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
   const mayBombard = !!playerId && canBombard(playerId, bodyName, ships.map((s) => ({ id: s.id, ownerId: s.ownerId, bodyName: orbitedBody(s), armed: isArmed(s), weapons: 0, stance: 'off' as const })), owners, controllers, atWar)
   const doBuild = (kind: DefenseKind) => {
     if (!playerId) return
-    const res = build(playerId, bodyName, kind, simDays)
+    // The ground map opens with it in hand: click where it should stand.
+    const res = chooseDefenseSite(playerId, bodyName, kind)
     setMessage(res.ok ? null : res.reason)
   }
 
@@ -132,9 +132,6 @@ export function DefenseTab({ bodyName, playerId }: { bodyName: string; playerId:
       {mine && (
         <>
           <div className="econ-subtitle" style={{ marginTop: 10 }}>Build</div>
-          <div className="abs-dim" title="Fortresses, shields and batteries each take a Military district slot; develop the district on the Buildings tab">
-            Military district: {militaryInUse(bodyName, installations)} / {militarySlotsOf(bodyName)} slots used
-          </div>
           {message && <div className="econ-neg pl-message">{message}</div>}
           <div className="pl-def-build">
             {BUILDABLE_DEFENSE_KINDS.map((kind) => {

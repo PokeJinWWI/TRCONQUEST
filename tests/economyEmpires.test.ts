@@ -40,9 +40,12 @@ console.log('\n=== 1. The home nations\' seed is stable ===')
   // them — no new seeded buildings, so `countries` is unchanged).
   // Rehashed once more when the Complex resource district was split into mining and agricultural districts (their capacities seeded apart; the economy's
   // numbers do not move: the two share one ecosystem bonus).
-  check('worlds', hash(seedWorlds()) === '32fa2eb186b034c1')
-  check('countries', hash(seedCountries()) === '4c74ab14d2187147')
-  check('corporations', hash(seedCorporations()) === 'c4949843a4c08459')
+  // Rehashed when Earth's spaceports became the six hand-placed ones (the economy runs exactly what the map shows) and when Tenkū Kōro lost the
+  // native script from its name (the NERV theme adds it); and again when the starting economies were fitted to what is wanted (scripts/economy/
+  // calibrate.ts: mothballed plants, new starting prices and tax rates).
+  check('worlds', hash(seedWorlds()) === '234fa75e7cf3f978')
+  check('countries', hash(seedCountries()) === '30f7a226778fc4f4')
+  check('corporations', hash(seedCorporations()) === 'ba6b548892b4c34a')
   check('banks', hash(seedBanks()) === '7bccfcac62561d47')
   check('characters', hash(seedCharacters()) === 'fe9da9a53a59c43d')
   check('families', hash(seedFamilies()) === '6c211d4cc3df1023')
