@@ -40,6 +40,10 @@ import { tickMonetary } from './monetaryPolicy'
 import { runForeignInvestmentAI } from './foreignInvestmentAI'
 import { TRANSPORT_LOSS, sellFromWorld, tradeBetweenNations } from './internationalTrade'
 import { findBuilding } from './buildingSites'
+import { stepMobility } from './popMobility'
+import { loyaltyOf, stepLoyalty } from './popPolitics'
+import { STATUS_GRIEVANCE, STATUS_WAGE, acceptanceOf, nationCultureOf, skilledAccess, stepAssimilation, type NationCulture } from './acceptance'
+import { STRATUM_OF, birthMortality, driftWorkforceShare, educationAccess, idealWorkforceShare, labourFactor, needsFactor, schoolCoverage, workforceShareOf, type PopLaws } from './popRules'
 import { goodIsScarce } from './scarcity'
 import { marketAccess, launchCapacity, interstellarFromWorlds, worldInfrastructure, infrastructureUsage } from './transport'
 
@@ -80,6 +84,10 @@ const THROUGHPUT_RAMP_UP = 0.05
 const THROUGHPUT_RAMP_DOWN = 0.15
 // How fast mothballed capacity (Building.idle) reopens while its good is scarce.
 const REOPEN_PER_MONTH = 0.2
+// …but a plant mothballed almost entirely (a world that needs a sliver of its good) reopens in proportion to what it still runs, not by a
+// fifth of a level at once, which would overshoot a small need many times over.
+const REOPEN_MIN_STEP = 0.02
+const reopenStep = (idle: number): number => Math.min(REOPEN_PER_MONTH, Math.max(REOPEN_MIN_STEP, 0.5 * (1 - idle)))
 // Equipment and strategic materials used as a recipe input: a shortfall DEGRADES
 // output to a floor rather than halting it (see the production step). Alloys and
 // rocket fuel are here so a thin supply of the long metals→alloys chain throttles
@@ -111,8 +119,6 @@ const SOL_SMOOTHING = 0.5
 // of the SoL scale a population grows on the order of ~2–3%/year, and real
 // deprivation shrinks it at a similar gentle pace. The midpoint sits below 0.5
 // so a modest standard of living is roughly stable.
-const GROWTH_RATE = 0.0016
-const GROWTH_MIDPOINT = 0.35
 const EDU_DRIFT = 0.012 // education creeps toward SoL each tick (slow)
 const EDU_MAX = 0.98
 
@@ -543,6 +549,10 @@ function tickWorld(
   // This month's monetary price drift (monetaryPolicy: loose money, a falling
   // currency, printed money), applied to every price as it clears.
   priceDrift = 0,
+  // The country's laws on who works (economy/popRules.ts): where each pop's workforce share is heading.
+  popLaws?: Partial<PopLaws>,
+  // The nation's own culture and faith: who is accepted, and who assimilates (economy/acceptance.ts).
+  nationCulture?: NationCulture,
 ): WorldTickResult {
   const report = emptyWorldReport()
   const law = economicSystemDef(system)
@@ -559,8 +569,12 @@ function tickWorld(
   const workers = zeroClasses()
   const qualified = zeroClasses()
   for (const pop of world.pops) {
-    workers[pop.class] += pop.populationSize
-    qualified[pop.class] += pop.populationSize * qualificationFraction(pop.class, pop.educationLevel)
+    // Labour is the workforce (not the dependents), counted against the reference share so a pop at it supplies exactly its size.
+    const labour = pop.populationSize * labourFactor(workforceShareOf(pop))
+    // A culture that is not fully accepted is kept out of skilled work (1 for a nation's own people and for everyone else's lower jobs).
+    const access = nationCulture ? skilledAccess(acceptanceOf(pop.cultureId, nationCulture, popLaws), pop.class) : 1
+    workers[pop.class] += labour
+    qualified[pop.class] += labour * qualificationFraction(pop.class, pop.educationLevel) * access
   }
   // Jobs posted this month: each building hires for the run it plans (its last
   // run plus the ramp), not its full size — an idle factory isn't hiring.
@@ -681,7 +695,7 @@ function tickWorld(
   let incomeTaxRevenue = 0
   world.pops.forEach((pop) => {
     // Its share of its class's wages: its own jobs, plus lower jobs it took.
-    const wageIncome = workers[pop.class] > 0 ? classWageIncome[pop.class] * (pop.populationSize / workers[pop.class]) : 0
+    const wageIncome = workers[pop.class] > 0 ? classWageIncome[pop.class] * ((pop.populationSize * labourFactor(workforceShareOf(pop))) / workers[pop.class]) * (nationCulture ? STATUS_WAGE[acceptanceOf(pop.cultureId, nationCulture, popLaws)] : 1) : 0
     const incomeTax = wageIncome * taxRate
     incomeTaxRevenue += incomeTax
     const income = wageIncome - incomeTax + (welfarePerUnit + SUBSISTENCE_INCOME) * pop.populationSize
@@ -696,7 +710,7 @@ function tickWorld(
         const wf = tierWealthFactor(tier, pop.standardOfLiving) * wealthBoost(tier, pop.wealth, income)
         for (const group of species.needs[tier]) {
           if (group.id === LIFE_SUPPORT_GROUP_ID && lifeSupportScale(world.habitability) <= 0) continue
-          const target = groupTarget(group, pop.populationSize, wf, world.habitability) * priceResponse(group, tier, prices, adoptOf)
+          const target = groupTarget(group, pop.populationSize * needsFactor(workforceShareOf(pop)), wf, world.habitability) * priceResponse(group, tier, prices, adoptOf)
           const totalW = group.goods.reduce((s, g) => s + g.weight, 0) || 1
           for (const g of group.goods) {
             const fullWant = (target * g.weight) / totalW
@@ -842,7 +856,7 @@ function tickWorld(
         for (const group of groups) {
           const response = priceResponse(group, tier, prices, adoptOf)
           if (group.id === LIFE_SUPPORT_GROUP_ID && lifeSupportScale(world.habitability) <= 0) continue
-          const target = groupTarget(group, pop.populationSize, wf, world.habitability) * response
+          const target = groupTarget(group, pop.populationSize * needsFactor(workforceShareOf(pop)), wf, world.habitability) * response
           const res = consumeGroup(group, target, budget, prices, finalFulfill, govShareOf, adoptOf)
           // Adoption-reduced want (an unadopted good is not a missed need) — but
           // measured against the want BEFORE dear prices cut it: going without
@@ -979,7 +993,7 @@ function tickWorld(
     // way (that throttling spiralled); reopening into a shortage of its own
     // inputs only spread it (Orion ran out of power).
     const good = method.outputs[0]?.good
-    const idle = b.idle && good && inputScale >= 0.95 && goodIsScarce(good, [world]) ? Math.max(0, b.idle - REOPEN_PER_MONTH) : b.idle
+    const idle = b.idle && good && inputScale >= 0.95 && goodIsScarce(good, [world]) ? Math.max(0, b.idle - reopenStep(b.idle)) : b.idle
     return { ...b, inventory: inv, throughput, lastProfit: netProfit, unprofitableStreak, employed, jobsPosted, ...(idle !== b.idle ? { idle: idle || undefined } : {}) }
   })
 
@@ -1137,14 +1151,30 @@ function tickWorld(
   const capacity = world.populationCapacity
   const headroom = capacity > 0 ? Math.max(0, 1 - population / capacity) : 0
   const dividendPerPop = population > 0 ? workerDividendPool / population : 0
+  const coverage = schoolCoverage(finalBuildings, population)
+  const schoolBaseline = world.schoolBaseline ?? coverage
+  const coverageAboveStart = coverage - schoolBaseline
   const grownPops = nextPops.map((pop) => {
-    const growth = GROWTH_RATE * (pop.standardOfLiving - GROWTH_MIDPOINT) * 2 * (pop.standardOfLiving >= GROWTH_MIDPOINT ? headroom : 1)
+    const growth = birthMortality(pop.standardOfLiving, headroom).net
     const nextSize = Math.max(0.001, pop.populationSize * (1 + growth))
-    const educationLevel = clamp(pop.educationLevel + EDU_DRIFT * (pop.standardOfLiving - pop.educationLevel), 0, EDU_MAX)
+    // Literacy follows education access: living standards, the schools built beyond the world's starting ones, and the laws.
+    const educationLevel = clamp(pop.educationLevel + EDU_DRIFT * (educationAccess(pop.standardOfLiving, coverageAboveStart, popLaws) - pop.educationLevel), 0, EDU_MAX)
     const wealth = Math.max(0, pop.wealth + dividendPerPop * pop.populationSize)
-    return { ...pop, populationSize: nextSize, educationLevel, wealth }
+    // Workforce share drifts toward what the laws allow (a pop that has never moved stays unset, so it stays exactly as it was).
+    const ideal = idealWorkforceShare(popLaws, STRATUM_OF[pop.class])
+    const share = workforceShareOf(pop)
+    const nextShare = driftWorkforceShare(share, ideal)
+    const workforceShare = pop.workforceShare === undefined && nextShare === share ? undefined : nextShare
+    // Mood: a standard of living below what literate people expect breeds radicals, above it loyalists (a pop in between is left alone).
+    const loyaltyNow = loyaltyOf(pop)
+    const loyaltyNext = stepLoyalty(loyaltyNow, pop.standardOfLiving, educationLevel, nationCulture ? STATUS_GRIEVANCE[acceptanceOf(pop.cultureId, nationCulture, popLaws)] : 0)
+    return { ...pop, populationSize: nextSize, educationLevel, wealth, ...(workforceShare !== undefined ? { workforceShare } : {}), ...(pop.loyalty !== undefined || loyaltyNext !== loyaltyNow ? { loyalty: loyaltyNext } : {}) }
   })
-  const grownPopulation = grownPops.reduce((s, p) => s + p.populationSize, 0)
+  // Promotion and demotion: people move between professions as jobs go unfilled or unfound (economy/popMobility.ts).
+  const mobility = stepMobility(grownPops, report.labor, world.id)
+  // Assimilation and conversion: minorities drift into the nation's culture and faith (economy/acceptance.ts).
+  const grownPopsFinal = nationCulture ? stepAssimilation(mobility.pops, nationCulture, popLaws, world.id).pops : mobility.pops
+  const grownPopulation = grownPopsFinal.reduce((s, p) => s + p.populationSize, 0)
 
   // --- Adoption update (emergent demand): each emergent good's adoption rises
   //     toward the world's wealth-set ceiling while it is available (enough
@@ -1172,7 +1202,8 @@ function tickWorld(
     // importStock is consumed this tick; the logistics step refills it after.
     world: {
       ...world,
-      pops: grownPops,
+      pops: grownPopsFinal,
+      schoolBaseline,
       buildings: finalBuildings,
       constructionQueue: nextQueue,
       districts: developed.districts,
@@ -1259,6 +1290,8 @@ export function tickEconomy(
     const serviceValueByGood: Partial<Record<GoodId, number>> = {}
     let runningTreasury = country.treasury
     const publicServices = country.publicServices ?? {}
+    // The nation's own culture and faith, read off its people (economy/acceptance.ts).
+    const nationCulture = nationCultureOf(owned.flatMap(({ w }) => w.pops))
     // If the state ran out of bureaucracy last tick, its own enterprises are
     // hobbled this tick.
     const stateBureaucracyMalus = country.bureaucracy > 0 ? 1 : BUREAUCRACY_SHORTAGE_MALUS
@@ -1275,7 +1308,7 @@ export function tickEconomy(
       // profit) to attract investment (state/economyStore.setSpecialEconomicZone).
       const sez = w.specialEconomicZone
       const effTaxRate = sez?.active ? country.taxRate * (1 - sez.taxDiscount) : country.taxRate
-      const res = tickWorld(w, effTaxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, stateCorps, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR)
+      const res = tickWorld(w, effTaxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, stateCorps, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR, country.popLaws, nationCulture)
       runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
       stockpileSpend += res.stockpileSpend

@@ -11,7 +11,8 @@ import { OWN_SETTLEMENT_MIN_SEPARATION_CELLS } from '../../data/locationData'
 import { useStructureStore } from '../../state/structureStore'
 import { developmentView, type AreaRow } from '../../scene/territoryView'
 import { useCivicStore } from '../../state/civicStore'
-import { PlanetIcon } from './PlanetIcons'
+import { PlanetIcon, buildingIconId } from './PlanetIcons'
+import { StandaloneSection } from './StandaloneSection'
 import { useInfrastructureStore } from '../../state/infrastructureStore'
 import { useLocationStore, siteNativeBuiltIn } from '../../state/locationStore'
 import { useEconomyStore, worldByName } from '../../state/economyStore'
@@ -114,13 +115,13 @@ function AreaCard({ a, bodyName, onConnect }: { a: AreaRow; bodyName: string; on
           ))}
           {a.keyNodes.map((k) => (
             <div key={k} className="pl-tile pl-key-tile" title={`${k}: a key node of the ground map. Hold every key node to hold the world.`}>
-              <span className="pl-plus">◆</span>
+              <PlanetIcon id="cityHall" size={18} />
               <span className="pl-tile-name">{k}</span>
             </div>
           ))}
           {a.buildings.map((b) => (
             <div key={b.id} className="pl-tile">
-              <PlanetIcon id={b.id} size={18} />
+              <PlanetIcon id={buildingIconId(b.id)} size={18} />
               <span className="pl-tile-name"><BuildingChip bodyName={bodyName} id={b.id} count={b.count} /></span>
             </div>
           ))}
@@ -181,21 +182,7 @@ export function DevelopmentTab({ bodyName }: { bodyName: string }) {
           </div>
         )
       })}
-      {view.standalone.length > 0 && (
-        <div>
-          <div className="econ-subtitle" title="Buildings that stand on their own ground, in no area: a spaceport can go anywhere"><Bi en="Standalone buildings" /></div>
-          <div className="pl-district">
-            <div className="pl-grid">
-              {view.standalone.map((b) => (
-                <div key={b.id} className="pl-tile">
-                  <PlanetIcon id={b.id} size={18} />
-                  <span className="pl-tile-name"><BuildingChip bodyName={bodyName} id={b.id} count={b.count} /></span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <StandaloneSection bodyName={bodyName} playerId={playerId} extra={view.standalone.map((b) => ({ id: b.id, name: RECIPES[b.id]?.label ?? SIMPLE_BUILDING_DEFS[b.id as keyof typeof SIMPLE_BUILDING_DEFS]?.name ?? b.id, count: b.count }))} />
       {rural.length > 0 && (
         <div>
           <div className="econ-subtitle" title="Buildings that stand on their own ground, outside any district. One inside an area counts as part of it; a platform at sea can be reached only from orbit."><Bi en="Outside the districts" /></div>

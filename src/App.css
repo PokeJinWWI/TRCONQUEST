@@ -5622,6 +5622,11 @@ div.fleet-row .combat-density-row {
   pointer-events: none;
 }
 
+.ground-key-icon {
+  display: block;
+  margin: 2px 0;
+}
+
 .ground-hover {
   position: fixed;
   left: 50%;
@@ -7328,6 +7333,17 @@ html.side-resizing * {
 .outliner-subtab {
   min-width: 0;
 }
+/* Tabs and pills truncate with an ellipsis when the panel is narrower than their text, in every theme. */
+.outliner-tab,
+.outliner-subtab,
+.nav-subtab,
+.tab-bar-tab,
+.outliner-filter-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 .nav-btn-label {
   display: block;
   min-width: 0;
@@ -7344,4 +7360,24 @@ html.side-resizing * {
 }
 .nav-custom-btn .nav-custom-remove {
   flex-shrink: 0;
+}
+
+/* Standalone buildings: a row with a build progress bar, and the percentage under a marker on the ground map. */
+.pl-standalone-row {
+  flex-wrap: wrap;
+}
+.pl-progress {
+  flex: 1 1 100%;
+  height: 4px;
+  background: rgba(var(--ink-rgb), 0.15);
+}
+.pl-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent-soft);
+}
+.ground-build-pct {
+  display: block;
+  font-size: 9px;
+  text-align: center;
 }

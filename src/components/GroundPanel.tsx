@@ -5,6 +5,7 @@ import { planLanding } from '../scene/landingSite'
 import { useShipStore } from '../state/shipStore'
 import { keyNodeId, usePlaceNameStore } from '../state/placeNameStore'
 import { KEY_HOLD_BONUS, KEY_KIND_LABEL, KEY_ROLE, keyNameOf } from '../scene/keyNames'
+import { groupKeyNodes } from '../scene/keyGroups'
 import { useState } from 'react'
 import { regionAt } from '../scene/bodyTopography'
 import { ARMY_KINDS } from '../data/armyData'
@@ -154,6 +155,11 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
   const owner = owners[bodyName]
   const controller = controllerOf(bodyName, owners, controllers)
   const keyHolders = surface.keySlots.map((k) => ({ ...k, holder: holderOf(bodyName, k.node, owners, { [bodyName]: holders ?? {} }) }))
+  const keySort = useGroundViewStore((st) => st.keySort)
+  const setKeySort = useGroundViewStore((st) => st.setKeySort)
+  const keyCollapsed = useGroundViewStore((st) => st.keyCollapsed)
+  const toggleKeyGroup = useGroundViewStore((st) => st.toggleKeyGroup)
+  const keyGroups = groupKeyNodes(keyHolders, keySort, (k) => keyNameOf(surface, k).label, (k) => (k.holder ? ownerDisplay(k.holder).name : 'nobody'))
   const byOwner = new Map<string, Army[]>()
   for (const a of armies) byOwner.set(a.ownerId, [...(byOwner.get(a.ownerId) ?? []), a])
   const mineSelected = armies.filter((a) => a.ownerId === player).flatMap((a) => a.units).filter((u) => selectedIds.includes(u.id))
@@ -177,7 +183,20 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
       </div>
       {keyHolders.length > 0 && (
         <div className="ground-keys" title={`Key nodes are the places that decide who holds this world.\n${KEY_HOLD_BONUS}`}>
-          {keyHolders.map((k) => {
+          <div className="pl-site-districts">
+            <span className="abs-dim">Sort</span>
+            {(['type', 'name', 'holder'] as const).map((m) => (
+              <button key={m} type="button" className={`pl-develop${keySort === m ? ' active' : ''}`} onClick={() => setKeySort(m)} title={m === 'type' ? 'Group by kind: capital, city, spaceport, fortress, outpost' : `Order by ${m}`}>{m}</button>
+            ))}
+          </div>
+          {keyGroups.map((g) => (
+            <div key={g.key}>
+              {g.label && (
+                <button type="button" className="abs-world-toggle" onClick={() => toggleKeyGroup(g.key)} title={keyCollapsed[g.key] ? 'Show these' : 'Fold these away'}>
+                  <span>{keyCollapsed[g.key] ? '▸' : '▾'} {g.label} <span className="abs-dim">{g.items.length}</span></span>
+                </button>
+              )}
+              {!(g.label && keyCollapsed[g.key]) && g.items.map((k) => {
             const kn = keyNameOf(surface, k)
             const region = regionAt(bodyName, k.node)
             // What can be renamed: a spaceport the economy runs (recorded as a structure) or a defence installation, on a world you own.
@@ -249,7 +268,9 @@ export function GroundPanel({ bodyName, surface }: { bodyName: string; surface: 
                 )}
               </div>
             )
-          })}
+              })}
+            </div>
+          ))}
         </div>
       )}
       <div className="ship-panel-hint">

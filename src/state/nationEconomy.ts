@@ -84,14 +84,19 @@ export function spaceportSitesOf(bodyName: string): SpaceportSite[] {
     const st = useEconomyStore.getState()
     const w = worldByName(st.worlds, bodyName)
     if (!w) return []
+    // One spaceport per LEVEL (a building of level 4 is four spaceports), run by whoever owns that building: the same count as the
+    // Buildings tab and as Simple mode.
     return w.buildings
       .filter((b) => b.recipeId === 'spaceport')
-      .map((b) => {
-        if (b.owner.kind === 'corporation') {
-          const id = b.owner.corporationId
-          return { operator: id, operatorName: st.corporations.find((c) => c.id === id)?.name ?? id }
-        }
-        return { operator: 'state', operatorName: b.owner.kind === 'worker' ? 'its workers (co-op)' : `${nation} (state)` }
+      .flatMap((b) => {
+        const one =
+          b.owner.kind === 'corporation'
+            ? (() => {
+                const id = (b.owner as { corporationId: string }).corporationId
+                return { operator: id, operatorName: st.corporations.find((c) => c.id === id)?.name ?? id }
+              })()
+            : { operator: 'state', operatorName: b.owner.kind === 'worker' ? 'its workers (co-op)' : `${nation} (state)` }
+        return Array.from({ length: Math.max(0, Math.round(b.level)) }, () => one)
       })
   })()
   // A treaty port cedes operating rights over the body's FIRST spaceport site

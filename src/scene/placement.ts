@@ -22,6 +22,10 @@ export interface BuildingRef {
   id: string
 }
 
+// Buildings that stand on their own ground, in no area and on no site (a spaceport is a key node wherever it is founded, like a
+// fortress): placement never books a site for one, and the views list them by their key nodes (scene/portList.ts).
+export const STANDALONE_BUILDINGS: ReadonlySet<string> = new Set(['spaceport'])
+
 const INFRASTRUCTURE_RECIPES = new Set(['spaceport', 'seaport', 'roadNetwork'])
 
 // The kind of site a building stands on: the one its DISTRICT is developed on (scene/districtSites), except that

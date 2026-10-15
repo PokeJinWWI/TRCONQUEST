@@ -384,7 +384,17 @@ function balancedSpecs(specs: WorldSpec[]): Map<string, BuildingSpec[]> {
 }
 
 function buildWorld(rawSpec: WorldSpec, calibration?: WorldCalibration): World {
-  const spec = { ...rawSpec, buildings: seed.balanced().get(rawSpec.id) ?? rawSpec.buildings }
+  const fitted = calibration?.idle
+  const spec = {
+    ...rawSpec,
+    buildings: (seed.balanced().get(rawSpec.id) ?? rawSpec.buildings).map((b): BuildingSpec => {
+      const idle = fitted?.[b.recipe]
+      if (idle === undefined) return b
+      const { idle: _drop, ...rest } = b
+      void _drop
+      return idle > 0 ? { ...rest, idle } : rest
+    }),
+  }
   const pops: Pop[] = []
   const split = classSplitFor(spec)
   for (const cls of POP_CLASSES) {
@@ -800,7 +810,9 @@ const SEA_SHARE_FOR_SEAPORT = 0.05
 function withTransport(spec: WorldSpec): WorldSpec {
   const buildings = [...spec.buildings]
   const operator = nationOf(spec.ownerId)?.operatorId
-  const want = Math.max(1, Math.round((SPACEPORTS_PER_BILLION * spec.population) / 1000))
+  // A world whose spaceports are hand-placed (Earth's six, data/countryData) runs exactly those, so the economy and the map agree.
+  const curated = NATIONS.find((c) => c.capitalBodyName === spec.id)?.cities?.filter((c) => c.kind === 'spaceport').length ?? 0
+  const want = curated > 0 ? curated : Math.max(1, Math.round((SPACEPORTS_PER_BILLION * spec.population) / 1000))
   let have = buildings.filter((b) => b.recipe === 'spaceport').length
   while (have < want) {
     buildings.push({ recipe: 'spaceport', level: 1, owner: have % 2 === 1 && operator ? operator : 'state' })
@@ -1225,7 +1237,7 @@ const CORPORATIONS: Corporation[] = [
   // The nations' private spaceport & shipping operators (OPERATOR_OF): their
   // founder holds a block, the rest floats.
   ...[
-    { id: 'tenku-koro', name: 'Tenkū Kōro 天空航路', countryId: 'imperial-state-of-mars', leaderId: 'char-rin-takamori' },
+    { id: 'tenku-koro', name: 'Tenkū Kōro', countryId: 'imperial-state-of-mars', leaderId: 'char-rin-takamori' },
     { id: 'kypris-astroporia', name: 'Kypris Astroporia', countryId: 'republic-of-venus', leaderId: 'char-theodora-anthemis' },
     { id: 'arcadian-starlines', name: 'Arcadian Starlines', countryId: 'orion-republic', leaderId: 'char-solenne-hart' },
     { id: 'compagnie-stellaire', name: 'Compagnie Stellaire de Bellerive', countryId: 'kingdom-of-lalande', leaderId: 'char-augustin-delorme' },

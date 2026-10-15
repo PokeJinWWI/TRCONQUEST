@@ -93,9 +93,9 @@ for (const model of ['abstract', 'complex'] as const) {
 console.log('\n=== The UI no longer has the Civic key-sites card ===')
 {
   const strip = (f: string) => readFileSync(f, 'utf8').replace(/\/\/.*$/gm, '')
-  const ui = ['src/components/planet/KeySites.tsx', 'src/components/planet/SimplePlanetTabs.tsx', 'src/components/planet/ComplexPlanetTabs.tsx'].map(strip).join('\n')
+  const ui = ['src/components/planet/KeySites.tsx', 'src/components/planet/SimplePlanetTabs.tsx', 'src/components/planet/ComplexPlanetTabs.tsx', 'src/components/planet/BuildingsTab.tsx'].map(strip).join('\n')
   check('no CivicDistrict, no "Civic — key sites" heading anywhere', !/CivicDistrict/.test(ui) && !/Civic — key sites/.test(ui))
-  check('the Core district shows the civic tiles (Complex) and a Core card (Simple)', /CivicTiles/.test(strip('src/components/planet/ComplexPlanetTabs.tsx')) && /CoreCard/.test(strip('src/components/planet/SimplePlanetTabs.tsx')))
+  check('the Core district shows the civic tiles (Complex) and a Core card (Simple)', /s\.civic/.test(strip('src/components/planet/BuildingsTab.tsx')) && /CoreCard/.test(strip('src/components/planet/SimplePlanetTabs.tsx')))
   check('a civic tile opens the building window', /openBuilding/.test(strip('src/components/planet/KeySites.tsx')) && /CivicBuildingWindow/.test(strip('src/App.tsx')))
 }
 

@@ -22,12 +22,21 @@ const SPACEPORT_SEPARATION_CELLS = 2 // from any other key node, as the auto-pla
 // Records the world's auto-placed ports as structures (once). Idempotent; a world with none to record stays empty.
 export function seedPorts(bodyName: string): void {
   const store = useStructureStore.getState()
-  if (store.ports[bodyName]) return
   const surface = portBaseSurface(bodyName)
   const sites = spaceportSitesOf(bodyName)
   if (!surface || sites.length === 0) return
   const owner = useTerritoryStore.getState().bodyOwner[bodyName] ?? ''
   const extras = extraSpaceportNodes(surface, sites.length)
+  const have = store.ports[bodyName]
+  if (have) {
+    // A game saved when a world's ports were counted by building, not by level: top it up with the ports the world runs but has no
+    // node for yet (the ones already there, and every one the player chose, stay exactly where they are).
+    const standing = have.filter((p) => !p.chosen)
+    const used = new Set(have.map((p) => p.node))
+    const more = extras.filter((e) => !used.has(e.node)).slice(0, Math.max(0, extras.length - standing.length))
+    if (more.length > 0) store.setPorts(bodyName, [...have, ...more.map((e, i): PortStructure => ({ id: `${bodyName}#port-${standing.length + i}`, node: e.node, ownerId: owner, ...(e.outlier ? { outlier: true } : {}) }))])
+    return
+  }
   store.setPorts(
     bodyName,
     extras.map((e, i): PortStructure => ({ id: `${bodyName}#port-${i}`, node: e.node, ownerId: owner, ...(e.outlier ? { outlier: true } : {}) })),
@@ -92,8 +101,8 @@ export function placePort(builderId: string, bodyName: string, node: number, nam
   const keyed = { ...surface, keySlots: [...surface.keySlots, ...(store.ports[bodyName] ?? []).map((p) => ({ node: p.node, kind: 'spaceport' as const }))] }
   const judged = judgePortNode(keyed, node)
   if (!judged.ok) return judged
-  const siteId = nearestPortSite(builderId, bodyName, node)
-  if (!siteId) return { ok: false, reason: `${bodyName} has no site a spaceport could be booked on.` }
+  // A spaceport stands on its own: it is booked on the nearest site it may use for its freight, and without one if there is none.
+  const siteId = nearestPortSite(builderId, bodyName, node) ?? undefined
   const ordered = orderBuildingAt(builderId, bodyName, 'spaceport', siteId)
   if (!ordered.ok) return ordered
   const id = `${bodyName}#port-${Date.now().toString(36)}-${(store.ports[bodyName] ?? []).length}`

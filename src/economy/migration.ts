@@ -21,7 +21,9 @@ import {
   type MigrationFlow,
   type MigrationLaws,
 } from './migrationRules'
-import type { Pop, World, WorldReport } from './economyTypes'
+import type { World, WorldReport } from './economyTypes'
+import { mergeInto } from './popMerge'
+import { turmoilOf } from './popPolitics'
 
 export interface MigrationOptions {
   laws: Record<string, MigrationLaws>
@@ -81,30 +83,10 @@ export function attractionOfWorld(w: World, report: WorldReport | undefined, dis
 export const FAMINE_SOL = 0.25
 export const FAMINE_DISTRESS = 0.3
 export const DISPLACEMENT_DISTRESS_PER_POINT = 0.02
+// Radicals make a world less safe to live in: a world with every pop radical is as distressed as one that has lost half its ground.
+export const TURMOIL_DISTRESS = 0.4
 export function distressOf(w: World, given: number): number {
-  return given + (meanSoL(w) < FAMINE_SOL ? FAMINE_DISTRESS : 0) + (w.displacedUnrest ?? 0) * DISPLACEMENT_DISTRESS_PER_POINT + (w.devastation ?? 0) * 0.5
-}
-
-const keyOf = (p: Pop) => `${p.class}|${p.speciesTemplateId}|${p.cultureId}|${p.religionId}`
-
-function mergeInto(dest: Pop[], moving: Pop, amount: number, wealth: number, destId: string): Pop[] {
-  const i = dest.findIndex((p) => keyOf(p) === keyOf(moving))
-  if (i >= 0) {
-    const d = dest[i]
-    const size = d.populationSize + amount
-    const w = (x: number, y: number) => (d.populationSize * x + amount * y) / size
-    const merged: Pop = {
-      ...d,
-      populationSize: size,
-      wealth: d.wealth + wealth,
-      educationLevel: w(d.educationLevel, moving.educationLevel),
-      standardOfLiving: w(d.standardOfLiving, moving.standardOfLiving),
-      needsSatisfaction: Object.fromEntries(Object.keys(d.needsSatisfaction).map((t) => [t, w(d.needsSatisfaction[t as keyof typeof d.needsSatisfaction], moving.needsSatisfaction[t as keyof typeof d.needsSatisfaction])])) as Pop['needsSatisfaction'],
-    }
-    return dest.map((p, k) => (k === i ? merged : p))
-  }
-  // A new pop in the destination: the incomers keep the standard of living they arrive with, which the next tick then moves.
-  return [...dest, { ...moving, id: `${destId}:m:${keyOf(moving)}`, populationSize: amount, wealth }]
+  return given + (meanSoL(w) < FAMINE_SOL ? FAMINE_DISTRESS : 0) + (w.displacedUnrest ?? 0) * DISPLACEMENT_DISTRESS_PER_POINT + (w.devastation ?? 0) * 0.5 + turmoilOf(w.pops) * TURMOIL_DISTRESS
 }
 
 export function stepMigration(worlds: World[], opts: MigrationOptions): MigrationResult {

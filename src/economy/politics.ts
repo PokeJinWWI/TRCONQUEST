@@ -1,5 +1,6 @@
 import type { PopClass } from './recipes'
 import type { World } from './economyTypes'
+import { politicalStrength } from './popPolitics'
 
 // Interest groups — the standing, class-based political blocs of the design
 // doc (Section 2c). Milestone-1 slice: four baseline groups, each drawing its
@@ -24,18 +25,6 @@ export const INTEREST_GROUPS: InterestGroupDef[] = [
   { id: 'bureaucracy', name: 'Bureaucracy', color: '#c77dff', classes: ['political'] },
 ]
 
-// Political weight per class — not one-pop-one-vote (design doc Section 2c):
-// wealthier, higher-status classes carry disproportionate clout, so a small
-// Investor bloc can outweigh a large Subsistence one.
-const CLASS_POLITICAL_WEIGHT: Record<PopClass, number> = {
-  subsistence: 0.5,
-  labor: 1,
-  technical: 1.5,
-  professional: 2.5,
-  investor: 4,
-  political: 3,
-}
-
 const GROUP_OF_CLASS: Partial<Record<PopClass, InterestGroupId>> = {}
 for (const g of INTEREST_GROUPS) for (const c of g.classes) GROUP_OF_CLASS[c] = g.id
 
@@ -51,13 +40,12 @@ export interface InterestGroupStrength {
 // both how many and how rich/high-status they are matter — exactly the tension
 // the future Political map mode is built to surface. Returned ranked, with each
 // group's share of the planet total.
-export function interestGroupStrengths(world: World): InterestGroupStrength[] {
+export function interestGroupStrengths(world: World, acceptanceOf?: (cultureId: string) => number): InterestGroupStrength[] {
   const raw: Record<InterestGroupId, number> = { 'trade-unions': 0, intelligentsia: 0, industrialists: 0, bureaucracy: 0 }
   for (const pop of world.pops) {
     const gid = GROUP_OF_CLASS[pop.class]
     if (!gid) continue
-    const wealthMult = 1 + Math.min(2, pop.wealth / 200)
-    raw[gid] += pop.populationSize * CLASS_POLITICAL_WEIGHT[pop.class] * wealthMult
+    raw[gid] += politicalStrength(pop, acceptanceOf ? acceptanceOf(pop.cultureId) : 1)
   }
   const total = Object.values(raw).reduce((s, v) => s + v, 0)
   return INTEREST_GROUPS.map((def) => ({ def, strength: raw[def.id], share: total > 0 ? raw[def.id] / total : 0 })).sort(

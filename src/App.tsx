@@ -21,6 +21,7 @@ import { DiplomacyToast } from './components/DiplomacyPanel'
 import { StarbasePanel } from './components/StarbasePanel'
 import { GoodDetailPanel } from './components/GoodDetailPanel'
 import { BuildingDetailWindow } from './components/BuildingDetailWindow'
+import { StandaloneDetailWindow } from './components/StandaloneDetailWindow'
 import { CivicBuildingWindow } from './components/CivicBuildingWindow'
 import { TimeControls } from './components/TimeControls'
 import { MapModesButton } from './components/MapModesButton'
@@ -197,6 +198,7 @@ function App() {
       <StarbasePanel />
       <GoodDetailPanel />
       <BuildingDetailWindow />
+      <StandaloneDetailWindow />
       <CivicBuildingWindow />
     </div>
   )

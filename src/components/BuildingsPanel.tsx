@@ -337,9 +337,11 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const groups = subtab ? TAB_GROUPS[subtab] ?? null : null
   const rows = useMemo(() => {
     if (!world) return []
+    // One building's places stay together: by building, then by the place it stands in.
     return world.buildings
       .map((b) => ({ b, recipe: RECIPES[b.recipeId] }))
       .filter(({ recipe }) => recipe && (!groups || groups.includes(buildingGroup(recipe.id))))
+      .sort((x, y) => x.recipe!.label.localeCompare(y.recipe!.label) || (x.b.siteId ? siteName(x.b.siteId) : '').localeCompare(y.b.siteId ? siteName(y.b.siteId) : ''))
   }, [world, groups])
 
   if (!world) {

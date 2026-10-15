@@ -1,3 +1,4 @@
+import type { PopLaws } from '../economy/popRules'
 import { findBuilding, splitBySites } from '../economy/buildingSites'
 import { pickSettlers, mixOf, type SettlerMix } from '../economy/settlerPicker'
 import { treatyLanes } from '../scene/migrationPaths'
@@ -281,6 +282,8 @@ interface EconomyStore {
   seedEmpires: () => void
   setTaxRate: (countryId: string, rate: number) => void
   setWelfare: (countryId: string, perCapita: number) => void
+  // Enacts one law about who works (economy/popRules.ts).
+  setPopLaw: (countryId: string, key: keyof PopLaws, value: string) => void
   // Transfers a whole world to a new owning country — its pops, buildings and
   // taxes now belong to that country. Called only when a peace treaty cedes
   // the world (see src/state/territoryStore.ts's cedeBody); the one hook the
@@ -802,6 +805,10 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
   setWelfare: (countryId, perCapita) =>
     set((state) => ({
       countries: state.countries.map((c) => (c.id === countryId ? { ...c, welfarePerCapita: Math.max(0, Math.min(10, perCapita)) } : c)),
+    })),
+  setPopLaw: (countryId, key, value) =>
+    set((state) => ({
+      countries: state.countries.map((c) => (c.id === countryId ? { ...c, popLaws: { ...(c.popLaws ?? {}), [key]: value } } : c)),
     })),
   queueConstruction: (worldId, recipeId, owner = { kind: 'state' }, siteId) => {
     const target = get().worlds.find((w) => w.id === worldId)

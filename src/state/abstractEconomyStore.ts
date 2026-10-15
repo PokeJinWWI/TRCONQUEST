@@ -1,3 +1,4 @@
+import type { PopLaws } from '../economy/popRules'
 import type { ColonyKit } from '../economy-abstract/colonyKit'
 import { stepAbstractMigration } from '../economy-abstract/migration'
 import { WAVE_EVENT_MIN_MILLIONS, type MigrationFlow } from '../economy/migrationRules'
@@ -214,6 +215,7 @@ interface AbstractEconomyStore {
   setMoneyCreation: (countryId: string, rate: number) => void
   setWarTaxes: (countryId: string, on: boolean) => void
   setWelfare: (countryId: string, level: number) => void
+  setPopLaw: (countryId: string, key: keyof PopLaws, value: string) => void
   setSpecialEconomicZone: (countryId: string, on: boolean) => void
   setMonetaryStance: (countryId: string, stance: MonetaryStance) => void
   // A standing monthly trade order: + import, − export, 0 clears it.
@@ -388,6 +390,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
   setMoneyCreation: (countryId, rate) => set((s) => patch(s, countryId, (c) => ({ ...c, moneyCreation: Math.max(0, Math.min(1, rate)) }))),
   setWarTaxes: (countryId, on) => set((s) => patch(s, countryId, (c) => ({ ...c, warTaxes: on }))),
   setWelfare: (countryId, level) => set((s) => patch(s, countryId, (c) => ({ ...c, welfare: Math.max(0, Math.min(1, level)) }))),
+  setPopLaw: (countryId, key, value) => set((s) => patch(s, countryId, (c) => ({ ...c, popLaws: { ...(c.popLaws ?? {}), [key]: value } }))),
   setSpecialEconomicZone: (countryId, on) => set((s) => patch(s, countryId, (c) => ({ ...c, specialEconomicZone: on }))),
   setMonetaryStance: (countryId, stance) => set((s) => patch(s, countryId, (c) => ({ ...c, monetaryStance: stance }))),
   setTrade: (countryId, good, perMonth) =>

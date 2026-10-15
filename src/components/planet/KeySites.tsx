@@ -14,6 +14,7 @@ import { keyNameOf } from '../../scene/keyNames'
 import { nativeOfName } from '../../data/nativeNames'
 import { KEY_BUILDING_ICON, keyBuildingsOf, type KeyBuilding } from '../../scene/keyBuildings'
 import { PlanetIcon } from './PlanetIcons'
+import { chooseDefenseSite } from '../../scene/standalone'
 import { useCivicDetailStore, useCivicStore } from '../../state/civicStore'
 import { ensureSeeded } from '../../scene/seedPlacementOrders'
 import type { CivicBuilding } from '../../scene/civic'
@@ -106,7 +107,6 @@ export function CoreCard({ bodyName }: { bodyName: string }) {
 // free slots, and a picker for a new one.
 export function MilitaryTiles({ bodyName, playerId, canBuild, slots, grouped }: { bodyName: string; playerId: string | null; canBuild: boolean; slots: number; grouped: boolean }) {
   const installations = useDefenseStore((s) => s.installations)
-  const build = useDefenseStore((s) => s.build)
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const holders = useTerritoryStore((s) => s.nodeHolders)
   const simDays = useGameTimeStore((s) => Math.floor(s.simDays))
@@ -118,7 +118,8 @@ export function MilitaryTiles({ bodyName, playerId, canBuild, slots, grouped }: 
   const named = surface ? withInstallationKeys(surface, installations, Infinity) : null
   const doBuild = (kind: DefenseKind) => {
     if (!playerId) return
-    const res = build(playerId, bodyName, kind, useGameTimeStore.getState().simDays)
+    // The ground map opens with it in hand: click where it should stand.
+    const res = chooseDefenseSite(playerId, bodyName, kind)
     setMessage(res.ok ? null : res.reason)
     if (res.ok) setPicking(false)
   }

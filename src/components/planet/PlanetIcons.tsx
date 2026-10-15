@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { buildingGroup } from '../../economy/recipes'
 
 // Simple glyphs for the planet screen: districts, buildings (Simple mode's roster
 // and Complex mode's building groups), defense installations and foreign
@@ -82,6 +83,14 @@ const GLYPHS: Record<string, ReactElement> = {
   defenseBattery: <path d="M3 14h10l-1-4H4z M6 10l3-6 M8.5 4.5l3-1.5 M8 10a2 2 0 0 0-4 0" fill="none" />,
   military: <path d="M2 14V5h2v2h2V5h4v2h2V5h2v9z M7 14v-3h2v3" fill="none" />,
 
+  // --- Standalone and transport buildings --------------------------------------------------
+  spaceyard: <path d="M1 13h14 M3 13V9l5-5 5 5v4 M6 13v-3h4v3 M8 4V1.5 M8 1.5l2 .8-2 .8" fill="none" />,
+  rocketWorks: <path d="M8 1c2.2 2 2.6 5 2.6 8H5.4C5.4 6 5.8 3 8 1z M5.4 9 4 12.5h8L10.6 9 M8 12.5V15 M2 15h12 M13 3v4 M11 5h4" fill="none" />,
+  railway: <path d="M2 14 6 2 M14 14 10 2 M3.6 10h8.8 M4.7 6h6.6 M2.6 14h10.8" fill="none" />,
+  roadNetwork: <path d="M6 15 7 1 M10 15 9 1 M8 3v2 M8 7v2 M8 11v2" fill="none" />,
+  seaport: <path d="M8 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3 M8 5v9 M4 9H2c0 3 2.5 5 6 5s6-2 6-5h-2 M5.5 8h5" fill="none" />,
+  spaceElevatorAnchor: <path d="M8 1v10 M6 4l2-3 2 3 M4 14h8 M5 14l1.5-3h3L11 14 M3 14c0-2 1-3 2-3 M13 14c0-2-1-3-2-3" fill="none" />,
+
   // --- Key-node buildings (scene/keyBuildings.ts) ---------------------------------------
   spaceport: <path d="M8 1c2 2 2.5 5 2.5 8H5.5c0-3 .5-6 2.5-8z M5.5 9 4 12h8l-1.5-3 M8 12v3 M1 15h14" fill="none" />,
   seat: <path d="M1 14h14 M2 12h12 M3 12V7 M6 12V7 M10 12V7 M13 12V7 M2 7h12 M4 7a4 4 0 0 1 8 0 M8 3V1.5" fill="none" />,
@@ -117,4 +126,12 @@ export function PlanetIcon({ id, size = 16, className, title }: { id: string; si
 
 export function hasPlanetIcon(id: string): boolean {
   return id in GLYPHS
+}
+
+// The icon a building is drawn with: its own if it has one, else its group's (Complex recipes share icons by group), else the civic one. One
+// rule for every list that shows a building, so none falls back to the empty square.
+export function buildingIconId(id: string): string {
+  if (id in GLYPHS) return id
+  const group = buildingGroup(id)
+  return group in GLYPHS ? group : 'civic'
 }

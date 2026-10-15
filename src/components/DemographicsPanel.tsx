@@ -1,3 +1,4 @@
+import { workforceOf } from '../economy/popRules'
 import { Bi } from './Bi'
 import { useMemo } from 'react'
 import { useEconomyStore } from '../state/economyStore'
@@ -60,6 +61,7 @@ export function DemographicsPanel() {
   const total = pops.reduce((s, p) => s + p.populationSize, 0)
   const avgSoL = pops.reduce((s, p) => s + p.standardOfLiving * p.populationSize, 0) / total
   const avgEdu = pops.reduce((s, p) => s + p.educationLevel * p.populationSize, 0) / total
+  const workforce = pops.reduce((s, p) => s + workforceOf(p), 0)
 
   const byClass = groupSum(pops, (p) => p.class)
   const byCulture = groupSum(pops, (p) => p.cultureId)
@@ -88,7 +90,13 @@ export function DemographicsPanel() {
           Avg SoL <b>{Math.round(avgSoL * 100)}%</b>
         </span>
         <span>
-          Avg education <b>{Math.round(avgEdu * 100)}%</b>
+          Literacy <b>{Math.round(avgEdu * 100)}%</b>
+        </span>
+        <span title="People who staff jobs and earn wages (workforce laws move this share)">
+          Workforce <b>{formatPop(workforce)}</b>
+        </span>
+        <span title="Children, the elderly and carers: no job, half a worker's needs">
+          Dependents <b>{formatPop(total - workforce)}</b>
         </span>
         <span>
           Cohorts <b>{pops.length}</b>

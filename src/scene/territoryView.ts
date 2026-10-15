@@ -24,6 +24,8 @@ import { RECIPES } from '../economy/recipes'
 import { groundKeySurface, portBaseSurface } from '../state/defenseStore'
 import { bodyAreas, footprintsOf } from './footprintState'
 import { areaAtNode, areaOfSeed } from './areas'
+import { STANDALONE_BUILDINGS } from './placement'
+import { portList, type PortList } from './portList'
 import { civicInArea } from './civic'
 import { keyNameOf } from './keyNames'
 import { useCivicStore } from '../state/civicStore'
@@ -200,6 +202,8 @@ export interface DevelopmentView {
   areas: AreaRow[]
   // Buildings held on ground no area covers (spaceports and other standalone works): just buildings, wherever they stand.
   standalone: { id: string; count: number }[]
+  // The world's spaceports, one row per key node (scene/portList.ts).
+  ports: PortList
 }
 
 // One area: a connected patch of one district kind, with everything that stands in it.
@@ -250,7 +254,7 @@ export function developmentView(bodyName: string, playerId: string | null): Deve
       holds: s.material ?? s.good ?? null,
       owner: owner ? nameOf(owner) : null,
       mine: !!owner && owner === playerId,
-      buildings: Object.entries(placed[s.id] ?? {}).map(([id, count]) => ({ id, count })),
+      buildings: Object.entries(placed[s.id] ?? {}).filter(([id]) => !STANDALONE_BUILDINGS.has(id)).map(([id, count]) => ({ id, count })),
       captured: !!owner && s.node !== null && capturedBy(bodyName, s.node, siteOwner(s.id)!),
       access: owner ? (accessFor(owner)[s.id] ?? 1) : null,
       forPlayer: decision ? { legal: decision.legal, physical: decision.physical.ok ? null : decision.physical.reason, why: decision.reason } : null,
@@ -262,8 +266,8 @@ export function developmentView(bodyName: string, playerId: string | null): Deve
   const areas = areaRows(bodyName, rows, settlements)
   const inAreas = new Set(areas.flatMap((a) => a.seedIds))
   const standalone = new Map<string, number>()
-  for (const r of rows) if (r.owner && !inAreas.has(r.id)) for (const b of r.buildings) standalone.set(b.id, (standalone.get(b.id) ?? 0) + b.count)
-  return { bodyName, sites: rows, routes, settlements, areas, standalone: [...standalone].map(([id, count]) => ({ id, count })) }
+  for (const r of rows) if (r.owner && !inAreas.has(r.id)) for (const b of r.buildings.filter((x) => !STANDALONE_BUILDINGS.has(x.id))) standalone.set(b.id, (standalone.get(b.id) ?? 0) + b.count)
+  return { bodyName, sites: rows, routes, settlements, areas, standalone: [...standalone].map(([id, count]) => ({ id, count })), ports: portList(bodyName) }
 }
 
 function areaRows(bodyName: string, rows: readonly SiteRow[], settlements: DevelopmentView['settlements']): AreaRow[] {

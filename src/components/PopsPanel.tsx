@@ -1,3 +1,4 @@
+import { dependentsOf, workforceOf, workforceShareOf } from '../economy/popRules'
 import { Bi } from './Bi'
 import { Fragment, useMemo, useState } from 'react'
 import { CULTURES, RELIGIONS } from '../economy/demographics'
@@ -233,6 +234,7 @@ export function PopsPanel({ worldName, world }: PopsPanelProps) {
               <th><Bi en="Culture" /></th>
               <th><Bi en="Religion" /></th>
               <th><Bi en="Pop" /></th>
+              <th title="Workforce / dependents"><Bi en="Work / dep" /></th>
               <th><Bi en="SoL" /></th>
               <th><Bi en="Needs" /></th>
             </tr>
@@ -256,6 +258,7 @@ export function PopsPanel({ worldName, world }: PopsPanelProps) {
                       {religion?.name ?? p.religionId}
                     </td>
                     <td>{formatPop(p.populationSize)}</td>
+                    <td title={`${formatPop(workforceOf(p))} in the workforce, ${formatPop(dependentsOf(p))} dependents (${Math.round(workforceShareOf(p) * 100)}% workforce)`}>{formatPop(workforceOf(p))} / {formatPop(dependentsOf(p))}</td>
                     <td className={sol >= 60 ? 'econ-pos' : sol >= 35 ? '' : 'econ-neg'} title="Standard of Living — the meaningful measure of how well this cohort lives">
                       {sol}%
                     </td>
@@ -265,7 +268,7 @@ export function PopsPanel({ worldName, world }: PopsPanelProps) {
                   </tr>
                   {open && (
                     <tr className="pops-cohort-detail-row">
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <CohortConsumption pop={p} />
                       </td>
                     </tr>

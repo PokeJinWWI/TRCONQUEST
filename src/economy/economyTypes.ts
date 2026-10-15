@@ -1,3 +1,4 @@
+import type { PopLaws } from './popRules'
 import type { GoodId } from './goods'
 import type { NeedTier } from './species'
 import type { PopClass, DistrictType } from './recipes'
@@ -74,6 +75,11 @@ export interface Pop {
   cultureId: string
   religionId: string
   populationSize: number
+  // The share of these people who are workforce (economy/popRules.ts); the rest are dependents. Absent = the reference share, so a pop
+  // that never heard of the split behaves as it always did. Moves a little each month toward the share the country's laws allow.
+  workforceShare?: number
+  // Mood, from -1 (all radicals) through 0 (neutral) to +1 (all loyalists): economy/popPolitics.ts. Absent = neutral.
+  loyalty?: number
   wealth: number
   educationLevel: number
   // Standard of Living, 0..1 — the growth engine (design doc Section 2a).
@@ -174,6 +180,8 @@ export interface LaborMarket {
 // local market and labor market, but NO treasury or tax policy: those belong to
 // its owning country (the v1 mistake this restructure fixes).
 export interface World {
+  // The schooling the world started with (economy/popRules.schoolCoverage): schools built beyond it raise literacy. Set on its first tick.
+  schoolBaseline?: number
   // How kind the surface is to its people, 0..1 (economy/habitability.ts). Absent = 1: a fully habitable world, no life-support need.
   habitability?: number
   // Unrest from displaced people (state/unrestStore), set by the main thread before each month. Absent = none.
@@ -249,6 +257,8 @@ export const SEZ_DEFAULT_TAX_DISCOUNT = 0.5
 // policy, one debt, spanning all the worlds it owns.
 export interface Country {
   id: string
+  // Laws about who works (economy/popRules.ts). Absent = the defaults, which keep the reference workforce.
+  popLaws?: Partial<PopLaws>
   // Player-controllable fiscal policy.
   taxRate: number
   welfarePerCapita: number

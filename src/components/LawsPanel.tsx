@@ -1,5 +1,6 @@
 import { Bi } from './Bi'
 import { MigrationLawsSection } from './MigrationPanels'
+import { PopLawsSection } from './PopLawsSection'
 import { ECONOMIC_SYSTEMS, economicSystemDef, FOREIGN_INVESTMENT_POLICIES, foreignInvestmentPolicyDef } from '../economy/laws'
 import { useEconomyStore } from '../state/economyStore'
 import { useConfirmStore } from '../state/confirmStore'
@@ -142,6 +143,7 @@ export function LawsPanel() {
         </>
       )}
       <MigrationLawsSection nationId={country.id} />
+      <PopLawsSection nationId={country.id} />
       <div className="ship-panel-hint">More laws (tax, trade, labor) will be enacted here as the government layer deepens.</div>
     </div>
   )
