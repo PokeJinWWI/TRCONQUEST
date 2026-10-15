@@ -871,6 +871,11 @@ export function abstractReport(s: AbstractEconomyState, worlds: WorldState[], st
 
 // Annual productivity growth from a month's research and the population
 // (millions) — see PRODUCTIVITY_*.
+// A nation's yearly population growth (before clinics): fed people grow with their approval and welfare, an underfed population starves.
+export function popGrowthPerYear(approval: number, welfare: number, foodSatisfaction: number): number {
+  return foodSatisfaction >= 0.95 ? POP_GROWTH * (0.5 + approval) * (1 + 0.3 * clamp(welfare, 0, 1)) : -STARVATION * (1 - foodSatisfaction)
+}
+
 export function productivityGrowthFor(researchPerMonth: number, populationMillions: number): number {
   const perBillion = populationMillions > 0 ? researchPerMonth / (populationMillions / 1000) : 0
   return PRODUCTIVITY_BASE + (PRODUCTIVITY_RESEARCH_MAX * perBillion) / (perBillion + PRODUCTIVITY_RESEARCH_HALF)
@@ -954,9 +959,7 @@ export function tickAbstractEconomy(s: AbstractEconomyState, worlds: WorldState[
   }
 
   // Population, per world.
-  const growth = (POP_GROWTH * (0.5 + r.approval) * (1 + 0.3 * clamp(s.welfare, 0, 1))) / TICKS_PER_YEAR
-  const starve = (STARVATION * (1 - r.foodSatisfaction)) / TICKS_PER_YEAR
-  const popFactor = 1 + (r.foodSatisfaction >= 0.95 ? growth : -starve)
+  const popFactor = 1 + popGrowthPerYear(r.approval, s.welfare, r.foodSatisfaction) / TICKS_PER_YEAR
   const nextWorlds = [...byName.values()].map((w) => {
     // Clinics add their own growth on their world (only while the people are fed).
     let clinic = 0

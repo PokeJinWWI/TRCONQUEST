@@ -6,6 +6,7 @@ import { seedBanks, seedCorporations, seedCountries, seedWorlds } from '../src/e
 import { interestGroupStrengths } from '../src/economy/politics'
 import { MOOD_DEADBAND, LOYALTY_STEP, expectedSoL, loyalistShare, loyaltyOf, politicalStrength, radicalShare, simpleLoyalists, simpleRadicals, stepLoyalty, turmoilOf, wealthLevel } from '../src/economy/popPolitics'
 import { distressOf } from '../src/economy/migration'
+import { TURMOIL_OUTPUT_LOSS } from '../src/economy/popPolitics'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -63,6 +64,14 @@ console.log('\n=== 4. In the economy ===')
   check('some pops have formed a mood (SoL moved away from what they expect)', loyalties.some((x) => x !== 0))
   const w = worlds[0]
   const angry = { ...w, pops: w.pops.map((p) => ({ ...p, loyalty: -1 })) }
+  // Radicals slow work down: the same world, every pop radical, makes less.
+  const outputOf = (ws: typeof worlds) => ws.reduce((n, x) => n + x.buildings.reduce((m, b) => m + b.throughput * b.level, 0), 0)
+  let calmC = seedCountries(); let calmW = seedWorlds(); let angryC = seedCountries(); let angryW = seedWorlds().map((x) => ({ ...x, pops: x.pops.map((p) => ({ ...p, loyalty: -1 })) })); let cc = seedCorporations(); let ac = seedCorporations(); let cb = seedBanks(); let ab = seedBanks()
+  for (let m = 1; m <= 3; m++) {
+    ;({ countries: calmC, worlds: calmW, corporations: cc, banks: cb } = tickEconomy(calmC, calmW, cc, { enableAI: false, tick: m, humanCountryIds: [] }, cb))
+    ;({ countries: angryC, worlds: angryW, corporations: ac, banks: ab } = tickEconomy(angryC, angryW, ac, { enableAI: false, tick: m, humanCountryIds: [] }, ab))
+  }
+  check('radicals slow work down (an all-radical world makes less than the same calm one)', outputOf(angryW) < outputOf(calmW) && TURMOIL_OUTPUT_LOSS > 0, `${outputOf(angryW).toFixed(1)} < ${outputOf(calmW).toFixed(1)}`)
   check('radicals make a world less safe to live in (more distress)', distressOf(angry, 0) > distressOf({ ...w, pops: w.pops.map((p) => ({ ...p, loyalty: 0 })) }, 0))
 }
 

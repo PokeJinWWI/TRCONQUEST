@@ -331,6 +331,9 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
   const releaseProductionMethod = useEconomyStore((s) => s.releaseProductionMethod)
   const corporations = useEconomyStore((s) => s.corporations)
   const [detailId, setDetailId] = useState<string | null>(null)
+  // Buildings that stand in several places are listed as one group (a header with its totals, then a row per place); folded ones show only the header.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
+  const toggleFold = (id: string) => setFolded((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n })
   // The "where?" step for a new building.
   const [choosing, setChoosing] = useState<string | null>(null)
 
@@ -405,7 +408,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                     <td colSpan={8}>{BUILDING_GROUP_LABELS[group]}</td>
                   </tr>
                 )}
-                {items.map(({ b, recipe }) => {
+                {items.map(({ b, recipe }, idx) => {
                   const method = getMethod(b.recipeId, b.methodId)
                   const out = method?.outputs[0]
                   const runPct = Math.round(b.throughput * 100)
@@ -423,8 +426,22 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                   const open = detailId === b.id
                   const depletable = out && recipe!.category === 'extraction' && DEPLETABLE_GOODS.includes(out.good)
                   const remaining = depletable ? world.resourceDeposits?.[out!.good] : undefined
+                  const places = items.filter((x) => x.b.recipeId === b.recipeId)
+                  const firstOfGroup = idx === 0 || items[idx - 1].b.recipeId !== b.recipeId
+                  const summary = places.length > 1 && firstOfGroup ? (
+                    <tr key={`${b.recipeId}-group`} className="bld-group-row">
+                      <td colSpan={8}>
+                        <button type="button" className="bld-name-btn" onClick={() => toggleFold(b.recipeId)} title="Show or hide this building's places">
+                          <span className="market-caret">{folded.has(b.recipeId) ? '▸' : '▾'}</span>
+                          {recipe!.label} <span className="abs-dim">· {places.reduce((n, x) => n + x.b.level, 0)} levels{new Set(places.map((x) => x.b.siteId).filter(Boolean)).size > 0 ? ` in ${new Set(places.map((x) => x.b.siteId).filter(Boolean)).size} place${new Set(places.map((x) => x.b.siteId).filter(Boolean)).size === 1 ? '' : 's'}` : ''}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ) : null
+                  if (places.length > 1 && folded.has(b.recipeId)) return summary ? <Fragment key={`${b.id}-folded`}>{summary}</Fragment> : null
                   return (
                     <Fragment key={b.id}>
+                    {summary}
                     <tr className="bld-row">
                       <td>
                         <button type="button" className="bld-name-btn" onClick={() => setDetailId(open ? null : b.id)} title="Click for full details">

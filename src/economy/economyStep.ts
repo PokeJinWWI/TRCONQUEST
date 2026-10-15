@@ -7,6 +7,7 @@
 // worker boundary, so the wars come as a list of pairs), and everything it
 // produces goes out through `EconomyStepOutput`.
 import { stepMigration } from './migration'
+import { popStats, type PopStats } from './popStats'
 import type { MigrationFlow, MigrationLaws } from './migrationRules'
 import { tickEconomy } from './economyTick'
 import type { Bank, CentralBankEvent, Corporation, Country, CountryFiscal, MonetaryAggregates, World, WorldReport } from './economyTypes'
@@ -40,6 +41,11 @@ export interface FiscalSample {
   pegTarget?: number
   fxReserves?: number
   credibility?: number
+  // The nation's people (economy/popStats.ts); absent on older samples.
+  literacy?: number
+  turmoil?: number
+  workforceShare?: number
+  upperWealthShare?: number
 }
 
 // Unemployment across a country's worlds: 1 − employed / labour force. The
@@ -65,9 +71,10 @@ export function unemploymentOf(countryId: string, worlds: World[], worldReports:
   return force > 0 ? Math.max(0, 1 - employed / force) : 0
 }
 
-export function sampleOf(f: CountryFiscal, country?: Country, money?: MonetaryAggregates, unemployment?: number): FiscalSample {
+export function sampleOf(f: CountryFiscal, country?: Country, money?: MonetaryAggregates, unemployment?: number, pops?: PopStats): FiscalSample {
   const cb = country?.centralBank
   return {
+    ...(pops ? { literacy: pops.literacy, turmoil: pops.turmoil, workforceShare: pops.workforceShare, upperWealthShare: pops.upperWealthShare } : {}),
     gdp: f.gdp,
     priceLevel: f.priceLevel,
     inflation: f.inflation,
@@ -204,7 +211,7 @@ export function runEconomySteps(input: EconomyStepInput): EconomyStepOutput {
     })
     worlds = moved.worlds
     migrationFlows.push(moved.flows)
-    for (const c of countries) (samples[c.id] ??= []).push(sampleOf(countryReports[c.id], c, moneyReports[c.id], unemploymentOf(c.id, worlds, worldReports)))
+    for (const c of countries) (samples[c.id] ??= []).push(sampleOf(countryReports[c.id], c, moneyReports[c.id], unemploymentOf(c.id, worlds, worldReports), popStats(worlds.filter((w) => w.ownerId === c.id).flatMap((w) => w.pops))))
   }
   return { countries, worlds, corporations, banks, tick: input.startTick + input.steps, worldReports, countryReports, moneyReports, events, samples, migrationFlows }
 }

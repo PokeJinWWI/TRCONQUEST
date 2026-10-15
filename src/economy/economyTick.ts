@@ -41,7 +41,7 @@ import { runForeignInvestmentAI } from './foreignInvestmentAI'
 import { TRANSPORT_LOSS, sellFromWorld, tradeBetweenNations } from './internationalTrade'
 import { findBuilding } from './buildingSites'
 import { stepMobility } from './popMobility'
-import { loyaltyOf, stepLoyalty } from './popPolitics'
+import { TURMOIL_OUTPUT_LOSS, loyaltyOf, stepLoyalty, turmoilOf } from './popPolitics'
 import { STATUS_GRIEVANCE, STATUS_WAGE, acceptanceOf, nationCultureOf, skilledAccess, stepAssimilation, type NationCulture } from './acceptance'
 import { STRATUM_OF, birthMortality, driftWorkforceShare, educationAccess, idealWorkforceShare, labourFactor, needsFactor, schoolCoverage, workforceShareOf, type PopLaws } from './popRules'
 import { goodIsScarce } from './scarcity'
@@ -562,8 +562,10 @@ function tickWorld(
   const levelsByDistrict = buildingLevelsByDistrict(world)
   const districtMult = Object.fromEntries(DISTRICT_TYPES.map((d) => [d, 1 + districtBonus(world, d, levelsByDistrict).total])) as Record<DistrictType, number>
   const devastationMult = 1 - DEVASTATION_OUTPUT_LOSS * Math.min(1, Math.max(0, world.devastation ?? 0))
+  // Radicals slow work down (economy/popPolitics.ts): nothing at all while the world is calm.
+  const turmoilMult = 1 - TURMOIL_OUTPUT_LOSS * turmoilOf(world.pops)
   const outputFactor = (b: Building) =>
-    interferenceMultiplier(b, system) * (b.owner.kind === 'state' ? stateBureaucracyMalus : 1) * districtMult[districtOfRecipe(b.recipeId)] * devastationMult
+    interferenceMultiplier(b, system) * (b.owner.kind === 'state' ? stateBureaucracyMalus : 1) * districtMult[districtOfRecipe(b.recipeId)] * devastationMult * turmoilMult
 
   // --- Labor market (qualification-gated) ---
   const workers = zeroClasses()

@@ -4,7 +4,10 @@
 import { seedWorlds } from '../src/economy/economySeed'
 import { nationCultureOf } from '../src/economy/acceptance'
 import { REFERENCE_WORKFORCE_SHARE } from '../src/economy/popRules'
-import { cultureView, politicsView, popRows, religionView, societyViewComplex, societyViewSimple } from '../src/scene/societyView'
+import { cultureView, politicsView, popRows, religionView, simpleBirthsAndDeaths, societyViewComplex, societyViewSimple } from '../src/scene/societyView'
+import { popStats } from '../src/economy/popStats'
+import { runEconomySteps } from '../src/economy/economyStep'
+import { seedBanks, seedCorporations, seedCountries } from '../src/economy/economySeed'
 
 let failures = 0
 function check(label: string, cond: boolean, detail = '') {
@@ -42,6 +45,24 @@ console.log('\n=== 2. Simple: what it knows ===')
   check('the same words: lower and middle class, workforce and dependents', v.mode === 'simple' && v.strata.map((s) => s.stratum).join() === 'lower,middle' && near(v.workforce + v.dependents, 6000))
   check('it invents nothing it does not model: no wealth, no classes, no upper class', v.strata.every((s) => s.wealth === null && s.classes.length === 0) && v.topWealthShare === null && v.birthPerThousand === null)
   check('the unemployed make the lower class angrier', v.strata[0].mood.radicals > 0 && v.strata[1].mood.loyalists > 0 && v.turmoil > 0)
+}
+
+console.log('\n=== 2b. Simple: births and deaths, and the history numbers ===')
+{
+  const v = societyViewSimple({ population: 6000, workforce: 2520, literacy: 0.6, approval: 0.6, growthPerYear: 0.006, strata: { workers: { population: 3500, happiness: 0.55 }, specialists: { population: 1500, happiness: 0.7 }, unemployed: { population: 1000, happiness: 0.2 } } })
+  const b = simpleBirthsAndDeaths(0.6, 0.006)
+  check('Simple reads its growth as births and deaths per thousand a year, and they differ by the growth', v.birthPerThousand !== null && near(v.birthPerThousand! - v.deathPerThousand!, 6, 1e-6) && b.birth > b.death)
+  check('no growth figure, no invented births', societyViewSimple({ population: 10, workforce: 4, literacy: 0.6, strata: { workers: { population: 5, happiness: 0.5 }, specialists: { population: 0, happiness: 0.5 }, unemployed: { population: 5, happiness: 0.5 } } }).birthPerThousand === null)
+  const s = popStats(pops)
+  check('the people\'s headline numbers for the charts are sensible shares', s.literacy > 0 && s.literacy < 1 && s.turmoil === 0 && near(s.workforceShare, REFERENCE_WORKFORCE_SHARE) && s.upperWealthShare > 0 && s.upperWealthShare < 0.5)
+  check('an empty nation has all zeros', popStats([]).literacy === 0)
+}
+
+console.log('\n=== 2c. The history samples ===')
+{
+  const out = runEconomySteps({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), banks: seedBanks(), startTick: 0, steps: 3, humanCountryIds: [], warPairs: [] })
+  const ids = out.countries.map((c) => c.id)
+  check('every nation gets its people\'s numbers each month, for the charts', ids.every((id) => (out.samples[id] ?? []).length === 3 && out.samples[id].every((x) => typeof x.literacy === 'number' && typeof x.turmoil === 'number' && typeof x.workforceShare === 'number' && typeof x.upperWealthShare === 'number')))
 }
 
 console.log('\n=== 3. Pop table, politics, culture, religion ===')

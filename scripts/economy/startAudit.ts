@@ -6,7 +6,7 @@
 import { tickEconomy } from '../../src/economy/economyTick'
 import { seedBanks, seedCorporations, seedCountries, seedWorlds } from '../../src/economy/economySeed'
 import { GOODS, GOOD_IDS, type GoodId } from '../../src/economy/goods'
-import type { World, WorldReport } from '../../src/economy/economyTypes'
+import type { Country, World, WorldReport } from '../../src/economy/economyTypes'
 import { getMethod } from '../../src/economy/recipes'
 
 const arg = (name: string, fallback: string): string => {
@@ -51,9 +51,9 @@ export interface NationAudit {
   biggestSurplus: { good: GoodId; share: number; madeOverWanted: number }[]
 }
 
-export function auditNations(months = MONTHS): NationAudit[] {
-  let countries = seedCountries()
-  let worlds: World[] = seedWorlds()
+export function auditNations(months = MONTHS, start?: { countries: Country[]; worlds: World[] }): NationAudit[] {
+  let countries = start?.countries ?? seedCountries()
+  let worlds: World[] = start?.worlds ?? seedWorlds()
   let corporations = seedCorporations()
   let banks = seedBanks()
   const ids = countries.map((c) => c.id)

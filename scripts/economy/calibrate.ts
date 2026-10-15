@@ -216,12 +216,32 @@ const score = (c: SeedCalibration, t: Record<string, CountryCalibration>): numbe
   return Object.entries(verdict.failing).filter(([id]) => id.startsWith('empire-')).reduce((n, [, f]) => n + f.length, 0) + verdict.nonFinite * 100
 }
 // A round is judged by price steadiness AND by how well the plants fit what is wanted (the empires: by stability violations first).
-const judge = (m: Measured): number => (EMPIRES ? score(cal, taxes) + misfit(m) : drift(m) * 3 + misfit(m))
+// ...and by how far people's standard of living has fallen from the plain seed's: mothballing plants cuts jobs and wages, so a fit that
+// trims the glut by costing the nation its living standard is no improvement.
+const meanSoL = (m: Measured): Record<string, number> => {
+  const sum: Record<string, { w: number; n: number }> = {}
+  for (const w of m.worlds) {
+    const x = (sum[w.ownerId] ??= { w: 0, n: 0 })
+    for (const p of w.pops) {
+      x.w += p.standardOfLiving * p.populationSize
+      x.n += p.populationSize
+    }
+  }
+  return Object.fromEntries(Object.entries(sum).map(([id, x]) => [id, x.n > 0 ? x.w / x.n : 0]))
+}
+const baselineSoL = meanSoL(measured)
+const SOL_PENALTY = 3 // per point (0..1) of average living standard lost, averaged over the nations
+const solDrop = (m: Measured): number => {
+  const now = meanSoL(m)
+  const ids = Object.keys(baselineSoL)
+  return ids.length > 0 ? ids.reduce((n, id) => n + Math.max(0, baselineSoL[id] - (now[id] ?? 0)), 0) / ids.length : 0
+}
+const judge = (m: Measured): number => (EMPIRES ? score(cal, taxes) + misfit(m) : drift(m) * 3 + misfit(m) + SOL_PENALTY * solDrop(m))
 let best = { cal: structuredClone(cal), taxes: structuredClone(taxes), judged: judge(measured), label: 'the plain seed' }
 if (EMPIRES) console.log(`  plain seed: ${best.judged}`)
 const keepIfBest = (label: string) => {
   const judged = judge(measured)
-  console.log(`  ${label}: judged ${judged.toFixed(3)} (best so far ${best.judged.toFixed(3)} from ${best.label})`)
+  console.log(`  ${label}: judged ${judged.toFixed(3)} (misfit ${(misfit(measured) * 100).toFixed(1)}%, living standard down ${(solDrop(measured) * 100).toFixed(1)} points; best so far ${best.judged.toFixed(3)} from ${best.label})`)
   if (judged < best.judged) best = { cal: structuredClone(cal), taxes: structuredClone(taxes), judged, label }
 }
 const priceRound = (label: string) => {
@@ -255,6 +275,32 @@ for (const step of ['price', 'fit', 'fit', 'fit', 'price', 'fit', 'fit', 'fit', 
 console.log(`keeping ${best.label}`)
 cal = best.cal
 const chosenTaxes = best.taxes
+
+// --- 2b. A nation keeps its living standard ---
+// Mothballing helps a nation only if it does not cost its people: a nation whose standard of living ends more than this far below the plain
+// seed's has its fit halved (the others keep theirs), and the two years are measured again, up to three times.
+const MAX_SOL_LOSS = 0.03
+if (!EMPIRES) {
+  for (let pass = 0; pass < 4; pass++) {
+    cal = best.cal
+    measured = run(cal, { ...chosenTaxes }, true)
+    const now = meanSoL(measured)
+    const costly = Object.keys(baselineSoL).filter((id) => baselineSoL[id] - (now[id] ?? 0) > MAX_SOL_LOSS)
+    console.log(`  living standard check ${pass + 1}: ${costly.length ? `${costly.join(', ')} lose more than ${MAX_SOL_LOSS * 100} points` : 'every nation keeps its living standard'}`)
+    if (costly.length === 0) break
+    // Back the fit off by half (what is left of it is tried again): a nation keeps as much of it as its people can afford.
+    for (const w of measured.worlds) {
+      const idle = costly.includes(w.ownerId) ? cal[w.id]?.idle : undefined
+      if (!idle) continue
+      for (const k of Object.keys(idle)) {
+        const half = Math.round((idle[k]! / 2) * 100) / 100
+        if (half >= 0.03) idle[k] = half
+        else delete idle[k]
+      }
+    }
+    best = { ...best, cal: structuredClone(cal) }
+  }
+}
 
 // --- 3. The empires keep their jobs ---
 // Mothballing cuts jobs as well as output. An empire whose labour force ends year 5 under 55% in work (the test holds every empire to 50%)

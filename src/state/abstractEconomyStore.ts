@@ -1,4 +1,5 @@
-import type { PopLaws } from '../economy/popRules'
+import { REFERENCE_LITERACY, type PopLaws } from '../economy/popRules'
+import { simpleRadicals } from '../economy/popPolitics'
 import type { ColonyKit } from '../economy-abstract/colonyKit'
 import { stepAbstractMigration } from '../economy-abstract/migration'
 import { WAVE_EVENT_MIN_MILLIONS, type MigrationFlow } from '../economy/migrationRules'
@@ -90,6 +91,9 @@ export interface AbstractHistoryPoint {
   inflation: number
   debtToGdp: number
   rate: number
+  // The nation's people: its literacy, and the share of them who are radicals (read off the strata's happiness).
+  literacy?: number
+  turmoil?: number
 }
 
 // What the AI (or any steer) sees of a nation before a month runs.
@@ -283,7 +287,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
     const research: Record<string, Record<TechCategory, number>> = {}
     const stocks: Record<string, Stockpile> = {}
     const ids = Object.keys(byCountry)
-    const series: Record<string, { gdp: number; realGdp: number; inflation: number; debtToGdp: number; rate: number }[]> = {}
+    const series: Record<string, AbstractHistoryPoint[]> = {}
     const migrationFlows: MigrationFlow[][] = []
     const distress = distressByBody()
     for (const id of ids) {
@@ -337,7 +341,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
         reports[id] = r
         for (const w of res.worlds) worlds[w.bodyName] = w
         for (const t of TECH_TREES) research[id][t] += r.researchByTree[t]
-        series[id].push({ gdp: res.state.gdp, realGdp: res.state.realGdp, inflation: res.state.inflation, debtToGdp: r.debtToGdp, rate: res.state.currency.rate })
+        series[id].push({ gdp: res.state.gdp, realGdp: res.state.realGdp, inflation: res.state.inflation, debtToGdp: r.debtToGdp, rate: res.state.currency.rate, literacy: res.state.literacy ?? REFERENCE_LITERACY, turmoil: strataTurmoil(r.strata) })
       }
       // Then people move (economy-abstract/migration.ts), by the laws and treaties of the month that just ran.
       const lanes = treatyLanes(useTreatyStore.getState().treaties)
@@ -596,4 +600,11 @@ function patch(store: AbstractEconomyStore, countryId: string, fn: (c: AbstractE
   const { bodyOwner, bodyController } = useTerritoryStore.getState()
   const report = abstractReport(next, worldsOf(countryId, store.worlds, bodyOwner, bodyController), stockOf(countryId))
   return { byCountry: { ...store.byCountry, [countryId]: next }, reports: { ...store.reports, [countryId]: report } }
+}
+
+// Share of a Simple nation's people who are radicals, read off its strata's happiness (the same words as Complex's pops).
+function strataTurmoil(strata: Record<'workers' | 'specialists' | 'unemployed', { population: number; happiness: number }>): number {
+  const total = strata.workers.population + strata.specialists.population + strata.unemployed.population
+  if (total <= 0) return 0
+  return (['workers', 'specialists', 'unemployed'] as const).reduce((n, k) => n + strata[k].population * simpleRadicals(strata[k].happiness), 0) / total
 }

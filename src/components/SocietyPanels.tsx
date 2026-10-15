@@ -1,11 +1,12 @@
 import { Bi } from './Bi'
+import { TimeChart } from './TimeChart'
 import { useMemo, useState } from 'react'
 import { nationCultureOf } from '../economy/acceptance'
 import { CULTURES, RELIGIONS } from '../economy/demographics'
 import { formatPop } from '../economy/format'
 import type { Pop } from '../economy/economyTypes'
 import { SOCIAL_STRATUM_LABEL, workforceOf, type PopLaws } from '../economy/popRules'
-import { worldWorkforce } from '../economy-abstract/abstractEconomy'
+import { popGrowthPerYear, worldWorkforce } from '../economy-abstract/abstractEconomy'
 import { NEED_TIERS, SPECIES_TEMPLATES } from '../economy/species'
 import { cultureView, politicsView, popRows, religionView, societyViewComplex, societyViewSimple, type Mood, type PopSort, type SocietyView } from '../scene/societyView'
 import { useAbstractEconomyStore, worldsOf } from '../state/abstractEconomyStore'
@@ -25,6 +26,8 @@ interface SocietyData {
   pops: Pop[]
   laws: Partial<PopLaws> | undefined
   view: SocietyView | null
+  // The nation's people over time, one value a month (the newest last), and the tick of the newest.
+  history: { literacy: number[]; turmoil: number[]; workforceShare: number[]; upperWealthShare: number[]; tick: number }
 }
 
 function useSocietyData(): SocietyData | null {
@@ -35,6 +38,10 @@ function useSocietyData(): SocietyData | null {
   const simpleState = useAbstractEconomyStore((s) => (countryId ? s.byCountry[countryId] : undefined))
   const simpleReport = useAbstractEconomyStore((s) => (countryId ? s.reports[countryId] : undefined))
   const simpleWorlds = useAbstractEconomyStore((s) => s.worlds)
+  const simpleHistory = useAbstractEconomyStore((s) => (countryId ? s.history[countryId] : undefined))
+  const simpleTick = useAbstractEconomyStore((s) => s.tick)
+  const complexHistory = useEconomyStore((s) => (countryId ? s.history[countryId] : undefined))
+  const complexTick = useEconomyStore((s) => s.tick)
   const owners = useTerritoryStore((s) => s.bodyOwner)
   const controllers = useTerritoryStore((s) => s.bodyController)
   return useMemo(() => {
@@ -44,13 +51,18 @@ function useSocietyData(): SocietyData | null {
       const mine = worldsOf(countryId, simpleWorlds, owners, controllers)
       const population = mine.reduce((n, w) => n + w.population, 0)
       const workforce = mine.reduce((n, w) => n + worldWorkforce(w), 0)
-      const view = societyViewSimple({ population, workforce, literacy: simpleState.literacy ?? 0.6, strata: { workers: simpleReport.strata.workers, specialists: simpleReport.strata.specialists, unemployed: simpleReport.strata.unemployed } })
-      return { countryId, simple, pops: [], laws: simpleState.popLaws, view }
+      const view = societyViewSimple({ population, workforce, literacy: simpleState.literacy ?? 0.6, strata: { workers: simpleReport.strata.workers, specialists: simpleReport.strata.specialists, unemployed: simpleReport.strata.unemployed }, approval: simpleReport.approval, growthPerYear: popGrowthPerYear(simpleReport.approval, simpleState.welfare, simpleReport.foodSatisfaction) })
+      const h = simpleHistory ?? []
+      return { countryId, simple, pops: [], laws: simpleState.popLaws, view, history: { literacy: h.map((p) => p.literacy ?? 0), turmoil: h.map((p) => p.turmoil ?? 0), workforceShare: [], upperWealthShare: [], tick: simpleTick } }
     }
     const pops = worlds.filter((w) => w.ownerId === countryId).flatMap((w) => w.pops)
     const laws = countries.find((c) => c.id === countryId)?.popLaws
-    return { countryId, simple, pops, laws, view: pops.length > 0 ? societyViewComplex(pops, nationCultureOf(pops), laws) : null }
-  }, [countryId, simple, worlds, countries, simpleState, simpleReport, simpleWorlds, owners, controllers])
+    const h = (complexHistory ?? []).filter((p) => p.literacy !== undefined)
+    return {
+      countryId, simple, pops, laws, view: pops.length > 0 ? societyViewComplex(pops, nationCultureOf(pops), laws) : null,
+      history: { literacy: h.map((p) => p.literacy ?? 0), turmoil: h.map((p) => p.turmoil ?? 0), workforceShare: h.map((p) => p.workforceShare ?? 0), upperWealthShare: h.map((p) => p.upperWealthShare ?? 0), tick: complexTick },
+    }
+  }, [countryId, simple, worlds, countries, simpleState, simpleReport, simpleWorlds, owners, controllers, simpleHistory, simpleTick, complexHistory, complexTick])
 }
 
 function MoodBar({ mood }: { mood: Mood }) {
@@ -120,6 +132,14 @@ export function SocialClassesPanel() {
         </div>
       ))}
       {v.topWealthShare !== null && <div className="abs-dim" title="A plain measure of how unequal the nation is">The {SOCIAL_STRATUM_LABEL.upper.toLowerCase()} holds {pct(v.topWealthShare)} of the nation's wealth.</div>}
+      {data.history.literacy.length > 1 && (
+        <>
+          <TimeChart title="Literacy" endTick={data.history.tick} includeZero format={(x) => pct(x, 1)} series={[{ label: 'Literacy', color: '#6fe3ff', values: data.history.literacy }]} tip="Share of people who can read and write. It follows living standards, the schools you build and your schooling laws." />
+          <TimeChart title="Turmoil" endTick={data.history.tick} includeZero format={(x) => pct(x, 1)} series={[{ label: 'Radicals', color: '#ff6b4a', values: data.history.turmoil }]} tip="Share of people who are radicals: below the standard of living they expect." />
+          {data.history.workforceShare.length > 1 && <TimeChart title="Workforce share" endTick={data.history.tick} format={(x) => pct(x, 1)} series={[{ label: 'In the workforce', color: '#ffd23f', values: data.history.workforceShare }]} tip="Share of people who staff jobs. Your workforce laws move it a little each month." />}
+          {data.history.upperWealthShare.length > 1 && <TimeChart title="Wealth held by the upper class" endTick={data.history.tick} includeZero format={(x) => pct(x, 1)} series={[{ label: 'Upper class', color: '#c77dff', values: data.history.upperWealthShare }]} tip="How unequal the nation is." />}
+        </>
+      )}
       {data.simple && NOT_MODELLED('professions, wealth or an upper class')}
     </div>
   )

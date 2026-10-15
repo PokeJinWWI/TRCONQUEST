@@ -1,6 +1,6 @@
 import { Bi } from '../Bi'
 import { useSeededBody } from '../../hooks/useSeededBody'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { areaView, type AreaDistrict, type AreaSite } from '../../scene/buildingsView'
 import { useAbstractEconomyStore } from '../../state/abstractEconomyStore'
 import { useBuildingDetailStore } from '../../state/buildingDetailStore'
@@ -211,12 +211,6 @@ export function BuildingsTab({ bodyName, playerId }: { bodyName: string; playerI
   const ready = useSeededBody(bodyName)
   const rootRef = useRef<HTMLDivElement>(null)
   const view = useMemo(() => (ready ? areaView(bodyName, playerId) : { bodyName, landLeft: null, sections: [], totals: [], ports: { rows: [], economy: 0 }, standalone: [], unplaced: [] }), [ready, bodyName, playerId, placed, levels, established, civic, simpleQueue, complexWorlds, ports])
-  // A building chip jumps to the first place that holds it.
-  useEffect(() => {
-    if (!highlight) return
-    const site = view.sections.flatMap((sec) => sec.sites).find((s) => s.buildings.some((b) => b.id === highlight))
-    if (site) rootRef.current?.querySelector(`[data-site="${site.siteId}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [highlight, view])
   return (
     <div className="pl-districts pl-area" ref={rootRef}>
       <div className="abs-dim pl-land">
@@ -225,7 +219,7 @@ export function BuildingsTab({ bodyName, playerId }: { bodyName: string; playerI
       </div>
       {view.totals.length > 0 && (
         <details>
-          <summary className="abs-dim" title="Each building over every place it stands in. Press one to find where.">Totals: {view.totals.length} buildings, {view.totals.reduce((n, t) => n + t.levels, 0)} levels</summary>
+          <summary className="abs-dim" title="Each building over every place it stands in. Press one to show only the places that hold it.">Totals: {view.totals.length} buildings, {view.totals.reduce((n, t) => n + t.levels, 0)} levels</summary>
         <div className="pl-site-districts">
           {view.totals.map((t) => (
             <button key={t.id} type="button" className={`pl-develop${highlight === t.id ? ' active' : ''}`} onClick={() => setHighlight(highlight === t.id ? null : t.id)} title={`${t.name}: ${t.levels} level${t.levels === 1 ? '' : 's'} in ${t.places} place${t.places === 1 ? '' : 's'}`}>
@@ -236,10 +230,19 @@ export function BuildingsTab({ bodyName, playerId }: { bodyName: string; playerI
         </details>
       )}
       {message && <div className="econ-neg pl-message">{message}</div>}
+      {highlight && (
+        <div className="pl-site-districts">
+          <span className="abs-dim">Showing only the places that hold {view.totals.find((t) => t.id === highlight)?.name ?? highlight}</span>
+          <button type="button" className="pl-develop" onClick={() => setHighlight(null)}>Show all</button>
+        </div>
+      )}
       {view.sections.map((sec) => {
         const used = (s: AreaSite) => s.districts.some((d) => d.levels > 0 || d.buildings.length > 0) || s.buildings.length > 0 || s.onOrder.length > 0 || s.civic.some((c) => c.kind !== 'cityHall')
-        const active = sec.sites.filter(used)
-        const idle = sec.sites.filter((s) => !used(s))
+        // A building chip filters the cards to the places that hold it.
+        const holds = (s: AreaSite) => !highlight || s.buildings.some((b) => b.id === highlight)
+        const active = sec.sites.filter((s) => used(s) && holds(s))
+        const idle = highlight ? [] : sec.sites.filter((s) => !used(s))
+        if (active.length === 0 && idle.length === 0) return null
         return (
           <div key={sec.kind}>
             <div className="econ-subtitle">{sec.title}</div>

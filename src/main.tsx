@@ -14,6 +14,9 @@ import { TooltipLayer } from './components/TooltipLayer'
 import { NativeAnnotator } from './components/NativeAnnotator'
 import { BoxSelectLayer } from './components/BoxSelectLayer'
 
+// Dev only: every store on window.__trc, for the browser tool (src/devHooks.ts). Not in a production build.
+if (import.meta.env.DEV) void import('./devHooks')
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

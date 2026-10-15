@@ -51,6 +51,9 @@ export function stepLoyalty(loyalty: number, standardOfLiving: number, literacy:
   return Math.max(-1, Math.min(1, loyalty + LOYALTY_STEP * push))
 }
 
+// Radicals strike, sabotage and slow work down: a world with every pop radical makes this much less (a calm one loses nothing).
+export const TURMOIL_OUTPUT_LOSS = 0.12
+
 // A world's or nation's turmoil: the people-weighted share of radicals.
 export function turmoilOf(pops: readonly { populationSize: number; loyalty?: number }[]): number {
   let total = 0

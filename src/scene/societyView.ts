@@ -141,7 +141,7 @@ export interface SimpleStratumInput {
   specialists: { population: number; happiness: number }
   unemployed: { population: number; happiness: number }
 }
-export function societyViewSimple(input: { population: number; workforce: number; literacy: number; strata: SimpleStratumInput }): SocietyView {
+export function societyViewSimple(input: { population: number; workforce: number; literacy: number; strata: SimpleStratumInput; approval?: number; growthPerYear?: number }): SocietyView {
   const { workers, specialists, unemployed } = input.strata
   const lowerPop = workers.population + unemployed.population
   const moodOfHappiness = (h: number): Mood => {
@@ -163,7 +163,15 @@ export function societyViewSimple(input: { population: number; workforce: number
   })
   const strata = [mk('lower', lowerPop, lowerMood), mk('middle', specialists.population, moodOfHappiness(specialists.happiness))].filter((s) => s.population > 0)
   const turmoil = input.population > 0 ? sum(strata, (s) => s.population * s.mood.radicals) / input.population : 0
-  return { mode: 'simple', population: input.population, workforce: input.workforce, dependents: Math.max(0, input.population - input.workforce), strata, literacy: input.literacy, turmoil, topWealthShare: null, birthPerThousand: null, deathPerThousand: null }
+  // Simple has one growth figure; read as births and deaths it splits the way Complex's do (mortality falls steeply with how content people are).
+  const vitals = input.approval !== undefined && input.growthPerYear !== undefined ? simpleBirthsAndDeaths(input.approval, input.growthPerYear) : null
+  return { mode: 'simple', population: input.population, workforce: input.workforce, dependents: Math.max(0, input.population - input.workforce), strata, literacy: input.literacy, turmoil, topWealthShare: null, birthPerThousand: vitals?.birth ?? null, deathPerThousand: vitals?.death ?? null }
+}
+
+// Births and deaths per thousand a year from Simple's single yearly growth: mortality as in Complex (by how content people are), births the rest.
+export function simpleBirthsAndDeaths(approval: number, growthPerYear: number): { birth: number; death: number } {
+  const death = Math.max(0, birthMortality(approval, 1).mortality * 12 * 1000)
+  return { birth: Math.max(0, death + growthPerYear * 1000), death }
 }
 
 // ---- the pop table -----------------------------------------------------------------------------------------------------------------------

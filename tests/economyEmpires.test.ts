@@ -43,7 +43,7 @@ console.log('\n=== 1. The home nations\' seed is stable ===')
   // Rehashed when Earth's spaceports became the six hand-placed ones (the economy runs exactly what the map shows) and when Tenkū Kōro lost the
   // native script from its name (the NERV theme adds it); and again when the starting economies were fitted to what is wanted (scripts/economy/
   // calibrate.ts: mothballed plants, new starting prices and tax rates).
-  check('worlds', hash(seedWorlds()) === '685f7b14ec117ea0')
+  check('worlds', hash(seedWorlds()) === '234fa75e7cf3f978')
   check('countries', hash(seedCountries()) === '30f7a226778fc4f4')
   check('corporations', hash(seedCorporations()) === 'ba6b548892b4c34a')
   check('banks', hash(seedBanks()) === '7bccfcac62561d47')

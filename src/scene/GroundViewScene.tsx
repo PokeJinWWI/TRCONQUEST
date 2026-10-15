@@ -30,6 +30,7 @@ import { holderOf, radToKm, unitSpeedRadPerDay } from './groundLogic'
 import { classifyFireLine } from './armyLogic'
 import { bodyGroundInfoAny, TERRAIN_IDS, type BodySurface } from './planetTerrain'
 import { nearestNode, nodePoint, normalize, surfaceMesh, type SurfacePoint } from './surfaceMesh'
+import { facesCamera } from './horizon'
 import { HoloGlobe, HoloHalo, type HoloNode } from './HoloGlobe'
 import { hologramTint } from './HoloPlanet'
 import { FlatMapSurface } from './FlatMap'
@@ -75,14 +76,6 @@ const GRID_OPACITY = { coarse: 0.35, standard: 0.22, fine: 0.14 } as const
 const FIRE_MUTUAL_COLOR = '#ffd23f'
 const FIRE_HOSTILE_COLOR = '#ff3b3b'
 const FIRE_FRIENDLY_COLOR = '#4ade80'
-
-// Whether a point of the globe (a unit vector, the globe's radius is `radius`) can be seen from the camera: it is visible only on the
-// camera's side of the horizon, where p . camera > radius (the old test compared against a fifth of that, so markers on the far side
-// of the planet were drawn over it, at positions that are not where they stand).
-const HORIZON_SLACK = 0.97
-export function facesCamera(p: SurfacePoint, cam: { x: number; y: number; z: number }, radius: number): boolean {
-  return p.x * cam.x + p.y * cam.y + p.z * cam.z > radius * HORIZON_SLACK
-}
 
 function toVec(p: SurfacePoint, r: number): [number, number, number] {
   return [p.x * r, p.y * r, p.z * r]
@@ -168,6 +161,7 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
           <GroundLines bodyName={bodyName} />
           <DistanceThresholdWatcher mode="max" threshold={EXIT_DISTANCE} onTrigger={exitGround} controlsRef={controlsRef} />
           <OrbitControls ref={controlsRef} enablePan={false} enableDamping dampingFactor={0.08} minDistance={MIN_DISTANCE} maxDistance={MAX_DISTANCE} />
+          {import.meta.env.DEV && <DevCameraProbe controlsRef={controlsRef} />}
           <CameraFocus controlsRef={controlsRef} flat={false} />
           <KeyboardPan controlsRef={controlsRef} mode="orbit" />
         </Canvas>
@@ -183,6 +177,17 @@ export function GroundViewScene({ bodyName }: { bodyName: string }) {
 
 // Swings the camera onto a node when the Ground panel asks (focusRequest):
 // the globe turns to face it at the current distance; the flat map pans to it.
+// Dev only: the camera, its canvas size and the controls on window.__trcScene, so the browser tool can project a node to the screen and
+// compare it with where a marker was drawn (see src/devHooks.ts).
+function DevCameraProbe({ controlsRef }: { controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const camera = useThree((st) => st.camera)
+  const size = useThree((st) => st.size)
+  useEffect(() => {
+    ;(window as unknown as { __trcScene?: unknown }).__trcScene = { camera, canvasSize: size, controls: controlsRef.current, GLOBE_RADIUS }
+  }, [camera, size, controlsRef])
+  return null
+}
+
 function CameraFocus({ controlsRef, flat }: { controlsRef: React.RefObject<OrbitControlsImpl | null>; flat: boolean }) {
   const request = useGroundViewStore((s) => s.focusRequest)
   const camera = useThree((s) => s.camera)
