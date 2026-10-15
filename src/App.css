@@ -554,13 +554,15 @@
 .resource-value {
   font-size: 12px;
   color: var(--text);
-  min-width: 1.5em;
+  font-variant-numeric: tabular-nums;
+  min-width: 5ch;
 }
 
 .resource-delta {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   color: rgba(205, 238, 255, 0.55);
+  min-width: 8ch;
 }
 
 .resource-info-description {
@@ -598,9 +600,24 @@
 /* Breadcrumb */
 
 .breadcrumb {
+  /* One grid cell holding the real trail and a hidden copy of the system-level chain, so the
+     breadcrumb is never narrower than that (components/Breadcrumb.tsx says why). */
+  display: grid;
+  align-items: center;
+  justify-items: start;
+}
+.breadcrumb > * {
+  grid-area: 1 / 1;
+}
+.breadcrumb-trail,
+.breadcrumb-reserve {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.breadcrumb-reserve {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .crumb {
@@ -1934,6 +1951,17 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--strong);
+}
+/* The header's numbers reserve the room of their longest ordinary form ("$312.0M", "+$10.5M/mo",
+   "1,234", "+120/mo"). The bar wraps when its parts do not fit, so a number gaining a digit as the game
+   goes on (the balance's first month: +$9.8M -> +$10.1M) used to flip the whole bar between one and two
+   rows, with every panel docked under it moving. With the room reserved the bar is a function of the
+   window alone. */
+.fiscal-ind-treasury .fiscal-ind-val {
+  min-width: 8ch;
+}
+.fiscal-ind-balance .fiscal-ind-val {
+  min-width: 11ch;
 }
 
 /* Debt panel */
@@ -7266,6 +7294,11 @@ button.pl-tile.empty:hover {
 }
 .situation-badge.sev-none {
   --sev-color: rgba(var(--accent-rgb), 0.45);
+}
+.situation-badge-count {
+  min-width: 2ch;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 .situation-badge-icon {
   display: grid;

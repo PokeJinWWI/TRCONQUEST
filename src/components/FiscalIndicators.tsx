@@ -47,7 +47,7 @@ export function FiscalIndicators() {
     <div className="fiscal-indicators">
       <button
         type="button"
-        className="fiscal-ind"
+        className="fiscal-ind fiscal-ind-treasury"
         title="National treasury (negative = overdraft; issue bonds to cover it)"
         onClick={() => setOpenId('treasury')}
       >
@@ -56,7 +56,7 @@ export function FiscalIndicators() {
       </button>
       <button
         type="button"
-        className="fiscal-ind"
+        className="fiscal-ind fiscal-ind-balance"
         title="Budget balance per month (revenue − spending)"
         onClick={() => setOpenId('balance')}
       >

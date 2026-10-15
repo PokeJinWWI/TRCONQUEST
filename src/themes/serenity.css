@@ -1,0 +1,351 @@
+/* The Serenity theme: a ronin's winter. Ink-black panels, pale steel and frost for line and letter,
+   one seal-red mark (a hanko) where the eye should stop. Everything is flat, square and ruled to a
+   grid, and nothing moves: stasis.
+     Palette  deep-navy panels (--panel-rgb 5,12,28), steel-blue rules (#70a8e8), frost for emphasis
+              (#c4e0ff), pale ice-blue text, vermilion (#d6402f) ONLY for alarms and the seal.
+     Type     Yuji Syuku (a thin, wide-tracked brush mincho) for the game title, Shippori Mincho for
+              headings and window titles, Zen Kaku Gothic New for the interface.
+     Shape    no rounded corners anywhere; 1px hairlines; a double rule round windows; a shoji grid
+              (24px) faint behind panels and windows. The active button is inverted: frost with ink.
+     Mark     a small vermilion square before the title, a vermilion tick on every rule and on every
+              window's title bar.
+     Motion   none. No fades, no transitions, no glows: the theme's animations and transitions are
+              switched off (Reduce motion has nothing to reduce).
+     Cursors  a katana: drawn for the pointer, drawn with a ring at its point over anything you can
+              act on, sheathed and struck through where you cannot.
+   English only. A pure reskin of Default: every rule is under html[data-theme='serenity']. Relation
+   colours (own / allied / neutral / hostile) and nation colours are NOT themed. */
+@import './serenityFonts.css';
+
+html[data-theme='serenity'] {
+  --accent-rgb: 112, 168, 232;
+  --accent-soft-rgb: 196, 224, 255;
+  --ink-rgb: 198, 220, 248;
+  --panel-rgb: 5, 12, 28;
+  --panel-deep-rgb: 3, 7, 18;
+  --panel-raised-rgb: 12, 26, 52;
+  --panel-hover-rgb: 22, 46, 86;
+  --text-bright-rgb: 232, 244, 255;
+  --ok-rgb: 127, 196, 176;
+  --warn-rgb: 200, 169, 91;
+  --danger-rgb: 214, 64, 47;
+  --caution-rgb: 217, 196, 119;
+  --accent: #70a8e8;
+  --accent-soft: #c4e0ff;
+  --text: #c6dcf8;
+  --text-bright: #e8f4ff;
+  --text-cool: #b4cef0;
+  --text-toast: #e8f4ff;
+  --strong: #ffffff;
+  --danger: #d6402f;
+  --warn: #c8a95b;
+  --caution: #d9c477;
+  --ok: #7fc4b0;
+  --page-bg: #020611;
+  --sr-steel: #2f5282;
+  --sr-ink: #040a18;
+  --font-ui: 'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  --font-body: 'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  --font-display: 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --font-title: 'Yuji Syuku', 'Shippori Mincho', 'Hiragino Mincho ProN', serif;
+  --font-mono: 'Zen Kaku Gothic New', sans-serif;
+  /* The shoji grid: hairlines every 24px, faint. */
+  --sr-grid: linear-gradient(rgba(var(--accent-rgb), 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--accent-rgb), 0.05) 1px, transparent 1px);
+  /* The cursors: a drawn katana (the point is the hotspot), the katana with a ring at its point over
+     anything you can act on, the katana in its saya struck through where you cannot. */
+  --cursor-default: url('../assets/cursors/serenity-katana.svg') 3 3, default;
+  --cursor-pointer: url('../assets/cursors/serenity-katana-ready.svg') 6 6, pointer;
+  --cursor-blocked: url('../assets/cursors/serenity-katana-sheathed.svg') 3 3, not-allowed;
+}
+
+/* --- Stasis: nothing animates, nothing eases ---------------------------------------------- */
+html[data-theme='serenity'] *,
+html[data-theme='serenity'] *::before,
+html[data-theme='serenity'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* --- Type ---------------------------------------------------------------------------- */
+/* Default glows its labels (location, breadcrumb, map markers); stasis does not glow. */
+html[data-theme='serenity'] body * {
+  text-shadow: none;
+}
+html[data-theme='serenity'] body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+html[data-theme='serenity'] :is(.hud-title, .main-menu-title) {
+  font-family: var(--font-title);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.14em;
+  color: var(--accent-soft);
+  text-shadow: none;
+}
+html[data-theme='serenity'] .hud-title {
+  font-size: 19px;
+  line-height: 1;
+}
+/* The seal: one small vermilion square before the title. */
+html[data-theme='serenity'] :is(.hud-title, .main-menu-title)::before {
+  content: '';
+  display: inline-block;
+  width: 0.46em;
+  height: 0.46em;
+  margin-right: 0.7em;
+  background: var(--danger);
+  vertical-align: 0.12em;
+}
+html[data-theme='serenity'] :is(.draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-subtitle, .confirm-title, .econ-subtitle, .outliner-section-title, .action-dock-header, .nav-custom-title) {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  text-shadow: none;
+}
+html[data-theme='serenity'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .situations-type-label) {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+html[data-theme='serenity'] :is(.outliner-tab, .outliner-subtab, .nav-subtab) {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding-inline: 3px;
+}
+/* Equal thirds would cut 'Territory' short: share the row by word length instead. */
+html[data-theme='serenity'] .outliner-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-theme='serenity'] .nav-category-btn {
+  font-size: 11px;
+}
+html[data-theme='serenity'] :is(.fiscal-ind-val, .resource-value, .resource-delta, .situations-count, .situation-badge-count, .time-clock, .inspect-value, .time-date) {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme='serenity'] .inspect-label {
+  color: rgba(var(--text-bright-rgb), 0.66);
+}
+html[data-theme='serenity'] button {
+  font-family: inherit;
+}
+
+/* --- Square, ruled chrome -------------------------------------------------------------- */
+html[data-theme='serenity'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .situation-badge-icon, .outliner-filter-pill, .main-menu-country-card, .main-menu-econ-option, .pl-tile, .pl-detail, .pl-district) {
+  border-radius: 0 !important;
+}
+html[data-theme='serenity'] .hud-bar {
+  background: linear-gradient(#0b1b38, #040a18);
+}
+html[data-theme='serenity'] .hud-top {
+  border-bottom: 1px solid var(--accent);
+  box-shadow: 0 1px 0 #000, 0 2px 0 rgba(var(--accent-rgb), 0.22);
+}
+html[data-theme='serenity'] .hud-bottom {
+  border-top: 1px solid var(--accent);
+  box-shadow: 0 -1px 0 #000, 0 -2px 0 rgba(var(--accent-rgb), 0.22);
+}
+html[data-theme='serenity'] :is(.nav-sidebar, .outliner) {
+  background: rgba(4, 10, 24, 0.97) var(--sr-grid);
+  background-size: auto, 24px 24px, 24px 24px;
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: inset 0 0 0 1px #000;
+}
+
+/* Windows: a double rule, a flat dark title bar with the seal's tick, the grid behind. */
+html[data-theme='serenity'] .draggable-window {
+  border: 1px solid var(--accent);
+  outline: 1px solid rgba(var(--accent-rgb), 0.24);
+  outline-offset: 3px;
+  background-color: rgba(4, 10, 24, 0.97);
+  background-image: var(--sr-grid);
+  background-size: 24px 24px;
+  box-shadow: 0 0 0 1px #000, 0 12px 30px rgba(0, 0, 0, 0.7);
+}
+html[data-theme='serenity'] .draggable-window-titlebar {
+  background: #0c2146;
+  color: var(--accent-soft);
+  border-left: 3px solid var(--danger);
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.5);
+  font-size: 12px;
+}
+html[data-theme='serenity'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: var(--accent-soft);
+}
+
+/* Buttons: ink with a steel rule; the active one is inverted, flat frost with ink lettering;
+   a disabled one fades into the panel. The clock's pace buttons keep their OWN colours (STRAT accent,
+   OPS amber, TAC red, as in Default): the active one is ringed in that colour. */
+html[data-theme='serenity'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: rgba(6, 14, 32, 0.92);
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  color: var(--accent);
+}
+html[data-theme='serenity'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: var(--accent-soft);
+  color: var(--strong);
+}
+html[data-theme='serenity'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--sr-ink);
+  box-shadow: none;
+  text-shadow: none;
+}
+html[data-theme='serenity'] .time-mode-btn.active {
+  outline: 1px solid currentColor;
+  outline-offset: -3px;
+}
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright
+   as the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='serenity'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
+  color: rgba(var(--accent-rgb), 0.32);
+  border-color: rgba(var(--accent-rgb), 0.18);
+  background: rgba(6, 12, 26, 0.7);
+}
+
+html[data-theme='serenity'] :is(input, select, textarea) {
+  background: #050d1e;
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+}
+
+/* A straight hairline for every rule, with the seal's tick at its left end. */
+html[data-theme='serenity'] .inspect-divider {
+  position: relative;
+  border-top: 1px solid rgba(var(--accent-rgb), 0.38);
+  margin: 12px 0;
+}
+html[data-theme='serenity'] .inspect-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -2px;
+  width: 14px;
+  height: 3px;
+  background: var(--danger);
+}
+html[data-theme='serenity'] .outliner-entry.selected .outliner-entry-name {
+  color: var(--accent-soft);
+  text-shadow: none;
+  border-left: 2px solid var(--danger);
+  padding-left: 4px;
+}
+
+/* --- Main menu ------------------------------------------------------------------------- */
+html[data-theme='serenity'] .main-menu {
+  background: linear-gradient(180deg, #0a1a36 0%, #040a18 75%);
+}
+html[data-theme='serenity'] :is(.main-menu-country-card, .main-menu-econ-option) {
+  background-color: rgba(5, 12, 28, 0.95);
+  background-image: var(--sr-grid);
+  background-size: 24px 24px;
+  box-shadow: inset 0 0 0 1px #000;
+}
+html[data-theme='serenity'] :is(.main-menu-country-card, .main-menu-econ-option):hover {
+  background-color: rgba(16, 36, 68, 0.96);
+}
+html[data-theme='serenity'] .main-menu-econ-option.active {
+  background-color: rgba(24, 52, 98, 0.96);
+}
+html[data-theme='serenity'] :is(.main-menu-country-name, .main-menu-econ-name) {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+/* --- HUD ------------------------------------------------------------------------------ */
+html[data-theme='serenity'] .time-date {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent-soft);
+  letter-spacing: 0.1em;
+}
+
+/* --- Alerts ----------------------------------------------------------------------------- */
+html[data-theme='serenity'] .dip-toast {
+  background: rgba(6, 14, 32, 0.97);
+  color: var(--text-bright);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  border-left: 4px solid var(--accent-soft);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: none;
+}
+html[data-theme='serenity'] .dip-toast:hover {
+  background: rgba(14, 32, 62, 0.98);
+}
+html[data-theme='serenity'] .dip-toast.sev-warning {
+  border-left-color: var(--warn);
+}
+html[data-theme='serenity'] .dip-toast.sev-danger {
+  background: linear-gradient(rgba(56, 14, 10, 0.95), rgba(10, 6, 6, 0.97));
+  color: var(--strong);
+  border: 1px solid rgba(var(--danger-rgb), 0.7);
+  border-left: 4px solid var(--danger);
+}
+
+html[data-theme='serenity'] .confirm-box {
+  background-color: rgba(4, 10, 24, 0.98);
+  background-image: var(--sr-grid);
+  background-size: 24px 24px;
+  border: 1px solid var(--accent);
+  outline: 1px solid rgba(var(--accent-rgb), 0.24);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px #000, 0 16px 40px rgba(0, 0, 0, 0.75);
+}
+html[data-theme='serenity'] .confirm-title {
+  background: #0c2146;
+  color: var(--accent-soft);
+  margin: -16px -18px 12px;
+  padding: 6px 18px;
+  border-left: 3px solid var(--danger);
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.5);
+}
+
+html[data-theme='serenity'] .situations-type {
+  background: rgba(5, 12, 28, 0.9);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='serenity'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='serenity'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='serenity'] .sev-info {
+  --sev-color: var(--accent);
+}
+html[data-theme='serenity'] .situation-badge {
+  background: #000;
+  border: 1px solid var(--accent);
+  font-family: var(--font-ui);
+}
+html[data-theme='serenity'] .situation-badge.sev-danger {
+  background: var(--danger);
+  color: var(--sr-ink);
+  border-color: var(--danger);
+}
+html[data-theme='serenity'] .situation-badge.sev-danger .situation-badge-icon {
+  background: var(--sr-ink);
+  color: var(--danger);
+}
+
+/* --- Tech tree ---------------------------------------------------------------------------- */
+html[data-theme='serenity'] .tech-tree-node rect {
+  fill: rgba(6, 14, 32, 0.97);
+}
+html[data-theme='serenity'] .tech-tree-node-name {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}

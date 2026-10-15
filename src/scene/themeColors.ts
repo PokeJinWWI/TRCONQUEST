@@ -1,7 +1,7 @@
 // The 3D maps' interface colours (orbit rings, hyperlanes, map grids, the combat lattice) per UI
 // theme (state/themeStore.ts). Default = the original colours. NERV draws the map itself in the
 // show's mint-green line work (orbits, lanes, grids) and keeps frames orange, like its tactical screens;
-// Ichor draws them in antique gold over dark bronze; Yesteryear in claret and rose over dark wine. All leave alone everything that carries meaning:
+// Ichor draws them in antique gold over dark bronze; Yesteryear in claret and rose over dark wine; Serenity in steel and frost over ink; Nirvana in lotus pink; Harvest in bone white and one crimson. All leave alone everything that carries meaning:
 // stars, planet surfaces, relation colours, nation and territory colours, map-mode data.
 import { useMemo } from 'react'
 import { useThemeStore, type ThemeId } from '../state/themeStore'
@@ -27,6 +27,9 @@ export const SCENE_COLORS: Record<ThemeId, SceneColors> = {
   nerv: { orbit: '#3df5b0', lane: '#3df5b0', grid: '#3df5b0', gridPoint: '#7dffc8', frame: '#ff9900', lattice: '#0e5a40', latticeNode: '#3df5b0', toneMapped: false },
   ichor: { orbit: '#c9a24a', lane: '#e6c878', grid: '#b8923c', gridPoint: '#e6c878', frame: '#c9a24a', lattice: '#5a4416', latticeNode: '#c9a24a', toneMapped: false },
   yesteryear: { orbit: '#b8445e', lane: '#e07b8f', grid: '#9a2c45', gridPoint: '#e07b8f', frame: '#b83252', lattice: '#4a1220', latticeNode: '#b83252', toneMapped: false },
+  serenity: { orbit: '#70a8e8', lane: '#c4e0ff', grid: '#5b8ec8', gridPoint: '#c4e0ff', frame: '#70a8e8', lattice: '#1a3558', latticeNode: '#70a8e8', toneMapped: false },
+  nirvana: { orbit: '#f08cb4', lane: '#ffd0e2', grid: '#e07aa6', gridPoint: '#ffd0e2', frame: '#f08cb4', lattice: '#5a2a42', latticeNode: '#f08cb4', toneMapped: false },
+  harvest: { orbit: '#c9c9c9', lane: '#ffffff', grid: '#8a8a8a', gridPoint: '#e6e6e6', frame: '#bdbdbd', lattice: '#2e2e2e', latticeNode: '#c0182f', toneMapped: false },
 }
 
 export function useSceneColors(): SceneColors {

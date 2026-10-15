@@ -186,7 +186,9 @@ html[data-theme='yesteryear'] .time-mode-btn.active {
   outline: 1px dashed currentColor;
   outline-offset: -4px;
 }
-html[data-theme='yesteryear'] button:disabled:not(.situations-icon) {
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright as
+   the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='yesteryear'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
   color: rgba(var(--accent-soft-rgb), 0.34);
   border-color: rgba(var(--accent-rgb), 0.2);
   background: rgba(10, 4, 5, 0.7);

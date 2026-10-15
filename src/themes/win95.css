@@ -182,7 +182,9 @@ html[data-theme='win95'] :is(.nav-category-btn, .combat-density-btn, .time-btn, 
   font-weight: 700;
   box-shadow: var(--w95-sunken);
 }
-html[data-theme='win95'] button:disabled:not(.situations-icon) {
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright as
+   the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='win95'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
   color: #808080;
   text-shadow: 1px 1px 0 #fff;
 }

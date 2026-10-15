@@ -19,7 +19,7 @@ function ScreenEffects({ crt, set }: { crt: CrtEffects; set: (key: keyof CrtEffe
 }
 
 // The UI theme choice (state/themeStore.ts), shown in Settings and on the main menu. The script
-// row only matters for NERV; Ichor and Yesteryear have only the motion row (their window fade).
+// row only matters for NERV; Ichor, Yesteryear and Nirvana have only the motion row (their window fade).
 export function ThemePicker() {
   const theme = useThemeStore((s) => s.theme)
   const script = useThemeStore((s) => s.script)
@@ -95,7 +95,7 @@ export function ThemePicker() {
           </div>
         </>
       )}
-      {(theme === 'ichor' || theme === 'yesteryear') && (
+      {(theme === 'ichor' || theme === 'yesteryear' || theme === 'nirvana') && (
         <div className="inspect-row">
           <span className="inspect-label"><Bi en="Reduce motion" /></span>
           <span className="inspect-value combat-density-row">

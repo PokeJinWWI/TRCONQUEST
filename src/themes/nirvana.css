@@ -1,0 +1,438 @@
+/* The Nirvana theme: a lotus pond at first light. White panels with a breath of pink, lotus pink for
+   line and emphasis, plum for reading, a little gold at the heart of the flower. Soft and calm: petal
+   corners (rounded on two diagonals, sharp on the others), hairline rules with a lotus at their middle,
+   a faint scatter of blossoms behind the panels. The map behind stays night: panels and windows are
+   light, anything drawn over the map is not.
+     Palette  white (--panel-rgb 255,250,252), lotus pink (#b8386c text / #f1a5c4 fills), plum ink
+              (#5a3347), pale gold (#e9b84a) for the flower's heart, jade (#1f7a58) for good news,
+              cherry (#c8283f) for alarms.
+     Type     Italiana (the title: thin, graceful), Marcellus (headings), Nunito Sans (the interface).
+     Shape    petal corners, 1px pink hairlines, soft pink shadows; the active control is a filled
+              lotus-pink petal.
+     Motion   windows and notices bloom in with a gentle fade (opacity only); Reduce motion removes it.
+     Cursors  a lotus bud for the pointer (its tip is the hotspot), a lotus in full bloom over anything
+              you can act on, a closed grey bud struck through where you cannot.
+   English only. A pure reskin of Default: every rule is under html[data-theme='nirvana']. Relation
+   colours (own / allied / neutral / hostile) and nation colours are NOT themed. */
+@import './nirvanaFonts.css';
+
+html[data-theme='nirvana'] {
+  --accent-rgb: 184, 56, 108;
+  --accent-soft-rgb: 138, 36, 80;
+  --ink-rgb: 90, 51, 71;
+  --panel-rgb: 255, 250, 252;
+  --panel-deep-rgb: 250, 238, 244;
+  --panel-raised-rgb: 255, 255, 255;
+  --panel-hover-rgb: 252, 226, 237;
+  --text-bright-rgb: 52, 22, 40;
+  --ok-rgb: 31, 122, 88;
+  --warn-rgb: 183, 121, 31;
+  --danger-rgb: 200, 40, 63;
+  --caution-rgb: 168, 134, 27;
+  --accent: #b8386c;
+  --accent-soft: #8a2450;
+  --text: #5a3347;
+  --text-bright: #34162a;
+  --text-cool: #6b4258;
+  --text-toast: #34162a;
+  --strong: #1f0a16;
+  --danger: #c8283f;
+  --warn: #b7791f;
+  --caution: #a8861b;
+  --ok: #1f7a58;
+  --page-bg: #fdf4f8;
+  --nv-pink: #f1a5c4;
+  --nv-pink-pale: #fde6ef;
+  --nv-line: #efb5cd;
+  --nv-gold: #e9b84a;
+  --font-ui: 'Nunito Sans', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Nunito Sans', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Marcellus', 'Trajan Pro', Georgia, serif;
+  --font-title: 'Italiana', 'Marcellus', Georgia, serif;
+  --font-mono: 'Nunito Sans', system-ui, sans-serif;
+  /* A faint scatter of four-petal blossoms behind panels. */
+  --nv-blossoms: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cg transform='translate(14 14)' fill='%23f1a5c4' fill-opacity='0.2'%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(72)'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(144)'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(216)'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(288)'/%3E%3Ccircle r='1.5' fill='%23e9b84a' fill-opacity='0.4'/%3E%3C/g%3E%3Cg transform='translate(42 42) scale(.6)' fill='%23f1a5c4' fill-opacity='0.16'%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(72)'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(144)'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(216)'/%3E%3Cellipse cy='-4.6' rx='2.6' ry='4.4' transform='rotate(288)'/%3E%3C/g%3E%3C/svg%3E");
+  /* The lotus ornament: five petals, pink on white, used on rules and title bars. */
+  --nv-lotus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 16'%3E%3Cg fill='%23fde3ee' stroke='%23c94a82' stroke-width='.9' stroke-linejoin='round'%3E%3Cpath d='M1.5 8C5 8 9 10 11 13.2 6 14 2.5 12 1.5 8Z'/%3E%3Cpath d='M22.5 8C19 8 15 10 13 13.2 18 14 21.5 12 22.5 8Z'/%3E%3Cpath d='M6.5 3.5C10 5 11 10 11.2 13 7 12 5 8 6.5 3.5Z'/%3E%3Cpath d='M17.5 3.5C14 5 13 10 12.8 13 17 12 19 8 17.5 3.5Z'/%3E%3Cpath d='M12 1C15 4 15 9 12 13 9 9 9 4 12 1Z'/%3E%3C/g%3E%3C/svg%3E");
+  /* The cursors: a lotus bud (the tip is the hotspot), a lotus in bloom over anything you can act on,
+     a closed grey bud struck through where you cannot. */
+  --cursor-default: url('../assets/cursors/nirvana-bud.svg') 3 3, default;
+  --cursor-pointer: url('../assets/cursors/nirvana-bloom.svg') 14 14, pointer;
+  --cursor-blocked: url('../assets/cursors/nirvana-closed.svg') 3 3, not-allowed;
+}
+
+/* The map is night: whatever is drawn over it keeps light-on-dark tokens. (The HUD, windows and
+   notices are outside it and stay white.) */
+html[data-theme='nirvana'] .view-transition {
+  --accent-rgb: 246, 170, 205;
+  --accent-soft-rgb: 255, 214, 232;
+  --ink-rgb: 250, 230, 240;
+  --panel-rgb: 24, 10, 24;
+  --panel-deep-rgb: 12, 5, 14;
+  --panel-raised-rgb: 38, 18, 38;
+  --panel-hover-rgb: 64, 30, 60;
+  --text-bright-rgb: 255, 244, 250;
+  --accent: #f6aacd;
+  --accent-soft: #ffd6e8;
+  --text: #f1dbe8;
+  --text-bright: #fff4fa;
+  --text-cool: #e8cfe0;
+  --text-toast: #fff4fa;
+  --strong: #ffffff;
+  color: var(--text);
+}
+
+/* --- Type ---------------------------------------------------------------------------- */
+html[data-theme='nirvana'] body {
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+}
+html[data-theme='nirvana'] :is(.hud-title, .main-menu-title) {
+  font-family: var(--font-title);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.1em;
+  color: var(--accent-soft);
+  text-shadow: none;
+}
+html[data-theme='nirvana'] .hud-title {
+  font-size: 21px;
+  line-height: 1;
+}
+/* A small lotus before the title. */
+html[data-theme='nirvana'] :is(.hud-title, .main-menu-title)::before {
+  content: '';
+  display: inline-block;
+  width: 1.3em;
+  height: 0.88em;
+  margin-right: 0.5em;
+  background: var(--nv-lotus) center / contain no-repeat;
+  vertical-align: -0.04em;
+}
+html[data-theme='nirvana'] :is(.draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-subtitle, .confirm-title, .econ-subtitle, .outliner-section-title, .action-dock-header, .nav-custom-title) {
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  text-shadow: none;
+}
+html[data-theme='nirvana'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .situations-type-label) {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html[data-theme='nirvana'] :is(.outliner-tab, .outliner-subtab, .nav-subtab) {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding-inline: 3px;
+}
+html[data-theme='nirvana'] .outliner-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-theme='nirvana'] .nav-category-btn {
+  font-size: 11px;
+}
+html[data-theme='nirvana'] :is(.fiscal-ind-val, .resource-value, .resource-delta, .situations-count, .situation-badge-count, .time-clock, .inspect-value, .time-date) {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme='nirvana'] :is(.inspect-label, .main-menu-econ-desc) {
+  color: var(--text-cool);
+}
+html[data-theme='nirvana'] button {
+  font-family: inherit;
+}
+/* Default's text glows are made for dark; a white page has no use for them. */
+html[data-theme='nirvana'] body * {
+  text-shadow: none;
+}
+
+/* --- Petal chrome ------------------------------------------------------------------------ */
+html[data-theme='nirvana'] :is(button, input, select, textarea, .nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill, .situations-type, .pl-tile) {
+  border-radius: 10px 2px 10px 2px !important;
+}
+html[data-theme='nirvana'] :is(.draggable-window, .confirm-box, .dip-toast, .main-menu-country-card, .main-menu-econ-option, .pl-detail, .pl-district, .game-tooltip) {
+  border-radius: 18px 3px 18px 3px !important;
+}
+html[data-theme='nirvana'] .draggable-window-titlebar {
+  border-radius: 17px 2px 0 0 !important;
+}
+html[data-theme='nirvana'] .hud-bar {
+  background: linear-gradient(#fffafc, #fbe9f1);
+}
+html[data-theme='nirvana'] .hud-top {
+  border-bottom: 1px solid var(--nv-line);
+  box-shadow: 0 2px 14px rgba(184, 56, 108, 0.14);
+}
+html[data-theme='nirvana'] .hud-bottom {
+  border-top: 1px solid var(--nv-line);
+  box-shadow: 0 -2px 14px rgba(184, 56, 108, 0.14);
+}
+html[data-theme='nirvana'] :is(.nav-sidebar, .outliner) {
+  background-color: rgba(255, 250, 252, 0.97);
+  background-image: var(--nv-blossoms);
+  border-color: var(--nv-line);
+  box-shadow: inset 0 0 0 1px #fff, 0 0 18px rgba(184, 56, 108, 0.1);
+}
+
+/* Windows: a white card, a pink hairline, a soft shadow, a pale-pink title bar with a lotus. */
+html[data-theme='nirvana'] .draggable-window {
+  border: 1px solid var(--nv-line);
+  background-color: rgba(255, 250, 252, 0.98);
+  background-image: var(--nv-blossoms);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 10px 34px rgba(138, 36, 80, 0.28);
+}
+html[data-theme='nirvana'] .draggable-window-titlebar {
+  background: linear-gradient(#fff4f9, #fbdce9);
+  color: var(--accent-soft);
+  border-bottom: 1px solid var(--nv-line);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+html[data-theme='nirvana'] .draggable-window-titlebar::before {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 12px;
+  margin-right: 8px;
+  background: var(--nv-lotus) center / contain no-repeat;
+}
+html[data-theme='nirvana'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: var(--accent-soft);
+}
+
+/* Buttons: white petals with a pink rule; the active one is filled lotus pink. */
+html[data-theme='nirvana'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: linear-gradient(#ffffff, #fdeef4);
+  border: 1px solid var(--nv-line);
+  color: var(--accent);
+}
+html[data-theme='nirvana'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: linear-gradient(#fff6fa, #fbd9e7);
+  border-color: var(--accent);
+  color: var(--accent-soft);
+}
+html[data-theme='nirvana'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: linear-gradient(#f9bdd5, #ee93b8);
+  border-color: var(--accent);
+  color: var(--strong);
+  box-shadow: 0 1px 6px rgba(184, 56, 108, 0.3);
+}
+html[data-theme='nirvana'] .time-mode-btn.active {
+  outline: 1px solid currentColor;
+  outline-offset: -3px;
+}
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright
+   as the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='nirvana'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
+  color: rgba(var(--accent-rgb), 0.4);
+  border-color: rgba(var(--accent-rgb), 0.2);
+  background: #fbf3f6;
+}
+html[data-theme='nirvana'] :is(input, select, textarea) {
+  background: #ffffff;
+  border: 1px solid var(--nv-line);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+}
+
+/* A hairline for every rule, with a small lotus at its middle. */
+html[data-theme='nirvana'] .inspect-divider {
+  position: relative;
+  border-top: 1px solid var(--nv-line);
+  margin: 14px 0;
+}
+html[data-theme='nirvana'] .inspect-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 24px;
+  height: 14px;
+  transform: translateX(-50%);
+  background: #fffafc var(--nv-lotus) center / 20px 13px no-repeat;
+}
+html[data-theme='nirvana'] .outliner-entry.selected .outliner-entry-name {
+  color: var(--accent-soft);
+  border-left: 2px solid var(--nv-pink);
+  padding-left: 4px;
+}
+
+/* --- Main menu ------------------------------------------------------------------------- */
+html[data-theme='nirvana'] .main-menu {
+  background: radial-gradient(ellipse at 50% 0%, #ffffff 0%, #fdeaf2 55%, #f9d6e5 100%);
+}
+html[data-theme='nirvana'] :is(.main-menu-country-card, .main-menu-econ-option) {
+  background-color: rgba(255, 255, 255, 0.92);
+  background-image: var(--nv-blossoms);
+  box-shadow: 0 4px 16px rgba(184, 56, 108, 0.12);
+}
+html[data-theme='nirvana'] :is(.main-menu-country-card, .main-menu-econ-option):hover {
+  background-color: #fff2f7;
+}
+html[data-theme='nirvana'] .main-menu-econ-option.active {
+  background-color: #fde0ec;
+}
+html[data-theme='nirvana'] :is(.main-menu-country-name, .main-menu-econ-name) {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 13.5px;
+  letter-spacing: 0.05em;
+  color: var(--text-bright);
+}
+
+/* --- HUD ------------------------------------------------------------------------------ */
+/* Default dims these with a low alpha, made for light-on-dark; on white they need to be solid. */
+html[data-theme='nirvana'] :is(.fiscal-ind-label, .resource-delta) {
+  color: var(--text-cool);
+}
+html[data-theme='nirvana'] .resource-delta.econ-pos {
+  color: var(--ok);
+}
+html[data-theme='nirvana'] .resource-delta.econ-neg {
+  color: var(--danger);
+}
+html[data-theme='nirvana'] .crumb:not(:disabled) {
+  opacity: 0.85;
+}
+html[data-theme='nirvana'] .crumb-sep {
+  opacity: 0.7;
+}
+html[data-theme='nirvana'] .nav-custom-pin {
+  opacity: 0.95;
+}
+html[data-theme='nirvana'] .time-date {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--accent-soft);
+  letter-spacing: 0.08em;
+}
+
+/* --- Alerts ----------------------------------------------------------------------------- */
+html[data-theme='nirvana'] .dip-toast {
+  background: #ffffff;
+  color: var(--text-bright);
+  border: 1px solid var(--nv-line);
+  border-left: 4px solid var(--nv-pink);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 6px 22px rgba(138, 36, 80, 0.22);
+}
+html[data-theme='nirvana'] .dip-toast:hover {
+  background: #fff2f7;
+}
+html[data-theme='nirvana'] .dip-toast.sev-warning {
+  border-left-color: var(--warn);
+}
+html[data-theme='nirvana'] .dip-toast.sev-danger {
+  background: #fff0f2;
+  color: #5a0f1c;
+  border: 1px solid rgba(var(--danger-rgb), 0.55);
+  border-left: 4px solid var(--danger);
+}
+html[data-theme='nirvana'] .game-tooltip {
+  background: #ffffff;
+  color: var(--text-bright);
+  border: 1px solid var(--nv-line);
+  box-shadow: 0 6px 22px rgba(138, 36, 80, 0.22);
+}
+html[data-theme='nirvana'] .confirm-box {
+  background-color: #fffafc;
+  background-image: var(--nv-blossoms);
+  border: 1px solid var(--nv-line);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 14px 44px rgba(138, 36, 80, 0.32);
+}
+html[data-theme='nirvana'] .confirm-title {
+  background: linear-gradient(#fff4f9, #fbdce9);
+  color: var(--accent-soft);
+  margin: -16px -18px 12px;
+  padding: 7px 18px;
+  border-bottom: 1px solid var(--nv-line);
+}
+html[data-theme='nirvana'] .situations-type {
+  background: #ffffff;
+  border: 1px solid var(--nv-line);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='nirvana'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='nirvana'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='nirvana'] .sev-info {
+  --sev-color: var(--nv-pink);
+}
+html[data-theme='nirvana'] .situation-badge {
+  background: #ffffff;
+  border: 1px solid var(--accent);
+  color: var(--accent-soft);
+  font-family: var(--font-ui);
+}
+html[data-theme='nirvana'] .situation-badge.sev-danger {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+}
+html[data-theme='nirvana'] .situation-badge.sev-danger .situation-badge-icon {
+  background: #ffffff;
+  color: var(--danger);
+}
+
+/* --- Tech tree ---------------------------------------------------------------------------- */
+html[data-theme='nirvana'] .tech-tree-node rect {
+  fill: #ffffff;
+}
+html[data-theme='nirvana'] .tech-tree-node-name {
+  font-family: var(--font-display);
+  letter-spacing: 0.03em;
+}
+
+/* --- Colours written inline for dark panels ------------------------------------------------- */
+/* Some panels set a text colour inline (a pale blue for figures, bright greens / reds / ambers for
+   statuses). On white the pale ones vanish and the bright ones glare: figures take the plum ink, the
+   statuses keep their hue but go darker. (The map overlays are exempt: they sit on night.) */
+html[data-theme='nirvana'] [style*='rgb(205']:not(.view-transition *),
+html[data-theme='nirvana'] [style*='rgb(201']:not(.view-transition *) {
+  color: var(--text-bright) !important;
+}
+html[data-theme='nirvana'] [style^='color:']:not(.view-transition *),
+html[data-theme='nirvana'] [style*='; color:']:not(.view-transition *) {
+  filter: brightness(0.62) saturate(1.2);
+}
+html[data-theme='nirvana'] [style*='rgb(205']:not(.view-transition *),
+html[data-theme='nirvana'] [style*='rgb(201']:not(.view-transition *) {
+  filter: none;
+}
+html[data-theme='nirvana'] .abs-statcard-head {
+  filter: brightness(0.62) saturate(1.2);
+}
+/* The pace buttons keep their own colours; the inactive ones are only less faded than on night. */
+html[data-theme='nirvana'] .time-mode-btn:not(.active) {
+  opacity: 0.9;
+}
+html[data-theme='nirvana'] .tchart-range:not(.active) {
+  color: var(--text-cool);
+}
+
+/* --- Motion -------------------------------------------------------------------------------- */
+/* Windows and notices bloom in with a gentle fade. (Opacity only: a window is positioned by an
+   inline transform, which an animation would override.) */
+@keyframes nirvana-bloom {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+html[data-theme='nirvana'][data-motion='full'] :is(.draggable-window, .confirm-box, .dip-toast) {
+  animation: nirvana-bloom 0.45s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme='nirvana'] * {
+    animation: none !important;
+  }
+}

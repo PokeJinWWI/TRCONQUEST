@@ -157,8 +157,11 @@ console.log('\n=== 7. No old-style subscripts left ===')
 // The English-only themes share one set of checks: parse, token completeness, scoping, fonts, cursors,
 // scene colours. (NERV has its own above: it is the one with native-script labels.)
 const ENGLISH_THEMES = [
-  { id: 'ichor', label: 'Ichor', families: ['Cinzel', 'Cormorant Garamond', 'Pirata One'], title: ["--font-blackletter:\\s*'Pirata One'", "--font-display:\\s*'Cinzel'", "--font-body:\\s*'Cormorant Garamond'"], orbit: '#c9a24a', cursors: [['--cursor-default', 'ichor-dagger'], ['--cursor-pointer', 'ichor-tracery'], ['--cursor-blocked', 'ichor-sealed']] },
+  { id: 'ichor', label: 'Ichor', families: ['Cinzel', 'Cormorant Garamond', 'Grenze Gotisch'], title: ["--font-blackletter:\\s*'Grenze Gotisch'", "--font-display:\\s*'Cinzel'", "--font-body:\\s*'Cormorant Garamond'"], orbit: '#c9a24a', cursors: [['--cursor-default', 'ichor-dagger'], ['--cursor-pointer', 'ichor-tracery'], ['--cursor-blocked', 'ichor-sealed']] },
   { id: 'yesteryear', label: 'Yesteryear', families: ['Playfair Display', 'Old Standard TT', 'Rye'], title: ["--font-saloon:\\s*'Rye'", "--font-display:\\s*'Playfair Display'", "--font-body:\\s*'Old Standard TT'"], orbit: '#b8445e', cursors: [['--cursor-default', 'yesteryear-spade'], ['--cursor-pointer', 'yesteryear-chip'], ['--cursor-blocked', 'yesteryear-folded']] },
+  { id: 'serenity', label: 'Serenity', families: ['Shippori Mincho', 'Yuji Syuku', 'Zen Kaku Gothic New'], title: ["--font-title:\\s*'Yuji Syuku'", "--font-display:\\s*'Shippori Mincho'", "--font-body:\\s*'Zen Kaku Gothic New'"], orbit: '#70a8e8', cursors: [['--cursor-default', 'serenity-katana'], ['--cursor-pointer', 'serenity-katana-ready'], ['--cursor-blocked', 'serenity-katana-sheathed']] },
+  { id: 'nirvana', label: 'Nirvana', families: ['Italiana', 'Marcellus', 'Nunito Sans'], title: ["--font-title:\\s*'Italiana'", "--font-display:\\s*'Marcellus'", "--font-body:\\s*'Nunito Sans'"], orbit: '#f08cb4', cursors: [['--cursor-default', 'nirvana-bud'], ['--cursor-pointer', 'nirvana-bloom'], ['--cursor-blocked', 'nirvana-closed']] },
+  { id: 'harvest', label: 'Harvest', families: ['Grenze Gotisch', 'IM Fell English SC', 'Spectral'], title: ["--font-title:\\s*'Grenze Gotisch'", "--font-display:\\s*'IM Fell English SC'", "--font-body:\\s*'Spectral'"], orbit: '#c9c9c9', cursors: [['--cursor-default', 'harvest-rose'], ['--cursor-pointer', 'harvest-rose-ready'], ['--cursor-blocked', 'harvest-rose-withered']] },
 ] as const
 
 for (const th of ENGLISH_THEMES) {
@@ -187,7 +190,12 @@ for (const th of ENGLISH_THEMES) {
   const timeRules = [...sheet.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => m[1].includes('.time-mode-btn'))
   const recolours = timeRules.filter((m) => /(^|;|\s)(background|background-color|color|border-color|border)\s*:/.test(m[2]))
   check(`${th.label} never recolours the time-mode buttons (each keeps its own colour; the active one is ringed in it)`, timeRules.length > 0 && recolours.length === 0, recolours.map((m) => m[1].trim().slice(0, 60)).join(' | '))
-  check('its entrance animation touches opacity only (a window is placed by an inline transform)', !new RegExp(`@keyframes ${th.id === 'ichor' ? 'ichor-rise' : 'yesteryear-deal'}[^}]*transform`).test(sheet.replace(/\s+/g, ' ')))
+  if (th.id === 'serenity' || th.id === 'harvest') {
+    // Stasis: no animation and no transition anywhere (the theme switches every one of them off).
+    check(`${th.label} defines no @keyframes and switches animation and transition off`, !/@keyframes/.test(sheet) && /animation:\s*none\s*!important/.test(sheet) && /transition:\s*none\s*!important/.test(sheet))
+  } else {
+    check('its entrance animation touches opacity only (a window is placed by an inline transform)', !new RegExp(`@keyframes ${({ ichor: 'ichor-rise', yesteryear: 'yesteryear-deal', nirvana: 'nirvana-bloom' } as Record<string, string>)[th.id]}[^}]*transform`).test(sheet.replace(/\s+/g, ' ')))
+  }
 
   const fonts = readFileSync(`src/themes/${th.id}Fonts.css`, 'utf8')
   const families = new Set([...fonts.matchAll(/font-family:\s*'([^']+)'/g)].map((m) => m[1]))
@@ -212,6 +220,17 @@ for (const th of ENGLISH_THEMES) {
 }
 check('Default scene colours are unchanged', SCENE_COLORS.default.orbit === '#7ce8ff')
 
+console.log('\n=== Display-only tiles are not greyed out by a theme ===')
+{
+  // A building tile with nothing to open is `<button class="pl-tile" disabled>`; a theme's blanket disabled
+  // style used to dim every one of them to a third of their colour (they read as unavailable).
+  for (const id of ['nerv', 'ichor', 'yesteryear', 'serenity', 'nirvana', 'harvest', 'terminal', 'win95']) {
+    const sheet = readFileSync(`src/themes/${id}.css`, 'utf8')
+    const rule = sheet.match(new RegExp(`html\\[data-theme='${id}'\\] button:disabled([^{]*)\\{`))
+    check(`${id}: the blanket disabled style leaves .pl-tile alone`, !!rule && /\.pl-tile/.test(rule[1]), rule ? rule[1].trim() : 'no rule')
+  }
+}
+
 console.log('\n=== Main menu stays reachable when it is taller than the window ===')
 {
   const app = readFileSync('src/App.css', 'utf8')
@@ -219,6 +238,16 @@ console.log('\n=== Main menu stays reachable when it is taller than the window =
   check('the menu is not centred with justify-content (a tall one lost its title above the screen)', /justify-content:\s*flex-start/.test(menu) && !/justify-content:\s*center/.test(menu))
   check('it is centred by auto margins on its first and last child instead (they collapse on overflow)', /\.main-menu\s*>\s*:first-child\s*{[^}]*margin-top:\s*auto/.test(app) && /\.main-menu\s*>\s*:last-child\s*{[^}]*margin-bottom:\s*auto/.test(app))
   check('the menu scrolls', /overflow-y:\s*auto/.test(menu))
+}
+
+console.log('\n=== The header keeps its rows as the game runs ===')
+{
+  // The top bar wraps by content width, so numbers growing over game time (treasury, income, resources)
+  // flipped it between one and two rows; each figure reserves its widest width in ch with tabular figures.
+  const app = readFileSync('src/App.css', 'utf8')
+  check('treasury and balance reserve their width', /\.fiscal-ind-treasury\s+\.fiscal-ind-val\s*{[^}]*min-width:\s*\d+ch/.test(app) && /\.fiscal-ind-balance\s+\.fiscal-ind-val\s*{[^}]*min-width:\s*\d+ch/.test(app))
+  check('resource value and delta reserve theirs, in tabular figures', /\.resource-value\s*{[^}]*min-width:\s*\d+ch/.test(app) && /\.resource-delta\s*{[^}]*min-width:\s*\d+ch/.test(app) && /\.resource-value\s*{[^}]*tabular-nums/.test(app))
+  check('the situation badge count reserves its width', /\.situation-badge-count\s*{[^}]*min-width:\s*\d+ch/.test(app))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

@@ -39,7 +39,7 @@ html[data-theme='ichor'] {
   --font-ui: 'Cormorant Garamond', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --font-body: 'Cormorant Garamond', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --font-display: 'Cinzel', 'Trajan Pro', 'Palatino Linotype', Georgia, serif;
-  --font-blackletter: 'Pirata One', 'Old English Text MT', 'Palatino Linotype', Georgia, serif;
+  --font-blackletter: 'Grenze Gotisch', 'Old English Text MT', 'Palatino Linotype', Georgia, serif;
   --font-mono: 'Cormorant Garamond', 'Palatino Linotype', Georgia, serif;
   /* A damask of small diamonds and a dot at every crossing, in gold at a whisper. */
   --ichor-damask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cpath d='M14 1L27 14L14 27L1 14Z' fill='none' stroke='%23c9a24a' stroke-opacity='0.07' stroke-width='0.8'/%3E%3Cpath d='M14 8L20 14L14 20L8 14Z' fill='%23c9a24a' fill-opacity='0.035'/%3E%3Ccircle cx='0' cy='0' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3Ccircle cx='28' cy='0' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3Ccircle cx='0' cy='28' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3Ccircle cx='28' cy='28' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3C/svg%3E");
@@ -63,19 +63,19 @@ html[data-theme='ichor'] body {
 }
 html[data-theme='ichor'] :is(.hud-title, .main-menu-title) {
   font-family: var(--font-blackletter);
-  font-weight: 400;
+  font-weight: 700;
   text-transform: none;
   letter-spacing: 0.04em;
   color: var(--accent-soft);
   text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.35);
 }
-/* A narrow face reads small at the size Default's wide letters use: the menu title gets more of it. */
+/* The blackletter title is set a little larger than Default's lettering on the menu. */
 html[data-theme='ichor'] .main-menu-title {
-  font-size: clamp(28px, 5.6vw, 48px);
+  font-size: clamp(26px, 5.2vw, 44px);
   line-height: 1.05;
 }
 html[data-theme='ichor'] .hud-title {
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1;
 }
 html[data-theme='ichor'] :is(.draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-subtitle, .confirm-title, .econ-subtitle, .outliner-section-title, .action-dock-header, .nav-custom-title) {
@@ -189,7 +189,9 @@ html[data-theme='ichor'] :is(.nav-category-btn, .combat-density-btn, .time-btn, 
 html[data-theme='ichor'] .time-mode-btn.active {
   box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px currentColor;
 }
-html[data-theme='ichor'] button:disabled:not(.situations-icon) {
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright as
+   the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='ichor'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
   color: rgba(var(--accent-rgb), 0.36);
   border-color: rgba(var(--accent-rgb), 0.2);
   background: rgba(10, 8, 5, 0.7);

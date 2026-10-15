@@ -15,6 +15,18 @@ export function Breadcrumb() {
 
   return (
     <nav className="breadcrumb">
+      {/* The width of the system-level chain is always reserved (hidden, in the same grid cell): the
+          header wraps when its parts do not fit one row, and that decision must not change as the
+          breadcrumb grows and shrinks with the view, or the whole bar (and every panel docked under
+          it) jumps between one and two rows as you zoom. */}
+      <span className="breadcrumb-reserve" aria-hidden="true">
+        <span className="crumb"><Bi en="GALAXY" /></span>
+        <span className="crumb-sep">›</span>
+        <span className="crumb"><Bi en="INTERSTELLAR" /></span>
+        <span className="crumb-sep">›</span>
+        <span className="crumb"><Bi en="SYSTEM" /></span>
+      </span>
+      <span className="breadcrumb-trail">
       <button type="button" className="crumb" onClick={enterGalactic} disabled={level === 'galactic'} title="Zoom out to the whole galaxy">
         <Bi en="GALAXY" />
       </button>
@@ -72,6 +84,7 @@ export function Breadcrumb() {
           </button>
         </>
       )}
+      </span>
     </nav>
   )
 }

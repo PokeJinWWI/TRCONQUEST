@@ -93,7 +93,9 @@ html[data-theme='terminal'] :is(.nav-category-btn, .combat-density-btn, .time-bt
   box-shadow: none;
   text-shadow: none;
 }
-html[data-theme='terminal'] button:disabled:not(.situations-icon) {
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright as
+   the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='terminal'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
   color: rgba(var(--phosphor-dim-rgb), 0.7);
   border-color: rgba(var(--phosphor-dim-rgb), 0.4);
   background: transparent;

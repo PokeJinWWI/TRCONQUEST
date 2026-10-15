@@ -134,7 +134,9 @@ html[data-theme='nerv'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .
   box-shadow: none;
   text-shadow: none;
 }
-html[data-theme='nerv'] button:disabled:not(.situations-icon) {
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright as
+   the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='nerv'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
   color: rgba(var(--danger-rgb), 0.55);
   border-color: rgba(var(--danger-rgb), 0.35);
   background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(var(--danger-rgb), 0.08) 6px 8px);

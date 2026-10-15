@@ -1,0 +1,406 @@
+/* The Harvest theme: a walled garden gone to thorn. The interface is black and white and nothing
+   else: pitch panels, bone-white rules and letters, a vignette in every corner. The colours are
+   the rose (an engraved crimson bloom before the title, at the heart of every rule and at the end
+   of the cursor), the dark green of the vines and the little meadow flowers; and alarms, which
+   are blood.
+     Palette  black (--panel-rgb 8,8,8), bone white (#dcdcdc), pure white for emphasis, greyed
+              versions of the status colours (sage, straw), crimson (#b3122b) for roses and alarms, dark
+              green (#2b6137) for vines.
+     Type     Grenze Gotisch (the title: a gothic hand), IM Fell English SC (headings: old small
+              capitals, uneven), Spectral (the interface).
+     Shape    square corners, 1px bone rules with a second, fainter rule outside, a braid of dark
+              green thorn vine along the whole top bar, a runic line pattern (thin right-angled
+              strokes that step and hook) under every title bar, down the side panels and in every
+              divider with a rose at its middle, a row of small dim stemless meadow flowers along
+              the bottom bar, a dark vignette over the whole screen.
+     Motion   none: no animation, no transition.
+     Cursors  a thorned rose stem whose tip is the pointer and whose bloom hangs off the end; the
+              same with a ring at the tip over anything you can act on; the rose gone black and the
+              stem grey, struck through, where you cannot.
+   English only. A pure reskin of Default: every rule is under html[data-theme='harvest']. Relation
+   colours (own / allied / neutral / hostile) and nation colours are NOT themed. */
+@import './harvestFonts.css';
+
+html[data-theme='harvest'] {
+  --accent-rgb: 220, 220, 220;
+  --accent-soft-rgb: 255, 255, 255;
+  --ink-rgb: 226, 226, 226;
+  --panel-rgb: 8, 8, 8;
+  --panel-deep-rgb: 3, 3, 3;
+  --panel-raised-rgb: 20, 20, 20;
+  --panel-hover-rgb: 40, 40, 40;
+  --text-bright-rgb: 245, 245, 245;
+  --ok-rgb: 168, 184, 166;
+  --warn-rgb: 207, 196, 160;
+  --danger-rgb: 193, 24, 43;
+  --caution-rgb: 191, 184, 154;
+  --accent: #d6d6d6;
+  --accent-soft: #ffffff;
+  --text: #cfcfcf;
+  --text-bright: #f4f4f4;
+  --text-cool: #bcbcbc;
+  --text-toast: #f4f4f4;
+  --strong: #ffffff;
+  --danger: #c1182b;
+  --warn: #cfc4a0;
+  --caution: #bfb89a;
+  --ok: #a8b8a6;
+  --page-bg: #000000;
+  --hv-bone: #dcdcdc;
+  --hv-crimson: #b3122b;
+  --hv-crimson-rgb: 179, 18, 43;
+  --font-ui: 'Spectral', 'Iowan Old Style', Georgia, serif;
+  --font-body: 'Spectral', 'Iowan Old Style', Georgia, serif;
+  --font-display: 'IM Fell English SC', 'Spectral', Georgia, serif;
+  --font-title: 'Grenze Gotisch', 'IM Fell English SC', Georgia, serif;
+  --font-mono: 'Spectral', Georgia, serif;
+  /* A short braid of thorned green vine for title bars and rules. */
+  --hv-vine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='16' viewBox='0 0 60 16'%3E%3Cg fill='%232f6d3c' stroke='%2307140b' stroke-width='.5' stroke-linejoin='round'%3E%3Cpath d='M2.5 9.0 Q2.9 10.9 -0.3 12.9 Q4.8 11.5 4.2 9.4Z'/%3E%3Cpath d='M7.3 10.0 Q8.4 7.2 4.9 2.2 Q10.4 7.4 9.1 10.3Z'/%3E%3Cpath d='M13.9 10.6 Q14.8 12.2 12.7 14.5 Q16.8 12.2 15.7 10.6Z'/%3E%3Cpath d='M19.9 10.4 Q20.5 8.1 17.1 5.1 Q22.4 7.9 21.7 10.2Z'/%3E%3Cpath d='M25.4 9.5 Q26.7 11.2 24.9 14.7 Q28.7 10.7 27.1 9.1Z'/%3E%3Cpath d='M32.5 7.0 Q32.5 4.2 27.8 1.2 Q34.4 3.7 34.2 6.6Z'/%3E%3Cpath d='M37.3 6.0 Q38.4 7.6 36.4 10.4 Q40.4 7.3 39.1 5.7Z'/%3E%3Cpath d='M43.9 5.4 Q44.7 8.0 41.1 11.9 Q46.7 8.0 45.7 5.4Z'/%3E%3Cpath d='M49.9 5.6 Q50.6 7.3 48.1 9.5 Q52.6 7.6 51.7 5.8Z'/%3E%3Cpath d='M55.4 6.5 Q55.6 8.9 51.5 11.5 Q57.5 9.5 57.1 6.9Z'/%3E%3C/g%3E%3Cpath d='M0 8.0 C7.5 11.5 22.5 11.5 30.0 8.0 C37.5 4.5 52.5 4.5 60.0 8.0' fill='none' stroke='%2307140b' stroke-width='2.8449999999999998' stroke-linecap='round'/%3E%3Cpath d='M0 8.0 C7.5 11.5 22.5 11.5 30.0 8.0 C37.5 4.5 52.5 4.5 60.0 8.0' fill='none' stroke='%232b6137' stroke-width='1.4449999999999998' stroke-linecap='round'/%3E%3Cpath d='M0 8.0 C7.5 11.5 22.5 11.5 30.0 8.0 C37.5 4.5 52.5 4.5 60.0 8.0' fill='none' stroke='%238fd09a' stroke-width='0.50' stroke-dasharray='5 3 2 3' stroke-linecap='round' opacity='.6'/%3E%3Cg fill='%232f6d3c' stroke='%2307140b' stroke-width='.5' stroke-linejoin='round'%3E%3Cpath d='M2.3 7.1 Q3.9 9.3 1.5 14.0 Q5.8 8.8 4.4 6.5Z'/%3E%3Cpath d='M7.1 6.0 Q8.0 4.2 5.5 2.1 Q9.9 4.0 9.2 5.7Z'/%3E%3Cpath d='M13.7 5.4 Q14.7 7.7 11.5 11.3 Q16.7 7.7 15.8 5.4Z'/%3E%3Cpath d='M19.7 5.6 Q21.0 3.9 18.8 0.9 Q23.0 4.1 21.8 5.8Z'/%3E%3Cpath d='M25.2 6.4 Q25.3 9.5 20.2 12.8 Q27.2 10.1 27.3 7.0Z'/%3E%3Cpath d='M32.3 8.9 Q33.8 7.7 32.3 4.9 Q35.7 8.2 34.4 9.5Z'/%3E%3Cpath d='M37.1 10.0 Q38.4 8.0 35.8 4.3 Q40.4 8.2 39.2 10.3Z'/%3E%3Cpath d='M43.7 10.6 Q44.8 8.6 42.1 5.7 Q46.8 8.6 45.9 10.6Z'/%3E%3Cpath d='M49.7 10.4 Q50.3 7.6 46.1 3.9 Q52.3 7.4 51.8 10.2Z'/%3E%3Cpath d='M55.2 9.6 Q55.8 7.6 52.9 5.8 Q57.7 7.1 57.3 9.0Z'/%3E%3C/g%3E%3Cpath d='M0 8.0 C7.5 4.5 22.5 4.5 30.0 8.0 C37.5 11.5 52.5 11.5 60.0 8.0' fill='none' stroke='%2307140b' stroke-width='3.0999999999999996' stroke-linecap='round'/%3E%3Cpath d='M0 8.0 C7.5 4.5 22.5 4.5 30.0 8.0 C37.5 11.5 52.5 11.5 60.0 8.0' fill='none' stroke='%232b6137' stroke-width='1.7' stroke-linecap='round'/%3E%3Cpath d='M0 8.0 C7.5 4.5 22.5 4.5 30.0 8.0 C37.5 11.5 52.5 11.5 60.0 8.0' fill='none' stroke='%238fd09a' stroke-width='0.50' stroke-dasharray='5 3 2 3' stroke-linecap='round' opacity='.6'/%3E%3C/svg%3E");
+  /* An engraved rose from above (layered petals, hatched rim), for the title and the middle of rules. */
+  --hv-rose: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-11 -11 22 22'%3E%3Ccircle r='10.6' fill='%23000'/%3E%3Ccircle cx='6.10' cy='0.00' r='4.7' fill='%238f0c20' stroke='%2314020a' stroke-width='.7'/%3E%3Ccircle cx='3.80' cy='4.77' r='4.7' fill='%238f0c20' stroke='%2314020a' stroke-width='.7'/%3E%3Ccircle cx='-1.36' cy='5.95' r='4.7' fill='%238f0c20' stroke='%2314020a' stroke-width='.7'/%3E%3Ccircle cx='-5.50' cy='2.65' r='4.7' fill='%238f0c20' stroke='%2314020a' stroke-width='.7'/%3E%3Ccircle cx='-5.50' cy='-2.65' r='4.7' fill='%238f0c20' stroke='%2314020a' stroke-width='.7'/%3E%3Ccircle cx='-1.36' cy='-5.95' r='4.7' fill='%238f0c20' stroke='%2314020a' stroke-width='.7'/%3E%3Ccircle cx='3.80' cy='-4.77' r='4.7' fill='%238f0c20' stroke='%2314020a' stroke-width='.7'/%3E%3Cpath d='M7.16 -2.53 L9.33 -3.30' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M7.55 -0.91 L9.83 -1.19' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M7.55 0.91 L9.83 1.19' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M7.16 2.53 L9.33 3.30' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M6.45 4.02 L8.40 5.24' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M5.42 5.33 L7.05 6.95' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M3.99 6.47 L5.20 8.42' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M2.49 7.18 L3.24 9.36' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M0.88 7.55 L1.14 9.83' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-0.79 7.56 L-1.03 9.85' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-2.57 7.15 L-3.34 9.32' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-4.07 6.42 L-5.30 8.36' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-5.36 5.39 L-6.98 7.02' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-6.40 4.09 L-8.34 5.33' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-7.19 2.45 L-9.37 3.20' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-7.56 0.83 L-9.84 1.07' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-7.56 -0.83 L-9.84 -1.07' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-7.19 -2.45 L-9.37 -3.20' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-6.40 -4.09 L-8.34 -5.33' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-5.36 -5.39 L-6.98 -7.02' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-4.07 -6.42 L-5.30 -8.36' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-2.57 -7.15 L-3.34 -9.32' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M-0.79 -7.56 L-1.03 -9.85' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M0.88 -7.55 L1.14 -9.83' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M2.49 -7.18 L3.24 -9.36' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M3.99 -6.47 L5.20 -8.42' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M5.42 -5.33 L7.05 -6.95' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M6.45 -4.02 L8.40 -5.24' stroke='%232a0309' stroke-width='.45' opacity='.85'/%3E%3Ccircle cx='3.15' cy='1.52' r='3.6' fill='%23b3122b' stroke='%2314020a' stroke-width='.6'/%3E%3Ccircle cx='-0.47' cy='3.47' r='3.6' fill='%23b3122b' stroke='%2314020a' stroke-width='.6'/%3E%3Ccircle cx='-3.44' cy='0.62' r='3.6' fill='%23b3122b' stroke='%2314020a' stroke-width='.6'/%3E%3Ccircle cx='-1.65' cy='-3.08' r='3.6' fill='%23b3122b' stroke='%2314020a' stroke-width='.6'/%3E%3Ccircle cx='2.42' cy='-2.53' r='3.6' fill='%23b3122b' stroke='%2314020a' stroke-width='.6'/%3E%3Cpath d='M4.07 1.04 L6.01 1.53' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M3.69 2.01 L5.44 2.97' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M3.07 2.86 L4.54 4.23' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M0.27 4.19 L0.40 6.19' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-0.78 4.13 L-1.15 6.09' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-1.77 3.81 L-2.62 5.62' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-3.90 1.55 L-5.76 2.29' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-4.17 0.54 L-6.15 0.79' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-4.17 -0.51 L-6.15 -0.75' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-2.68 -3.23 L-3.96 -4.77' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-1.80 -3.80 L-2.65 -5.60' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M-0.80 -4.12 L-1.19 -6.09' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M2.25 -3.55 L3.32 -5.24' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M3.05 -2.88 L4.51 -4.26' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Cpath d='M3.67 -2.04 L5.42 -3.01' stroke='%232a0309' stroke-width='.35' opacity='.7'/%3E%3Ccircle cx='0.81' cy='1.26' r='2.2' fill='%236b0816' stroke='%2314020a' stroke-width='.55'/%3E%3Ccircle cx='-1.50' cy='0.07' r='2.2' fill='%236b0816' stroke='%2314020a' stroke-width='.55'/%3E%3Ccircle cx='0.69' cy='-1.33' r='2.2' fill='%236b0816' stroke='%2314020a' stroke-width='.55'/%3E%3Cpath d='M-1.4 .4 Q-.9 -1.7 .9 -1.2 Q1.9 .1 .7 1.2 Q-.5 1.6 -.8 .6' fill='none' stroke='%2314020a' stroke-width='.55' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* The braided thorn vine that runs across the top bar (dark green, long swept thorns, leaves). */
+  --hv-vine-wide: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40' viewBox='0 0 120 40'%3E%3Cg fill='%232f6d3c' stroke='%2307140b' stroke-width='.5' stroke-linejoin='round'%3E%3Cpath d='M5.2 22.3 Q5.8 25.7 0.4 28.9 Q7.7 26.3 8.4 23.3Z'/%3E%3Cpath d='M14.7 24.7 Q16.9 19.9 11.1 11.4 Q18.8 20.2 18.1 25.2Z'/%3E%3Cpath d='M28.0 26.0 Q29.7 28.6 26.0 32.6 Q31.7 28.6 31.4 26.0Z'/%3E%3Cpath d='M40.0 25.5 Q41.0 21.6 35.2 16.7 Q43.0 21.3 43.3 25.0Z'/%3E%3Cpath d='M51.0 23.5 Q53.5 26.2 50.6 32.2 Q55.4 25.6 54.2 22.5Z'/%3E%3Cpath d='M65.2 17.7 Q65.2 12.9 57.1 8.1 Q67.1 12.3 68.4 16.7Z'/%3E%3Cpath d='M74.7 15.3 Q76.8 17.9 73.5 22.8 Q78.8 17.6 78.1 14.8Z'/%3E%3Cpath d='M88.0 14.0 Q89.5 9.6 83.4 3.0 Q91.5 9.6 91.4 14.0Z'/%3E%3Cpath d='M100.0 14.5 Q101.3 17.4 97.0 21.0 Q103.3 17.7 103.3 15.0Z'/%3E%3Cpath d='M111.0 16.5 Q113.6 13.2 110.1 5.9 Q115.5 13.8 114.2 17.5Z'/%3E%3C/g%3E%3Cpath d='M0 20.0 C15.0 28.0 45.0 28.0 60.0 20.0 C75.0 12.0 105.0 12.0 120.0 20.0' fill='none' stroke='%2307140b' stroke-width='4.12' stroke-linecap='round'/%3E%3Cpath d='M0 20.0 C15.0 28.0 45.0 28.0 60.0 20.0 C75.0 12.0 105.0 12.0 120.0 20.0' fill='none' stroke='%232b6137' stroke-width='2.72' stroke-linecap='round'/%3E%3Cpath d='M0 20.0 C15.0 28.0 45.0 28.0 60.0 20.0 C75.0 12.0 105.0 12.0 120.0 20.0' fill='none' stroke='%238fd09a' stroke-width='0.50' stroke-dasharray='5 3 2 3' stroke-linecap='round' opacity='.6'/%3E%3Cpath d='M13.6 15.5 Q17.5 19.3 19.7 23.5 Q12.9 20.2 13.6 15.5Z' fill='%232f6d3c' stroke='%2307140b' stroke-width='.5'/%3E%3Cpath d='M13.6 15.5 L19.7 23.5' stroke='%238fd09a' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M46.4 15.5 Q48.6 20.5 49.1 25.2 Q44.0 19.6 46.4 15.5Z' fill='%232f6d3c' stroke='%2307140b' stroke-width='.5'/%3E%3Cpath d='M46.4 15.5 L49.1 25.2' stroke='%238fd09a' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M73.6 24.5 Q75.7 29.5 76.3 34.2 Q71.2 28.6 73.6 24.5Z' fill='%232f6d3c' stroke='%2307140b' stroke-width='.5'/%3E%3Cpath d='M73.6 24.5 L76.3 34.2' stroke='%238fd09a' stroke-width='.45' opacity='.85'/%3E%3Cpath d='M106.4 24.5 Q110.3 28.3 112.5 32.5 Q105.8 29.2 106.4 24.5Z' fill='%232f6d3c' stroke='%2307140b' stroke-width='.5'/%3E%3Cpath d='M106.4 24.5 L112.5 32.5' stroke='%238fd09a' stroke-width='.45' opacity='.85'/%3E%3Cg fill='%232f6d3c' stroke='%2307140b' stroke-width='.5' stroke-linejoin='round'%3E%3Cpath d='M4.8 17.8 Q7.9 21.5 4.0 29.6 Q9.8 20.9 8.6 16.6Z'/%3E%3Cpath d='M14.4 15.3 Q16.0 12.3 11.7 8.8 Q18.0 12.0 18.3 14.7Z'/%3E%3Cpath d='M27.6 14.0 Q29.5 18.0 24.1 23.9 Q31.5 18.0 31.6 14.0Z'/%3E%3Cpath d='M39.6 14.5 Q42.0 11.7 38.4 6.5 Q44.0 12.0 43.6 15.0Z'/%3E%3Cpath d='M50.6 16.4 Q50.8 21.8 41.9 27.0 Q52.7 22.4 54.4 17.6Z'/%3E%3Cpath d='M64.8 22.2 Q67.6 20.3 65.3 15.4 Q69.5 20.9 68.6 23.4Z'/%3E%3Cpath d='M74.4 24.7 Q75.7 28.7 69.8 33.4 Q77.7 29.0 78.3 25.3Z'/%3E%3Cpath d='M87.6 26.0 Q89.6 22.7 85.0 17.7 Q91.6 22.7 91.6 26.0Z'/%3E%3Cpath d='M99.6 25.5 Q102.0 29.9 96.6 37.6 Q104.0 29.6 103.6 25.0Z'/%3E%3Cpath d='M110.6 23.6 Q111.7 20.2 106.6 17.2 Q113.6 19.6 114.4 22.4Z'/%3E%3C/g%3E%3Cpath d='M0 20.0 C15.0 12.0 45.0 12.0 60.0 20.0 C75.0 28.0 105.0 28.0 120.0 20.0' fill='none' stroke='%2307140b' stroke-width='4.6' stroke-linecap='round'/%3E%3Cpath d='M0 20.0 C15.0 12.0 45.0 12.0 60.0 20.0 C75.0 28.0 105.0 28.0 120.0 20.0' fill='none' stroke='%232b6137' stroke-width='3.2' stroke-linecap='round'/%3E%3Cpath d='M0 20.0 C15.0 12.0 45.0 12.0 60.0 20.0 C75.0 28.0 105.0 28.0 120.0 20.0' fill='none' stroke='%238fd09a' stroke-width='0.50' stroke-dasharray='5 3 2 3' stroke-linecap='round' opacity='.6'/%3E%3C/svg%3E");
+  /* A row of small meadow flowers (daisies, poppies, cornflowers, buttercups), dim, with no stems: heads on the line, for the bottom bar. */
+  --hv-meadow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='12' viewBox='0 0 150 12'%3E%3Cellipse cx='10.2' cy='8.6' rx='1.7' ry='0.9' transform='rotate(0 10.2 8.6)' fill='%23a9a493'/%3E%3Cellipse cx='9.4' cy='10.5' rx='1.7' ry='0.9' transform='rotate(45 9.4 10.5)' fill='%23a9a493'/%3E%3Cellipse cx='7.5' cy='11.3' rx='1.7' ry='0.9' transform='rotate(90 7.5 11.3)' fill='%23a9a493'/%3E%3Cellipse cx='5.6' cy='10.5' rx='1.7' ry='0.9' transform='rotate(135 5.6 10.5)' fill='%23a9a493'/%3E%3Cellipse cx='4.8' cy='8.6' rx='1.7' ry='0.9' transform='rotate(180 4.8 8.6)' fill='%23a9a493'/%3E%3Cellipse cx='5.6' cy='6.7' rx='1.7' ry='0.9' transform='rotate(225 5.6 6.7)' fill='%23a9a493'/%3E%3Cellipse cx='7.5' cy='5.9' rx='1.7' ry='0.9' transform='rotate(270 7.5 5.9)' fill='%23a9a493'/%3E%3Cellipse cx='9.4' cy='6.7' rx='1.7' ry='0.9' transform='rotate(315 9.4 6.7)' fill='%23a9a493'/%3E%3Ccircle cx='7.5' cy='8.6' r='1.2' fill='%238c7424'/%3E%3Ccircle cx='22.5' cy='9.1' r='2.5' fill='%237a1c20' stroke='%232a0709' stroke-width='.5'/%3E%3Ccircle cx='22.5' cy='9.1' r='0.8' fill='%23100506'/%3E%3Cpath d='M37.5 8.6 L40.4 9.5' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M37.5 8.6 L38.2 11.5' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M37.5 8.6 L35.3 10.6' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M37.5 8.6 L34.6 7.7' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M37.5 8.6 L36.8 5.7' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M37.5 8.6 L39.7 6.6' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Ccircle cx='37.5' cy='8.6' r='.7' fill='%231d2150'/%3E%3Ccircle cx='52.5' cy='9.4' r='2.2' fill='%239a8528' stroke='%234e4210' stroke-width='.4'/%3E%3Cellipse cx='69.8' cy='9.0' rx='1.5' ry='0.8' transform='rotate(0 69.8 9.0)' fill='%23a9a493'/%3E%3Cellipse cx='69.2' cy='10.7' rx='1.5' ry='0.8' transform='rotate(45 69.2 10.7)' fill='%23a9a493'/%3E%3Cellipse cx='67.5' cy='11.3' rx='1.5' ry='0.8' transform='rotate(90 67.5 11.3)' fill='%23a9a493'/%3E%3Cellipse cx='65.8' cy='10.7' rx='1.5' ry='0.8' transform='rotate(135 65.8 10.7)' fill='%23a9a493'/%3E%3Cellipse cx='65.2' cy='9.0' rx='1.5' ry='0.8' transform='rotate(180 65.2 9.0)' fill='%23a9a493'/%3E%3Cellipse cx='65.8' cy='7.3' rx='1.5' ry='0.8' transform='rotate(225 65.8 7.3)' fill='%23a9a493'/%3E%3Cellipse cx='67.5' cy='6.7' rx='1.5' ry='0.8' transform='rotate(270 67.5 6.7)' fill='%23a9a493'/%3E%3Cellipse cx='69.2' cy='7.3' rx='1.5' ry='0.8' transform='rotate(315 69.2 7.3)' fill='%23a9a493'/%3E%3Ccircle cx='67.5' cy='9.0' r='1.0' fill='%238c7424'/%3E%3Ccircle cx='80.1' cy='9.4' r='.8' fill='%238f8b7c'/%3E%3Ccircle cx='82.5' cy='7.5' r='.8' fill='%238f8b7c'/%3E%3Ccircle cx='84.9' cy='9.4' r='.8' fill='%238f8b7c'/%3E%3Ccircle cx='82.5' cy='10.0' r='.8' fill='%238f8b7c'/%3E%3Ccircle cx='81.3' cy='8.8' r='.8' fill='%238f8b7c'/%3E%3Ccircle cx='83.7' cy='8.8' r='.8' fill='%238f8b7c'/%3E%3Ccircle cx='97.5' cy='8.8' r='2.8' fill='%237a1c20' stroke='%232a0709' stroke-width='.5'/%3E%3Ccircle cx='97.5' cy='8.8' r='0.8' fill='%23100506'/%3E%3Cpath d='M112.5 9.0 L115.0 9.8' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M112.5 9.0 L113.1 11.5' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M112.5 9.0 L110.6 10.8' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M112.5 9.0 L110.0 8.2' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M112.5 9.0 L111.9 6.5' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M112.5 9.0 L114.4 7.2' stroke='%234a559a' stroke-width='1.3' stroke-linecap='round'/%3E%3Ccircle cx='112.5' cy='9.0' r='.7' fill='%231d2150'/%3E%3Ccircle cx='127.5' cy='9.2' r='2.4' fill='%239a8528' stroke='%234e4210' stroke-width='.4'/%3E%3Cellipse cx='145.3' cy='8.5' rx='1.8' ry='0.9' transform='rotate(0 145.3 8.5)' fill='%23a9a493'/%3E%3Cellipse cx='144.5' cy='10.5' rx='1.8' ry='0.9' transform='rotate(45 144.5 10.5)' fill='%23a9a493'/%3E%3Cellipse cx='142.5' cy='11.3' rx='1.8' ry='0.9' transform='rotate(90 142.5 11.3)' fill='%23a9a493'/%3E%3Cellipse cx='140.5' cy='10.5' rx='1.8' ry='0.9' transform='rotate(135 140.5 10.5)' fill='%23a9a493'/%3E%3Cellipse cx='139.7' cy='8.5' rx='1.8' ry='0.9' transform='rotate(180 139.7 8.5)' fill='%23a9a493'/%3E%3Cellipse cx='140.5' cy='6.5' rx='1.8' ry='0.9' transform='rotate(225 140.5 6.5)' fill='%23a9a493'/%3E%3Cellipse cx='142.5' cy='5.7' rx='1.8' ry='0.9' transform='rotate(270 142.5 5.7)' fill='%23a9a493'/%3E%3Cellipse cx='144.5' cy='6.5' rx='1.8' ry='0.9' transform='rotate(315 144.5 6.5)' fill='%23a9a493'/%3E%3Ccircle cx='142.5' cy='8.5' r='1.2' fill='%238c7424'/%3E%3C/svg%3E");
+  /* A runic line pattern: thin right-angled strokes that step and hook, in a horizontal and a vertical tile. */
+  --hv-runic-h: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='12' viewBox='0 0 96 12'%3E%3Cpath d='M3.5 2.5L3.5 10.5 M3.5 7.5L8.5 7.5 M8.5 7.5L8.5 12.5 M1.5 3.5L3.5 3.5 M18.5 2.5L18.5 10.5 M18.5 7.5L24.5 7.5 M24.5 7.5L24.5 4.5 M24.5 4.5L26.5 4.5 M16.5 3.5L18.5 3.5 M34.5 2.5L34.5 10.5 M34.5 6.5L40.5 6.5 M40.5 6.5L40.5 1.5 M40.5 1.5L42.5 1.5 M32.5 3.5L34.5 3.5 M48.5 2.5L48.5 10.5 M48.5 7.5L52.5 7.5 M52.5 7.5L52.5 11.5 M52.5 11.5L54.5 11.5 M45.5 3.5L48.5 3.5 M61.5 2.5L61.5 10.5 M61.5 7.5L65.5 7.5 M65.5 7.5L65.5 12.5 M65.5 12.5L67.5 12.5 M58.5 8.5L61.5 8.5 M73.5 2.5L73.5 8.5 M73.5 3.5L79.5 3.5 M79.5 3.5L79.5 -0.5 M79.5 -0.5L82.5 -0.5 M71.5 6.5L73.5 6.5 M87.5 2.5L87.5 10.5 M87.5 4.5L91.5 4.5 M91.5 4.5L91.5 0.5 M91.5 0.5L94.5 0.5 M85.5 8.5L87.5 8.5' fill='none' stroke='%23cfcfcf' stroke-width='1' stroke-linecap='square' opacity='0.6' shape-rendering='crispEdges'/%3E%3C/svg%3E");
+  --hv-runic-v: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='96' viewBox='0 0 12 96'%3E%3Cpath d='M2.5 3.5L10.5 3.5 M7.5 3.5L7.5 8.5 M7.5 8.5L12.5 8.5 M3.5 1.5L3.5 3.5 M2.5 18.5L10.5 18.5 M7.5 18.5L7.5 24.5 M7.5 24.5L4.5 24.5 M4.5 24.5L4.5 26.5 M3.5 16.5L3.5 18.5 M2.5 34.5L10.5 34.5 M6.5 34.5L6.5 40.5 M6.5 40.5L1.5 40.5 M1.5 40.5L1.5 42.5 M3.5 32.5L3.5 34.5 M2.5 48.5L10.5 48.5 M7.5 48.5L7.5 52.5 M7.5 52.5L11.5 52.5 M11.5 52.5L11.5 54.5 M3.5 45.5L3.5 48.5 M2.5 61.5L10.5 61.5 M7.5 61.5L7.5 65.5 M7.5 65.5L12.5 65.5 M12.5 65.5L12.5 67.5 M8.5 58.5L8.5 61.5 M2.5 73.5L8.5 73.5 M3.5 73.5L3.5 79.5 M3.5 79.5L-0.5 79.5 M-0.5 79.5L-0.5 82.5 M6.5 71.5L6.5 73.5 M2.5 87.5L10.5 87.5 M4.5 87.5L4.5 91.5 M4.5 91.5L0.5 91.5 M0.5 91.5L0.5 94.5 M8.5 85.5L8.5 87.5' fill='none' stroke='%23cfcfcf' stroke-width='1' stroke-linecap='square' opacity='0.6' shape-rendering='crispEdges'/%3E%3C/svg%3E");
+  /* The cursors: a thorned rose stem (the tip is the hotspot) with its bloom at the far end, the same
+     with a ring at its tip over anything you can act on, the rose gone black and struck through
+     where you cannot. */
+  --cursor-default: url('../assets/cursors/harvest-rose.svg') 3 3, default;
+  --cursor-pointer: url('../assets/cursors/harvest-rose-ready.svg') 6 6, pointer;
+  --cursor-blocked: url('../assets/cursors/harvest-rose-withered.svg') 3 3, not-allowed;
+  /* A text face with a small x-height: let the browser scale it to Default's. */
+  font-size-adjust: 0.5;
+}
+
+/* --- Stasis: nothing animates, nothing eases ------------------------------------------------ */
+html[data-theme='harvest'] *,
+html[data-theme='harvest'] *::before,
+html[data-theme='harvest'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* --- The vignette: the garden closes in at the corners ----------------------------------- */
+html[data-theme='harvest'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 52%, rgba(0, 0, 0, 0.62) 100%);
+}
+
+/* --- Type ---------------------------------------------------------------------------- */
+html[data-theme='harvest'] body {
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+}
+html[data-theme='harvest'] body * {
+  text-shadow: none;
+}
+html[data-theme='harvest'] :is(.hud-title, .main-menu-title) {
+  font-family: var(--font-title);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  color: var(--strong);
+  text-shadow: 0 2px 0 rgba(var(--hv-crimson-rgb), 0.55);
+}
+html[data-theme='harvest'] .hud-title {
+  font-size: 22px;
+  line-height: 1;
+}
+/* The rose before the title. */
+html[data-theme='harvest'] :is(.hud-title, .main-menu-title)::before {
+  content: '';
+  display: inline-block;
+  width: 0.78em;
+  height: 0.78em;
+  margin-right: 0.45em;
+  background: var(--hv-rose) center / contain no-repeat;
+  vertical-align: -0.06em;
+}
+html[data-theme='harvest'] :is(.draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-subtitle, .confirm-title, .econ-subtitle, .outliner-section-title, .action-dock-header, .nav-custom-title) {
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+html[data-theme='harvest'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .situations-type-label) {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+html[data-theme='harvest'] :is(.outliner-tab, .outliner-subtab, .nav-subtab) {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding-inline: 3px;
+}
+html[data-theme='harvest'] .outliner-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-theme='harvest'] .nav-category-btn {
+  font-size: 11.5px;
+}
+html[data-theme='harvest'] :is(.fiscal-ind-val, .resource-value, .resource-delta, .situations-count, .situation-badge-count, .time-clock, .inspect-value, .time-date) {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+html[data-theme='harvest'] .inspect-label {
+  color: rgba(var(--text-bright-rgb), 0.62);
+}
+html[data-theme='harvest'] button {
+  font-family: inherit;
+}
+
+/* --- Chrome ------------------------------------------------------------------------------- */
+html[data-theme='harvest'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .situation-badge-icon, .outliner-filter-pill, .main-menu-country-card, .main-menu-econ-option, .pl-tile, .pl-detail, .pl-district, .game-tooltip) {
+  border-radius: 0 !important;
+}
+html[data-theme='harvest'] .hud-bar {
+  background: linear-gradient(#141414, #030303);
+}
+/* The top bar: bone rule, a fainter one under it, and a strip of vine along the bottom edge. */
+html[data-theme='harvest'] .hud-top {
+  border-bottom: 1px solid var(--hv-bone);
+  background-image: var(--hv-vine-wide);
+  background-repeat: repeat-x;
+  background-position: left bottom;
+  background-size: 84px 28px;
+  padding-bottom: 18px;
+  box-shadow: 0 1px 0 #000, 0 2px 0 rgba(var(--accent-rgb), 0.25);
+}
+html[data-theme='harvest'] .hud-bottom {
+  border-top: 1px solid var(--hv-bone);
+  box-shadow: 0 -1px 0 #000, 0 -2px 0 rgba(var(--accent-rgb), 0.25);
+}
+/* Small dim meadow flowers sit along the top edge of the bottom bar (no stems: heads on the line). */
+html[data-theme='harvest'] .hud-bottom::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 14px;
+  background: var(--hv-meadow) repeat-x left bottom / auto 14px;
+  pointer-events: none;
+}
+html[data-theme='harvest'] :is(.nav-sidebar, .outliner) {
+  background-color: #070707;
+  background-image: var(--hv-runic-v), radial-gradient(ellipse at 50% 0%, #161616 0%, #070707 70%);
+  background-repeat: repeat-y, no-repeat;
+  background-size: 12px 96px, auto;
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 36px rgba(0, 0, 0, 0.7);
+}
+/* A runic line pattern runs down the inner edge of each side panel (the edge that faces the map). */
+html[data-theme='harvest'] .nav-sidebar {
+  background-position: right 3px top, 50% 0;
+}
+html[data-theme='harvest'] .outliner {
+  background-position: left 3px top, 50% 0;
+}
+
+/* Windows: a bone rule and a second, fainter one outside it; a black title bar with a runic line under it. */
+html[data-theme='harvest'] .draggable-window {
+  border: 1px solid var(--hv-bone);
+  outline: 1px solid rgba(var(--accent-rgb), 0.25);
+  outline-offset: 3px;
+  background: radial-gradient(ellipse at 50% 0%, #171717 0%, #070707 72%);
+  box-shadow: 0 0 0 1px #000, 0 14px 38px rgba(0, 0, 0, 0.85), inset 0 0 40px rgba(0, 0, 0, 0.6);
+}
+html[data-theme='harvest'] .draggable-window-titlebar {
+  background-color: #050505;
+  background-image: var(--hv-runic-h);
+  background-repeat: repeat-x;
+  background-position: left bottom;
+  background-size: 96px 12px;
+  color: var(--strong);
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.5);
+  padding-bottom: 12px;
+  font-size: 12.5px;
+}
+html[data-theme='harvest'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: var(--strong);
+}
+
+/* Buttons: black with a bone rule; the active one is bone-white with black lettering and a
+   crimson thorn-line under it. The clock's pace buttons keep their OWN colours. */
+html[data-theme='harvest'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: #0a0a0a;
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  color: var(--accent);
+}
+html[data-theme='harvest'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: #1b1b1b;
+  border-color: var(--strong);
+  color: var(--strong);
+}
+html[data-theme='harvest'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: #ececec;
+  border-color: #ffffff;
+  color: #050505;
+  box-shadow: inset 0 -3px 0 var(--hv-crimson);
+}
+html[data-theme='harvest'] .time-mode-btn.active {
+  outline: 1px solid currentColor;
+  outline-offset: -3px;
+}
+/* Display-only tiles (a building with nothing to open) are disabled buttons too: they stay as bright
+   as the ones you can click, not greyed out like a control that is unavailable. */
+html[data-theme='harvest'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
+  color: rgba(var(--accent-rgb), 0.32);
+  border-color: rgba(var(--accent-rgb), 0.18);
+  background: #080808;
+}
+html[data-theme='harvest'] :is(input, select, textarea) {
+  background: #050505;
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+}
+
+/* Every divider is a length of vine with a rose at its middle. */
+html[data-theme='harvest'] .inspect-divider {
+  position: relative;
+  height: 12px;
+  margin: 12px 0;
+  border: 0;
+  background: var(--hv-runic-h) repeat-x center / 96px 12px;
+  opacity: 0.9;
+}
+html[data-theme='harvest'] .inspect-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  background: #070707 var(--hv-rose) center / 18px 18px no-repeat;
+}
+html[data-theme='harvest'] .outliner-entry.selected .outliner-entry-name {
+  color: var(--strong);
+  border-left: 2px solid var(--hv-crimson);
+  padding-left: 4px;
+}
+
+/* --- Main menu ------------------------------------------------------------------------- */
+html[data-theme='harvest'] .main-menu {
+  background: radial-gradient(ellipse at 50% 20%, #1a1a1a 0%, #070707 55%, #000 100%);
+}
+html[data-theme='harvest'] :is(.main-menu-country-card, .main-menu-econ-option) {
+  background: radial-gradient(ellipse at 50% 0%, #181818 0%, #090909 75%);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 28px rgba(0, 0, 0, 0.7);
+}
+html[data-theme='harvest'] :is(.main-menu-country-card, .main-menu-econ-option):hover {
+  background: radial-gradient(ellipse at 50% 0%, #262626 0%, #0d0d0d 75%);
+}
+html[data-theme='harvest'] .main-menu-econ-option.active {
+  background: radial-gradient(ellipse at 50% 0%, #303030 0%, #101010 75%);
+}
+html[data-theme='harvest'] :is(.main-menu-country-name, .main-menu-econ-name) {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+/* --- HUD ------------------------------------------------------------------------------ */
+html[data-theme='harvest'] .time-date {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--strong);
+  letter-spacing: 0.1em;
+}
+
+/* --- Alerts ----------------------------------------------------------------------------- */
+html[data-theme='harvest'] .dip-toast {
+  background: #070707;
+  color: var(--text-bright);
+  border: 1px solid var(--hv-bone);
+  border-left: 5px solid var(--hv-bone);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-style: italic;
+  box-shadow: 0 0 0 1px #000, 0 8px 22px rgba(0, 0, 0, 0.8);
+}
+html[data-theme='harvest'] .dip-toast:hover {
+  background: #161616;
+}
+html[data-theme='harvest'] .dip-toast.sev-warning {
+  border-left-color: var(--warn);
+}
+html[data-theme='harvest'] .dip-toast.sev-danger {
+  background: linear-gradient(#2c050b, #0a0204);
+  color: var(--strong);
+  border: 1px solid rgba(var(--danger-rgb), 0.75);
+  border-left: 5px solid var(--hv-crimson);
+}
+html[data-theme='harvest'] .game-tooltip {
+  background: #050505;
+  color: var(--text-bright);
+  border: 1px solid var(--hv-bone);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.8);
+}
+html[data-theme='harvest'] .confirm-box {
+  background: radial-gradient(ellipse at 50% 0%, #171717 0%, #060606 75%);
+  border: 1px solid var(--hv-bone);
+  outline: 1px solid rgba(var(--accent-rgb), 0.25);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px #000, 0 16px 44px rgba(0, 0, 0, 0.9);
+}
+html[data-theme='harvest'] .confirm-title {
+  background-color: #050505;
+  background-image: var(--hv-runic-h);
+  background-repeat: repeat-x;
+  background-position: left bottom;
+  background-size: 96px 12px;
+  color: var(--strong);
+  margin: -16px -18px 12px;
+  padding: 7px 18px 14px;
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.5);
+}
+html[data-theme='harvest'] .situations-type {
+  background: #090909;
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='harvest'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='harvest'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='harvest'] .sev-info {
+  --sev-color: var(--hv-bone);
+}
+html[data-theme='harvest'] .situation-badge {
+  background: #000;
+  border: 1px solid var(--hv-bone);
+  color: var(--strong);
+  font-family: var(--font-ui);
+}
+html[data-theme='harvest'] .situation-badge.sev-danger {
+  background: var(--hv-crimson);
+  color: #ffffff;
+  border-color: var(--hv-crimson);
+}
+html[data-theme='harvest'] .situation-badge.sev-danger .situation-badge-icon {
+  background: #000;
+  color: #ffffff;
+}
+
+/* --- Tech tree ---------------------------------------------------------------------------- */
+html[data-theme='harvest'] .tech-tree-node rect {
+  fill: #090909;
+}
+html[data-theme='harvest'] .tech-tree-node-name {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}
