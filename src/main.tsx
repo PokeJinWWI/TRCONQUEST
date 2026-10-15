@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './themes/nerv.css'
+import './themes/ichor.css'
+import './themes/yesteryear.css'
 // Puts the saved theme on <html> before the first paint.
 import './state/themeStore'
 import App from './App.tsx'

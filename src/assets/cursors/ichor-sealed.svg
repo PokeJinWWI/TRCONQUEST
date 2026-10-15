@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 32 32">
+  <!-- Ichor theme cursor for "not now": the quatrefoil struck through in crimson over dulled bronze. Hotspot is the centre (12,12 at 24px). -->
+  <g fill="none" stroke="#0a0603" stroke-width="4.4" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="16" cy="11.6" r="4.4"/>
+    <circle cx="16" cy="20.4" r="4.4"/>
+    <circle cx="11.6" cy="16" r="4.4"/>
+    <circle cx="20.4" cy="16" r="4.4"/>
+    <path d="M6.5 25.5 L25.5 6.5" stroke-width="5"/>
+  </g>
+  <g fill="none" stroke="#8a6a24" stroke-width="1.7">
+    <circle cx="16" cy="11.6" r="4.4"/>
+    <circle cx="16" cy="20.4" r="4.4"/>
+    <circle cx="11.6" cy="16" r="4.4"/>
+    <circle cx="20.4" cy="16" r="4.4"/>
+  </g>
+  <path d="M6.5 25.5 L25.5 6.5" fill="none" stroke="#d4283c" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M6.5 25.5 L25.5 6.5" fill="none" stroke="#ff8a98" stroke-width="0.7" stroke-linecap="round" opacity="0.7"/>
+</svg>

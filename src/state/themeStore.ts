@@ -1,13 +1,16 @@
 import { create } from 'zustand'
 
-// The UI theme: Default (the original look, English only) or NERV (Evangelion-styled, with a
-// native-script label beside the English in Japanese, Traditional or Simplified Chinese).
+// The UI theme: Default (the original look, English only), NERV (Evangelion-styled, with a
+// native-script label beside the English in Japanese, Traditional or Simplified Chinese) or
+// Ichor (a gothic court in black and gold, English only) or Yesteryear (a 1900s card room in
+// wine red and black, English only).
 // A preference, kept across games in localStorage; applied to <html> as data-theme /
-// data-script / data-motion so the stylesheets (index.css, themes/nerv.css) follow it.
-export type ThemeId = 'default' | 'nerv'
+// data-script / data-motion so the stylesheets (index.css and themes/*.css) follow it.
+export type ThemeId = 'default' | 'nerv' | 'ichor' | 'yesteryear'
 export type ScriptId = 'ja' | 'zh-Hant' | 'zh-Hans'
 
-export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'NERV' }
+export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'NERV', ichor: 'Ichor', yesteryear: 'Yesteryear' }
+export const THEME_IDS = Object.keys(THEME_LABELS) as ThemeId[]
 export const SCRIPT_LABELS: Record<ScriptId, string> = { ja: '日本語', 'zh-Hant': '繁體中文', 'zh-Hans': '简体中文' }
 export const THEME_STORAGE_KEY = 'trc.theme.v1'
 
@@ -24,7 +27,7 @@ export function parseThemePrefs(raw: string | null): ThemePrefs {
   try {
     const v = JSON.parse(raw) as Partial<ThemePrefs>
     return {
-      theme: v.theme === 'nerv' || v.theme === 'default' ? v.theme : DEFAULTS.theme,
+      theme: THEME_IDS.includes(v.theme as ThemeId) ? (v.theme as ThemeId) : DEFAULTS.theme,
       script: v.script === 'ja' || v.script === 'zh-Hant' || v.script === 'zh-Hans' ? v.script : DEFAULTS.script,
       reduceMotion: typeof v.reduceMotion === 'boolean' ? v.reduceMotion : DEFAULTS.reduceMotion,
     }

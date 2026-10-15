@@ -7,9 +7,9 @@
 //
 // Run:  npx tsx tests/themes.test.ts
 
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseThemePrefs } from '../src/state/themeStore'
+import { THEME_IDS, THEME_LABELS, parseThemePrefs } from '../src/state/themeStore'
 import { SCENE_COLORS } from '../src/scene/themeColors'
 import { NATIVE_DICTS, dictionaryGaps, nativeOf } from '../src/i18n/native'
 import { TRADITIONAL_ONLY, forScript } from '../src/i18n/hanzi'
@@ -113,6 +113,73 @@ console.log('\n=== 7. No old-style subscripts left ===')
   walk('src')
   const offenders = files.filter((f) => /<sub\b/.test(readFileSync(f, 'utf8')))
   check('no component draws a <sub> subscript (they go through <Bi>/<NamedBi>)', offenders.length === 0, offenders.join(', '))
+}
+
+// The English-only themes share one set of checks: parse, token completeness, scoping, fonts, cursors,
+// scene colours. (NERV has its own above: it is the one with native-script labels.)
+const ENGLISH_THEMES = [
+  { id: 'ichor', label: 'Ichor', families: ['Cinzel', 'Cormorant Garamond', 'Pirata One'], title: ["--font-blackletter:\\s*'Pirata One'", "--font-display:\\s*'Cinzel'", "--font-body:\\s*'Cormorant Garamond'"], orbit: '#c9a24a', cursors: [['--cursor-default', 'ichor-dagger'], ['--cursor-pointer', 'ichor-tracery'], ['--cursor-blocked', 'ichor-sealed']] },
+  { id: 'yesteryear', label: 'Yesteryear', families: ['Playfair Display', 'Old Standard TT', 'Rye'], title: ["--font-saloon:\\s*'Rye'", "--font-display:\\s*'Playfair Display'", "--font-body:\\s*'Old Standard TT'"], orbit: '#b8445e', cursors: [['--cursor-default', 'yesteryear-spade'], ['--cursor-pointer', 'yesteryear-chip'], ['--cursor-blocked', 'yesteryear-folded']] },
+] as const
+
+for (const th of ENGLISH_THEMES) {
+  console.log(`\n=== ${th.label} ===`)
+  check(`a saved ${th.label} theme loads`, parseThemePrefs(`{"theme":"${th.id}"}`).theme === th.id)
+  check('an unknown theme still falls back to Default', parseThemePrefs('{"theme":"gold"}').theme === 'default')
+  check(`${th.label} is in the picker with a label`, THEME_LABELS[th.id as keyof typeof THEME_LABELS] === th.label && THEME_IDS.includes(th.id as never))
+
+  const index = readFileSync('src/index.css', 'utf8')
+  const root = index.match(/:root\s*{([^}]*)}/)?.[1] ?? ''
+  const defaultTokens = new Set([...root.matchAll(/(--[a-z-]+):/g)].map((m) => m[1]))
+  const sheet = readFileSync(`src/themes/${th.id}.css`, 'utf8')
+  const block = sheet.match(new RegExp(`html\\[data-theme='${th.id}'\\]\\s*{([^}]*)}`))?.[1] ?? ''
+  const redefined = new Set([...block.matchAll(/(--[a-z-]+):/g)].map((m) => m[1]))
+  const colourTokens = [...defaultTokens].filter((t) => t !== '--shade-rgb' && (/rgb$/.test(t) || /^--(accent|accent-soft|text|text-bright|text-cool|text-toast|strong|danger|warn|caution|ok|page-bg|font-ui|font-body)$/.test(t)))
+  const missing = colourTokens.filter((t) => !redefined.has(t))
+  check(`${th.label} redefines every colour and font token Default defines (nothing falls back to cyan)`, missing.length === 0 && colourTokens.length > 20, missing.join(', ') || `${colourTokens.length} tokens`)
+  check(`the ${th.label} stylesheet carries none of the Default cyan`, !/111,\s*227,\s*255/.test(sheet) && !/#6fe3ff/i.test(sheet))
+
+  const rules = sheet.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@import[^;]*;/g, '').replace(/@keyframes[^{]*{(?:[^{}]*{[^}]*})*[^}]*}/g, '')
+  const selectors = [...rules.matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim()).filter((sel) => sel && !sel.startsWith('@media'))
+  const unscoped = selectors.filter((sel) => !sel.split(/,(?![^(]*\))/).every((part) => part.includes(`[data-theme='${th.id}']`)))
+  check(`every ${th.label} rule is scoped to html[data-theme=${th.id}] (the other themes untouched)`, unscoped.length === 0, unscoped.slice(0, 3).join(' | '))
+  // The clock pace buttons (STRAT / OPS / TAC) carry their own colours in Default (accent / amber / red); a theme
+  // restyles their shape and type but never recolours them, or the active one stops matching its button.
+  const timeRules = [...sheet.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => m[1].includes('.time-mode-btn'))
+  const recolours = timeRules.filter((m) => /(^|;|\s)(background|background-color|color|border-color|border)\s*:/.test(m[2]))
+  check(`${th.label} never recolours the time-mode buttons (each keeps its own colour; the active one is ringed in it)`, timeRules.length > 0 && recolours.length === 0, recolours.map((m) => m[1].trim().slice(0, 60)).join(' | '))
+  check('its entrance animation touches opacity only (a window is placed by an inline transform)', !new RegExp(`@keyframes ${th.id === 'ichor' ? 'ichor-rise' : 'yesteryear-deal'}[^}]*transform`).test(sheet.replace(/\s+/g, ' ')))
+
+  const fonts = readFileSync(`src/themes/${th.id}Fonts.css`, 'utf8')
+  const families = new Set([...fonts.matchAll(/font-family:\s*'([^']+)'/g)].map((m) => m[1]))
+  check(`the three ${th.label} families are bundled`, th.families.every((f) => families.has(f)), [...families].join(', '))
+  const files = [...fonts.matchAll(/url\(([^)]+\.woff2)\)/g)].map((m) => join('src/themes', m[1]))
+  check('every font file the stylesheet names is installed', files.length >= 10 && files.every((f) => existsSync(f)), `${files.filter((f) => !existsSync(f)).length} missing of ${files.length}`)
+  check('the title and headings use them', th.title.every((re) => new RegExp(re).test(sheet)))
+
+  // The theme's own cursors: three pictures that are not the Default ones, each hotspot inside its picture.
+  for (const [v, file] of th.cursors) {
+    const m = block.match(new RegExp(`${v}:\\s*url\\('\\.\\./assets/cursors/([a-z-]+\\.svg)'\\)\\s+(\\d+)\\s+(\\d+),\\s*[a-z-]+;`))
+    const path = m ? `src/assets/cursors/${m[1]}` : ''
+    const svg = path && existsSync(path) ? readFileSync(path, 'utf8') : ''
+    const size = Number(svg.match(/<svg[^>]*\swidth="(\d+)"/)?.[1] ?? 0)
+    check(`${v} is ${file}.svg with a keyword fallback and a hotspot inside it`, !!m && m[1] === `${file}.svg` && size > 0 && size <= 32 && Number(m[2]) < size && Number(m[3]) < size, m ? `${m[1]} ${m[2]},${m[3]} in ${size}px` : 'not defined')
+  }
+  check('none of the three is a Default cursor picture', !/cursors\/(pointer|target|blocked)\.svg/.test(sheet))
+
+  const sc = SCENE_COLORS[th.id as keyof typeof SCENE_COLORS]
+  const others = Object.entries(SCENE_COLORS).filter(([k]) => k !== th.id).map(([, v]) => v.orbit)
+  check('the maps are drawn in the theme\'s own line colour, untone-mapped', !!sc && sc.orbit === th.orbit && sc.toneMapped === false && !others.includes(sc.orbit))
+}
+check('Default scene colours are unchanged', SCENE_COLORS.default.orbit === '#7ce8ff')
+
+console.log('\n=== Main menu stays reachable when it is taller than the window ===')
+{
+  const app = readFileSync('src/App.css', 'utf8')
+  const menu = app.match(/\.main-menu\s*{([^}]*)}/)?.[1] ?? ''
+  check('the menu is not centred with justify-content (a tall one lost its title above the screen)', /justify-content:\s*flex-start/.test(menu) && !/justify-content:\s*center/.test(menu))
+  check('it is centred by auto margins on its first and last child instead (they collapse on overflow)', /\.main-menu\s*>\s*:first-child\s*{[^}]*margin-top:\s*auto/.test(app) && /\.main-menu\s*>\s*:last-child\s*{[^}]*margin-bottom:\s*auto/.test(app))
+  check('the menu scrolls', /overflow-y:\s*auto/.test(menu))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

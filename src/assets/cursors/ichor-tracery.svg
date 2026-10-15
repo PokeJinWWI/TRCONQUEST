@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 32 32">
+  <!-- Ichor theme cursor over anything you can act on: a gothic quatrefoil of gold tracery with four spires and a ruby heart. Hotspot is the centre (12,12 at 24px). -->
+  <defs>
+    <radialGradient id="ruby" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ff7a8c"/>
+      <stop offset="0.55" stop-color="#b2223a"/>
+      <stop offset="1" stop-color="#5c0a18"/>
+    </radialGradient>
+  </defs>
+  <!-- keyline -->
+  <g fill="none" stroke="#0a0603" stroke-width="4.4" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="16" cy="11.6" r="4.4"/>
+    <circle cx="16" cy="20.4" r="4.4"/>
+    <circle cx="11.6" cy="16" r="4.4"/>
+    <circle cx="20.4" cy="16" r="4.4"/>
+  </g>
+  <g fill="#0a0603" stroke="#0a0603" stroke-width="2.4" stroke-linejoin="round">
+    <path d="M16 0.8 L18.3 5.4 L13.7 5.4 Z"/>
+    <path d="M16 31.2 L18.3 26.6 L13.7 26.6 Z"/>
+    <path d="M0.8 16 L5.4 13.7 L5.4 18.3 Z"/>
+    <path d="M31.2 16 L26.6 13.7 L26.6 18.3 Z"/>
+  </g>
+  <!-- tracery -->
+  <g fill="none" stroke="#e6c878" stroke-width="1.7">
+    <circle cx="16" cy="11.6" r="4.4"/>
+    <circle cx="16" cy="20.4" r="4.4"/>
+    <circle cx="11.6" cy="16" r="4.4"/>
+    <circle cx="20.4" cy="16" r="4.4"/>
+  </g>
+  <!-- spires -->
+  <g fill="#c9a24a">
+    <path d="M16 0.8 L18.3 5.4 L13.7 5.4 Z"/>
+    <path d="M16 31.2 L18.3 26.6 L13.7 26.6 Z"/>
+    <path d="M0.8 16 L5.4 13.7 L5.4 18.3 Z"/>
+    <path d="M31.2 16 L26.6 13.7 L26.6 18.3 Z"/>
+  </g>
+  <!-- heart -->
+  <path d="M16 12 L20 16 L16 20 L12 16 Z" fill="#0a0603"/>
+  <path d="M16 13 L19 16 L16 19 L13 16 Z" fill="url(#ruby)" stroke="#e6c878" stroke-width="0.8" stroke-linejoin="round"/>
+</svg>

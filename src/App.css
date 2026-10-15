@@ -4449,13 +4449,23 @@ div.fleet-row .combat-density-row {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Centred by auto margins on the first and last child (below), not justify-content: a column
+     centred that way and taller than the window (NERV's bilingual rows, a short window) loses its
+     top half above the screen where it cannot be scrolled to; auto margins collapse instead. */
+  justify-content: flex-start;
   gap: 12px;
   background: #050a12;
   font-family: var(--font-ui);
   color: var(--accent);
   overflow-y: auto;
   padding: 16px 0;
+}
+
+.main-menu > :first-child {
+  margin-top: auto;
+}
+.main-menu > :last-child {
+  margin-bottom: auto;
 }
 
 .main-menu-title {

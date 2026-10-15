@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 32 32">
+  <!-- Yesteryear theme cursor over anything you can act on: a poker chip, wine with ivory edge spots and a ring. Hotspot is the centre (12,12 at 24px). -->
+  <circle cx="16" cy="16" r="14" fill="#1a0509"/>
+  <circle cx="16" cy="16" r="12.4" fill="#6b1226"/>
+  <!-- edge spots: eight ivory blocks round the rim -->
+  <g fill="#efe3cc">
+    <rect x="14.2" y="3.6" width="3.6" height="4.4" rx="0.8"/>
+    <rect x="14.2" y="24" width="3.6" height="4.4" rx="0.8"/>
+    <rect x="3.6" y="14.2" width="4.4" height="3.6" rx="0.8"/>
+    <rect x="24" y="14.2" width="4.4" height="3.6" rx="0.8"/>
+    <rect x="14.2" y="3.6" width="3.6" height="4.4" rx="0.8" transform="rotate(45 16 16)"/>
+    <rect x="14.2" y="3.6" width="3.6" height="4.4" rx="0.8" transform="rotate(135 16 16)"/>
+    <rect x="14.2" y="3.6" width="3.6" height="4.4" rx="0.8" transform="rotate(225 16 16)"/>
+    <rect x="14.2" y="3.6" width="3.6" height="4.4" rx="0.8" transform="rotate(315 16 16)"/>
+  </g>
+  <circle cx="16" cy="16" r="8.4" fill="#4a0b1b" stroke="#e07b8f" stroke-width="1.1"/>
+  <circle cx="16" cy="16" r="5.2" fill="none" stroke="#efe3cc" stroke-width="0.9" stroke-dasharray="1.6 1.6"/>
+  <circle cx="16" cy="16" r="1.7" fill="#efe3cc"/>
+</svg>

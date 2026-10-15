@@ -1,0 +1,337 @@
+/* The Ichor theme: a gothic court in black and gold. Lacquer-black panels, antique gold leaf for
+   frames and text, parchment ivory for reading, deep crimson for alarms (ichor: the blood of gods).
+   Engraved Roman capitals for headings, a blackletter hand for the title, an old-style serif for
+   the rest; chamfered corners and double-ruled frames over a faint damask. English only: the
+   bilingual labels belong to NERV. A pure reskin of the Default theme: every rule here is under
+   html[data-theme='ichor'], so Default is untouched. Most of the look comes from redefining the
+   theme tokens (index.css :root); the rest is dressing. Relation colours (own / allied / neutral /
+   hostile) and nation colours are NOT themed. */
+@import './ichorFonts.css';
+
+html[data-theme='ichor'] {
+  --accent-rgb: 201, 162, 74;
+  --accent-soft-rgb: 230, 200, 120;
+  --ink-rgb: 244, 228, 190;
+  --panel-rgb: 9, 7, 5;
+  --panel-deep-rgb: 4, 3, 2;
+  --panel-raised-rgb: 20, 15, 9;
+  --panel-hover-rgb: 42, 31, 14;
+  --text-bright-rgb: 248, 236, 205;
+  --ok-rgb: 111, 174, 124;
+  --warn-rgb: 217, 144, 47;
+  --danger-rgb: 178, 34, 52;
+  --caution-rgb: 224, 193, 90;
+  --accent: #c9a24a;
+  --accent-soft: #e6c878;
+  --text: #e6dcc3;
+  --text-bright: #f6ecd0;
+  --text-cool: #ddd3bd;
+  --text-toast: #f3e9cf;
+  --strong: #fff4d6;
+  --danger: #c0293a;
+  --warn: #d9902f;
+  --caution: #e0c15a;
+  --ok: #6fae7c;
+  --page-bg: #050403;
+  --ichor-gold-deep: #8a6a24;
+  --ichor-crimson: #8b1a2b;
+  --ichor-crimson-rgb: 139, 26, 43;
+  --font-ui: 'Cormorant Garamond', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-body: 'Cormorant Garamond', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-display: 'Cinzel', 'Trajan Pro', 'Palatino Linotype', Georgia, serif;
+  --font-blackletter: 'Pirata One', 'Old English Text MT', 'Palatino Linotype', Georgia, serif;
+  --font-mono: 'Cormorant Garamond', 'Palatino Linotype', Georgia, serif;
+  /* A damask of small diamonds and a dot at every crossing, in gold at a whisper. */
+  --ichor-damask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cpath d='M14 1L27 14L14 27L1 14Z' fill='none' stroke='%23c9a24a' stroke-opacity='0.07' stroke-width='0.8'/%3E%3Cpath d='M14 8L20 14L14 20L8 14Z' fill='%23c9a24a' fill-opacity='0.035'/%3E%3Ccircle cx='0' cy='0' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3Ccircle cx='28' cy='0' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3Ccircle cx='0' cy='28' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3Ccircle cx='28' cy='28' r='1.1' fill='%23c9a24a' fill-opacity='0.12'/%3E%3C/svg%3E");
+  /* Gold leaf: a gradient for bars and rules. */
+  --ichor-leaf: linear-gradient(180deg, #e6c878 0%, #c9a24a 45%, #8a6a24 100%);
+  /* The cursors: a gold stiletto for the pointer (the point is the hotspot), gothic quatrefoil tracery
+     over anything you can act on, the same tracery struck through in crimson where you cannot. */
+  --cursor-default: url('../assets/cursors/ichor-dagger.svg') 3 3, default;
+  --cursor-pointer: url('../assets/cursors/ichor-tracery.svg') 12 12, pointer;
+  --cursor-blocked: url('../assets/cursors/ichor-sealed.svg') 12 12, not-allowed;
+  /* An old-style serif is small for its size; let the browser scale it to the Default theme's
+     x-height so the interface text does not shrink. */
+  font-size-adjust: 0.5;
+}
+
+/* --- Type ---------------------------------------------------------------------------- */
+html[data-theme='ichor'] body {
+  font-family: var(--font-body);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+html[data-theme='ichor'] :is(.hud-title, .main-menu-title) {
+  font-family: var(--font-blackletter);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  color: var(--accent-soft);
+  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.35);
+}
+/* A narrow face reads small at the size Default's wide letters use: the menu title gets more of it. */
+html[data-theme='ichor'] .main-menu-title {
+  font-size: clamp(28px, 5.6vw, 48px);
+  line-height: 1.05;
+}
+html[data-theme='ichor'] .hud-title {
+  font-size: 24px;
+  line-height: 1;
+}
+html[data-theme='ichor'] :is(.draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-subtitle, .confirm-title, .econ-subtitle, .outliner-section-title, .action-dock-header, .nav-custom-title) {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-shadow: none;
+}
+html[data-theme='ichor'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .situations-type-label) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* Cinzel is wide: the narrow tabs set their capitals in the serif instead, and the nav column a
+   size down, so nothing is cut off. */
+html[data-theme='ichor'] :is(.outliner-tab, .outliner-subtab, .nav-subtab) {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  padding-inline: 3px;
+}
+/* Equal thirds would cut 'Territory' short: share the row by word length instead. */
+html[data-theme='ichor'] .outliner-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-theme='ichor'] .nav-category-btn {
+  font-size: 11px;
+}
+html[data-theme='ichor'] :is(.outliner-filter-pill, .outliner-entry) {
+  font-size: 12px;
+}
+html[data-theme='ichor'] :is(.fiscal-ind-val, .resource-value, .resource-delta, .situations-count, .situation-badge-count, .time-clock, .inspect-value) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+html[data-theme='ichor'] .inspect-label {
+  font-style: italic;
+  color: rgba(var(--text-bright-rgb), 0.78);
+}
+
+/* --- Chamfered, gold-ruled chrome ----------------------------------------------------- */
+/* Buttons and tabs lose their rounded corners for cut ones. */
+html[data-theme='ichor'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .outliner-filter-pill, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn) {
+  border-radius: 0 !important;
+}
+html[data-theme='ichor'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+}
+html[data-theme='ichor'] .hud-bar {
+  background: linear-gradient(rgba(30, 21, 8, 0.96), rgba(5, 4, 3, 0.97));
+}
+html[data-theme='ichor'] .hud-top {
+  border-bottom: 1px solid var(--accent);
+  box-shadow: 0 1px 0 #000, 0 2px 0 rgba(var(--accent-rgb), 0.28);
+}
+html[data-theme='ichor'] .hud-bottom {
+  border-top: 1px solid var(--accent);
+  box-shadow: 0 -1px 0 #000, 0 -2px 0 rgba(var(--accent-rgb), 0.28);
+}
+html[data-theme='ichor'] :is(.nav-sidebar, .outliner) {
+  background: rgba(5, 4, 3, 0.95) var(--ichor-damask);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px rgba(var(--accent-rgb), 0.22);
+}
+
+/* Windows: a double rule, a gold-leaf title bar, damask behind the content. */
+html[data-theme='ichor'] .draggable-window {
+  border: 1px solid var(--accent);
+  outline: 1px solid rgba(var(--accent-rgb), 0.38);
+  outline-offset: 3px;
+  background: rgba(5, 4, 3, 0.96) var(--ichor-damask);
+  box-shadow: 0 0 0 1px #000, 0 14px 38px rgba(0, 0, 0, 0.78), inset 0 0 40px rgba(var(--accent-rgb), 0.05);
+}
+html[data-theme='ichor'] .draggable-window-titlebar {
+  background: var(--ichor-leaf);
+  color: #120c03;
+  border-bottom: 1px solid #000;
+  font-size: 13px;
+  text-shadow: 0 1px 0 rgba(255, 244, 214, 0.35);
+}
+html[data-theme='ichor'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: #120c03;
+}
+
+/* Buttons: black lacquer with a gold rule; the active one is gold leaf with black lettering;
+   a disabled one fades to bronze. */
+html[data-theme='ichor'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: linear-gradient(rgba(22, 16, 8, 0.92), rgba(6, 5, 3, 0.92));
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  color: var(--accent-soft);
+}
+html[data-theme='ichor'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: linear-gradient(rgba(60, 44, 16, 0.95), rgba(20, 14, 6, 0.95));
+  border-color: var(--accent-soft);
+  color: var(--strong);
+}
+html[data-theme='ichor'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: var(--ichor-leaf);
+  border-color: var(--accent-soft);
+  color: #120c03;
+  box-shadow: none;
+  text-shadow: 0 1px 0 rgba(255, 244, 214, 0.3);
+}
+/* The clock pace buttons keep their OWN colour (STRAT accent, OPS amber, TAC red, as in Default): the
+   active one is the full-strength one and gets a double rule in that colour, never the theme's gold. */
+html[data-theme='ichor'] .time-mode-btn.active {
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px currentColor;
+}
+html[data-theme='ichor'] button:disabled:not(.situations-icon) {
+  color: rgba(var(--accent-rgb), 0.36);
+  border-color: rgba(var(--accent-rgb), 0.2);
+  background: rgba(10, 8, 5, 0.7);
+}
+
+/* Buttons otherwise fall back to the browser's own sans; keep them in the theme's hand. */
+html[data-theme='ichor'] button {
+  font-family: inherit;
+}
+
+/* Lists, fields, rules. */
+html[data-theme='ichor'] :is(input, select, textarea) {
+  background: rgba(8, 6, 4, 0.95);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+}
+html[data-theme='ichor'] .inspect-divider {
+  height: 1px;
+  border: none;
+  background: linear-gradient(90deg, transparent, var(--accent) 18%, var(--accent) 82%, transparent);
+  opacity: 0.55;
+}
+html[data-theme='ichor'] .outliner-entry.selected .outliner-entry-name {
+  color: var(--accent-soft);
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.45);
+}
+
+/* --- Main menu ------------------------------------------------------------------------- */
+html[data-theme='ichor'] .main-menu {
+  background: radial-gradient(ellipse at 50% -10%, #241a09 0%, #0c0905 45%, #050403 100%);
+}
+html[data-theme='ichor'] :is(.main-menu-country-card, .main-menu-econ-option) {
+  background: rgba(8, 6, 4, 0.9) var(--ichor-damask);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px rgba(var(--accent-rgb), 0.16);
+}
+html[data-theme='ichor'] :is(.main-menu-country-card, .main-menu-econ-option):hover {
+  background: rgba(34, 25, 10, 0.95) var(--ichor-damask);
+}
+html[data-theme='ichor'] .main-menu-econ-option.active {
+  background: rgba(46, 34, 12, 0.95) var(--ichor-damask);
+}
+html[data-theme='ichor'] :is(.main-menu-country-name, .main-menu-econ-name) {
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+}
+
+/* --- HUD ------------------------------------------------------------------------------ */
+html[data-theme='ichor'] .time-date {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--accent-soft);
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.4);
+  letter-spacing: 0.1em;
+}
+
+/* --- Alerts ----------------------------------------------------------------------------- */
+html[data-theme='ichor'] .dip-toast {
+  background: linear-gradient(rgba(20, 14, 7, 0.96), rgba(5, 4, 3, 0.96));
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  border-left: 4px solid var(--accent);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+}
+/* A danger toast is a crimson plate edged in gold. */
+html[data-theme='ichor'] .dip-toast.sev-danger {
+  background: linear-gradient(rgba(var(--ichor-crimson-rgb), 0.95), rgba(60, 8, 16, 0.97));
+  color: var(--strong);
+  border: 1px solid var(--accent);
+  border-left: 4px solid var(--accent-soft);
+  letter-spacing: 0.02em;
+}
+html[data-theme='ichor'] .dip-toast.sev-warning {
+  border-color: var(--warn);
+  border-left-color: var(--warn);
+}
+
+html[data-theme='ichor'] .confirm-box {
+  background: rgba(5, 4, 3, 0.97) var(--ichor-damask);
+  border: 1px solid var(--accent);
+  outline: 1px solid rgba(var(--accent-rgb), 0.38);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px #000, 0 18px 46px rgba(0, 0, 0, 0.8);
+}
+html[data-theme='ichor'] .confirm-title {
+  background: var(--ichor-leaf);
+  color: #120c03;
+  margin: -16px -18px 12px;
+  padding: 6px 18px;
+}
+
+/* Situations: the counts as a ledger; the top-bar badge as a seal. */
+html[data-theme='ichor'] .situations-type {
+  background: rgba(6, 5, 3, 0.8);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='ichor'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='ichor'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='ichor'] .sev-info {
+  --sev-color: var(--accent);
+}
+html[data-theme='ichor'] .situation-badge {
+  background: #000;
+  border: 1px solid var(--accent);
+  font-family: var(--font-display);
+}
+html[data-theme='ichor'] .situation-badge.sev-danger {
+  background: var(--ichor-crimson);
+  color: var(--strong);
+}
+html[data-theme='ichor'] .situation-badge.sev-danger .situation-badge-icon {
+  background: var(--accent);
+  color: #120c03;
+}
+
+/* --- Tech tree and charts -------------------------------------------------------------- */
+html[data-theme='ichor'] .tech-tree-node rect {
+  fill: rgba(10, 8, 5, 0.96);
+}
+html[data-theme='ichor'] .tech-tree-node-name {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+/* --- Motion -------------------------------------------------------------------------------- */
+/* Windows and notices fade into place; nothing flickers. (Opacity only: a window is positioned
+   by an inline transform, which an animation would override.) */
+@keyframes ichor-rise {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+html[data-theme='ichor'][data-motion='full'] :is(.draggable-window, .confirm-box, .dip-toast) {
+  animation: ichor-rise 0.22s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme='ichor'] * {
+    animation: none !important;
+  }
+}
