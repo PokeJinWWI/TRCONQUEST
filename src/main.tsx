@@ -5,6 +5,7 @@ import './themes/nerv.css'
 import './themes/ichor.css'
 import './themes/yesteryear.css'
 import './themes/terminal.css'
+import './themes/modernterminal.css'
 import './themes/win95.css'
 import '@fontsource/share-tech-mono/latin-400.css'
 // Puts the saved theme on <html> before the first paint.

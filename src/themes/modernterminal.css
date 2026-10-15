@@ -1,0 +1,218 @@
+/* The Colorful Terminal theme: a text-mode strategy game on a modern screen. Neutral near-black
+   panels, one monospace face, 1px square rules in the palette's accent colour, a box-drawing feel
+   (title text sits ON the top rule), and ONE solid selection bar with dark text. No glow, no
+   scanlines: it is crisp. The player picks the colours (state/themeStore.ts sets --accent /
+   --select and the neutral panel tokens from scene/modernPalette.ts as inline properties on
+   <html>); nothing here names a colour except the alert colours. Every rule is under
+   html[data-theme='modernterminal']. Relation colours, nation colours and alerts are NOT themed.
+   The look is mostly black, white and grey: panels, buttons and body text are neutral, and colour
+   is spent sparingly: a few accent rules (the window frame, the top bar's lower rule), the one
+   selection bar, and COLOURED TEXT for labels and headings (the fixed --ink-1..5 set below,
+   cycled through sections and resources, so a screen reads as many colours of type on black).
+   The set has NO red, orange or green: those carry meaning (loss, warning, growth), so a resource
+   such as Influence never reads as a change. Green is --good, used only for gains. */
+
+html[data-theme='modernterminal'] {
+  --warn-rgb: 255, 176, 0;
+  --danger-rgb: 255, 92, 72;
+  --caution-rgb: 255, 214, 64;
+  --ink-1: #7da2ff;
+  --ink-2: #e8c85c;
+  --ink-3: #5fd0ea;
+  --ink-4: #d27ae6;
+  --ink-5: #f0a8c8;
+  --good: #66dd96;
+  --rule: rgba(255, 255, 255, 0.22);
+  --danger: #ff5c48;
+  --warn: #ffb000;
+  --caution: #ffd640;
+  --font-ui: 'JetBrains Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-body: 'JetBrains Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* --- Type --------------------------------------------------------------------------------- */
+html[data-theme='modernterminal'] body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+html[data-theme='modernterminal'] :is(.hud-title, .draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-title, .confirm-title, .outliner-section-title, .action-dock-header) {
+  font-family: var(--font-ui);
+  letter-spacing: 0.04em;
+  text-shadow: none;
+}
+html[data-theme='modernterminal'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn) {
+  font-family: var(--font-ui);
+  letter-spacing: 0.02em;
+}
+
+/* --- Square, ruled chrome ----------------------------------------------------------------- */
+html[data-theme='modernterminal'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .outliner-filter-pill, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn) {
+  border-radius: 0 !important;
+}
+html[data-theme='modernterminal'] .hud-bar {
+  background: rgba(var(--panel-deep-rgb), 0.97);
+}
+html[data-theme='modernterminal'] .hud-top {
+  border-bottom: 1px solid var(--accent);
+}
+html[data-theme='modernterminal'] .hud-bottom {
+  border-top: 1px solid var(--rule);
+}
+html[data-theme='modernterminal'] :is(.nav-sidebar, .outliner) {
+  background: rgba(var(--panel-deep-rgb), 0.97);
+  border-color: var(--rule);
+}
+html[data-theme='modernterminal'] .draggable-window {
+  border: 1px solid rgba(var(--accent-rgb), 0.75);
+  background: rgba(var(--panel-rgb), 0.97);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+}
+/* The title sits on the rule: an accent-coloured heading over a thin line, no filled bar. */
+html[data-theme='modernterminal'] .draggable-window-titlebar {
+  background: rgba(var(--panel-deep-rgb), 1);
+  color: var(--strong);
+  border-bottom: 1px solid var(--rule);
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+html[data-theme='modernterminal'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: var(--text);
+  text-shadow: none;
+}
+
+/* Buttons are thin outlines; hover tints; selected / active is the solid selection bar. */
+html[data-theme='modernterminal'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: rgba(var(--panel-deep-rgb), 0.8);
+  border: 1px solid var(--rule);
+  color: var(--text);
+}
+html[data-theme='modernterminal'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: var(--strong);
+}
+html[data-theme='modernterminal'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: var(--select);
+  border-color: var(--select);
+  color: #0a0a0b;
+  box-shadow: none;
+  text-shadow: none;
+}
+html[data-theme='modernterminal'] button:disabled:not(.situations-icon) {
+  color: rgba(var(--ink-rgb), 0.35);
+  border-color: rgba(var(--ink-rgb), 0.16);
+  background: transparent;
+}
+html[data-theme='modernterminal'] :is(input, select, textarea) {
+  background: rgba(var(--panel-deep-rgb), 0.95);
+  border: 1px solid var(--rule);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+}
+html[data-theme='modernterminal'] :is(input, textarea) {
+  caret-color: var(--select);
+}
+/* A selected list row is the solid bar. */
+html[data-theme='modernterminal'] .outliner-entry.selected .outliner-entry-name {
+  background: var(--select);
+  color: #0a0a0b;
+  text-shadow: none;
+}
+
+/* --- HUD ---------------------------------------------------------------------------------- */
+html[data-theme='modernterminal'] .hud-title {
+  color: var(--strong);
+  font-weight: 700;
+  font-size: 15px;
+}
+html[data-theme='modernterminal'] .time-date {
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+}
+
+/* --- Alerts ------------------------------------------------------------------------------- */
+html[data-theme='modernterminal'] .dip-toast {
+  background: rgba(var(--panel-deep-rgb), 0.96);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  font-size: 13px;
+}
+html[data-theme='modernterminal'] .dip-toast.sev-danger {
+  background: var(--danger);
+  color: #0a0a0b;
+  border: none;
+  font-weight: 700;
+  text-shadow: none;
+}
+html[data-theme='modernterminal'] .dip-toast.sev-warning {
+  border-color: var(--warn);
+  border-left-color: var(--warn);
+}
+html[data-theme='modernterminal'] .confirm-box {
+  background: rgba(var(--panel-deep-rgb), 0.98);
+  border: 1px solid var(--accent);
+}
+html[data-theme='modernterminal'] .confirm-title {
+  color: var(--strong);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 6px;
+}
+html[data-theme='modernterminal'] .situations-type {
+  background: rgba(var(--panel-deep-rgb), 0.85);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='modernterminal'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='modernterminal'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='modernterminal'] .sev-info {
+  --sev-color: var(--accent);
+}
+html[data-theme='modernterminal'] .situation-badge {
+  background: #000;
+  font-family: var(--font-mono);
+}
+html[data-theme='modernterminal'] .situation-badge.sev-danger {
+  background: var(--danger);
+  color: #0a0a0b;
+}
+
+/* --- Coloured text ------------------------------------------------------------------------ */
+/* Labels are grey, values white; headings and resources take the colours of the fixed set. */
+html[data-theme='modernterminal'] .inspect-label {
+  color: rgba(var(--ink-rgb), 0.6);
+}
+html[data-theme='modernterminal'] .inspect-value {
+  color: var(--text-bright);
+}
+html[data-theme='modernterminal'] .nav-nation-name {
+  color: var(--accent);
+}
+html[data-theme='modernterminal'] .outliner-title {
+  color: var(--ink-3);
+}
+html[data-theme='modernterminal'] .outliner-section:nth-of-type(5n + 1) .outliner-section-title { color: var(--ink-3); }
+html[data-theme='modernterminal'] .outliner-section:nth-of-type(5n + 2) .outliner-section-title { color: var(--ink-2); }
+html[data-theme='modernterminal'] .outliner-section:nth-of-type(5n + 3) .outliner-section-title { color: var(--ink-4); }
+html[data-theme='modernterminal'] .outliner-section:nth-of-type(5n + 4) .outliner-section-title { color: var(--ink-5); }
+html[data-theme='modernterminal'] .outliner-section:nth-of-type(5n + 5) .outliner-section-title { color: var(--ink-1); }
+html[data-theme='modernterminal'] .resource-item:nth-child(5n + 1) :is(.resource-icon, .resource-value) { color: var(--ink-1); }
+html[data-theme='modernterminal'] .resource-item:nth-child(5n + 2) :is(.resource-icon, .resource-value) { color: var(--ink-2); }
+html[data-theme='modernterminal'] .resource-item:nth-child(5n + 3) :is(.resource-icon, .resource-value) { color: var(--ink-3); }
+html[data-theme='modernterminal'] .resource-item:nth-child(5n + 4) :is(.resource-icon, .resource-value) { color: var(--ink-4); }
+html[data-theme='modernterminal'] .resource-item:nth-child(5n + 5) :is(.resource-icon, .resource-value) { color: var(--ink-5); }
+html[data-theme='modernterminal'] .nav-category-btn:nth-child(5n + 1) { color: var(--ink-3); }
+html[data-theme='modernterminal'] .nav-category-btn:nth-child(5n + 2) { color: var(--ink-2); }
+html[data-theme='modernterminal'] .nav-category-btn:nth-child(5n + 3) { color: var(--ink-5); }
+html[data-theme='modernterminal'] .nav-category-btn:nth-child(5n + 4) { color: var(--ink-4); }
+html[data-theme='modernterminal'] .nav-category-btn:nth-child(5n + 5) { color: var(--ink-1); }
+html[data-theme='modernterminal'] .nav-category-btn:hover:not(:disabled) { color: var(--strong); }
+html[data-theme='modernterminal'] :is(.good, .pos, .ok) { color: var(--good); }
+html[data-theme='modernterminal'] .nav-category-btn:is(.active, [aria-selected='true']) { color: #0a0a0b; }
