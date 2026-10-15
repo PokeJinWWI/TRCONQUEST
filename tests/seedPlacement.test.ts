@@ -68,7 +68,14 @@ for (const model of ['abstract', 'complex'] as const) {
     if (Object.keys(res.unplaced).length > 0) loose.push(`${b}:${JSON.stringify(res.unplaced)}`)
   }
   check(`every starting building of ${bodies.join(', ')} stands on a site`, loose.length === 0, loose.join(' '))
-  check('...seeding changed no number in the economy: the worlds are exactly as they were', before === JSON.stringify(model === 'abstract' ? useAbstractEconomyStore.getState().worlds : useEconomyStore.getState().worlds))
+  // Complex seeding also splits each world's buildings into one per place (economy/buildingSites): the split changes no total.
+  const sansBuildings = (ws: unknown) => JSON.stringify((ws as { buildings?: unknown }[]).map((w) => ({ ...w, buildings: undefined })))
+  const totals = (ws: { buildings: { recipeId: string; owner: { kind: string }; level: number; throughput: number }[] }[]) =>
+    ws.map((w) => { const t: Record<string, number> = {}; for (const b of w.buildings) { const k = `${b.recipeId}|${b.owner.kind}`; t[k] = (t[k] ?? 0) + b.level; t[`${k}|run`] = (t[`${k}|run`] ?? 0) + b.level * b.throughput } return t })
+  const sameTotals = (a: Record<string, number>[], b: Record<string, number>[]) => a.every((t, i) => Object.keys({ ...t, ...b[i] }).every((k) => Math.abs((t[k] ?? 0) - (b[i][k] ?? 0)) < 1e-6))
+  check('...seeding changed no number in the economy: the worlds are exactly as they were', model === 'abstract'
+    ? before === JSON.stringify(useAbstractEconomyStore.getState().worlds)
+    : sansBuildings(JSON.parse(before)) === sansBuildings(useEconomyStore.getState().worlds) && sameTotals(totals(JSON.parse(before)), totals(useEconomyStore.getState().worlds)))
   for (const b of ['Mars', 'Venus']) {
     const levels = worldLevels(b, mode)
     const placedLevels: Record<string, number> = {}

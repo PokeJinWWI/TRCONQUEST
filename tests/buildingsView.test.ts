@@ -1,8 +1,8 @@
-// The by-area view model (scene/areaView.ts): a world as its settlements and sites, each with its districts, buildings, civic buildings
+// The by-area view model (scene/buildingsView.ts): a world as its settlements and sites, each with its districts, buildings, civic buildings
 // and what is on order, and what can be built or developed there. Same data as the master list, seen by place.
 //
-// Run:  npx tsx tests/areaView.test.ts
-import { areaView } from '../src/scene/areaView'
+// Run:  npx tsx tests/buildingsView.test.ts
+import { areaView } from '../src/scene/buildingsView'
 import { locationsOf } from '../src/scene/locations'
 import { levelRoomAt } from '../src/scene/placementOrders'
 import { setUpNewGame } from '../src/scene/gameSetup'
@@ -40,6 +40,9 @@ for (const model of ['abstract', 'complex'] as const) {
   for (const b of v.standalone) shown.set(b.id, (shown.get(b.id) ?? 0) + b.count)
   check('...and the cards add up to the world\'s buildings, building by building', worldBuildings('Mars', mode).every((b) => shown.get(b.id) === b.count))
   check('no site shows more buildings in a district than its developed slots', all.every((s) => s.districts.every((d) => d.used <= d.slots)))
+  check('each building sits in its own district block at the place, with its level there', all.every((s) => s.districts.reduce((n, d) => n + d.buildings.reduce((m, b) => m + b.count, 0), 0) === s.buildings.reduce((n, b) => n + b.count, 0) && s.districts.every((d) => d.buildings.every((b) => b.district === d.district))))
+  check('the totals chips add up to every level the world has', v.totals.reduce((n, t) => n + t.levels, 0) === worldBuildings('Mars', mode).reduce((n, b) => n + b.count, 0))
+  if (model === 'complex') check('Complex: every tile opens the building that stands at that place', all.every((s) => s.buildings.every((b) => !!b.buildingId)))
   const capital = all.find((s) => s.civic.some((c) => c.kind === 'seat'))!
   check('the capital settlement holds the Government Seat as a civic building, among its own buildings', !!capital && capital.kind === 'settlement' && capital.civic.length >= 2)
   check('a site Mars owns offers its developed districts\' buildings and the districts it can develop', capital.mine && capital.canBuild.length > 0 && capital.canDevelop.length > 0)

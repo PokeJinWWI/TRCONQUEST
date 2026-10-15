@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="24" viewBox="0 0 17 19" shape-rendering="crispEdges">
+  <!-- Windows 95 pointing hand: white glove, black outline. Hotspot is the fingertip (5,0). -->
+  <path d="M4.5 0.5 H6.5 V7 H7.5 V5.5 H9.5 V7 H10.5 V6 H12.5 V7.5 H13.5 V7 H15.5 V12 L14 14.5 V18 H5.5 V15 L1.5 10.5 V8.5 H3.5 L4.5 9.5 Z" fill="#fff" stroke="#000" stroke-width="1" stroke-linejoin="miter"/>
+  <path d="M7.5 9 V13 M9.5 9 V13 M11.5 9 V13" stroke="#000" stroke-width="1" fill="none"/>
+</svg>

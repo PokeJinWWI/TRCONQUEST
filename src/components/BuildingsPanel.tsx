@@ -1,3 +1,4 @@
+import { siteName } from '../state/locationStore'
 import { Bi } from './Bi'
 import { SiteChooser } from './planet/SiteChooser'
 import { Fragment, useMemo, useState } from 'react'
@@ -319,6 +320,11 @@ function ownerLabel(b: Building, corporations: Corporation[]): string {
 export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsPanelProps) {
   const countryId = usePlayerStore((s) => s.selectedCountryId)
   const queueConstruction = useEconomyStore((s) => s.queueConstruction)
+  // One more level of this building where it stands; if that place is full, anywhere it can go.
+  const buildMore = (worldId: string, b: { recipeId: string; siteId?: string }) => {
+    const r = queueConstruction(worldId, b.recipeId, { kind: 'state' }, b.siteId)
+    if (!r.ok && b.siteId) queueConstruction(worldId, b.recipeId, { kind: 'state' })
+  }
   const cancelConstruction = useEconomyStore((s) => s.cancelConstruction)
   const downgradeBuilding = useEconomyStore((s) => s.downgradeBuilding)
   const setProductionMethod = useEconomyStore((s) => s.setProductionMethod)
@@ -422,6 +428,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                         <button type="button" className="bld-name-btn" onClick={() => setDetailId(open ? null : b.id)} title="Click for full details">
                           <span className="market-caret">{open ? '▾' : '▸'}</span>
                           {recipe!.label}
+                          {b.siteId && <span className="abs-dim" title="This building stands in one place; the same building elsewhere is another building"> · {siteName(b.siteId)}</span>}
                         </button>
                       </td>
                       <td>
@@ -444,7 +451,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                             <button
                               type="button"
                               className="bld-level-btn"
-                              onClick={() => queueConstruction(world.id, b.recipeId, { kind: 'state' })}
+                              onClick={() => buildMore(world.id, b)}
                               disabled={!canBuild(world, b.recipeId)}
                               title={
                                 !canBuild(world, b.recipeId)
@@ -626,6 +633,11 @@ export function ComplexBuildingCard({ b, world, country, owned, onClose }: { b: 
   const fmt = (n: number) => formatIED(n, rate)
   const corporations = useEconomyStore((s) => s.corporations)
   const queueConstruction = useEconomyStore((s) => s.queueConstruction)
+  // One more level of this building where it stands; if that place is full, anywhere it can go.
+  const buildMore = (worldId: string, b: { recipeId: string; siteId?: string }) => {
+    const r = queueConstruction(worldId, b.recipeId, { kind: 'state' }, b.siteId)
+    if (!r.ok && b.siteId) queueConstruction(worldId, b.recipeId, { kind: 'state' })
+  }
   const downgradeBuilding = useEconomyStore((s) => s.downgradeBuilding)
   const setProductionMethod = useEconomyStore((s) => s.setProductionMethod)
   const releaseProductionMethod = useEconomyStore((s) => s.releaseProductionMethod)
@@ -648,7 +660,7 @@ export function ComplexBuildingCard({ b, world, country, owned, onClose }: { b: 
       </div>
       {owned && (
         <div className="pl-detail-actions">
-          <button type="button" className="laws-enact-btn" disabled={!room} onClick={() => queueConstruction(world.id, b.recipeId, { kind: 'state' })}
+          <button type="button" className="laws-enact-btn" disabled={!room} onClick={() => buildMore(world.id, b)}
             title={!room ? 'District is full — develop it first' : `Queue another state-owned level — about ${fmt(estimateConstructionCost(b.recipeId, world.market.prices))} of materials`}>
             + Upgrade
           </button>

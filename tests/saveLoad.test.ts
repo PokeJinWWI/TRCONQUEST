@@ -6,13 +6,16 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { decode, encode, sameData } from '../src/state/saveCodec'
+import { mergeSites } from '../src/economy/buildingSites'
+import type { Building } from '../src/economy/economyTypes'
+import { ensureSeeded } from '../src/scene/seedPlacementOrders'
 import { STORE_REGISTRY, UNREGISTERED_STORES, gameEntries } from '../src/state/gameStores'
 import { SAVE_FORMAT, SaveError, applySave, createSave } from '../src/state/saveGame'
 import { packSave, unpackSave } from '../src/state/saveStorage'
 import { resetGame } from '../src/scene/gameReset'
 import { setUpNewGame } from '../src/scene/gameSetup'
 import { usePlayerStore } from '../src/state/playerStore'
-import { empiresRunning, useEconomyStore } from '../src/state/economyStore'
+import { empiresRunning, useEconomyStore, worldByName } from '../src/state/economyStore'
 import { useAbstractEconomyStore } from '../src/state/abstractEconomyStore'
 import { useGameTimeStore } from '../src/state/gameTimeStore'
 import { useShipStore } from '../src/state/shipStore'
@@ -160,6 +163,24 @@ console.log('\n=== 6. Packing for storage ===')
   let err = ''
   try { await unpackSave(new TextEncoder().encode('{nope')) } catch (e) { err = (e as Error).message }
   check('garbage is refused readably', /damaged/.test(err), err)
+}
+
+console.log('\n=== 7. A save from before buildings belonged to a place ===')
+{
+  await startGame('complex')
+  ensureSeeded('Mars')
+  const levelsOf = () => JSON.stringify(worldByName(useEconomyStore.getState().worlds, 'Mars')!.buildings.reduce((m, b) => ({ ...m, [b.recipeId]: (m[b.recipeId] ?? 0) + b.level }), {} as Record<string, number>))
+  const want = levelsOf()
+  const file = JSON.parse(JSON.stringify(await createSave('old')))
+  // Make it an old file: version 2, every Complex building merged back into one per recipe and owner.
+  file.version = 2
+  const economy = decode(file.stores.economy.data) as { worlds: { buildings: Building[] }[] }
+  for (const w of economy.worlds) w.buildings = mergeSites(w.buildings)
+  file.stores.economy.data = encode(economy)
+  await applySave(file)
+  const mars = worldByName(useEconomyStore.getState().worlds, 'Mars')!
+  check('an old save opens with its buildings split where the ledger says', mars.buildings.some((b) => !!b.siteId) && mars.buildings.every((b) => !!b.siteId))
+  check('...and no level was gained or lost', levelsOf() === want)
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll save/load checks passed')

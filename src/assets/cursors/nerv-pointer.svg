@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 32 32">
+  <!-- NERV pointer: a hard-edged MAGI-orange arrowhead on a black keyline. Hotspot is the tip (2,2 at 22px). -->
+  <path d="M3 3 L3 25 L9.5 19 L14 29 L18 27.2 L13.4 17.4 L22 17.4 Z" fill="#ff9900" stroke="#000" stroke-width="2.4" stroke-linejoin="miter" paint-order="stroke"/>
+  <path d="M3 3 L22 17.4 L13.4 17.4 L9.5 19 Z" fill="#ffd9a8" opacity="0.5"/>
+</svg>

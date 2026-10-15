@@ -1,3 +1,4 @@
+import { levelAtSite } from '../economy/buildingSites'
 // The route network, store side: building and running routes, paying for them, and handing
 // what the network means for production to both economies. The rules are
 // scene/infrastructureNet.ts; who may build where is jurisdiction (scene/sovereignty).
@@ -138,7 +139,11 @@ export function syncSiteAccess(): void {
     for (const [owner, siteIds] of bySiteOwner) {
       const factors = accessOnBody(body, owner, now)
       for (const site of siteIds) {
-        for (const [id, count] of Object.entries(usePlacementStore.getState().placed[site] ?? {})) {
+        for (const [id, ledger] of Object.entries(usePlacementStore.getState().placed[site] ?? {})) {
+          // Complex: a building tagged with this site gets its share below; only the units of an unplaced building count here.
+          const tagged = simple ? 0 : levelAtSite(complexBuildings(body), id, site)
+          const count = ledger - tagged
+          if (count <= 0) continue
           const key = simple ? owner : body
           const row = acc.get(key) ?? new Map<string, { n: number; share: number }>()
           const cur = row.get(id) ?? { n: 0, share: 0 }
@@ -153,7 +158,7 @@ export function syncSiteAccess(): void {
       const worlds = useAbstractEconomyStore.getState().worlds
       return Object.values(worlds).filter((w) => ownerOfWorld(w.bodyName) === key).reduce((n, w) => n + ((w.buildings as Record<string, number>)[id] ?? 0), 0)
     }
-    return useEconomyStore.getState().worlds.find((w) => w.id === key)?.buildings.filter((b) => b.recipeId === id).reduce((n, b) => n + b.level, 0) ?? 0
+    return useEconomyStore.getState().worlds.find((w) => w.id === key)?.buildings.filter((b) => b.recipeId === id && !b.siteId).reduce((n, b) => n + b.level, 0) ?? 0
   }
   const result = new Map<string, Record<string, number>>()
   for (const [key, row] of acc) {
@@ -171,9 +176,26 @@ export function syncSiteAccess(): void {
   if (simple) {
     for (const nation of Object.keys(useAbstractEconomyStore.getState().byCountry)) useAbstractEconomyStore.getState().setBuildingAccess(nation, result.get(nation) ?? {})
   } else {
+    // Each building tagged with a site gets the share of THAT site (key "recipe@site"), the unplaced rest the aggregate (key "recipe").
+    const byOwner = new Map<string, Record<string, number>>()
+    for (const w of useEconomyStore.getState().worlds) {
+      const out: Record<string, number> = { ...(result.get(w.id) ?? {}) }
+      for (const b of w.buildings) {
+        if (!b.siteId) continue
+        const owner = siteOwner(b.siteId)
+        if (!owner) continue
+        const k = `${w.id}|${owner}`
+        if (!byOwner.has(k)) byOwner.set(k, accessOnBody(w.id, owner, now))
+        const f = byOwner.get(k)![b.siteId] ?? 1
+        if (f < 0.999) out[`${b.recipeId}@${b.siteId}`] = Math.round(f * 1000) / 1000
+      }
+      result.set(w.id, out)
+    }
     useEconomyStore.getState().setSiteAccess(Object.fromEntries(result))
   }
 }
+
+const complexBuildings = (body: string) => useEconomyStore.getState().worlds.find((w) => w.id === body)?.buildings ?? []
 
 function ownerOfWorld(bodyName: string): string | undefined {
   return useTerritoryStore.getState().bodyOwner[bodyName]

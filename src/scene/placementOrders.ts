@@ -6,6 +6,7 @@
 // It is the place where the two answers meet, and they stay apart in the result: the
 // builder's RIGHT to build there (scene/sovereignty: jurisdiction) and whether the building
 // PHYSICALLY fits (scene/placement: site kind, deposit, room).
+import { levelAtSite } from '../economy/buildingSites'
 import { isAutoBuilt, isRural } from '../economy/recipes'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
 import { useEconomyStore, worldByName } from '../state/economyStore'
@@ -45,6 +46,10 @@ const sitesOfBody = (bodyName: string): string[] => Object.keys(usePlacementStor
 // demolished building): the most recently placed sites give up theirs first.
 export function reconcileBody(bodyName: string): void {
   reconcileLevels(bodyName)
+  if (refOf('').mode === 'complex') {
+    reconcileComplexBuildings(bodyName)
+    return
+  }
   const store = usePlacementStore.getState()
   const ids = new Set<string>()
   for (const site of sitesOfBody(bodyName)) for (const id of Object.keys(store.placed[site])) ids.add(id)
@@ -57,6 +62,42 @@ export function reconcileBody(bodyName: string): void {
       const cut = Math.min(here, extra)
       if (cut > 0) usePlacementStore.getState().unplace(site, id, cut)
       extra -= cut
+    }
+  }
+}
+
+// Complex: a building knows its own site (economy/buildingSites), so the ledger entry at a site is what stands there (the
+// Buildings tagged with it) plus what is on order there, plus the units of an UNPLACED building that the ledger has claimed (a
+// start or an old save not yet split). Anything above that is a ghost (a level the AI downsized, a cancelled order) and goes, at
+// exactly the site it is on.
+function reconcileComplexBuildings(bodyName: string): void {
+  const world = worldByName(useEconomyStore.getState().worlds, bodyName)
+  const sites = sitesOfBody(bodyName)
+  const store = usePlacementStore.getState()
+  const ids = new Set<string>()
+  for (const site of sites) for (const id of Object.keys(store.placed[site] ?? {})) ids.add(id)
+  for (const id of ids) {
+    const unplaced = world ? world.buildings.filter((b) => b.recipeId === id && !b.siteId).reduce((n, b) => n + b.level, 0) : 0
+    const queuedAt = (site: string) => (world ? world.constructionQueue.filter((o) => o.recipeId === id && !o.district && o.siteId === site).length : 0)
+    const builtAt = (site: string) => (world ? levelAtSite(world.buildings, id, site) : 0)
+    const excess = new Map<string, number>()
+    let claimed = 0
+    for (const site of sites) {
+      const have = usePlacementStore.getState().placed[site]?.[id] ?? 0
+      const over = have - builtAt(site) - queuedAt(site)
+      if (over > 0) {
+        excess.set(site, over)
+        claimed += over
+      }
+    }
+    let ghosts = claimed - unplaced
+    // Orders placed by the AI's own queue before the world was seen carry no siteId: they are the queued units nobody tagged.
+    if (ghosts > 0 && world) ghosts -= world.constructionQueue.filter((o) => o.recipeId === id && !o.district && !o.siteId).length
+    for (const site of [...excess.keys()].reverse()) {
+      if (ghosts <= 0) break
+      const cut = Math.min(excess.get(site)!, ghosts)
+      usePlacementStore.getState().unplace(site, id, cut)
+      ghosts -= cut
     }
   }
 }

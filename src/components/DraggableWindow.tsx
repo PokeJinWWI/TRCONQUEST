@@ -47,6 +47,8 @@ interface DraggableWindowProps {
    * names a particular thing ("Mars", a ship's name) pass a stable key so one
    * size covers them all. */
   memoryKey?: string
+  /** When this changes the window comes to the front (same window, new thing shown) without moving or resetting. */
+  raiseKey?: string
   children: ReactNode
 }
 
@@ -79,7 +81,7 @@ const RESIZE_HANDLES: { edges: string; cls: string }[] = [
 // the satellite-view inspection panel and the nav sidebar's category
 // windows — re-centers on whichever body is selected but stays wherever the
 // player last dragged/resized it until they select something else.
-export function DraggableWindow({ title, titleNative, onClose, initialOffset, wide, anchor, maximizable = true, defaultSize, memoryKey, children }: DraggableWindowProps) {
+export function DraggableWindow({ title, titleNative, onClose, initialOffset, wide, anchor, maximizable = true, defaultSize, memoryKey, raiseKey, children }: DraggableWindowProps) {
   const sizeKey = memoryKey ?? title
   const [pos, setPos] = useState(initialOffset ?? { x: 0, y: 0 })
   // Collapsed to just its title bar — independent of `onClose`: a window
@@ -105,6 +107,12 @@ export function DraggableWindow({ title, titleNative, onClose, initialOffset, wi
   // Starts already on top of anything opened before it — a freshly opened
   // window shouldn't appear to open BEHIND an existing one until clicked.
   const [zIndex, setZIndex] = useState(bringToFrontZIndex)
+  const raisedForRef = useRef(raiseKey)
+  useEffect(() => {
+    if (raisedForRef.current === raiseKey) return
+    raisedForRef.current = raiseKey
+    setZIndex(bringToFrontZIndex())
+  }, [raiseKey])
   // Register in the window stack so Escape can close the topmost window first
   // (state/windowRegistry.ts). Only closable windows take part. The onClose ref
   // keeps the registry pointing at the latest handler without re-registering.

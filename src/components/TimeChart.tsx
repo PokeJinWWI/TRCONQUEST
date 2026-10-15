@@ -34,12 +34,15 @@ const RANGES = [
   { label: '6M', months: 6, every: 1 },
   { label: '1Y', months: 12, every: 2 },
   { label: '3Y', months: 36, every: 6 },
+  // Everything recorded; `every` 0 = pick a spacing that gives about six ticks.
+  { label: 'All', months: Infinity, every: 0 },
 ] as const
 
 const W = 300
-// Wide enough for the longest money label — "IED 197.58T" and negatives — which
-// are drawn right-anchored at PAD_L − 4 and would otherwise clip off the left.
-const PAD_L = 66
+// The left margin is sized to the widest y label (money labels like "IED 197.58T" and negatives
+// are drawn right-anchored at PAD_L − 4), so the plot is not pushed right by unused space.
+const PAD_L_MIN = 28
+const Y_LABEL_CHAR = 5
 const PAD_R = 6
 const PAD_T = 6
 const PAD_B = 16
@@ -90,6 +93,7 @@ export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1)
   const n = Math.max(0, ...series.map((s) => s.values.length))
   // Show the last `months` months (+1 sample so the first month has a left edge).
   const shown = Math.min(n, range.months + 1)
+  const every = range.every || Math.max(1, Math.ceil((shown - 1) / 6))
   const sliced = series.map((s) => ({ ...s, values: s.values.slice(Math.max(0, s.values.length - shown)) }))
   const firstTick = endTick - (shown - 1)
 
@@ -98,7 +102,7 @@ export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1)
       <span className="econ-graph-title" title={tip}><Bi en={title} /></span>
       <span className="tchart-ranges">
         {RANGES.map((r, i) => (
-          <button key={r.label} type="button" className={`tchart-range${i === rangeIdx ? ' active' : ''}`} title={`Show the last ${r.months === 36 ? '3 years' : r.months === 12 ? 'year' : '6 months'}`} onClick={() => setRangeIdx(i)}>
+          <button key={r.label} type="button" className={`tchart-range${i === rangeIdx ? ' active' : ''}`} title={r.months === Infinity ? 'Show everything recorded' : `Show the last ${r.months === 36 ? '3 years' : r.months === 12 ? 'year' : '6 months'}`} onClick={() => setRangeIdx(i)}>
             {r.label}
           </button>
         ))}
@@ -132,9 +136,10 @@ export function TimeChart({ title, series, endTick, format = (v) => v.toFixed(1)
     if (!(includeZero && min === 0)) min -= pad
   }
   const yTicks = niceTicks(min, max)
-  const xTicks = monthTicks(firstTick, shown, range.every)
+  const xTicks = monthTicks(firstTick, shown, every)
   const xTicksHaveNative = xTicks.some((t) => nativeText(t.label))
 
+  const PAD_L = Math.max(PAD_L_MIN, Math.max(...yTicks.map((v) => format(v).length)) * Y_LABEL_CHAR + 8)
   const plotW = W - PAD_L - PAD_R
   const hasNative = xTicksHaveNative
   const padB = hasNative ? PAD_B_NATIVE : PAD_B

@@ -17,6 +17,7 @@ import { labelKey } from '../src/i18n/labelText'
 import { CITY_NAMES } from '../src/data/cityNames'
 import { NATIVE_BY_NAME } from '../src/data/nativeNames'
 import { migratePlaceNames, nativeFor, usePlaceNameStore } from '../src/state/placeNameStore'
+import { PHOSPHORS, customPhosphor, hslToRgb, phosphorOf, phosphorSceneColors, phosphorTokens } from '../src/scene/phosphor'
 import { STORE_REGISTRY } from '../src/state/gameStores'
 
 let failures = 0
@@ -29,8 +30,8 @@ function check(label: string, cond: boolean, detail = '') {
 }
 
 console.log('\n=== 1. Theme preference ===')
-check('nothing saved = Default, Japanese, full motion', JSON.stringify(parseThemePrefs(null)) === JSON.stringify({ theme: 'default', script: 'ja', reduceMotion: false }))
-check('a saved NERV / Simplified / reduced loads', JSON.stringify(parseThemePrefs('{"theme":"nerv","script":"zh-Hans","reduceMotion":true}')) === JSON.stringify({ theme: 'nerv', script: 'zh-Hans', reduceMotion: true }))
+check('nothing saved = Default, Japanese, full motion', JSON.stringify(parseThemePrefs(null)) === JSON.stringify({ theme: 'default', script: 'ja', reduceMotion: false, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
+check('a saved NERV / Simplified / reduced loads', JSON.stringify(parseThemePrefs('{"theme":"nerv","script":"zh-Hans","reduceMotion":true}')) === JSON.stringify({ theme: 'nerv', script: 'zh-Hans', reduceMotion: true, phosphor: 'green', phosphorHue: 300, crt: { curve: true, scanlines: true, glow: true, noise: false, flicker: false }, nervCrt: { curve: false, scanlines: false, glow: false, noise: false, flicker: false } }))
 check('junk gives the defaults', parseThemePrefs('{{').theme === 'default' && parseThemePrefs('{"theme":"pink","script":"xx"}').script === 'ja')
 
 console.log('\n=== 2. Default is the original look ===')
@@ -52,6 +53,44 @@ console.log('\n=== 2. Default is the original look ===')
   const unscoped = selectors.filter((s) => !topLevel(s).every((part) => part.includes("[data-theme='nerv']") || ['.native', '.time-date-native', '.game-tooltip-native'].includes(part.trim())))
   check('every NERV rule is scoped to html[data-theme=nerv] (Default untouched)', unscoped.length === 0, unscoped.slice(0, 3).join(' | '))
   check('the scene chrome keeps its original colours in Default', SCENE_COLORS.default.orbit === '#7ce8ff' && SCENE_COLORS.default.grid === '#6fe3ff' && SCENE_COLORS.default.lattice === '#2b6b80')
+}
+
+console.log('\n=== 2a. Windows 95 theme ===')
+{
+  check('a saved Windows 95 theme loads', parseThemePrefs('{"theme":"win95"}').theme === 'win95')
+  check('the Windows 95 scene colours exist', SCENE_COLORS.win95.toneMapped === false)
+  const w95 = readFileSync('src/themes/win95.css', 'utf8')
+  const rules = w95.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@font-face\s*{[^}]*}/g, '')
+  const selectors = [...rules.matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim()).filter(Boolean)
+  const unscoped = selectors.filter((sel) => !sel.split(/,(?![^(]*\))/).every((part) => part.includes("[data-theme='win95']")))
+  check('every Windows 95 rule is scoped to html[data-theme=win95]', unscoped.length === 0, unscoped.slice(0, 3).join(' | '))
+}
+
+check('NERV screen effects default off and load per switch', (() => { const n = parseThemePrefs('{"theme":"nerv","nervCrt":{"scanlines":true,"glow":"x"}}').nervCrt; return n.scanlines === true && n.glow === false && n.curve === false })())
+check('the shared effect rules reach both Terminal and NERV', readFileSync('src/themes/terminal.css', 'utf8').includes("html:is([data-theme='terminal'], [data-theme='nerv'])[data-crt-scanlines='on']"))
+
+console.log('\n=== 2b. Terminal theme ===')
+{
+  const saved = parseThemePrefs('{"theme":"terminal","phosphor":"amber","phosphorHue":725,"crt":{"curve":false,"noise":true,"glow":"x"}}')
+  check('a saved Terminal / amber / hue wraps / switches load; a bad switch falls back', saved.theme === 'terminal' && saved.phosphor === 'amber' && saved.phosphorHue === 5 && saved.crt.curve === false && saved.crt.noise === true && saved.crt.glow === true)
+  check('an unknown phosphor gives green', parseThemePrefs('{"phosphor":"pink"}').phosphor === 'green')
+  check('green and amber are the real phosphors', JSON.stringify(hslToRgb(135, 100, 60)) === '[51,255,102]' && JSON.stringify(hslToRgb(41.5, 100, 50)) === '[255,176,0]')
+  const g = phosphorTokens(PHOSPHORS.green)
+  const a = phosphorTokens(PHOSPHORS.amber)
+  check('the accent is the phosphor, as a triplet and a hex', g['--accent'] === '#33ff66' && g['--accent-rgb'] === '51, 255, 102' && a['--accent'] === '#ffb000')
+  check('every token index.css defines for colour comes from the phosphor or terminal.css', ['--accent-rgb', '--panel-rgb', '--text', '--strong', '--page-bg', '--ok'].every((k) => k in g))
+  check('panels are near-black', g['--panel-rgb'].split(', ').every((v) => Number(v) < 12) && g['--page-bg'] !== '#000000' && Number.parseInt(g['--page-bg'].slice(1, 3), 16) < 8)
+  check('a custom hue stays readable (lighter toward blue)', customPhosphor(250).l > customPhosphor(30).l && customPhosphor(30).l >= 58)
+  check('a custom phosphor is a hue slider', phosphorOf('custom', 200).h === 200 && phosphorOf('custom', -10).h === 350)
+  check('the map line work follows it', phosphorSceneColors(PHOSPHORS.amber).orbit === '#ffb000' && phosphorSceneColors(PHOSPHORS.green).toneMapped === false)
+  const term = readFileSync('src/themes/terminal.css', 'utf8')
+  const rules = term.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@keyframes[^{]*{(?:[^{}]*{[^}]*})*[^}]*}/g, '').replace(/@media[^{]*{(?:[^{}]*{[^}]*})*[^}]*}/g, '')
+  const selectors = [...rules.matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim()).filter(Boolean)
+  const unscoped = selectors.filter((sel) => !sel.split(/,(?![^(]*\))/).every((part) => part.includes("[data-theme='terminal']")))
+  check('every Terminal rule is scoped to html[data-theme=terminal]', unscoped.length === 0, unscoped.slice(0, 3).join(' | '))
+  check('Terminal names no accent colour of its own (only alerts)', !/#(33ff66|ffb000)\b/i.test(term.replace(/--(warn|caution)[^;]*;/g, '')))
+  check('the effects are separate switches', ['curve', 'scanlines', 'glow', 'noise', 'flicker'].every((k) => term.includes(`data-crt-${k}='on'`)))
+  check('the overlays never take clicks', (term.match(/pointer-events: none/g) ?? []).length >= 3)
 }
 
 console.log('\n=== 3. Dictionaries ===')

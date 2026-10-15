@@ -11,7 +11,7 @@ import { accessOnBody, buildRoute, capturedBy, syncSiteAccess } from '../src/sce
 import { buildFacility, planFacility } from '../src/scene/orbitalOrders'
 import { orbitalAccessNow, orbitalControlNow } from '../src/scene/orbitalState'
 import { controlSnapshot, describeControlChange } from '../src/scene/occupation'
-import { siteKindOf, siteKindsFor, slotsOfSite } from '../src/scene/placement'
+import { siteKindOf, siteKindsFor, slotsOfSite, slotsUsedBy } from '../src/scene/placement'
 import { planPlacement } from '../src/scene/placementOrders'
 import { embarkSettlers } from '../src/scene/colonies'
 import { applyShipCommand } from '../src/scene/shipCommands'
@@ -239,7 +239,7 @@ for (const model of ['abstract', 'complex'] as const) {
     let slots = 0
     for (const [id, n] of Object.entries(row)) {
       if (!siteKindsFor({ mode: model === 'abstract' ? 'simple' : 'complex', id }).includes(site.kind)) bad.push(`${siteId}: ${id} on a ${site.kind} site`)
-      slots += n
+      slots += n * slotsUsedBy({ mode: model === 'abstract' ? 'simple' : 'complex', id })
     }
     if (slots > slotsOfSite(site)) bad.push(`${siteId}: over capacity`)
   }

@@ -9,6 +9,7 @@ import { useTerritoryStore } from '../state/territoryStore'
 import { groundKeySurface } from '../state/defenseStore'
 import { useCivicStore } from '../state/civicStore'
 import { isRural } from '../economy/recipes'
+import { useEconomyStore, worldByName } from '../state/economyStore'
 import { civicOf, withSettlementHalls, withoutGrownOutpost } from './civic'
 import { useColonyStore } from '../state/colonyStore'
 import { OUTPOST_HALL_POPULATION } from '../data/colonyData'
@@ -96,6 +97,8 @@ export function seedBodyPlacement(bodyName: string): SeedResult | null {
     for (const [id, n] of Object.entries(result.placed[siteId] ?? {})) usePlacementStore.getState().place(siteId, id, n)
   }
   usePlacementStore.getState().markSeeded(bodyName)
+  // Complex: the starting buildings become one building per place, as the ledger says (economy/buildingSites.splitBySites).
+  if (mode === 'complex') splitWorldBySites(bodyName)
   // The world's auto-placed spaceports become structures at the nodes they already had (so they can be named and moved from here on).
   seedPorts(bodyName)
   return result
@@ -106,4 +109,14 @@ export function seedBodyPlacement(bodyName: string): SeedResult | null {
 export function ensureSeeded(bodyName: string): void {
   const s = usePlacementStore.getState()
   if (s.autoSeed && !s.seeded[bodyName]) seedBodyPlacement(bodyName)
+}
+
+// Splits a Complex world's unplaced buildings by the ledger of the sites on its body: one Building per (recipe, owner, place).
+export function splitWorldBySites(bodyName: string): void {
+  const world = worldByName(useEconomyStore.getState().worlds, bodyName)
+  if (!world) return
+  const placed: Record<string, Record<string, number>> = {}
+  for (const [siteId, row] of Object.entries(usePlacementStore.getState().placed)) if (siteId.startsWith(`${bodyName}#`)) placed[siteId] = row
+  if (Object.keys(placed).length === 0) return
+  useEconomyStore.getState().splitBuildingsBySites(world.id, placed)
 }

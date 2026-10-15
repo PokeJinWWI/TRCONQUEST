@@ -39,6 +39,7 @@ import { updateExchangeRates, convertBetween } from './fx'
 import { tickMonetary } from './monetaryPolicy'
 import { runForeignInvestmentAI } from './foreignInvestmentAI'
 import { TRANSPORT_LOSS, sellFromWorld, tradeBetweenNations } from './internationalTrade'
+import { findBuilding } from './buildingSites'
 import { goodIsScarce } from './scarcity'
 import { marketAccess, launchCapacity, interstellarFromWorlds, worldInfrastructure, infrastructureUsage } from './transport'
 
@@ -1051,8 +1052,6 @@ function tickWorld(
     }
     // Land every order that finished this tick (processed in order so two orders
     // for the same recipe+owner stack onto each other correctly).
-    const sameOwner = (a: Building['owner'], o: Building['owner']) =>
-      a.kind === o.kind && (a.kind !== 'corporation' || a.corporationId === (o as { corporationId: string }).corporationId)
     for (const o of queue) {
       if (o.progress < o.cost - 1e-9) continue
       if (o.district) {
@@ -1060,7 +1059,7 @@ function tickWorld(
         developed = { districts: grown.districts, districtCapacity: grown.districtCapacity }
         continue
       }
-      const existing = builtBuildings.find((b) => b.recipeId === o.recipeId && sameOwner(b.owner, o.owner))
+      const existing = findBuilding(builtBuildings, o.recipeId, o.owner, o.siteId)
       if (existing)
         builtBuildings = builtBuildings.map((b) =>
           b.id === existing.id ? { ...b, level: b.level + 1, throughput: (b.throughput * b.level) / (b.level + 1) } : b,
@@ -1071,6 +1070,7 @@ function tickWorld(
           {
             id: `${o.id}-built`,
             recipeId: o.recipeId,
+            ...(o.siteId ? { siteId: o.siteId } : {}),
             methodId: getMethod(o.recipeId, undefined)?.id ?? '',
             methodLocked: false,
             level: 1,

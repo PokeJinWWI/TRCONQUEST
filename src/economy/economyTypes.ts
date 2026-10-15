@@ -123,6 +123,9 @@ export interface Building {
   // The share (0..1) of its output that can reach a hub from the site it stands on (scene/infrastructureNet.ts),
   // set by the main thread before each month. Absent = 1: nothing is in the way.
   siteAccess?: number
+  // The development site this building stands on (economy/buildingSites.ts): a building is identified by (recipe, owner, site) and
+  // `level` is how many stand THERE. Absent = unplaced (seeded, an empire's, or built before sites existed).
+  siteId?: string
   recipeId: string
   // The production method currently in use (see recipes.ts). Player-switchable
   // on owned worlds; changes inputs, outputs, and the worker mix.
