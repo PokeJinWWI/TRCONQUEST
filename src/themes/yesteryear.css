@@ -1,0 +1,347 @@
+/* The Yesteryear theme: an Edwardian card room, a game of poker in 1905. Black lacquer and oxblood
+   velvet, ivory playing-card stock, a thread of brass gaslight, engraved Victorian printing.
+     Palette  near-black wine panels, deep wine fills, claret rules, rose for emphasis, ivory to read
+              by, brass in hairlines only; alarms are scarlet so they never blend with the wine, and
+              'fine' is felt green.
+     Type     Playfair Display (a Didone: headings, figures), Old Standard TT (the body, a real 1900s
+              book face), Rye (saloon wood type: the title only).
+     Shape    playing cards: softly rounded corners, not cut ones. The active button is a poker chip:
+              wine, with a dashed ivory ring just inside its edge.
+     Texture  pinstripe wallpaper on the side rails, a card-back lattice inside windows, velvet
+              title bars, a suit pip at the middle of every rule.
+     Alerts   an info toast is an ivory card with black type; a danger toast is a wine plate edged
+              in scarlet.
+     Motion   a window fade, nothing else (Reduce motion applies).
+   English only. A pure reskin of Default: every rule is under html[data-theme='yesteryear']. Most
+   of the look is the tokens redefined here (index.css :root); the rest is dressing. Relation colours
+   (own / allied / neutral / hostile) and nation colours are NOT themed. */
+@import './yesteryearFonts.css';
+
+html[data-theme='yesteryear'] {
+  --accent-rgb: 184, 50, 82;
+  --accent-soft-rgb: 224, 123, 143;
+  --ink-rgb: 236, 223, 198;
+  --panel-rgb: 14, 4, 6;
+  --panel-deep-rgb: 6, 2, 3;
+  --panel-raised-rgb: 28, 8, 12;
+  --panel-hover-rgb: 58, 14, 24;
+  --text-bright-rgb: 250, 240, 222;
+  --ok-rgb: 95, 168, 118;
+  --warn-rgb: 217, 164, 65;
+  --danger-rgb: 232, 71, 47;
+  --caution-rgb: 230, 194, 106;
+  --accent: #b83252;
+  --accent-soft: #e07b8f;
+  --text: #ecdfc6;
+  --text-bright: #faf0de;
+  --text-cool: #e4d6bd;
+  --text-toast: #1b0a0d;
+  --strong: #fff7e6;
+  --danger: #e8472f;
+  --warn: #d9a441;
+  --caution: #e6c26a;
+  --ok: #5fa876;
+  --page-bg: #060203;
+  --yy-wine: #5b0f20;
+  --yy-wine-deep: #2a0610;
+  --yy-ivory: #efe3cc;
+  --yy-brass: #b8955a;
+  --yy-brass-rgb: 184, 149, 90;
+  --font-ui: 'Old Standard TT', 'Bookman Old Style', Georgia, serif;
+  --font-body: 'Old Standard TT', 'Bookman Old Style', Georgia, serif;
+  --font-display: 'Playfair Display', 'Bodoni 72', Didot, Georgia, serif;
+  --font-saloon: 'Rye', 'Playfair Display', Georgia, serif;
+  --font-mono: 'Playfair Display', Georgia, serif;
+  /* Wallpaper stripes for the rails; a card-back lattice of diamonds for windows. */
+  --yy-pinstripe: repeating-linear-gradient(90deg, rgba(150, 26, 52, 0.22) 0 1px, transparent 1px 9px);
+  --yy-lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18'%3E%3Cpath d='M9 0L18 9L9 18L0 9Z' fill='none' stroke='%23b83252' stroke-opacity='0.14' stroke-width='0.8'/%3E%3Ccircle cx='9' cy='9' r='1' fill='%23b83252' fill-opacity='0.18'/%3E%3C/svg%3E");
+  --yy-velvet: linear-gradient(180deg, #7d1730 0%, #4a0b1b 55%, #2a0610 100%);
+  /* The cursors: an ivory spade whose point is the hotspot; a poker chip over anything you can act
+     on; the chip gone grey and struck through where you cannot. */
+  --cursor-default: url('../assets/cursors/yesteryear-spade.svg') 3 3, default;
+  --cursor-pointer: url('../assets/cursors/yesteryear-chip.svg') 12 12, pointer;
+  --cursor-blocked: url('../assets/cursors/yesteryear-folded.svg') 12 12, not-allowed;
+  font-size-adjust: 0.48;
+}
+
+/* --- Type ---------------------------------------------------------------------------- */
+html[data-theme='yesteryear'] body {
+  font-family: var(--font-body);
+  letter-spacing: 0.005em;
+}
+html[data-theme='yesteryear'] :is(.hud-title, .main-menu-title) {
+  font-family: var(--font-saloon);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  color: var(--yy-ivory);
+  text-shadow: 0 1px 0 var(--yy-wine), 0 0 14px rgba(var(--accent-rgb), 0.5);
+}
+html[data-theme='yesteryear'] .hud-title {
+  font-size: 19px;
+  line-height: 1;
+}
+html[data-theme='yesteryear'] :is(.draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-subtitle, .confirm-title, .econ-subtitle, .outliner-section-title, .action-dock-header, .nav-custom-title) {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  text-shadow: none;
+}
+html[data-theme='yesteryear'] :is(.nav-category-btn, .combat-density-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .situations-type-label) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+/* Wide display capitals do not fit narrow tabs; the book face does. */
+html[data-theme='yesteryear'] :is(.outliner-tab, .outliner-subtab, .nav-subtab) {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding-inline: 3px;
+}
+html[data-theme='yesteryear'] .outliner-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-theme='yesteryear'] .nav-category-btn {
+  font-size: 11px;
+}
+/* Figures in lining numerals: columns of numbers must line up, not dance like old-style ones. */
+html[data-theme='yesteryear'] :is(.fiscal-ind-val, .resource-value, .resource-delta, .situations-count, .situation-badge-count, .time-clock, .inspect-value, .time-date) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+html[data-theme='yesteryear'] .inspect-label {
+  font-style: italic;
+  color: rgba(var(--text-bright-rgb), 0.8);
+}
+
+/* --- Cards and chips ------------------------------------------------------------------ */
+html[data-theme='yesteryear'] :is(.draggable-window, .confirm-box, .dip-toast) {
+  border-radius: 6px;
+}
+html[data-theme='yesteryear'] .hud-bar {
+  background: linear-gradient(#2a0610, #0a0304);
+}
+html[data-theme='yesteryear'] .hud-top {
+  border-bottom: 1px solid var(--accent);
+  box-shadow: 0 1px 0 #000, 0 2px 0 rgba(var(--yy-brass-rgb), 0.4);
+}
+html[data-theme='yesteryear'] .hud-bottom {
+  border-top: 1px solid var(--accent);
+  box-shadow: 0 -1px 0 #000, 0 -2px 0 rgba(var(--yy-brass-rgb), 0.4);
+}
+/* The rails are papered in pinstripe. */
+html[data-theme='yesteryear'] :is(.nav-sidebar, .outliner) {
+  background: rgba(10, 3, 5, 0.96) var(--yy-pinstripe);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 22px rgba(var(--accent-rgb), 0.08);
+}
+
+/* Windows: a card with a velvet title bar, lattice behind the content, a brass thread inside. */
+html[data-theme='yesteryear'] .draggable-window {
+  border: 1px solid var(--accent);
+  background: rgba(10, 3, 5, 0.97) var(--yy-lattice);
+  box-shadow: 0 0 0 1px #000, 0 0 0 2px rgba(var(--yy-brass-rgb), 0.45), 0 14px 36px rgba(0, 0, 0, 0.78);
+}
+html[data-theme='yesteryear'] .draggable-window-titlebar {
+  background: var(--yy-velvet);
+  color: var(--yy-ivory);
+  border-bottom: 1px solid var(--yy-brass);
+  border-radius: 5px 5px 0 0;
+  font-size: 12px;
+  text-shadow: 0 1px 0 #000;
+}
+html[data-theme='yesteryear'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: var(--yy-ivory);
+}
+
+/* Buttons are cards; the active one is a chip. */
+html[data-theme='yesteryear'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: linear-gradient(#210608, #0c0304);
+  border: 1px solid rgba(var(--accent-rgb), 0.65);
+  color: var(--accent-soft);
+}
+html[data-theme='yesteryear'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: linear-gradient(#4a0b1b, #230510);
+  border-color: var(--accent-soft);
+  color: var(--strong);
+}
+html[data-theme='yesteryear'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: linear-gradient(#9a1d3a, #5b0f20);
+  border-color: var(--accent-soft);
+  color: var(--strong);
+  box-shadow: inset 0 0 0 1px #000;
+  outline: 1px dashed rgba(var(--ink-rgb), 0.6);
+  outline-offset: -4px;
+  text-shadow: 0 1px 0 #000;
+}
+/* The clock pace buttons keep their OWN colour (STRAT accent, OPS amber, TAC red, as in Default): the
+   active one is the full-strength one and is ringed like a chip, in that colour. */
+html[data-theme='yesteryear'] .time-mode-btn.active {
+  outline: 1px dashed currentColor;
+  outline-offset: -4px;
+}
+html[data-theme='yesteryear'] button:disabled:not(.situations-icon) {
+  color: rgba(var(--accent-soft-rgb), 0.34);
+  border-color: rgba(var(--accent-rgb), 0.2);
+  background: rgba(10, 4, 5, 0.7);
+}
+html[data-theme='yesteryear'] button {
+  font-family: inherit;
+}
+
+html[data-theme='yesteryear'] :is(input, select, textarea) {
+  background: rgba(8, 3, 4, 0.95);
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  color: var(--text-bright);
+  font-family: var(--font-ui);
+}
+
+/* A suit pip at the middle of every rule. */
+html[data-theme='yesteryear'] .inspect-divider {
+  position: relative;
+  border-top: 1px solid rgba(var(--accent-rgb), 0.55);
+  margin: 12px 0;
+  overflow: visible;
+}
+html[data-theme='yesteryear'] .inspect-divider::after {
+  content: '\2666';
+  position: absolute;
+  left: 50%;
+  top: -0.62em;
+  transform: translateX(-50%);
+  padding: 0 7px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--accent-soft);
+  background: #0a0304;
+}
+html[data-theme='yesteryear'] .outliner-entry.selected .outliner-entry-name {
+  color: var(--accent-soft);
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
+}
+
+/* --- Main menu ------------------------------------------------------------------------- */
+html[data-theme='yesteryear'] .main-menu {
+  background: radial-gradient(ellipse at 50% 0%, #3a0a16 0%, #14050a 42%, #060203 100%);
+}
+html[data-theme='yesteryear'] :is(.main-menu-country-card, .main-menu-econ-option) {
+  background: rgba(14, 4, 6, 0.92) var(--yy-lattice);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px rgba(var(--yy-brass-rgb), 0.3);
+}
+html[data-theme='yesteryear'] :is(.main-menu-country-card, .main-menu-econ-option):hover {
+  background: rgba(52, 12, 22, 0.95) var(--yy-lattice);
+}
+html[data-theme='yesteryear'] .main-menu-econ-option.active {
+  background: rgba(74, 14, 30, 0.95) var(--yy-lattice);
+}
+html[data-theme='yesteryear'] :is(.main-menu-country-name, .main-menu-econ-name) {
+  font-family: var(--font-display);
+  letter-spacing: 0.05em;
+}
+
+/* --- HUD ------------------------------------------------------------------------------ */
+html[data-theme='yesteryear'] .time-date {
+  font-size: 17px;
+  color: var(--yy-ivory);
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 var(--yy-wine);
+}
+
+/* --- Alerts ----------------------------------------------------------------------------- */
+/* An info notice is a playing card: ivory stock, black type, a wine edge. */
+html[data-theme='yesteryear'] .dip-toast {
+  background: linear-gradient(#f7edd8, #e6d7b8);
+  color: #1b0a0d;
+  border: 1px solid var(--yy-brass);
+  border-left: 6px solid #8a1a32;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+html[data-theme='yesteryear'] .dip-toast:hover {
+  background: linear-gradient(#fff7e6, #efe2c6);
+}
+html[data-theme='yesteryear'] .dip-toast.sev-warning {
+  border-left-color: var(--warn);
+}
+/* Danger: the house is calling the bet: a wine plate edged in scarlet. */
+html[data-theme='yesteryear'] .dip-toast.sev-danger {
+  background: linear-gradient(#5b0f20, #2a0610);
+  color: var(--strong);
+  border: 1px solid var(--danger);
+  border-left: 6px solid var(--danger);
+}
+
+html[data-theme='yesteryear'] .confirm-box {
+  background: rgba(10, 3, 5, 0.98) var(--yy-lattice);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px #000, 0 0 0 2px rgba(var(--yy-brass-rgb), 0.45), 0 18px 46px rgba(0, 0, 0, 0.8);
+}
+html[data-theme='yesteryear'] .confirm-title {
+  background: var(--yy-velvet);
+  color: var(--yy-ivory);
+  margin: -16px -18px 12px;
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--yy-brass);
+  border-radius: 5px 5px 0 0;
+}
+
+html[data-theme='yesteryear'] .situations-type {
+  background: rgba(10, 3, 5, 0.85);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='yesteryear'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='yesteryear'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='yesteryear'] .sev-info {
+  --sev-color: var(--accent-soft);
+}
+html[data-theme='yesteryear'] .situation-badge {
+  background: #0a0304;
+  border: 1px solid var(--yy-brass);
+  font-family: var(--font-display);
+}
+html[data-theme='yesteryear'] .situation-badge.sev-danger {
+  background: var(--danger);
+  color: #1b0a0d;
+}
+html[data-theme='yesteryear'] .situation-badge.sev-danger .situation-badge-icon {
+  background: #1b0a0d;
+  color: var(--danger);
+}
+
+/* --- Tech tree ---------------------------------------------------------------------------- */
+html[data-theme='yesteryear'] .tech-tree-node rect {
+  fill: rgba(14, 4, 6, 0.96);
+}
+html[data-theme='yesteryear'] .tech-tree-node-name {
+  font-family: var(--font-display);
+  letter-spacing: 0.03em;
+}
+
+/* --- Motion -------------------------------------------------------------------------------- */
+/* Opacity only: a window is placed by an inline transform, which an animation would override. */
+@keyframes yesteryear-deal {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+html[data-theme='yesteryear'][data-motion='full'] :is(.draggable-window, .confirm-box, .dip-toast) {
+  animation: yesteryear-deal 0.22s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme='yesteryear'] * {
+    animation: none !important;
+  }
+}

@@ -1,15 +1,17 @@
 import { create } from 'zustand'
 import { DEFAULT_CUSTOM_HUE, DEFAULT_PHOSPHOR, PHOSPHOR_LABELS, clampHue, phosphorOf, phosphorTokens, type PhosphorId } from '../scene/phosphor'
 
-// The UI theme: Default (the original look, English only) or NERV (Evangelion-styled, with a
-// native-script label beside the English in Japanese, Traditional or Simplified Chinese).
+// The UI theme: Default (the original look, English only), NERV (Evangelion-styled, with a
+// native-script label beside the English in Japanese, Traditional or Simplified Chinese),
+// Ichor (a gothic court in black and gold), Yesteryear (a 1900s card room in wine red and
+// black), Terminal (a phosphor CRT) or Windows 95. All but NERV are English only.
 // A preference, kept across games in localStorage; applied to <html> as data-theme /
-// data-script / data-motion so the stylesheets (index.css, themes/nerv.css) follow it.
-export type ThemeId = 'default' | 'nerv' | 'terminal' | 'win95'
+// data-script / data-motion so the stylesheets (index.css and themes/*.css) follow it.
+export type ThemeId = 'default' | 'nerv' | 'ichor' | 'yesteryear' | 'terminal' | 'win95'
 export type ScriptId = 'ja' | 'zh-Hant' | 'zh-Hans'
 
-export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'NERV', terminal: 'Terminal', win95: 'Windows 95' }
-export const THEME_IDS: ThemeId[] = ['default', 'nerv', 'terminal', 'win95']
+export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'NERV', ichor: 'Ichor', yesteryear: 'Yesteryear', terminal: 'Terminal', win95: 'Windows 95' }
+export const THEME_IDS: ThemeId[] = ['default', 'nerv', 'ichor', 'yesteryear', 'terminal', 'win95']
 export const SCRIPT_LABELS: Record<ScriptId, string> = { ja: '日本語', 'zh-Hant': '繁體中文', 'zh-Hans': '简体中文' }
 export const THEME_STORAGE_KEY = 'trc.theme.v1'
 

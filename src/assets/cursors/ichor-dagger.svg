@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 32 32">
+  <!-- Ichor theme default cursor: a gold stiletto, point up-left, crossguard, ruby pommel, on a black keyline. Hotspot is the point (3,3 at 24px). -->
+  <defs>
+    <linearGradient id="blade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8a6a24"/>
+      <stop offset="0.45" stop-color="#f4dc98"/>
+      <stop offset="1" stop-color="#b8923c"/>
+    </linearGradient>
+    <radialGradient id="ruby" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ff7a8c"/>
+      <stop offset="0.55" stop-color="#b2223a"/>
+      <stop offset="1" stop-color="#5c0a18"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(3.6 3.6) rotate(-45)">
+    <!-- blade, guard and grip as one keyline -->
+    <g fill="#0a0603" stroke="#0a0603" stroke-width="3" stroke-linejoin="round">
+      <path d="M0 0 L2 4.8 L2 15 L-2 15 L-2 4.8 Z"/>
+      <path d="M-6 14.6 Q-6.4 17.4 -4.6 17.6 L4.6 17.6 Q6.4 17.4 6 14.6 L3 16 L-3 16 Z"/>
+      <rect x="-1" y="16" width="2" height="6.5"/>
+      <circle cx="0" cy="24.3" r="2.3"/>
+    </g>
+    <!-- blade -->
+    <path d="M0 0 L2 4.8 L2 15 L-2 15 L-2 4.8 Z" fill="url(#blade)"/>
+    <path d="M0 1.6 L0 14.2" stroke="#7a5a1c" stroke-width="0.7" stroke-linecap="round"/>
+    <!-- crossguard with upturned quillons -->
+    <path d="M-6 14.6 Q-6.4 17.4 -4.6 17.6 L4.6 17.6 Q6.4 17.4 6 14.6 L3 16 L-3 16 Z" fill="#d6b45a"/>
+    <path d="M-3 16 L3 16" stroke="#8a6a24" stroke-width="0.6"/>
+    <!-- grip, wound -->
+    <rect x="-1" y="16" width="2" height="6.5" fill="#6b1020"/>
+    <path d="M-1 18 L1 17.2 M-1 20 L1 19.2 M-1 22 L1 21.2" stroke="#d6b45a" stroke-width="0.5"/>
+    <!-- pommel -->
+    <circle cx="0" cy="24.3" r="2.3" fill="#d6b45a"/>
+    <circle cx="0" cy="24.3" r="1.35" fill="url(#ruby)"/>
+  </g>
+</svg>
