@@ -1,3 +1,4 @@
+import { findBuilding } from '../economy/buildingSites'
 // Taking a building or a district level down at a chosen site, store side: the rules of who may (scene/demolition has the costs),
 // the payment (the same dual payment as every state project: the capital's goods in Complex, the strategic pool in Simple), then
 // the removal itself through each economy's own door. The placement ledger is cut at THIS site, so the footprint on the map shrinks
@@ -67,7 +68,8 @@ export function demolishBuilding(builderId: string, siteId: string, buildingId: 
   } else {
     const world = worldByName(useEconomyStore.getState().worlds, plan.bodyName)
     // Only the state's own buildings: a company's property is not the government's to knock down.
-    const b = world?.buildings.find((x) => x.recipeId === buildingId && x.owner.kind === 'state')
+    const state = { kind: 'state' } as const
+    const b = (world && findBuilding(world.buildings, buildingId, state, siteId)) || world?.buildings.find((x) => x.recipeId === buildingId && x.owner.kind === 'state')
     if (!world || !b) return { ok: false, reason: 'That building belongs to a company, not the state.' }
     useEconomyStore.getState().downgradeBuilding(world.id, b.id, { noSalvage: true })
   }

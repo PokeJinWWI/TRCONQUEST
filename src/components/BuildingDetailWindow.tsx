@@ -1,3 +1,4 @@
+import { siteName } from '../state/locationStore'
 import { DraggableWindow } from './DraggableWindow'
 import { ComplexBuildingCard } from './BuildingsPanel'
 import { useBuildingDetailStore } from '../state/buildingDetailStore'
@@ -25,7 +26,7 @@ export function BuildingDetailWindow() {
   const label = RECIPES[b.recipeId]?.label ?? b.recipeId
 
   return (
-    <DraggableWindow title={`${label} — ${world.name}`} memoryKey="building" onClose={close}>
+    <DraggableWindow raiseKey={buildingId} title={`${label} — ${b.siteId ? siteName(b.siteId) : world.name}`} memoryKey="building" onClose={close}>
       <div className="econ-panel">
         <ComplexBuildingCard b={b} world={world} country={country} owned={!!playerId && world.ownerId === playerId} onClose={close} />
       </div>

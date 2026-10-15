@@ -536,3 +536,38 @@ html[data-theme='win95'] .resource-delta:not(.econ-pos):not(.econ-neg) {
 html[data-theme='win95'] .main-menu-country-name {
   color: #000 !important;
 }
+
+/* --- Text drawn straight on the black map ----------------------------------------------------
+   The map is dark in every theme, but this theme's text tokens are black (for silver panels), so planet, star and ship
+   names drawn over the map must not use them. White with a hard 1px shadow, as Windows 95 desktop icon captions. */
+html[data-theme='win95'] :is(.marker-label, .focused-label, .ship-marker .marker-label, .planet-marker.selected .marker-label) {
+  color: #fff;
+  text-shadow: 1px 1px 0 #000 !important;
+  opacity: 1;
+}
+html[data-theme='win95'] .ship-marker.selected .marker-label,
+html[data-theme='win95'] .planet-marker.selected .marker-label {
+  color: #ffff00;
+}
+
+/* --- The building card inside its window ---------------------------------------------------- */
+html[data-theme='win95'] .pl-detail {
+  background: var(--w95-silver);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--w95-sunken);
+  color: #000;
+}
+html[data-theme='win95'] :is(.pl-detail-head, .pl-detail-name, .pl-detail-desc) {
+  color: #000;
+}
+html[data-theme='win95'] .econ-owner-tag {
+  background: none;
+  box-shadow: var(--w95-sunken);
+  border-radius: 0;
+}
+html[data-theme='win95'] .econ-owner-state { color: #000080; }
+html[data-theme='win95'] .econ-owner-owner { color: #006000; }
+html[data-theme='win95'] .econ-owner-pinned { color: #804000; }
+html[data-theme='win95'] .bld-detail-owner { color: #000080; }
+html[data-theme='win95'] .bld-detail-desc { color: #404040; }

@@ -1499,3 +1499,6 @@ Dev-server gotcha: after editing files while Vite is mid-edit the browser can ca
 
 ## 2026-10-13: colonization rework
 No Starbase to colonize; 3M real-pop settlers from a chosen world; landing picked on the ground map (outpost -> municipal hall at 5M); Control tab replaces Territory (presence, colony progress, decisions); claim planet by Influence; Simple colonies get a starter kit like Complex. See CLAUDE.md "Colonization rework".
+
+## 2026-10-14: buildings belong to a place
+Complex `Building.siteId` (one building per recipe/owner/site, `level` = how many stand there), `economy/buildingSites.ts`, `scene/placedBuildings.ts` (both modes), planet "Buildings" tab (`BuildingsTab.tsx`, `buildingsView.ts`) replaces By building / By area; `queueDistrict`/`queueConstruction` return `{ok, reason}`; save envelope v3 splits old saves; the acceptance/aiDevelopment "over capacity" failure was a test counting slot-free spaceports as slots. See `docs/territorial-design.md` section 14 and CLAUDE.md.

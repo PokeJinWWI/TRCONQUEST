@@ -15,16 +15,15 @@ import { useViewStore } from '../state/viewStore'
 import { groundSurface } from '../scene/groundLogic'
 import { usePlayerStore } from '../state/playerStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
-import { OwnerNote, SimpleDistrictsTab, SimplePopulationTab, SimpleWorldSummary } from './planet/SimplePlanetTabs'
-import { ComplexDistrictsTab, ComplexWorldSummary } from './planet/ComplexPlanetTabs'
+import { OwnerNote, SimplePopulationTab, SimpleWorldSummary } from './planet/SimplePlanetTabs'
+import { ComplexWorldSummary } from './planet/ComplexPlanetTabs'
 import { DefenseTab } from './planet/DefenseTab'
 import { DevelopmentTab } from './planet/DevelopmentTab'
 import { QualityOfLifeCard } from './QualityOfLifeCard'
 import { MigrationCard } from './MigrationPanels'
 import { ControlTab } from './planet/ControlTab'
 import { SystemTerritoryRows } from './planet/SystemTerritoryRows'
-import { AreaView } from './planet/AreaView'
-import { usePlanetViewStore } from '../state/planetViewStore'
+import { BuildingsTab } from './planet/BuildingsTab'
 import { useColonyStore } from '../state/colonyStore'
 import { COLONY_FOUNDING_DAYS, COLONY_PATROL_DAYS } from '../data/colonyData'
 import { canColonize, colonizeFromPlanet } from '../scene/colonies'
@@ -62,7 +61,7 @@ const KIND_LABEL: Record<InspectableBody['kind'], string> = {
 type InspectTab = 'summary' | 'districts' | 'population' | 'armies' | 'defense' | 'control' | 'development' | 'market' | 'politics'
 const TAB_LABELS: Record<InspectTab, string> = {
   summary: 'Summary',
-  districts: 'Districts & Buildings',
+  districts: 'Buildings',
   population: 'Population',
   armies: 'Armies',
   defense: 'Defense',
@@ -321,8 +320,6 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
   const simpleWorld = useAbstractEconomyStore((s) => !!s.worlds[body.name])
   // The territory and its sites are shown once the world is surveyed (or is yours): a body's details are intel.
   const surveyed = usePlayerBodySurveyed(body.name)
-  const districtsView = usePlanetViewStore((s) => s.view)
-  const setDistrictsView = usePlanetViewStore((s) => s.setView)
 
   if (body.kind === 'star') {
     return (
@@ -358,18 +355,8 @@ export function InspectPanel({ body, onClose, action }: InspectPanelProps) {
       )}
       {current === 'districts' && (
         <>
-          <div className="nav-subtabs pl-subtabs" title="The same buildings two ways: the master list by district, or each settlement and site with what stands on it">
-            <button type="button" className={`nav-subtab${districtsView === 'area' ? ' active' : ''}`} onClick={() => setDistrictsView('area')}>By area</button>
-            <button type="button" className={`nav-subtab${districtsView === 'building' ? ' active' : ''}`} onClick={() => setDistrictsView('building')}>By building</button>
-          </div>
           {simple && <OwnerNote bodyName={body.name} countryId={playerId} />}
-          {districtsView === 'area' ? (
-            <AreaView bodyName={body.name} playerId={playerId} />
-          ) : simple ? (
-            <SimpleDistrictsTab countryId={playerId} bodyName={body.name} />
-          ) : (
-            world && <ComplexDistrictsTab playerId={playerId} world={world} country={country} />
-          )}
+          <BuildingsTab bodyName={body.name} playerId={playerId} />
         </>
       )}
       {current === 'population' && (

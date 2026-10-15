@@ -14,7 +14,7 @@ import { surveyRoute } from '../src/scene/infrastructureNet'
 import { connectSite, isolatedSitesOf, settlementOpeningsOf, threatenedBodiesOf } from '../src/scene/aiDevelopment'
 import { locationsOf } from '../src/scene/locations'
 import { placeUnplacedOrders } from '../src/scene/placementOrders'
-import { siteKindsFor, slotsOfSite } from '../src/scene/placement'
+import { siteKindsFor, slotsOfSite, slotsUsedBy } from '../src/scene/placement'
 import { surfaceOf } from '../src/scene/planetTerrain'
 import { spawnOwnedShip } from '../src/scene/shipyardLogic'
 import { useStarbaseStore } from '../src/state/starbaseStore'
@@ -199,7 +199,7 @@ console.log('\n=== 6. Every placement stays legal ===')
     let slots = 0
     for (const [id, n] of Object.entries(row)) {
       if (!siteKindsFor({ mode: 'simple', id }).includes(site.kind)) bad.push(`${siteId}: ${id} on a ${site.kind} site`)
-      slots += n
+      slots += n * slotsUsedBy({ mode: 'simple', id })
     }
     if (slots > slotsOfSite(site)) bad.push(`${siteId}: over capacity`)
   }

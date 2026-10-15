@@ -242,3 +242,16 @@ Not built (say if you want them): ranger and relay stations; separate seaport ma
 three-way "permit" decision behind a separate government approval screen (the request is decided on its deadline).
 
 Known quirks: demolishing a district level in Simple mode takes months (its bar), though its cost is paid at once; the lens right-click cannot take down a spaceport (it is taken down from the economy panel).
+
+## 14. A building belongs to a place (2026-10-14)
+
+A building built in a different place is a different building: two factories in X are ONE Factory at level 2 in X; two in Y are another Factory at level 2 in Y (two buildings, four levels).
+
+- **Model (Complex).** `Building.siteId?` (`economy/economyTypes.ts`); a building is identified by (recipeId, owner, siteId) and `level` is how many stand THERE. `economy/buildingSites.ts` (pure): `buildingKey`, `findBuilding`, `levelOf`, `levelAtSite`, `splitBySites(buildings, ledger)` (idempotent; level, inventory, profit, jobs shared out in proportion so a month's output is unchanged), `mergeSites`. A finished order merges by that key (`economyTick`), so an order with a `siteId` stands at that site and a site-less one joins the unplaced building. Unplaced = no `siteId` (empire sims, an AI build not yet placed, an old save): behaves as before.
+- **Ledger.** `placementStore.placed` still decides legality and slots, but in Complex `reconcileBody` is now building-driven (`reconcileComplexBuildings`): ledger at a site = tagged buildings + orders there + units an unplaced building has claimed; anything above that is a ghost (a downsized level, a cancelled order) and goes at exactly that site.
+- **Seed / saves.** `seedBodyPlacement` splits the world after `assignSeed` (Complex). Save envelope v3: an older file is split by its ledger on load (`saveGame.upgradeBuildingsToSites`).
+- **Access.** `Building.siteAccess` is per building from its own site (`syncSiteAccess` writes keys `recipe@site`; unplaced ones keep the per-recipe aggregate; a building on a site an enemy holds makes nothing).
+- **Both modes, one list.** `scene/placedBuildings.ts`: `placedBuildings(body)` = rows {id, siteId|null, level, buildingId?}; Complex from `world.buildings`, Simple from the ledger less what is only on order (its economy keeps counts, so the ledger IS its per-place record). `buildingTotals` gives "Factory: 4 levels in 2 places".
+- **UI.** The planet's "Buildings" tab (`components/planet/BuildingsTab.tsx`, view model `scene/buildingsView.ts`) replaces By building / By area: each place is a card with its Core / Urban / Industrial (Academic / Generator in Simple) district blocks, their buildings as tiles with their level there, a per-district + level / + Build with the REASON shown when refused (`queueDistrict` and `queueConstruction` now return `{ok, reason}`), the orders with cancel, the military district level, foreign firms and (Complex) Manage buildings. Economy > Buildings rows and the building window name the place.
+- **Not changed:** land caps (a density-cost model is a separate plan), `World` per (body, owner).
+- **Baseline test fix.** `acceptance.test.ts` / `aiDevelopment.test.ts` summed the raw ledger as slots, counting slot-free spaceports (Earth's 8 at one infrastructure site): a test accounting bug, not a game bug; they now use `slotsUsedBy`.

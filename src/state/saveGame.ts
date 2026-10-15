@@ -22,7 +22,7 @@ import { claimSystemForStarbase } from '../scene/sovereignty'
 import { useStarbaseStore } from './starbaseStore'
 import { usePlacementStore } from './placementStore'
 import { exportEmpires, importEmpires } from './economyEngine'
-import { economyBusy, empiresRunning, markEmpiresRunning } from './economyStore'
+import { economyBusy, empiresRunning, markEmpiresRunning, useEconomyStore } from './economyStore'
 import { gameEntries, type StoreEntry } from './gameStores'
 import { useGameTimeStore } from './gameTimeStore'
 import { decode, encode, type Json } from './saveCodec'
@@ -31,7 +31,9 @@ export const SAVE_FORMAT = 'trconquest-save'
 // Bump when the envelope itself changes (store versions are separate).
 //   1  the first saves (before development sites, claims, routes and orbits existed)
 //   2  those stores are part of the save; an older file is upgraded on load (`upgradeLegacyTerritory`)
-export const SAVE_VERSION = 2
+//   3  Complex buildings carry the site they stand on (`Building.siteId`); an older file is split by its ledger on load
+//      (`upgradeBuildingsToSites`)
+export const SAVE_VERSION = 3
 
 export interface SaveFile {
   format: typeof SAVE_FORMAT
@@ -129,6 +131,7 @@ export async function applySave(file: unknown): Promise<void> {
   }
   if (file.version < 2) upgradeLegacyTerritory()
   if ((file.stores.placement?.version ?? 0) < 2 || file.version < 2) upgradeLegacyPlacement()
+  if (file.version < 3) upgradeBuildingsToSites()
   useGameTimeStore.setState({ paused: true })
 }
 
@@ -149,4 +152,16 @@ export function upgradeLegacyTerritory(): void {
 export function upgradeLegacyPlacement(): void {
   const p = usePlacementStore.getState()
   if (Object.keys(p.placed).length === 0 && Object.keys(p.levels).length === 0) p.setAutoSeed(true)
+}
+
+// A save from before a building belonged to a place: each Complex world's unplaced buildings are split where the placement
+// ledger says they stand (economy/buildingSites.splitBySites). Idempotent: what already stands as its own building is not
+// dealt out again, and a world with no ledger is left as it was.
+export function upgradeBuildingsToSites(): void {
+  const placed = usePlacementStore.getState().placed
+  for (const world of useEconomyStore.getState().worlds) {
+    const row: Record<string, Record<string, number>> = {}
+    for (const [siteId, units] of Object.entries(placed)) if (siteId.startsWith(`${world.id}#`)) row[siteId] = units
+    if (Object.keys(row).length > 0) useEconomyStore.getState().splitBuildingsBySites(world.id, row)
+  }
 }

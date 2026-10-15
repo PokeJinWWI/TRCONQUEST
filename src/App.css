@@ -6925,7 +6925,7 @@ button.pl-tile.empty:hover {
   margin-top: 6px;
 }
 
-/* By-area cards (components/planet/AreaView.tsx) */
+/* Buildings tab, one card per place (components/planet/BuildingsTab.tsx) */
 .pl-site-card {
   margin-bottom: 6px;
 }
@@ -6938,6 +6938,20 @@ button.pl-tile.empty:hover {
   gap: 8px;
   font-size: 11px;
   margin: 3px 0;
+}
+.pl-site-district-block {
+  border-top: 1px solid rgba(var(--accent-rgb), 0.15);
+  padding-top: 3px;
+  margin-top: 3px;
+}
+.pl-site-district-block:first-of-type {
+  border-top: none;
+}
+.pl-tile.pl-highlight {
+  outline: 1px solid rgba(var(--accent-rgb), 0.9);
+}
+.pl-develop.active {
+  background: rgba(var(--accent-rgb), 0.25);
 }
 .pl-site-actions {
   display: flex;

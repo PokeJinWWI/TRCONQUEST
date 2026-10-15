@@ -1,4 +1,4 @@
-// A world by AREA (docs/territorial-design.md section 12): the by-area counterpart of the master building list. Each settlement and
+// A world's buildings BY PLACE (docs/territorial-design.md sections 12 and 14): the one buildings view of both modes. Each settlement and
 // site of the body as a card with its developed districts, its buildings, its civic buildings, what is on order there, and what can
 // be built or developed at it. Plain data (no React) so every line is testable.
 import { getCountry } from '../data/countryData'
@@ -23,7 +23,7 @@ import { accessOnBody, capturedBy } from './infrastructureOrders'
 import { locationsOf, type DevLocation } from './locations'
 import { developedSlotsAt, districtUsedAt, ensureSeededFor, levelRoomAt } from './placementOrders'
 import { siteLabel } from './siteChoices'
-import { worldBuildings } from './worldDistricts'
+import { buildingTotals, placedBuildings } from './placedBuildings'
 
 export interface AreaDistrict {
   district: string
@@ -31,12 +31,18 @@ export interface AreaDistrict {
   levels: number
   slots: number
   used: number
+  // The buildings of this district standing at the place, each with its own level there.
+  buildings: AreaBuilding[]
 }
 
 export interface AreaBuilding {
   id: string
   name: string
+  // Its level AT THIS PLACE: two factories here are one Factory building at level 2.
   count: number
+  district: string
+  // Complex: the Building this is (opens its window).
+  buildingId?: string
 }
 
 export interface AreaSite {
@@ -55,7 +61,7 @@ export interface AreaSite {
   districts: AreaDistrict[]
   buildings: AreaBuilding[]
   civic: CivicBuilding[]
-  onOrder: { name: string; what: 'building' | 'level' }[]
+  onOrder: { name: string; what: 'building' | 'level'; district: string }[]
   // Districts that can be developed here.
   canDevelop: { district: string; label: string }[]
   // Buildings that can be built here, per district developed at the site.
@@ -68,6 +74,8 @@ export interface AreaView {
   // District levels the world's land can still take (null = no economy here).
   landLeft: number | null
   sections: { kind: DevLocation['kind']; title: string; sites: AreaSite[] }[]
+  // Per building, its levels over every place: "Factory: 4 levels in 2 places".
+  totals: { id: string; name: string; levels: number; places: number }[]
   // Buildings standing outside every area (a spaceport out in the open): just buildings.
   standalone: AreaBuilding[]
   // Buildings the world has that no site holds (built before sites, or that found none).
@@ -116,24 +124,35 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
     return accessFor.get(nation)!
   }
   // What is on order, by site.
-  const orders: { siteId: string; name: string; what: 'building' | 'level' }[] = []
+  const orders: { siteId: string; name: string; what: 'building' | 'level'; district: string }[] = []
   if (m === 'simple') {
     for (const o of (owner ? useAbstractEconomyStore.getState().byCountry[owner]?.queue : undefined) ?? []) {
-      if (o.bodyName === bodyName && o.siteId) orders.push({ siteId: o.siteId, name: o.building ? buildingName(m, o.building) : `${districtLabel(m, o.district!)} level`, what: o.building ? 'building' : 'level' })
+      if (o.bodyName === bodyName && o.siteId) orders.push({ siteId: o.siteId, name: o.building ? buildingName(m, o.building) : `${districtLabel(m, o.district!)} level`, what: o.building ? 'building' : 'level', district: o.building ? districtOfBuilding({ mode: m, id: o.building }) : o.district! })
     }
   } else {
     for (const o of worldByName(useEconomyStore.getState().worlds, bodyName)?.constructionQueue ?? []) {
-      if (o.siteId) orders.push({ siteId: o.siteId, name: o.district ? `${districtLabel(m, o.district)} level` : buildingName(m, o.recipeId), what: o.district ? 'level' : 'building' })
+      if (o.siteId) orders.push({ siteId: o.siteId, name: o.district ? `${districtLabel(m, o.district)} level` : buildingName(m, o.recipeId), what: o.district ? 'level' : 'building', district: o.district ?? districtOfBuilding({ mode: m, id: o.recipeId }) })
     }
   }
   const landLeft = freeLandNow(bodyName, m)
+  const rows = placedBuildings(bodyName, m)
+  const rowsAt = (siteId: string) => {
+    const by = new Map<string, AreaBuilding>()
+    for (const r of rows) {
+      if (r.siteId !== siteId) continue
+      const had = by.get(r.id)
+      by.set(r.id, had ? { ...had, count: had.count + r.level } : { id: r.id, name: buildingName(m, r.id), count: r.level, district: districtOfBuilding({ mode: m, id: r.id }), ...(r.buildingId ? { buildingId: r.buildingId } : {}) })
+    }
+    return [...by.values()].sort((a, b) => (a.name < b.name ? -1 : 1))
+  }
   const sites = locationsOf(bodyName).filter((s) => s.kind !== 'strategic' && !s.material)
   const districts = districtsOfMode(m)
   const out: AreaSite[] = sites.map((s) => {
     const holder = siteOwner(s.id)
     const mine = !!playerId && holder === playerId
     const levelsHere = ledger.levels[s.id] ?? {}
-    const placedHere = ledger.placed[s.id] ?? {}
+    const buildingsHere = rowsAt(s.id)
+    const districtIds = [...new Set([...Object.keys(levelsHere), ...buildingsHere.map((b) => b.district)])].sort()
     return {
       siteId: s.id,
       label: siteLabel(s),
@@ -146,10 +165,10 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
       access: holder ? (access(holder)[s.id] ?? 1) : null,
       captured: !!holder && s.node !== null && capturedBy(bodyName, s.node, holder),
       levelRoom: levelRoomAt(s),
-      districts: Object.entries(levelsHere).map(([district, levels]) => ({ district, label: districtLabel(m, district), levels, slots: developedSlotsAt(s.id, district), used: districtUsedAt(s.id, district) })).sort((a, b) => (a.district < b.district ? -1 : 1)),
-      buildings: Object.entries(placedHere).map(([id, count]) => ({ id, name: buildingName(m, id), count })).sort((a, b) => (a.name < b.name ? -1 : 1)),
+      districts: districtIds.map((district) => ({ district, label: districtLabel(m, district), levels: levelsHere[district] ?? 0, slots: developedSlotsAt(s.id, district), used: districtUsedAt(s.id, district), buildings: buildingsHere.filter((b) => b.district === district) })),
+      buildings: buildingsHere,
       civic: civicList.filter((c) => c.siteId === s.id),
-      onOrder: orders.filter((o) => o.siteId === s.id).map(({ name, what }) => ({ name, what })),
+      onOrder: orders.filter((o) => o.siteId === s.id).map(({ name, what, district }) => ({ name, what, district })),
       canDevelop: districts.filter((d) => siteKindsOfDistrict(m, d).includes(s.kind)).map((d) => ({ district: d, label: districtLabel(m, d) })),
       canBuild: (mine || (!holder && !!playerId)) && playerId
         ? districts.filter((d) => siteKindsOfDistrict(m, d).includes(s.kind)).flatMap((d) => {
@@ -174,7 +193,7 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
     const districtsHere = new Map<string, AreaDistrict>()
     for (const d of parts.flatMap((p) => p.districts)) {
       const had = districtsHere.get(d.district)
-      districtsHere.set(d.district, had ? { ...had, levels: had.levels + d.levels, slots: had.slots + d.slots, used: had.used + d.used } : { ...d })
+      districtsHere.set(d.district, had ? { ...had, levels: had.levels + d.levels, slots: had.slots + d.slots, used: had.used + d.used, buildings: [...had.buildings, ...d.buildings] } : { ...d })
     }
     const buildingsHere = new Map<string, AreaBuilding>()
     for (const b of parts.flatMap((p) => p.buildings)) {
@@ -205,11 +224,10 @@ export function areaView(bodyName: string, playerId: string | null): AreaView {
   const sections = kinds
     .map((kind) => ({ kind, title: TITLES[kind] ?? kind, sites: merged.filter((s) => s.kind === kind).sort((a, b) => b.suitability - a.suitability || (a.siteId < b.siteId ? -1 : 1)) }))
     .filter((sec) => sec.sites.length > 0)
-  const placedByBuilding: Record<string, number> = {}
-  for (const [id, row] of Object.entries(ledger.placed)) if (id.startsWith(`${bodyName}#`)) for (const [b, n] of Object.entries(row)) placedByBuilding[b] = (placedByBuilding[b] ?? 0) + n
-  const unplaced = worldBuildings(bodyName, m)
-    .map((b) => ({ id: b.id, name: buildingName(m, b.id), count: b.count - (placedByBuilding[b.id] ?? 0) }))
-    .filter((b) => b.count > 0)
+  const unplacedBy = new Map<string, number>()
+  for (const r of rows) if (r.siteId === null) unplacedBy.set(r.id, (unplacedBy.get(r.id) ?? 0) + r.level)
+  const unplaced = [...unplacedBy].map(([id, count]) => ({ id, name: buildingName(m, id), count, district: districtOfBuilding({ mode: m, id }) }))
+  const totals = buildingTotals(rows).map((t) => ({ ...t, name: buildingName(m, t.id) }))
   void slotsPerLevel
-  return { bodyName, landLeft, sections, standalone: [...standaloneBy.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), unplaced }
+  return { bodyName, landLeft, sections, totals, standalone: [...standaloneBy.values()].sort((a, b) => (a.name < b.name ? -1 : 1)), unplaced }
 }

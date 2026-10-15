@@ -1,3 +1,4 @@
+import { findBuilding, splitBySites } from '../economy/buildingSites'
 import { pickSettlers, mixOf, type SettlerMix } from '../economy/settlerPicker'
 import { treatyLanes } from '../scene/migrationPaths'
 import { distressByBody } from '../scene/migrationDistress'
@@ -22,7 +23,7 @@ import { districtOrder, freeLandOfWorld, withoutDistrictLevel } from '../economy
 import type { DistrictType } from '../economy/recipes'
 import { usePlayerStore } from './playerStore'
 import { seedWorlds, seedCountries, seedCorporations, seedCharacters, seedFamilies, seedBanks } from '../economy/economySeed'
-import { sharePrice, corporationValue, canBuild, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
+import { sharePrice, corporationValue, canBuild, districtOfRecipe, BUILD_COST_PER_LEVEL } from '../economy/economyTick'
 import { RETOOL_THROUGHPUT_FACTOR, type EconomicSystem } from '../economy/laws'
 import {
   defaultCentralBank,
@@ -40,7 +41,7 @@ import {
   type ExchangeRateRegime,
 } from '../economy/centralBank'
 import { convertBetween } from '../economy/fx'
-import { RECIPES, constructionWork, isAutoBuilt } from '../economy/recipes'
+import { DISTRICT_LABELS, RECIPES, constructionWork, isAutoBuilt } from '../economy/recipes'
 import { useTechStore } from './techStore'
 import { researchByNation } from '../economy/research'
 import type { TechCategory } from '../data/techData'
@@ -160,9 +161,7 @@ function makeLevelBuilding(recipeId: string, owner: BuildingOwner): Building {
 // grow an existing same-owner building of that type, or append a fresh one.
 function addOwnerLevels(buildings: Building[], recipeId: string, owner: BuildingOwner, count: number): Building[] {
   if (count <= 0) return buildings
-  const match = buildings.find(
-    (b) => b.recipeId === recipeId && b.owner.kind === owner.kind && (owner.kind !== 'corporation' || (b.owner as { corporationId?: string }).corporationId === owner.corporationId),
-  )
+  const match = findBuilding(buildings, recipeId, owner)
   if (match) return buildings.map((b) => (b.id === match.id ? { ...b, level: b.level + count } : b))
   return [...buildings, { ...makeLevelBuilding(recipeId, owner), level: count }]
 }
@@ -297,6 +296,8 @@ interface EconomyStore {
   setWorldLand: (worldId: string, land: number) => void
   // Records the development site of a queued building the economy's own AI ordered (scene/placementOrders.placeUnplacedOrders).
   setOrderSite: (worldId: string, orderId: string, siteId: string) => void
+  // Turns a world's unplaced buildings into one building per place, as the ledger says (economy/buildingSites.splitBySites).
+  splitBuildingsBySites: (worldId: string, placed: Record<string, Record<string, number>>) => void
   // Each world's buildings' share of output that reaches a hub, by world id then recipe id (scene/infrastructureOrders.syncSiteAccess).
   // Recipes not named are cleared back to full.
   setSiteAccess: (byWorld: Record<string, Record<string, number>>) => void
@@ -307,10 +308,10 @@ interface EconomyStore {
   // Refused if the target district on the world is full.
   // `siteId` picks the development site it stands on (scene/placementOrders.ts); without one the best
   // site the builder may use is chosen. An order no site can take is refused like any other.
-  queueConstruction: (worldId: string, recipeId: string, owner?: BuildingOwner, siteId?: string) => void
+  queueConstruction: (worldId: string, recipeId: string, owner?: BuildingOwner, siteId?: string) => { ok: true } | { ok: false; reason: string }
   // Develop one more level of a district (a state project; uses one unit of land).
   // `siteId` picks the site the level is developed at (scene/placementOrders.planDistrictLevel); without one the best open site is chosen.
-  queueDistrict: (worldId: string, district: DistrictType, siteId?: string) => void
+  queueDistrict: (worldId: string, district: DistrictType, siteId?: string) => { ok: true } | { ok: false; reason: string }
   // Orbital bombardment (scene/bombardment.ts), keyed by world NAME (body):
   // devastation 0–1, and the share of population killed.
   setDevastation: (byBody: Record<string, number>) => void
@@ -772,7 +773,7 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
         const want = byWorld[w.id] ?? {}
         let touched = false
         const buildings = w.buildings.map((b) => {
-          const f = want[b.recipeId]
+          const f = b.siteId ? want[`${b.recipeId}@${b.siteId}`] : want[b.recipeId]
           if ((b.siteAccess ?? undefined) === f) return b
           touched = true
           const { siteAccess: _drop, ...rest } = b
@@ -785,6 +786,10 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
       })
       return changed ? { worlds } : state
     }),
+  splitBuildingsBySites: (worldId, placed) =>
+    set((state) => ({
+      worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, buildings: splitBySites(w.buildings, placed) } : w)),
+    })),
   setOrderSite: (worldId, orderId, siteId) =>
     set((state) => ({
       worlds: state.worlds.map((w) => (w.id === worldId ? { ...w, constructionQueue: w.constructionQueue.map((o) => (o.id === orderId && !o.siteId ? { ...o, siteId } : o)) } : w)),
@@ -800,26 +805,26 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
     })),
   queueConstruction: (worldId, recipeId, owner = { kind: 'state' }, siteId) => {
     const target = get().worlds.find((w) => w.id === worldId)
+    if (!target) return { ok: false, reason: 'No such world.' }
     // Corporate HQs are the companies' own (corporationAI builds/relocates them), never state-constructed.
-    if (!target || isAutoBuilt(recipeId)) return
+    if (isAutoBuilt(recipeId)) return { ok: false, reason: 'Only the companies build this.' }
     const ref = { mode: 'complex' as const, id: recipeId }
     const plan = planPlacement(target.ownerId, target.id, ref, siteId)
-    if (!plan.ok) return
-    const before = target.constructionQueue.length
+    if (!plan.ok) return { ok: false, reason: plan.reason }
+    // Tech gate: a building requiring a tech (e.g. the space-elevator anchor) can't be queued until the owning nation has researched it.
+    const need = RECIPES[recipeId]?.requiresTech
+    if (need && !useTechStore.getState().stateFor(target.ownerId).researched.has(need)) return { ok: false, reason: `Needs ${need}.` }
+    if (!canBuild(target, recipeId)) return { ok: false, reason: `The ${DISTRICT_LABELS[districtOfRecipe(recipeId)]} district has no free slot: develop another level.` }
     set((state) => ({
       worlds: state.worlds.map((w) => {
         if (w.id !== worldId) return w
-        // Tech gate: a building requiring a tech (e.g. the space-elevator anchor)
-        // can't be queued until the owning nation has researched it.
-        const need = RECIPES[recipeId]?.requiresTech
-        if (need && !useTechStore.getState().stateFor(w.ownerId).researched.has(need)) return w
-        if (!canBuild(w, recipeId)) return w // district full — no room
         constructionCounter += 1
         const order = { id: `con-${worldId}-${recipeId}-${constructionCounter}`, recipeId, cost: constructionWork(recipeId), progress: 0, owner, ...(plan.site ? { siteId: plan.site.id } : {}) }
         return { ...w, constructionQueue: [...w.constructionQueue, order] }
       }),
     }))
-    if ((get().worlds.find((w) => w.id === worldId)?.constructionQueue.length ?? 0) > before) recordPlacement(plan, target.ownerId, ref)
+    recordPlacement(plan, target.ownerId, ref)
+    return { ok: true }
   },
   setDevastation: (byBody) =>
     set((state) => {
@@ -865,9 +870,10 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
     })),
   queueDistrict: (worldId, district, siteId) => {
     const target = get().worlds.find((w) => w.id === worldId)
-    if (!target || freeLandOfWorld(target) <= 0) return
+    if (!target) return { ok: false, reason: 'No such world.' }
+    if (freeLandOfWorld(target) <= 0) return { ok: false, reason: `${target.name ?? target.id} has no free land left for another level.` }
     const plan = planDistrictLevel(target.ownerId, target.id, district, siteId)
-    if (!plan.ok) return
+    if (!plan.ok) return { ok: false, reason: plan.reason }
     set((state) => ({
       worlds: state.worlds.map((w) => {
         if (w.id !== worldId || freeLandOfWorld(w) <= 0) return w
@@ -876,6 +882,7 @@ export const useEconomyStore = create<EconomyStore>((rawSet, get) => {
       }),
     }))
     recordLevel(plan, target.ownerId, district)
+    return { ok: true }
   },
   cancelConstruction: (worldId, orderId) => {
     // A cancelled building gives its place on the site back.
