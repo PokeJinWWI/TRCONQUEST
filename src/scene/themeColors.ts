@@ -25,6 +25,7 @@ export const SCENE_COLORS: Record<ThemeId, SceneColors> = {
   default: { orbit: '#7ce8ff', lane: '#7ce8ff', grid: '#6fe3ff', gridPoint: '#6fe3ff', frame: '#6fe3ff', lattice: '#2b6b80', latticeNode: '#7ce8ff', toneMapped: true },
   terminal: phosphorSceneColors(PHOSPHORS.green),
   modernterminal: modernSceneColors(modernPaletteOf('violet', 0)),
+  bloomberg: { orbit: '#b36b10', lane: '#35c8ff', grid: '#4a4a4a', gridPoint: '#ff9e1f', frame: '#ff9e1f', lattice: '#2a2a2a', latticeNode: '#ff9e1f', toneMapped: false },
   win95: { orbit: '#c0c0c0', lane: '#00c0c0', grid: '#808080', gridPoint: '#c0c0c0', frame: '#ffffff', lattice: '#404040', latticeNode: '#c0c0c0', toneMapped: false },
   nerv: { orbit: '#3df5b0', lane: '#3df5b0', grid: '#3df5b0', gridPoint: '#7dffc8', frame: '#ff9900', lattice: '#0e5a40', latticeNode: '#3df5b0', toneMapped: false },
   ichor: { orbit: '#c9a24a', lane: '#e6c878', grid: '#b8923c', gridPoint: '#e6c878', frame: '#c9a24a', lattice: '#5a4416', latticeNode: '#c9a24a', toneMapped: false },

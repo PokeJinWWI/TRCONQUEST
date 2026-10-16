@@ -224,7 +224,7 @@ console.log('\n=== Display-only tiles are not greyed out by a theme ===')
 {
   // A building tile with nothing to open is `<button class="pl-tile" disabled>`; a theme's blanket disabled
   // style used to dim every one of them to a third of their colour (they read as unavailable).
-  for (const id of ['nerv', 'ichor', 'yesteryear', 'serenity', 'nirvana', 'harvest', 'terminal', 'win95']) {
+  for (const id of ['nerv', 'ichor', 'yesteryear', 'serenity', 'nirvana', 'harvest', 'terminal', 'bloomberg', 'win95']) {
     const sheet = readFileSync(`src/themes/${id}.css`, 'utf8')
     const rule = sheet.match(new RegExp(`html\\[data-theme='${id}'\\] button:disabled([^{]*)\\{`))
     check(`${id}: the blanket disabled style leaves .pl-tile alone`, !!rule && /\.pl-tile/.test(rule[1]), rule ? rule[1].trim() : 'no rule')
@@ -265,6 +265,16 @@ console.log('\n=== Colorful Terminal ===')
   check('every rule is scoped to html[data-theme=modernterminal]', selectors.every((sel) => sel.split(/,(?![^(]*\))/).every((part) => part.includes("[data-theme='modernterminal']"))), selectors.filter((sel) => !sel.includes("[data-theme='modernterminal']")).slice(0, 3).join(' | '))
   check('it names no colour but the alerts and the fixed text-colour set (the rest comes from tokens)', !/#[0-9a-fA-F]{3,6}\b/.test(css.replace(/--(danger|warn|caution|good|ink-\d)[^;]*;/g, '').replace(/#0a0a0b|#000\b/g, '')))
   check('the 3D line work has an entry', SCENE_COLORS['modernterminal' as keyof typeof SCENE_COLORS] !== undefined)
+}
+
+console.log('\n=== Market Terminal ===')
+{
+  const css = readFileSync('src/themes/bloomberg.css', 'utf8')
+  check('Market Terminal is a theme with its label and saved choice loads', THEME_IDS.includes('bloomberg' as never) && THEME_LABELS['bloomberg' as keyof typeof THEME_LABELS] === 'Market Terminal' && parseThemePrefs('{"theme":"bloomberg"}').theme === 'bloomberg')
+  const selectors = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim()).filter(Boolean)
+  check('every rule is scoped to html[data-theme=bloomberg]', selectors.every((sel) => sel.split(/,(?![^(]*\))/).every((part) => part.includes("[data-theme='bloomberg']"))), selectors.filter((sel) => !sel.includes("[data-theme='bloomberg']")).slice(0, 3).join(' | '))
+  check('the 3D line work has an untone-mapped entry', SCENE_COLORS['bloomberg' as keyof typeof SCENE_COLORS]?.toneMapped === false)
+  check('gains are green and losses red', /econ-pos[^{]*\{\s*color:\s*var\(--good\)/.test(css) && /econ-neg[^{]*\{\s*color:\s*var\(--danger\)/.test(css))
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`)

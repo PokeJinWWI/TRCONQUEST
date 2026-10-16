@@ -10,11 +10,11 @@ import { DEFAULT_CUSTOM_HUE, DEFAULT_PHOSPHOR, PHOSPHOR_LABELS, clampHue, phosph
 // Windows 95. All but NERV are English only.
 // A preference, kept across games in localStorage; applied to <html> as data-theme /
 // data-script / data-motion so the stylesheets (index.css and themes/*.css) follow it.
-export type ThemeId = 'default' | 'nerv' | 'ichor' | 'yesteryear' | 'serenity' | 'nirvana' | 'harvest' | 'terminal' | 'modernterminal' | 'win95'
+export type ThemeId = 'default' | 'nerv' | 'ichor' | 'yesteryear' | 'serenity' | 'nirvana' | 'harvest' | 'terminal' | 'modernterminal' | 'bloomberg' | 'win95'
 export type ScriptId = 'ja' | 'zh-Hant' | 'zh-Hans'
 
-export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'Mars', ichor: 'Ichor', yesteryear: 'Yesteryear', serenity: 'Serenity', nirvana: 'Nirvana', harvest: 'Harvest', terminal: 'Terminal', modernterminal: 'Colorful Terminal', win95: 'Old Earth' }
-export const THEME_IDS: ThemeId[] = ['default', 'nerv', 'ichor', 'yesteryear', 'serenity', 'nirvana', 'harvest', 'terminal', 'modernterminal', 'win95']
+export const THEME_LABELS: Record<ThemeId, string> = { default: 'Default', nerv: 'Mars', ichor: 'Ichor', yesteryear: 'Yesteryear', serenity: 'Serenity', nirvana: 'Nirvana', harvest: 'Harvest', terminal: 'Terminal', modernterminal: 'Colorful Terminal', bloomberg: 'Market Terminal', win95: 'Old Earth' }
+export const THEME_IDS: ThemeId[] = ['default', 'nerv', 'ichor', 'yesteryear', 'serenity', 'nirvana', 'harvest', 'terminal', 'modernterminal', 'bloomberg', 'win95']
 export const SCRIPT_LABELS: Record<ScriptId, string> = { ja: '日本語', 'zh-Hant': '繁體中文', 'zh-Hans': '简体中文' }
 export const THEME_STORAGE_KEY = 'trc.theme.v1'
 
@@ -111,22 +111,26 @@ function apply(p: ThemePrefs): void {
   el.dataset.script = p.script
   el.dataset.motion = p.reduceMotion ? 'reduced' : 'full'
   el.lang = p.theme === 'nerv' ? `en-x-${p.script}` : 'en'
+  // Terminal and Colorful Terminal set the SAME custom properties (--accent, --text...), so clear
+  // both sets first and only then set the active theme's: clearing after setting wiped them.
+  if (p.theme !== 'terminal') {
+    delete el.dataset.phosphor
+    for (const k of PHOSPHOR_PROPS) el.style.removeProperty(k)
+  }
+  if (p.theme !== 'modernterminal') {
+    delete el.dataset.palette
+    for (const k of MODERN_PROPS) el.style.removeProperty(k)
+  }
   // Terminal: the phosphor as inline tokens (beats the stylesheet), each CRT effect as a switch
   // (flicker also yields to Reduce motion).
   if (p.theme === 'terminal') {
     el.dataset.phosphor = p.phosphor
     for (const [k, v] of Object.entries(phosphorTokens(phosphorOf(p.phosphor, p.phosphorHue)))) el.style.setProperty(k, v)
-  } else {
-    delete el.dataset.phosphor
-    for (const k of PHOSPHOR_PROPS) el.style.removeProperty(k)
   }
   // Colorful Terminal: the chosen palette as inline tokens.
   if (p.theme === 'modernterminal') {
     el.dataset.palette = p.modernPalette
     for (const [k, v] of Object.entries(modernTokens(modernPaletteOf(p.modernPalette, p.modernHue)))) el.style.setProperty(k, v)
-  } else {
-    delete el.dataset.palette
-    for (const k of MODERN_PROPS) el.style.removeProperty(k)
   }
   // The screen effects belong to Terminal and NERV (each its own set of switches).
   const fx = p.theme === 'terminal' ? p.crt : p.theme === 'nerv' ? p.nervCrt : null

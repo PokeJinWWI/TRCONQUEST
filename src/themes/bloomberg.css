@@ -1,0 +1,240 @@
+/* The Market Terminal theme: a trading-desk screen. Pure black, thin grey rules, one monospace
+   face. Colour is a CODE, as on a financial terminal, not decoration:
+     amber   what the screen is ABOUT: labels, headings, menus, the active tab (solid amber, dark text)
+     white   the figures themselves
+     yellow  anything you type into, and the clock
+     cyan    things you can follow: list entries, hover, the selection bar
+     green / red   up / down only (gains, losses, alarms)
+   Sections get a coloured tick on their left edge (the colour-coded function keys): the nav
+   buttons and Outliner sections cycle through the fixed --ink-* set. No glow, no motion, square
+   corners. The cursor is the computer's own. English only. A pure reskin of Default: every rule is under html[data-theme='bloomberg'];
+   relation colours and nation colours are NOT themed. */
+
+html[data-theme='bloomberg'] {
+  --accent-rgb: 255, 158, 31;
+  --accent-soft-rgb: 255, 190, 96;
+  --ink-rgb: 200, 200, 200;
+  --panel-rgb: 8, 8, 8;
+  --panel-deep-rgb: 0, 0, 0;
+  --panel-raised-rgb: 22, 22, 22;
+  --panel-hover-rgb: 38, 38, 38;
+  --text-bright-rgb: 255, 255, 255;
+  --ok-rgb: 0, 200, 83;
+  --warn-rgb: 255, 214, 0;
+  --danger-rgb: 255, 59, 48;
+  --caution-rgb: 255, 214, 0;
+  --accent: #ff9e1f;
+  --accent-soft: #ffbe60;
+  --text: #d2d2d2;
+  --text-bright: #ffffff;
+  --text-cool: #d2d2d2;
+  --text-toast: #ffffff;
+  --strong: #ffffff;
+  --danger: #ff3b30;
+  --warn: #ffd600;
+  --caution: #ffd600;
+  --ok: #00c853;
+  --good: #00c853;
+  --page-bg: #000000;
+  --rule: #3a3a3a;
+  --amber: #ff9e1f;
+  --amber-dim: #b36b10;
+  --yellow: #ffe03a;
+  --cyan: #35c8ff;
+  --ink-1: #ff9e1f;
+  --ink-2: #35c8ff;
+  --ink-3: #ffe03a;
+  --ink-4: #e07bff;
+  --ink-5: #8fa8c8;
+  --cursor-default: default;
+  --cursor-pointer: pointer;
+  --cursor-blocked: not-allowed;
+  --font-ui: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-body: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* --- Type --------------------------------------------------------------------------------- */
+html[data-theme='bloomberg'] body {
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 0;
+}
+html[data-theme='bloomberg'] :is(.hud-title, .draggable-window-titlebar, .outliner-title, .nav-nation-name, .main-menu-title, .confirm-title, .outliner-section-title, .action-dock-header, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn) {
+  font-family: var(--font-ui);
+  letter-spacing: 0.03em;
+  text-shadow: none;
+}
+
+/* --- Square, ruled chrome ----------------------------------------------------------------- */
+html[data-theme='bloomberg'] :is(button, input, select, textarea, .draggable-window, .draggable-window-titlebar, .confirm-box, .dip-toast, .situations-type, .situation-badge, .outliner-filter-pill, .nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn) {
+  border-radius: 0 !important;
+}
+html[data-theme='bloomberg'] .hud-bar {
+  background: #000;
+}
+html[data-theme='bloomberg'] .hud-top {
+  border-bottom: 2px solid var(--amber);
+}
+html[data-theme='bloomberg'] .hud-bottom {
+  border-top: 1px solid var(--rule);
+}
+html[data-theme='bloomberg'] :is(.nav-sidebar, .outliner) {
+  background: #000;
+  border-color: var(--rule);
+}
+html[data-theme='bloomberg'] .draggable-window {
+  border: 1px solid var(--rule);
+  background: rgba(var(--panel-rgb), 0.98);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7);
+}
+/* A panel header: dark bar, amber capitals, an amber rule under it. */
+html[data-theme='bloomberg'] .draggable-window-titlebar {
+  background: #161616;
+  color: var(--amber);
+  border-bottom: 2px solid var(--amber);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+html[data-theme='bloomberg'] .draggable-window-titlebar :is(button, .draggable-window-close, .draggable-window-collapse, .draggable-window-maximize) {
+  color: var(--text);
+}
+
+/* Buttons are thin grey outlines with amber type; hover turns cyan; the active one is a solid
+   amber key with dark type. */
+html[data-theme='bloomberg'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill) {
+  background: #0c0c0c;
+  border: 1px solid var(--rule);
+  color: var(--amber);
+}
+html[data-theme='bloomberg'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .confirm-btn, .outliner-filter-pill):hover:not(:disabled) {
+  background: #101820;
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+html[data-theme='bloomberg'] :is(.nav-category-btn, .combat-density-btn, .time-btn, .time-mode-btn, .outliner-tab, .outliner-subtab, .nav-subtab, .action-dock-tab, .tab-bar-tab, .outliner-filter-pill):is(.active, [aria-selected='true']) {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #000;
+  box-shadow: none;
+}
+html[data-theme='bloomberg'] button:disabled:not(.situations-icon, .pl-tile, .crumb) {
+  color: #5a5a5a;
+  border-color: #242424;
+  background: transparent;
+}
+/* Entry fields are yellow type on black with a yellow underline. */
+html[data-theme='bloomberg'] :is(input, select, textarea) {
+  background: #000;
+  border: 1px solid var(--rule);
+  border-bottom: 1px solid var(--yellow);
+  color: var(--yellow);
+  font-family: var(--font-ui);
+}
+html[data-theme='bloomberg'] :is(input, textarea) {
+  caret-color: var(--yellow);
+}
+/* A selected list row is a cyan bar. */
+html[data-theme='bloomberg'] .outliner-entry.selected .outliner-entry-name {
+  background: var(--cyan);
+  color: #000;
+}
+html[data-theme='bloomberg'] .outliner-entry:not(.selected) .outliner-entry-name {
+  color: var(--cyan);
+}
+
+/* --- HUD ---------------------------------------------------------------------------------- */
+html[data-theme='bloomberg'] .hud-title {
+  color: var(--amber);
+  font-weight: 700;
+  font-size: 14px;
+}
+html[data-theme='bloomberg'] .time-date {
+  font-family: var(--font-mono);
+  color: var(--yellow);
+}
+
+/* --- Alerts ------------------------------------------------------------------------------- */
+html[data-theme='bloomberg'] .dip-toast {
+  background: #0c0c0c;
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--cyan);
+  font-size: 12px;
+}
+html[data-theme='bloomberg'] .dip-toast.sev-danger {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+}
+html[data-theme='bloomberg'] .dip-toast.sev-warning {
+  border-color: var(--warn);
+  border-left-color: var(--warn);
+}
+html[data-theme='bloomberg'] .confirm-box {
+  background: #000;
+  border: 1px solid var(--amber);
+}
+html[data-theme='bloomberg'] .confirm-title {
+  color: var(--amber);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 6px;
+}
+html[data-theme='bloomberg'] .situations-type {
+  background: #0c0c0c;
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--sev-color);
+}
+html[data-theme='bloomberg'] .sev-danger {
+  --sev-color: var(--danger);
+}
+html[data-theme='bloomberg'] .sev-warning {
+  --sev-color: var(--warn);
+}
+html[data-theme='bloomberg'] .sev-info {
+  --sev-color: var(--cyan);
+}
+html[data-theme='bloomberg'] .situation-badge {
+  background: #000;
+  font-family: var(--font-mono);
+}
+html[data-theme='bloomberg'] .situation-badge.sev-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* --- Colour as code ----------------------------------------------------------------------- */
+/* Labels are amber, figures white. */
+html[data-theme='bloomberg'] .inspect-label {
+  color: var(--amber-dim);
+}
+html[data-theme='bloomberg'] .inspect-value {
+  color: #fff;
+}
+html[data-theme='bloomberg'] .nav-nation-name {
+  color: var(--amber);
+}
+html[data-theme='bloomberg'] .outliner-title {
+  color: var(--amber);
+}
+/* Up / down: gains green, losses red, the ONLY uses of those colours besides alarms. */
+html[data-theme='bloomberg'] :is(.good, .pos, .ok, .econ-pos) { color: var(--good); }
+html[data-theme='bloomberg'] :is(.bad, .neg, .econ-neg) { color: var(--danger); }
+/* Resource strip: amber icon, white figure (the delta keeps its up/down colour). */
+html[data-theme='bloomberg'] .resource-item :is(.resource-icon) { color: var(--amber); }
+html[data-theme='bloomberg'] .resource-item .resource-value { color: #fff; }
+/* Colour-coded keys: each nav button and Outliner section carries its own coloured tick. */
+html[data-theme='bloomberg'] .nav-category-btn { border-left-width: 4px; }
+html[data-theme='bloomberg'] .nav-category-btn:nth-child(5n + 1) { border-left-color: var(--ink-1); }
+html[data-theme='bloomberg'] .nav-category-btn:nth-child(5n + 2) { border-left-color: var(--ink-2); }
+html[data-theme='bloomberg'] .nav-category-btn:nth-child(5n + 3) { border-left-color: var(--ink-3); }
+html[data-theme='bloomberg'] .nav-category-btn:nth-child(5n + 4) { border-left-color: var(--ink-4); }
+html[data-theme='bloomberg'] .nav-category-btn:nth-child(5n + 5) { border-left-color: var(--ink-5); }
+html[data-theme='bloomberg'] .nav-category-btn:is(.active, [aria-selected='true']) { color: #000; }
+html[data-theme='bloomberg'] .outliner-section-title { border-left: 4px solid var(--ink-1); padding-left: 6px; }
+html[data-theme='bloomberg'] .outliner-section:nth-of-type(5n + 1) .outliner-section-title { border-left-color: var(--ink-1); }
+html[data-theme='bloomberg'] .outliner-section:nth-of-type(5n + 2) .outliner-section-title { border-left-color: var(--ink-2); }
+html[data-theme='bloomberg'] .outliner-section:nth-of-type(5n + 3) .outliner-section-title { border-left-color: var(--ink-3); }
+html[data-theme='bloomberg'] .outliner-section:nth-of-type(5n + 4) .outliner-section-title { border-left-color: var(--ink-4); }
+html[data-theme='bloomberg'] .outliner-section:nth-of-type(5n + 5) .outliner-section-title { border-left-color: var(--ink-5); }

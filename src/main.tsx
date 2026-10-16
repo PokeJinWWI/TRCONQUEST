@@ -9,6 +9,7 @@ import './themes/nirvana.css'
 import './themes/harvest.css'
 import './themes/terminal.css'
 import './themes/modernterminal.css'
+import './themes/bloomberg.css'
 import './themes/win95.css'
 import '@fontsource/share-tech-mono/latin-400.css'
 // Puts the saved theme on <html> before the first paint.

@@ -270,14 +270,31 @@ function useSurfaceNodeAt(surface: BodySurface): (node: number) => HoloNode {
 // The globe: every fine node coloured by its terrain, tinted by whoever holds
 // it, drawn as a hologram (see HoloGlobe). Colours are rewritten in place when
 // the front moves.
-function SurfaceGlobe({ surface }: { surface: BodySurface }) {
-  const bodyName = surface.bodyName
-  const nodeAt = useSurfaceNodeAt(surface)
-  // The map glows in the world's own colour, as the planet does from orbit.
-  const glow = useMemo<[number, number, number]>(() => {
+// The map glows in the world's own colour, as the planet does from orbit.
+function useSurfaceGlow(bodyName: string): [number, number, number] {
+  return useMemo<[number, number, number]>(() => {
     const c = hologramTint(bodyGroundInfoAny(bodyName)?.color ?? '#9fe8ff')
     return [c.r, c.g, c.b]
   }, [bodyName])
+}
+
+// Just the picture of the globe, no picking: the ground map draws it, and so does the main menu's
+// backdrop, so the world there looks exactly as it does on the map.
+export function SurfaceGlobeMesh({ surface, radius = GLOBE_RADIUS }: { surface: BodySurface; radius?: number }) {
+  const nodeAt = useSurfaceNodeAt(surface)
+  const glow = useSurfaceGlow(surface.bodyName)
+  return (
+    <>
+      <HoloGlobe radius={radius} nodeAt={nodeAt} version={nodeAt} glow={glow} bodyName={surface.bodyName} />
+      <HoloHalo radius={radius} glow={glow} />
+    </>
+  )
+}
+
+function SurfaceGlobe({ surface }: { surface: BodySurface }) {
+  const bodyName = surface.bodyName
+  const nodeAt = useSurfaceNodeAt(surface)
+  const glow = useSurfaceGlow(bodyName)
   const flat = useGroundViewStore((s) => s.projection === 'flat')
   // Where on the world a hit is: the globe's own point, or the flat map's
   // longitude/latitude.
@@ -312,14 +329,7 @@ function SurfaceGlobe({ surface }: { surface: BodySurface }) {
         orderSelectedUnitsTo(pickNode(e))
       }}
     >
-      {flat ? (
-        <FlatMapSurface nodeAt={nodeAt} version={nodeAt} glow={glow} bodyName={bodyName} />
-      ) : (
-        <>
-          <HoloGlobe radius={GLOBE_RADIUS} nodeAt={nodeAt} version={nodeAt} glow={glow} bodyName={bodyName} />
-          <HoloHalo radius={GLOBE_RADIUS} glow={glow} />
-        </>
-      )}
+      {flat ? <FlatMapSurface nodeAt={nodeAt} version={nodeAt} glow={glow} bodyName={bodyName} /> : <SurfaceGlobeMesh surface={surface} />}
     </group>
   )
 }
