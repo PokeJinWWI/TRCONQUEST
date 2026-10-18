@@ -1,0 +1,87 @@
+'''金山共和國''' · ''Republic of Jinshan'' · ''Jinshan Republic''
+
+The '''Republic of Jinshan''' (金山共和國, ''Gam Saan Gung Wo Gwok'' in Yue; ''Jīnshān Gònghéguó'' in Zhongyuan), commonly called '''Jinshan''', is a sovereign technocratic republic centred on the planet [[Jinshan]] ("Gold Mountain") in the [[τ Ceti]] system, about 11.9 light-years from Sol. It is a breakaway colony of the old Terran empire, settled by southern Chinese groups, and it is the youngest and, by starting population, the smallest of the human states in the Solar Neighbourhood. Its capital is Gam Waan (金灣, "Gold Bay"). With about 1.8 billion people, all on Jinshan itself, it is a little smaller than the [[Kingdom of Lalande]].
+
+Jinshan is not part of the Sol network of trade and treaties. It starts the game unknown to every other nation, and no other state knows it until ships, Starbases or worlds meet in a star system (see [[#Foreign relations]]).
+
+=Etymology=
+''Jinshan'' (金山, "Gold Mountain") is the old Cantonese-world name for California, carried by the first southern Chinese emigrants to the American west coast. The settlers gave it to a world that reminded them of that coast: warm, dry-summered, golden grassland between coastal ranges and an inland desert. The name of the state and of the planet are the same.
+
+The capital Gam Waan (金灣, "Gold Bay", jyutping) is named in Yue, the language of the largest of the founding communities. Unlike the nations of Sol, Jinshan does not name its places after cities of the old homeworld; its people name them from the land they stand on, and a settlement with no name yet is simply "Settlement N".
+
+=History=
+{{TBD|The founding history is not yet written in the game's lore. The outline below is what the game's data fixes; dates are left open.}}
+
+* Jinshan was settled as a colony of the old Terran empire, by southern Chinese groups (Yue, Hakka and Min) with a smaller Zhongyuan group.
+* It later broke away from the empire, whose surviving core is now ruled by the Northern Federal Command on [[Earth]]. [[Earth]] has never forgiven the secession and begins the game cool toward Jinshan (opinion −25, colder than toward Mars or Venus).
+* The first settlers were carried to the planet by [[Fung Wong Starlines]], founded by Chan Wing-sze.
+* In the game's opening it has no contact with the Sol powers.
+
+=Geography and territory=
+The Republic holds one world, [[Jinshan]], in the τ Ceti system. Its home system is its own, so it needs no Starbase to colonise there. The system also holds a star-wide debris disk and two candidate planets, τ Ceti e and f, which are not part of the Republic.
+
+=Demographics=
+Jinshan is a plural society of several peoples, which the Republic's own institutions acknowledge as the "Five Peoples" (the Yue, Hakka, Min, Zhongyuan and Jinshanese communities). The population also includes Wu (Jiangnan) and Gan–Xiang minorities. Starting shares:
+
+{| class="wikitable"
+! Culture !! Approx. share !! Notes
+|-
+| Zhongyuan (中原) || 28% || Plurality; largest single culture
+|-
+| Yue, Cantonese (粵) || 22% || Language of the capital's name
+|-
+| Wu, Jiangnan (吳) || 21% ||
+|-
+| Min, Teochew–Hokkien (閩) || 11% ||
+|-
+| Jinshanese (金山人) || 9% || The colony-born blend
+|-
+| Hakka (客家) || 6% ||
+|-
+| Gan–Xiang (贛·湘) || 3% ||
+|}
+
+==Religion==
+Each faith is a Jinshan form of an Old-Earth tradition. About 28% of the population is non-affiliated.
+* '''Jinshan Folk Religion''' (金山民間信仰): the largest faith, held across every culture
+* '''Jinshan Ruism''' (金山儒教)
+* '''Hui Islam of Jinshan''' (金山回族伊斯蘭教): held by part of the Zhongyuan
+* '''Jinshan Church''' (金山教會)
+* '''Jinshan Chan Buddhism''' (金山禪宗)
+* '''Jinshan Daoism''' (金山道教)
+
+=Government and politics=
+The Republic is a technocratic republic. Its economic system is interventionist: the state runs a welfare system and a public health and education service, and leaves most industry to private operators.
+
+* '''Council Hall:''' the seat of government is the Gam Waan Council Hall, on the bay at the capital.
+* '''Assembly of the Five Peoples:''' where delegates of the Yue, Hakka, Min, Zhongyuan and Jinshanese communities meet to settle the Republic's laws.
+* '''Jinshan Monetary Authority:''' the independent central bank, under Governor Chan Wing-sze, with a price-stability mandate and a managed exchange rate.
+
+{{TBD|Head of state, party system and election rules are not yet defined in the game.}}
+
+==Foreign relations==
+Jinshan has no contact with any other nation at the start of the game. Until two nations meet, they cannot trade, invest in each other or deal at all. Contact is permanent and pairwise: meeting Mars tells Jinshan nothing about Venus.
+
+Contact happens when each nation has a ship, a Starbase or a world in the same star system. The game then raises a ''first contact'' notification, and from that point normal diplomacy, trade and treaties are open. The AI plays Jinshan like any other strategic state.
+
+==Defense==
+The Republic's fortress is '''Cing Saan Pass''' (青山關, "Green Mountain Pass"), built into the pass above the capital. {{TBD|Armed forces are not yet named.}}
+
+=Economy=
+Jinshan is a small but fully rounded economy that runs on a deliberately automated industrial base.
+
+* '''Currency:''' the Jinshan Yuan (金山元, JSY), issued by the Jinshan Monetary Authority. It starts at a rate of 0.85.
+* '''Automation:''' Jinshan is the only nation that begins with the ''automation'' unlock. Its plants run the robotic production method wherever one exists: the same output for far fewer workers, in exchange for more power and machinery. This lets a small population staff a complete national supply chain.
+* '''Capital:''' the world is seeded with solar and coal power, coal, iron and phosphate mining, rice, wheat and tea farming, food processing, livestock and meat, and a full chain of manufacturing, plus a spaceyard and a rocket works. Private operators run the supply chain; the state does not run its own mills.
+* '''Finance:''' the largest bank is the Gam Waan Commercial Bank. The state starts with a modest treasury and bond market, an open foreign-investment policy, and a tax rate near 9%.
+* '''Transport:''' interstellar hauling is dominated by [[Fung Wong Starlines]] (鳳凰星航, "Phoenix Starlines"), which also runs most of the Republic's spaceports.
+
+In Simple economy mode Jinshan starts with 1,800 million people on its capital world, with civilian and consumer factories, alloy foundries, farms, mines, power plants, an electronics plant, physics and engineering labs, a clinic, four spaceports, a spaceyard and a rocket works.
+
+=See also=
+* [[Jinshan]]
+* [[τ Ceti]]
+* [[TRCONQUEST]]
+
+[[Category:Republics]]
+[[Category:States]]

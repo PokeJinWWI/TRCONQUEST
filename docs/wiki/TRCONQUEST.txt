@@ -1,0 +1,62 @@
+'''Terra Relicta: Conquest''' (abbreviated '''TRCONQUEST''') is a web grand-strategy game of interstellar nations, set in the Solar Neighbourhood in the years after the Great Disaster. Players pick a nation and run its economy, research, fleets, armies, colonies and diplomacy, in real time with a pausable clock, on maps that run from a planet's ground up to the whole galaxy. It is built with Vite, React, TypeScript and three.js, and runs in a browser.
+
+Every nation is played by the same rules, and every non-player nation is driven by a strategic AI that uses the same actions and the same delays as the player.
+
+=Setting=
+The game is set around the year 2700. The Solar Neighbourhood is home to several human states and one alien one. Most of them descend from colonies that were cut off from each other by the Great Disaster of 2291 and are now rebuilding. Travel between stars is by hyperdrive or warp drive, and orders given to ships take time to arrive, because communication is limited by the speed of the signal.
+
+=Playable nations=
+{| class="wikitable"
+! Nation !! Capital world !! Government !! Notes
+|-
+| [[Imperial State of Mars]] || Mars (Sol) || Imperial autocracy || Largest economy in Sol; holds the largest hyperium deposit
+|-
+| [[Republic of Venus]] || Venus (Sol) || Federal republic || Holds the largest exotic matter deposit
+|-
+| [[Orion Republic]] || Arcadia (Alpha Centauri) || Democratic republic ||
+|-
+| [[Kingdom of Lalande]] || Lalande 21185 d || Constitutional monarchy || Alien: the Tidalians
+|-
+| [[Republic of Jinshan]] || Jinshan (τ Ceti) || Technocratic republic || Newest nation; starts out of contact with the others
+|-
+| [[Earth]] || Earth (Sol) || Military government (Northern Federal Command) || Declining colossus of the old empire; starts with the Ring of Heaven
+|}
+A '''Sandbox''' mode has no nations: the player is a faction with no territory, and pirates and two rogue factions take the other roles.
+
+=Gameplay=
+==Economy==
+The game has two economy models, chosen at the main menu and fixed for the game.
+* '''Complex mode''' simulates pops (six classes), goods, prices, wages, jobs, buildings, banks, central banks, currencies, taxation, inflation, trade and foreign investment, month by month. It runs on a Web Worker. The twenty generated empires are simulated in the same worker.
+* '''Simple mode''' is a pared-down model: stockpiles of goods, districts and buildings on the worlds a nation owns, a single research output, and standing trade orders.
+
+Nations trade with each other in peacetime in both modes. In Complex mode a nation's stability rests on wages, the fiscal rule, price-elastic demand and damped AI behaviour. Pop laws (women's rights, child labour, retirement, schooling, cultural policy), migration, culture and religion acceptance, and political strength are all modelled.
+
+==Territory and colonies==
+Stars, planets, moons and belts can be claimed and developed. Sovereignty, claims, jurisdiction, orbits and treaties are separate concepts, so one can hold a system without owning its worlds. Buildings are built on development sites on a planet's surface, and roads and railways link the sites. Settlements, stations, orbital rings and rural structures all exist. Colony Ships carry real pops from a chosen world and found a colony at a landing site chosen on the ground map. Starbases give presence and a provisional system claim, and can carry modules.
+
+==Exploration and travel==
+* '''Drives:''' reaction drive within a system, '''Warp Mk I–VII''' (needs exotic matter) and '''Hyperdrive Mk I–V''' (needs hyperium), with a chance of losing a ship on a jump that falls with research and with charted lanes.
+* '''Scales:''' the interstellar view (between stars within one cluster) and the galactic view (between clusters), kept strictly distinct.
+* '''Survey:''' a system's information appears only after a ship has entered it, and a body's details only after it is surveyed. Science Ships survey, Construction Ships build Starbases and Cargo Ships haul goods.
+* '''Communication:''' orders and reports travel at signal speed, set by the nation's comms tier (Warp Comms or Hyper Comms), so ships far from home act on delayed orders.
+* '''Galaxy:''' the home neighbourhood is hand-authored; every other cluster is generated from one seed, with twenty generated empires.
+
+==Fleets and war==
+Ships are built at shipyards from a research-gated hull line (Corvette through Battleship), upgraded, repaired and scrapped, and can be custom-designed. Combat is N-sided orbital battle with tactics, boosts, targeting and free-flight maneuvering, plus ground armies, invasions, terrain battles on a relief map and a war-score system for peace terms (white peace, ceding bodies, reparations or vassalisation). Any ship can be attacked, with diplomatic consequences.
+
+==Diplomacy==
+Wars, truces, treaties, subjects, trade policy and territorial agreements are handled in the Diplomacy panel. Nations that have not met cannot deal at all until first contact. AI nations propose peace, demand reparations and strike first where they hold an advantage.
+
+==Research==
+A single tech tree is split into Physics, Society and Engineering, with cross-links, a research queue, resource costs and shortcuts for some techs.
+
+==Time==
+The clock has three paces: strategic (6 days per second), operations (1 day per second, for ground battles) and tactical (1 second per second, for ship combat). Pace drops on its own when a fight starts and returns to strategic when it ends. The game can be paused at any time.
+
+=Interface=
+The game is played through a globe and map interface with views for the galaxy, a cluster, a system, a planet, a satellite, the ground and the combat arena. Features include an Outliner, a Situations alert system, quick buttons, box select, queued orders and a build lens for placing districts, zones and routes. The interface has selectable themes (Default, NERV, Ichor, Yesteryear, Terminal, Windows 95, Serenity, Nirvana, Harvest) and, in some, bilingual Japanese and Chinese labels. Games can be saved to slots or to a file.
+
+=Development=
+TRCONQUEST is made by a two-person team. Game logic is kept in pure functions separate from the stores that hold state, and each mechanic has a plain test script. {{TBD|Credits, release status and links to be filled in.}}
+
+[[Category:Games]]

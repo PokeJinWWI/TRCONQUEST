@@ -1,0 +1,80 @@
+{{Planetary Infobox ver 1.0
+|image=
+|data24=Gold Mountain (金山)
+|data23=Jinshanese
+|data1=Solar Neighbourhood
+|data3=τ Ceti
+|data4=τ Ceti
+|data5=0
+|data6=
+|data7=
+|data8=0.70 AU from τ Ceti
+|data9=
+|data10=
+|data11=241.8d
+|data12=Continental world
+|data13=13,000 km (radius 6,500 km)
+|data14=Coastal ranges, golden grassland, inland desert, wide bays
+|data15=
+|data26=
+|data16=c. 1.8 billion
+|data17=Yue, Zhongyuan and other Chinese languages
+|data18=[[Republic of Jinshan]]
+|data19=Gam Waan (capital)
+|Title=
+}}
+
+'''Jinshan''' (金山, "Gold Mountain") is a continental world in the [[τ Ceti]] system and the home planet of the [[Republic of Jinshan]]. It is Earth-sized, warm and dry-summered, and the settlers who named it likened it to California. It is home to about 1.8 billion people, all of the Republic's population. Its capital is Gam Waan (金灣, "Gold Bay").
+
+=Orbit and physical characteristics=
+Jinshan orbits the G8V star [[τ Ceti]] at 0.70 AU, in the star's habitable zone between its two candidate outer planets, τ Ceti e (inside) and f (outside). The year lasts 0.662 Earth years (about 242 days). The orbit is inclined 1.4° to the system plane.
+
+{| class="wikitable"
+! Property !! Value
+|-
+| Radius || 6,500 km (about 1.02 Earth radii)
+|-
+| Mass || 6.3 × 10<sup>24</sup> kg (about 1.05 Earth masses)
+|-
+| Surface gravity || about 1.0 g
+|-
+| Orbital distance || 0.70 AU
+|-
+| Orbital period || 0.662 years
+|-
+| Class || Continental
+|-
+| Moons || None known
+|}
+
+The planet receives slightly more stellar flux than Earth does, which keeps it warm.
+
+=Geography=
+Jinshan's surface is authored to resemble California, unlike most worlds, whose surface follows their class. About 40% of the planet is land. A fifth of the land is mountain.
+
+* '''Coastal ranges:''' mountain chains run along the coasts, with passes between the bays and the interior. The capital's fortress, Cing Saan Pass, stands in one.
+* '''Grassland:''' most of the land is open plain, golden in the dry season.
+* '''Inland desert:''' dry basins sit behind the ranges.
+* '''Forest:''' only a little of the land is forested.
+* '''Poles:''' there is no polar ice cap to speak of.
+
+The largest landmass is a single large continent and is the settled land. {{TBD|Named continents, seas and ranges have not yet been authored.}}
+
+=Settlement=
+Gam Waan is the capital and largest city. It stands on a bay and holds the Gam Waan Council Hall and the Assembly of the Five Peoples. Above it, in the pass of Cing Saan (青山關, "Green Mountain Pass"), stands the Republic's fortress.
+
+Jinshan is settled as a spread of towns and cities, around one for each 100 million people, sharing the population out between them (a settlement is capped at 150 million people, the capital at 250). Its people name their own places from the land. Unnamed settlements appear as "Settlement 1", "Settlement 2" and so on until the Republic renames them. The planet can hold about 5.85 billion people at full development, well over three times today's population, so most of the land is unsettled.
+
+=Economy and resources=
+Jinshan is a farm, mine and factory world. Its land supports rice, wheat and tea farming and livestock; its mines produce coal, iron and phosphate; and its power comes from solar and coal plants. Its shipyard, rocket works and four spaceports connect it to the stars. Much of its industry is automated. See [[Republic of Jinshan#Economy]].
+
+=Demographics=
+See [[Republic of Jinshan#Demographics]]. The population is a mix of Zhongyuan, Yue, Wu, Min, Jinshanese, Hakka and Gan–Xiang peoples, and is made up of the settlers' descendants.
+
+=History=
+{{TBD|Discovery, survey and settlement dates are not yet defined.}} Jinshan was settled from the old Terran empire by southern Chinese groups, and later broke away with the rest of the Republic's territory. It remains out of contact with the Sol powers until their ships first reach τ Ceti.
+
+=The τ Ceti system=
+τ Ceti is a Sun-like (G8V) star 11.91 light-years from Sol, about 0.78 solar masses. It has two real candidate planets (e and f), a debris disk from 6 to 52 AU, and further seeded planets, with Jinshan as its only authored world.
+
+[[Category:Planets]]
