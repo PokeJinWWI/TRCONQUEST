@@ -2,7 +2,7 @@ import { siteName } from '../state/locationStore'
 import { Bi } from './Bi'
 import { SiteChooser } from './planet/SiteChooser'
 import { Fragment, useMemo, useState } from 'react'
-import { RECIPES, getMethod, BUREAUCRACY_OUTPUT, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
+import { RECIPES, getMethod, methodOpenTo, BUREAUCRACY_OUTPUT, buildingGroup, BUILDING_GROUP_LABELS, BUILDING_GROUP_ORDER, type BuildingGroup } from '../economy/recipes'
 import { GOODS } from '../economy/goods'
 import { estimateWorldGdp, estimateConstructionCost, JOB_SCALE, canBuild, BUILD_COST_PER_LEVEL, DEPLETABLE_GOODS, TICKS_PER_YEAR } from '../economy/economyTick'
 import { DISTRICT_LABELS, districtOfRecipe } from '../economy/recipes'
@@ -506,7 +506,7 @@ export function BuildingsPanel({ subtab, worldName, world, country }: BuildingsP
                               onChange={(e) => setProductionMethod(world.id, b.id, e.target.value)}
                               title={method?.description}
                             >
-                              {recipe!.methods.map((m) => (
+                              {recipe!.methods.filter((m) => m.id === b.methodId || methodOpenTo(m, useEconomyStore.getState().countries.find((c) => c.id === world.ownerId)?.unlocks)).map((m) => (
                                 <option key={m.id} value={m.id}>
                                   {m.label}
                                 </option>
@@ -689,7 +689,7 @@ export function ComplexBuildingCard({ b, world, country, owned, onClose }: { b: 
           </button>
           {recipe.methods.length > 1 && (
             <select className="econ-method-select" value={b.methodId} onChange={(e) => setProductionMethod(world.id, b.id, e.target.value)} title={method?.description}>
-              {recipe.methods.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              {recipe.methods.filter((m) => m.id === b.methodId || methodOpenTo(m, useEconomyStore.getState().countries.find((c) => c.id === world.ownerId)?.unlocks)).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           )}
           {pinned && <button type="button" className="econ-release-btn" onClick={() => releaseProductionMethod(world.id, b.id)} title="Hand this building back to its owner">↩</button>}

@@ -204,6 +204,12 @@ function OverviewRows({ body, action }: { body: InspectableBody; action?: Inspec
           </div>
         )
       })}
+      {body.catalogStatus && (
+        <div className="inspect-row" title={body.catalogStatus === 'confirmed' ? 'A real, catalogued body: detected and confirmed in the real world.' : 'A real detection that astronomers have not yet confirmed. Treated as present here.'}>
+          <span className="inspect-label"><Bi en="Catalogue" /></span>
+          <span className="inspect-value">{body.catalogStatus === 'confirmed' ? 'Confirmed' : 'Candidate'}</span>
+        </div>
+      )}
       <div className="inspect-row">
         <span className="inspect-label"><Bi en="Radius" /></span>
         <span className="inspect-value">{Math.round(body.radiusKm).toLocaleString()} km</span>

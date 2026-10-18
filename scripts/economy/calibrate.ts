@@ -16,6 +16,7 @@
 import { writeFileSync } from 'node:fs'
 import { galaxyEmpires } from '../../src/data/generatedEmpires'
 import { measureStability } from './stability'
+import { inContact } from '../../src/scene/contact'
 import { seedEmpireEconomies } from '../../src/economy/empireSeed'
 import { tickEconomy } from '../../src/economy/economyTick'
 import { seedBanks, seedCorporations, seedCountriesWith, seedWorldsWith } from '../../src/economy/economySeed'
@@ -48,7 +49,8 @@ function run(cal: SeedCalibration, taxes: Record<string, CountryCalibration>, en
   let worlds = seedWorldsWith(EMPIRES ? SEED_CALIBRATION : cal)
   let corporations = seedCorporations()
   let banks = seedBanks()
-  let canTrade: ((a: string, b: string) => boolean) | undefined
+  // As the game starts: a nation that has not made first contact (data/contactData.ts) trades with no one.
+  let canTrade: ((a: string, b: string) => boolean) | undefined = EMPIRES ? undefined : (a, b) => inContact(a, b, new Set())
   if (EMPIRES) {
     const emp = seedEmpireEconomies(galaxyEmpires(), { worlds: cal, taxRates: Object.fromEntries(Object.entries(taxes).map(([id, t]) => [id, t.taxRate!])) })
     countries = [...countries, ...emp.countries]

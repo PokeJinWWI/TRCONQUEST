@@ -311,6 +311,8 @@ export const SIMPLE_WORLD_SEEDS: Record<string, SimpleWorldSeed> = {
   'Proxima b': { population: 450, buildings: { civilianFactory: 1, consumerFactory: 1, farm: 2, mine: 1, powerPlant: 1, spaceport: 1 } },
   // Kingdom of Lalande
   'Lalande 21185 d': { population: 2000, buildings: { civilianFactory: 3, alloyFoundry: 3, consumerFactory: 3, electronicsPlant: 1, farm: 6, mine: 5, powerPlant: 4, physicsLab: 1, entertainmentCenter: 1, spaceport: 4, spaceyard: 1, rocketWorks: 1 } },
+  // Republic of Jinshan: a young technocratic republic, a little smaller than Lalande.
+  Jinshan: { population: 1800, buildings: { civilianFactory: 3, alloyFoundry: 2, consumerFactory: 3, electronicsPlant: 1, farm: 5, mine: 4, powerPlant: 4, physicsLab: 1, engineeringLab: 1, clinic: 1, spaceport: 4, spaceyard: 1, rocketWorks: 1 } },
   // Earth — the declining colossus: a huge, overcrowded population on limited,
   // ageing developed land (resource- and farm-heavy, thin on advanced plants).
   // Its land caps like Venus's, so a 9-billion populace is underdeveloped and
@@ -343,4 +345,5 @@ export const SIMPLE_CURRENCIES: Record<string, SimpleCurrencySeed> = {
   'republic-of-venus': { code: 'VNC', name: 'Venusian Crown', rate: 1.15 },
   'orion-republic': { code: 'ORM', name: 'Orion Mark', rate: 0.95 },
   'kingdom-of-lalande': { code: 'LLD', name: 'Lalande Ducat', rate: 0.7 },
+  'republic-of-jinshan': { code: 'JSY', name: 'Jinshan Yuan', rate: 0.85 },
 }

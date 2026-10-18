@@ -1,6 +1,8 @@
 import { Bi } from './Bi'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { COUNTRIES, getCountry } from '../data/countryData'
+import { inContact } from '../scene/contact'
+import { useContactStore } from '../state/contactStore'
 import { STRATEGIC_AI_COUNTRY_IDS, ownerDisplay } from '../data/countryRoster'
 import { TRUCE_DAYS, VASSALIZE_SCORE, eventSeverity, type DiplomacyEvent, type PeaceTerms, type War } from '../data/diplomacyData'
 import { eventReachesPlayer } from '../scene/notificationFilter'
@@ -66,8 +68,20 @@ function useFleetPower(): Map<string, number> {
 }
 
 // A directory of every other nation — click one to open its full profile.
+// The nations the player has made contact with, and how many it has not (first contact: scene/contact.ts).
+function useKnownNations(playerId: string | null): { known: typeof COUNTRIES; unmet: number } {
+  const met = useContactStore((s) => s.met)
+  return useMemo(() => {
+    const set = new Set(met)
+    const others = COUNTRIES.filter((c) => c.id !== playerId)
+    const known = others.filter((c) => !playerId || inContact(playerId, c.id, set))
+    return { known, unmet: others.length - known.length }
+  }, [met, playerId])
+}
+
 function RelationsTab() {
   const playerId = usePlayerStore((s) => s.selectedCountryId)
+  const { known, unmet } = useKnownNations(playerId)
   const relations = useDiplomacyStore((s) => s.relations)
   const power = useFleetPower()
   const day = useDay()
@@ -93,7 +107,8 @@ function RelationsTab() {
           </div>
         </div>
       )}
-      {COUNTRIES.filter((c) => c.id !== playerId).map((c) => {
+      {unmet > 0 && <div className="inspect-status">{unmet === 1 ? 'One nation' : `${unmet} nations`} you have not made contact with yet: send a ship, or settle a world, in a system you share with them.</div>}
+      {known.map((c) => {
         const rel = relationIn(relations, playerId, c.id)
         const truceLeft = Math.max(0, Math.ceil(rel.truceUntilSimDays - day))
         const status = rel.status === 'war' ? 'At war' : truceLeft > 0 ? `Truce · ${truceLeft}d` : 'Peace'
@@ -941,6 +956,7 @@ function TradePolicyTab() {
   const economyModel = usePlayerStore((s) => s.economyModel)
   const policies = useTradePolicyStore((s) => s.policies)
   const embargoes = useTradePolicyStore((s) => s.embargoes)
+  const { known } = useKnownNations(playerId)
   if (!playerId) return null
 
   const complex = economyModel !== 'abstract'
@@ -960,7 +976,7 @@ function TradePolicyTab() {
           <span className="dip-card-name"><Bi en="Embargoes" /></span>
         </div>
         <div className="inspect-status">A blanket embargo stops all trade with a nation; a shared market with it waives your tariffs.</div>
-        {COUNTRIES.filter((c) => c.id !== playerId).map((c) => {
+        {known.map((c) => {
           const embargoed = isEmbargoed(embargoes, playerId, c.id)
           const shared = inSharedMarket(playerId, c.id)
           return (

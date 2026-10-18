@@ -71,6 +71,20 @@ export const COUNTRIES: Country[] = [
     capitalCityName: 'Bellerive',
   },
   {
+    // A breakaway colony of Earth's old empire, settled by southern Chinese
+    // groups (Yue, Hakka, Min) with a Zhongyuan minority, on the California-like
+    // world of Jinshan ("Gold Mountain") at τ Ceti. Its places are named from the
+    // land they stand on (scene/placeNaming.ts), not from Earth's cities.
+    id: 'republic-of-jinshan',
+    name: 'Republic of Jinshan',
+    government: 'Technocratic republic',
+    color: '#d4a82f', // gold: Gold Mountain, distinct from the other five
+    capitalStarId: 'tau-ceti',
+    capitalBodyName: 'Jinshan',
+    capitalCityName: 'Gam Waan', // "Gold Bay" (Yue, jyutping)
+    capitalCityNative: '金灣',
+  },
+  {
     // The surviving core of an old empire — a declining colossus under the
     // Northern Federal Command (a military government). Huge, prestigious and
     // decaying from within. Capital: Chengyu (merged Chengdu–Chongqing).

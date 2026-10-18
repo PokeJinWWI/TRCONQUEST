@@ -257,6 +257,8 @@ export const SEZ_DEFAULT_TAX_DISCOUNT = 0.5
 // policy, one debt, spanning all the worlds it owns.
 export interface Country {
   id: string
+  // What the nation has unlocked (economy/recipes AUTOMATION_UNLOCK): methods that need one stay shut to it until it does. Absent = none.
+  unlocks?: string[]
   // Laws about who works (economy/popRules.ts). Absent = the defaults, which keep the reference workforce.
   popLaws?: Partial<PopLaws>
   // Player-controllable fiscal policy.

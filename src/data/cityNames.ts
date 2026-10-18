@@ -8,6 +8,7 @@
 //   Venus   Greek myth — Aphrodite's cities, epithets and companions.
 //   Orion   mythic and utopian places, in the spirit of Arcadia.
 //   Lalande French, after the astronomer Jérôme Lalande.
+//   Jinshan Plain numbered placeholders ("Settlement 1", ...): its people name their own places (state/placeNameStore).
 
 export interface CityName {
   name: string
@@ -16,6 +17,7 @@ export interface CityName {
 }
 
 export const CITY_NAMES: Record<string, CityName[]> = {
+  'republic-of-jinshan': Array.from({ length: 40 }, (_, i) => ({ name: `Settlement ${i + 1}` })),
   'imperial-state-of-mars': [
     { name: 'Rakuyō', native: '洛陽' },
     { name: 'Chōan', native: '長安' },

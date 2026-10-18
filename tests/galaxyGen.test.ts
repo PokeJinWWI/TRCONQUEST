@@ -46,10 +46,10 @@ const others = NEIGHBORHOODS.filter((n) => n.id !== SOLAR_NEIGHBORHOOD_ID)
 
 console.log('\n=== 1. Our own neighbourhood is untouched ===')
 {
-  check('STARS is still the 8 hand-authored systems', STARS.length === 8 && STARS[0].id === 'sol')
-  check('PLANETS_BY_STAR is still those 8 systems', Object.keys(PLANETS_BY_STAR).length === 8)
+  check('STARS is the hand-authored Solar Neighbourhood: the 8 original systems, then the 15 stars from the 12 ly chart (data/nearbySystems.ts)', STARS.length === 23 && STARS[0].id === 'sol' && STARS.slice(8).every((s) => s.hasSystemData))
+  check('PLANETS_BY_STAR is exactly the hand-authored systems: the 8 originals and the 15 chart stars', Object.keys(PLANETS_BY_STAR).length === 23 && STARS.every((s) => PLANETS_BY_STAR[s.id]))
   check('the Solar Neighbourhood serves STARS itself', getStarsForNeighborhood(SOLAR_NEIGHBORHOOD_ID) === STARS)
-  check('the home nations are unchanged', COUNTRIES.length === 5)
+  check('the home nations are unchanged (the five, and the Republic of Jinshan)', COUNTRIES.length === 6)
   check('no generated star in STARS', STARS.every((s) => !findGeneratedStar(s.id)))
 }
 

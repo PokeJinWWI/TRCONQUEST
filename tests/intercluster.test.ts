@@ -114,7 +114,9 @@ console.log('\n=== 1. The risk curve ===')
   // Calibration: today's 50% at the typical hop.
   check('Mk I loses exactly 50% at the reference hop', near(hyperdriveMkLoss(1, HYPERDRIVE_REFERENCE_HOP_LY), HYPERDRIVE_BASE_LOSS_CHANCE, 1e-12) && HYPERDRIVE_BASE_LOSS_CHANCE === 0.5)
   const pairs: number[] = []
-  for (const a of STARS) for (const b of STARS) if (a.id < b.id) pairs.push(Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2]))
+  // calibrated on the original 8 systems (the plain stars added later do not move the balance constant)
+  const CAL = STARS.slice(0, 8)
+  for (const a of CAL) for (const b of CAL) if (a.id < b.id) pairs.push(Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2]))
   const geo = Math.exp(pairs.reduce((n, d) => n + Math.log(d), 0) / pairs.length)
   check('...which is the Solar Neighbourhood\'s own typical star-to-star hop (its geometric mean)', Math.abs(geo - HYPERDRIVE_REFERENCE_HOP_LY) < 0.05 && Math.abs(hyperdriveMkLoss(1, geo) - 0.5) < 0.01, `${geo.toFixed(2)} ly -> ${(hyperdriveMkLoss(1, geo) * 100).toFixed(1)}%`)
   const hops = ['alpha-centauri', 'barnards-star', 'wolf-359', 'sirius'].map((id) => hyperdriveMkLoss(1, Math.hypot(...(STARS.find((s) => s.id === id)!.position as [number, number, number]))))

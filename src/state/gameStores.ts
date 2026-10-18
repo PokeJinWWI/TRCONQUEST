@@ -19,6 +19,7 @@ import { useZoneStore } from './zoneStore'
 import { useStructureStore } from './structureStore'
 import { useLensStore } from './lensStore'
 import { useClusterVisitStore } from './clusterVisitStore'
+import { useContactStore } from './contactStore'
 import { useColonyStore } from './colonyStore'
 import { useCombatStore } from './combatStore'
 import { useConfirmStore } from './confirmStore'
@@ -138,6 +139,7 @@ export const STORE_REGISTRY: StoreEntry[] = [
   game('ai', useAiStore),
   game('survey', useSurveyStore),
   game('clusterVisit', useClusterVisitStore),
+  game('contact', useContactStore),
   // v2: orbital stations. Earth's ring used to hang at the star Sol: it now circles Earth (zone Earth~low) with the modules it opens with.
   game('migration', useMigrationStore),
   game('starbases', useStarbaseStore, {

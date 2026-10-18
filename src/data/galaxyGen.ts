@@ -36,8 +36,8 @@ export function seededStream(seed: number, key: string): () => number {
   }
 }
 
-const between = (rng: () => number, lo: number, hi: number) => lo + rng() * (hi - lo)
-const intBetween = (rng: () => number, lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1))
+export const between = (rng: () => number, lo: number, hi: number) => lo + rng() * (hi - lo)
+export const intBetween = (rng: () => number, lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1))
 function weighted<T extends { weight: number }>(rng: () => number, options: T[]): T {
   let roll = rng() * options.reduce((sum, o) => sum + o.weight, 0)
   for (const o of options) {
@@ -99,7 +99,7 @@ export function generateClusterStars(seed: number, cluster: Pick<NeighborhoodDat
   return stars
 }
 
-const PLANET_COLORS: Record<PlanetClass, string> = {
+export const PLANET_COLORS: Record<PlanetClass, string> = {
   continental: '#6fa8dc',
   ocean: '#3d7dc9',
   hycean: '#5fb0c9',
@@ -112,12 +112,42 @@ const PLANET_COLORS: Record<PlanetClass, string> = {
   'gas-giant': '#d9b38c',
   'ice-giant': '#8fc7d9',
 }
-const HOT: PlanetClass[] = ['lava', 'barren', 'desert', 'toxic']
-const TEMPERATE: PlanetClass[] = ['continental', 'ocean', 'desert', 'hycean', 'barren', 'toxic']
-const COLD: PlanetClass[] = ['gas-giant', 'ice-giant', 'ice', 'barren', 'gas-giant']
+export const HOT: PlanetClass[] = ['lava', 'barren', 'desert', 'toxic']
+export const TEMPERATE: PlanetClass[] = ['continental', 'ocean', 'desert', 'hycean', 'barren', 'toxic']
+export const COLD: PlanetClass[] = ['gas-giant', 'ice-giant', 'ice', 'barren', 'gas-giant']
 const EARTH_RADIUS_KM = 6371
 const EARTH_MASS_KG = 5.972e24
 const JUPITER_MASS_KG = 1.898e27
+
+// One generated planet at `au` around a star of `solarMasses` whose habitable
+// zone sits at `habitableAU`: class from how warm the orbit is, size from the
+// class, the rest from `rng`. The draw order is part of the galaxy's seed.
+export function rollPlanet(rng: () => number, name: string, au: number, solarMasses: number, habitableAU: number): RawPlanet {
+  const warmth = au / habitableAU
+  const pool = warmth < 0.6 ? HOT : warmth <= 1.6 ? TEMPERATE : COLD
+  const picked = pool[Math.floor(rng() * pool.length)]
+  // A temperate world sits so close to a red dwarf that it is tidally locked.
+  const planetClass: PlanetClass = picked === 'continental' && solarMasses < 0.5 ? 'eyeball' : picked
+  const radiusKm = Math.round(planetClass === 'gas-giant' ? between(rng, 40_000, 75_000) : planetClass === 'ice-giant' ? between(rng, 20_000, 28_000) : between(rng, 2500, 8000))
+  const massKg =
+    planetClass === 'gas-giant'
+      ? between(rng, 0.3, 2) * JUPITER_MASS_KG
+      : planetClass === 'ice-giant'
+        ? between(rng, 0.5, 1.2) * 1e26
+        : EARTH_MASS_KG * Math.pow(radiusKm / EARTH_RADIUS_KM, 3.7)
+  return {
+    name,
+    radiusKm,
+    massKg,
+    auDistance: Math.round(au * 1000) / 1000,
+    color: PLANET_COLORS[planetClass],
+    periodYears: Math.sqrt(Math.pow(au, 3) / solarMasses),
+    inclinationDeg: Math.round(between(rng, 0, 6) * 10) / 10,
+    ascendingNodeDeg: Math.round(rng() * 360),
+    phaseDeg: Math.round(rng() * 360),
+    planetClass,
+  }
+}
 
 // A star's planets, kept minimal: 0-5 on widening orbits, hot worlds close in,
 // giants and ice far out. Same shape the hand-authored systems are written in.
@@ -130,31 +160,9 @@ export function generateRawPlanets(seed: number, star: Pick<StarData, 'id' | 'na
   const planets: RawPlanet[] = []
   let au = habitableAU * between(rng, 0.15, 0.5)
   for (let i = 0; i < count; i++) {
-    const warmth = au / habitableAU
-    const pool = warmth < 0.6 ? HOT : warmth <= 1.6 ? TEMPERATE : COLD
-    const picked = pool[Math.floor(rng() * pool.length)]
-    // A temperate world sits so close to a red dwarf that it is tidally locked.
-    const planetClass: PlanetClass = picked === 'continental' && solarMasses < 0.5 ? 'eyeball' : picked
-    const giant = planetClass === 'gas-giant' || planetClass === 'ice-giant'
-    const radiusKm = Math.round(planetClass === 'gas-giant' ? between(rng, 40_000, 75_000) : planetClass === 'ice-giant' ? between(rng, 20_000, 28_000) : between(rng, 2500, 8000))
-    const massKg =
-      planetClass === 'gas-giant'
-        ? between(rng, 0.3, 2) * JUPITER_MASS_KG
-        : planetClass === 'ice-giant'
-          ? between(rng, 0.5, 1.2) * 1e26
-          : EARTH_MASS_KG * Math.pow(radiusKm / EARTH_RADIUS_KM, 3.7)
-    planets.push({
-      name: `${star.name} ${ROMAN[i]}`,
-      radiusKm,
-      massKg,
-      auDistance: Math.round(au * 1000) / 1000,
-      color: PLANET_COLORS[planetClass],
-      periodYears: Math.sqrt(Math.pow(au, 3) / solarMasses),
-      inclinationDeg: Math.round(between(rng, 0, 6) * 10) / 10,
-      ascendingNodeDeg: Math.round(rng() * 360),
-      phaseDeg: Math.round(rng() * 360),
-      planetClass,
-    })
+    const planet = rollPlanet(rng, `${star.name} ${ROMAN[i]}`, au, solarMasses, habitableAU)
+    planets.push(planet)
+    const giant = planet.planetClass === 'gas-giant' || planet.planetClass === 'ice-giant'
     au *= between(rng, giant ? 1.8 : 1.5, 2.4)
   }
   return planets

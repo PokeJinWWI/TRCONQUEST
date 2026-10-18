@@ -8,6 +8,7 @@
 import { createHash } from 'node:crypto'
 import { galaxyEmpires } from '../src/data/generatedEmpires'
 import { seedEmpireEconomies, worldPlanetsOf, MAX_WORLDS_PER_EMPIRE } from '../src/economy/empireSeed'
+import { uncontactedPairs } from '../src/scene/contact'
 import { seedBanks, seedCharacters, seedCorporations, seedCountries, seedFamilies, seedWorlds } from '../src/economy/economySeed'
 import { runEconomySteps } from '../src/economy/economyStep'
 import { EmpireSim } from '../src/economy/empireSim'
@@ -25,7 +26,7 @@ function check(label: string, cond: boolean, detail = '') {
   }
 }
 
-const NATIONS = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic', 'kingdom-of-lalande', 'earth']
+const NATIONS = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic', 'kingdom-of-lalande', 'earth', 'republic-of-jinshan']
 const empires = galaxyEmpires()
 const hash = (x: unknown) => createHash('sha256').update(JSON.stringify(x)).digest('hex').slice(0, 16)
 
@@ -42,12 +43,13 @@ console.log('\n=== 1. The home nations\' seed is stable ===')
   // numbers do not move: the two share one ecosystem bonus).
   // Rehashed when Earth's spaceports became the six hand-placed ones (the economy runs exactly what the map shows) and when Tenkū Kōro lost the
   // native script from its name (the NERV theme adds it); and again when the starting economies were fitted to what is wanted (scripts/economy/
-  // calibrate.ts: mothballed plants, new starting prices and tax rates).
-  check('worlds', hash(seedWorlds()) === '234fa75e7cf3f978')
-  check('countries', hash(seedCountries()) === '30f7a226778fc4f4')
-  check('corporations', hash(seedCorporations()) === 'ba6b548892b4c34a')
-  check('banks', hash(seedBanks()) === '7bccfcac62561d47')
-  check('characters', hash(seedCharacters()) === 'fe9da9a53a59c43d')
+  // calibrate.ts: mothballed plants, new starting prices and tax rates); and again when the Republic of Jinshan became the sixth nation (its world,
+  // nation, bank, operator and character; only its own calibration entries were added, the other nations' are as they were).
+  check('worlds', hash(seedWorlds()) === '7bbcfc8ddef04ee8')
+  check('countries', hash(seedCountries()) === '87a4796b01994d6e')
+  check('corporations', hash(seedCorporations()) === '4f810170cca4b812')
+  check('banks', hash(seedBanks()) === '891e41d1b171bd07')
+  check('characters', hash(seedCharacters()) === '911ce2ceac65d0d0')
   check('families', hash(seedFamilies()) === '6c211d4cc3df1023')
 }
 
@@ -73,7 +75,8 @@ const emp = seedEmpireEconomies(empires)
 // --- Five years, all 24 nations, AI on --------------------------------------
 const verdict = measureStability(
   { countries: [...seedCountries(), ...emp.countries], worlds: [...seedWorlds(), ...emp.worlds], corporations: [...seedCorporations(), ...emp.corporations], banks: [...seedBanks(), ...emp.banks] },
-  { humanCountryIds: [], warPairs: [], tradeGroups: emp.tradeGroups },
+  // As the game starts: Jinshan has made first contact with no one, so it trades with no one (scene/contact.ts).
+  { humanCountryIds: [], warPairs: [], tradeGroups: emp.tradeGroups, uncontactedPairs: uncontactedPairs(NATIONS, new Set()) },
 )
 const empireIds = empires.map((e) => e.id)
 

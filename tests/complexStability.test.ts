@@ -11,6 +11,7 @@
 // Run:  npx tsx tests/complexStability.test.ts
 
 import { tickEconomy } from '../src/economy/economyTick'
+import { inContact } from '../src/scene/contact'
 import { seedBanks, seedCorporations, seedCountries, seedWorlds } from '../src/economy/economySeed'
 import { getMethod } from '../src/economy/recipes'
 import { GOODS } from '../src/economy/goods'
@@ -49,7 +50,7 @@ const years: Record<string, Year[]> = Object.fromEntries(ids.map((id) => [id, []
 for (let y = 0; y < YEARS; y++) {
   const acc: Record<string, Year> = Object.fromEntries(ids.map((id) => [id, { real: 0, nominal: 0, balance: 0, priceLevel: 0, formalEmployed: 0, formalWorkers: 0, ore: 0, oreUsed: 0 }]))
   for (let m = 0; m < 12; m++) {
-    const r = tickEconomy(countries, worlds, corporations, { enableAI: true, tick: y * 12 + m + 1, humanCountryIds: [] }, banks)
+    const r = tickEconomy(countries, worlds, corporations, { enableAI: true, tick: y * 12 + m + 1, humanCountryIds: [], canTrade: (a, b) => inContact(a, b, new Set()) }, banks)
     ;({ countries, worlds, corporations, banks } = r)
     for (const id of ids) {
       const a = acc[id]

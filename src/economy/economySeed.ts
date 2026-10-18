@@ -1,6 +1,6 @@
 import { LIFE_SUPPORT_GROUP_ID, lifeSupportScale } from './habitability'
 import { GOODS, GOOD_IDS, type GoodId } from './goods'
-import { BUREAUCRACY_OUTPUT, DISTRICT_TYPES, POP_CLASSES, RECIPES, districtOfRecipe, getMethod, qualificationFraction, type DistrictType, type PopClass } from './recipes'
+import { AUTOMATION_UNLOCK, BUREAUCRACY_OUTPUT, DISTRICT_TYPES, POP_CLASSES, RECIPES, ROBOTIC_METHOD_ID, districtOfRecipe, getMethod, qualificationFraction, type DistrictType, type PopClass } from './recipes'
 import { SLOTS_PER_DISTRICT_LEVEL } from './districts'
 import { landForBody } from '../scene/bodyLand'
 import { COUNTRIES as NATIONS } from '../data/countryData'
@@ -9,7 +9,7 @@ import { CLASS_PAY, LABOR_SHARE, WAGE_FLOOR, ADMIN_PER_BUILDING_LEVEL, BUREAUCRA
 import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor } from './species'
 import { bodyGroundInfo, surfaceOf, TERRAIN_IDS } from '../scene/planetTerrain'
 import { governorAppointmentDef, type CentralBank } from './centralBank'
-import type { ReligionMix } from './demographics'
+import { leadingCulture, religionsOfCohorts, type Cohort, type ReligionMix } from './demographics'
 import type {
   Bank,
   Building,
@@ -42,12 +42,13 @@ const OPERATOR_OF: Record<string, string> = {
   'orion-republic': 'arcadian-starlines',
   'kingdom-of-lalande': 'compagnie-stellaire',
   earth: 'terran-spacelift',
+  'republic-of-jinshan': 'fung-wong-starlines',
 }
 // The laissez-faire nations (their seeded economicSystem, below): plants the
 // seed adds to complete their supply chains are private (their operator's),
 // not the state's — a free-market republic doesn't run its own mills, and each
 // state building level costs bureaucracy.
-const PRIVATE_LED = new Set(['republic-of-venus', 'orion-republic'])
+const PRIVATE_LED = new Set(['republic-of-venus', 'orion-republic', 'republic-of-jinshan'])
 
 // Starting education by class — higher classes arrive more schooled, so the
 // technical/professional job rungs (which demand qualification) start staffed.
@@ -214,6 +215,8 @@ export interface WorldSpec {
   population: number
   capacity: number
   religions: ReligionMix
+  // A world of several peoples: one cohort per culture and faith (adds up to `religions`; `culture` is its largest).
+  cohorts?: Cohort[]
   buildings: BuildingSpec[]
   // See World.habitability; absent = 1.
   habitability?: number
@@ -400,10 +403,10 @@ function buildWorld(rawSpec: WorldSpec, calibration?: WorldCalibration): World {
   for (const cls of POP_CLASSES) {
     const classPop = spec.population * split[cls]
     if (classPop <= 0) continue
-    for (const r of spec.religions) {
+    for (const r of spec.cohorts ?? spec.religions.map((x) => ({ culture: spec.culture, religion: x.religion, share: x.share }))) {
       const size = classPop * r.share
       if (size <= 0) continue
-      pops.push(makePop(spec.id, cls, spec.species, spec.culture, r.religion, size))
+      pops.push(makePop(spec.id, cls, spec.species, r.culture, r.religion, size))
     }
   }
   // Seeded buildings open at the run their staff can support (the scarcest of
@@ -473,6 +476,37 @@ function seedDistricts(bodyName: string, capacity: Record<DistrictType, number>)
   const total = DISTRICT_TYPES.reduce((n, d) => n + districts[d], 0)
   return { districts, districtCapacity, land: Math.max(seed.landOf(bodyName), total) }
 }
+
+// The Republic of Jinshan's peoples, by culture and faith (shares of the world, summing to 1): the Zhongyuan the plurality, then the
+// Yue (Cantonese) and the Wu, the Min, the colony-born Jinshanese, the Hakka and the Gan-Xiang.
+const JINSHAN_COHORTS: Cohort[] = [
+  { culture: 'zhongyuan', religion: 'non-affiliated', share: 0.09 },
+  { culture: 'zhongyuan', religion: 'jinshan-ruism', share: 0.06 },
+  { culture: 'zhongyuan', religion: 'hui-islam-of-jinshan', share: 0.06 },
+  { culture: 'zhongyuan', religion: 'jinshan-folk', share: 0.04 },
+  { culture: 'zhongyuan', religion: 'jinshan-church', share: 0.03 },
+  { culture: 'yue', religion: 'jinshan-folk', share: 0.08 },
+  { culture: 'yue', religion: 'non-affiliated', share: 0.06 },
+  { culture: 'yue', religion: 'jinshan-church', share: 0.04 },
+  { culture: 'yue', religion: 'jinshan-chan', share: 0.03 },
+  { culture: 'yue', religion: 'jinshan-ruism', share: 0.01 },
+  { culture: 'wu', religion: 'jinshan-folk', share: 0.06 },
+  { culture: 'wu', religion: 'non-affiliated', share: 0.06 },
+  { culture: 'wu', religion: 'jinshan-church', share: 0.03 },
+  { culture: 'wu', religion: 'jinshan-chan', share: 0.03 },
+  { culture: 'wu', religion: 'jinshan-daoism', share: 0.03 },
+  { culture: 'min', religion: 'jinshan-folk', share: 0.06 },
+  { culture: 'min', religion: 'jinshan-chan', share: 0.03 },
+  { culture: 'min', religion: 'non-affiliated', share: 0.02 },
+  { culture: 'jinshanese', religion: 'non-affiliated', share: 0.04 },
+  { culture: 'jinshanese', religion: 'jinshan-folk', share: 0.03 },
+  { culture: 'jinshanese', religion: 'jinshan-daoism', share: 0.02 },
+  { culture: 'hakka', religion: 'jinshan-folk', share: 0.03 },
+  { culture: 'hakka', religion: 'jinshan-church', share: 0.02 },
+  { culture: 'hakka', religion: 'non-affiliated', share: 0.01 },
+  { culture: 'gan-xiang', religion: 'jinshan-folk', share: 0.02 },
+  { culture: 'gan-xiang', religion: 'jinshan-daoism', share: 0.01 },
+]
 
 const WORLD_SPECS: WorldSpec[] = [
   // Imperial State of Mars — the showcase world with the full chain.
@@ -798,6 +832,43 @@ const WORLD_SPECS: WorldSpec[] = [
       { recipe: 'corporateHq', level: 1, owner: 'terran-spacelift' },
     ],
   },
+  // Republic of Jinshan: a young breakaway colony of southern Chinese settlers on a California-like world.
+  {
+    id: 'Jinshan',
+    ownerId: 'republic-of-jinshan',
+    culture: leadingCulture(JINSHAN_COHORTS),
+    species: 'baseline-organic',
+    population: 1800,
+    capacity: 5850,
+    religions: religionsOfCohorts(JINSHAN_COHORTS),
+    cohorts: JINSHAN_COHORTS,
+    buildings: [
+      { recipe: 'solarPlant', level: 3 },
+      { recipe: 'coalPowerPlant', level: 2 },
+      { recipe: 'coalMine', level: 3 },
+      { recipe: 'ironMine', level: 2 },
+      { recipe: 'phosphateMine', level: 1 },
+      { recipe: 'wheatFarm', level: 2 },
+      { recipe: 'riceFarm', level: 3 },
+      { recipe: 'teaPlantation', level: 1 },
+      { recipe: 'foodProcessor', level: 2 },
+      { recipe: 'livestockRanch', level: 1 },
+      { recipe: 'meatPacking', level: 1 },
+      { recipe: 'fishery', level: 2 },
+      { recipe: 'steelMill', level: 3 },
+      { recipe: 'toolWorkshop', level: 2 },
+      { recipe: 'machineryFactory', level: 2 },
+      { recipe: 'fertilizerPlant', level: 1 },
+      { recipe: 'cementWorks', level: 1 },
+      { recipe: 'constructionSector', level: 1 },
+      { recipe: 'consumerGoodsFactory', level: 2 },
+      { recipe: 'clinic', level: 2 },
+      { recipe: 'roadNetwork', level: 1 },
+      { recipe: 'school', level: 1 },
+      { recipe: 'retailShop', level: 2 },
+      { recipe: 'governmentOffice', level: 2 },
+    ],
+  },
 ]
 // --- Spaceports, seaports and whole supply chains, before the balancer ---
 
@@ -893,7 +964,19 @@ function producerOf(good: GoodId, made: Set<GoodId>): string | null {
   return best
 }
 
-const SEEDED_SPECS = withSupplyChains(WORLD_SPECS.map(withTransport))
+// The nations that start with the automation unlock (their Country.unlocks says so too). A nation that holds it opens its plants on the robotic method wherever there is one: the
+// same output for far fewer workers, which a small population needs to staff a full national supply chain.
+const AUTOMATED_NATIONS: ReadonlySet<string> = new Set(['republic-of-jinshan'])
+function withAutomation(specs: WorldSpec[]): WorldSpec[] {
+  const automated = AUTOMATED_NATIONS
+  return specs.map((spec) =>
+    automated.has(spec.ownerId)
+      ? { ...spec, buildings: spec.buildings.map((b) => (!b.method && RECIPES[b.recipe]?.methods.some((m) => m.id === ROBOTIC_METHOD_ID) ? { ...b, method: ROBOTIC_METHOD_ID } : b)) }
+      : spec,
+  )
+}
+
+const SEEDED_SPECS = withAutomation(withSupplyChains(WORLD_SPECS.map(withTransport)))
 const BALANCED_BUILDINGS = balancedSpecs(SEEDED_SPECS)
 // The worlds as specified, their building levels from the balancer, opening at
 // the prices and wages the calibration found their markets settle at.
@@ -1111,6 +1194,44 @@ const COUNTRIES: Country[] = [
       reserveRequirement: 0.1,
     }),
   },
+  {
+    // Republic of Jinshan: a young technocratic republic, the smallest of the nations.
+    id: 'republic-of-jinshan',
+    unlocks: [AUTOMATION_UNLOCK],
+    taxRate: 0.1,
+    welfarePerCapita: 1.7,
+    treasury: 24000,
+    economicSystem: 'interventionism',
+    publicServices: { healthcare: 0.8, dental: 0, education: 0.5 },
+    bonds: { pops: 14000, corporations: 9000, foreign: 0 },
+    bondRate: 0.0045,
+    foreignBondPolicy: 'open',
+    foreignInvestmentPolicy: 'open',
+    foreignInvestmentAutoApprove: false,
+    pendingForeignInvestment: [],
+    requireForeignApproval: true,
+    pendingForeign: [],
+    bureaucracy: 3500,
+    decrees: [],
+    logisticsCapacity: 6000,
+    subsidies: { corporations: {}, buildings: {} },
+    investmentPool: 30000,
+    currency: { name: 'Jinshan Yuan', code: 'JSY', rate: 0.85, target: 0.85 },
+    centralBank: seedCentralBank('republic-of-jinshan', 'Jinshan Monetary Authority', {
+      status: 'independent',
+      structure: 'single',
+      policyAuthority: 'board',
+      appointment: 'fixed-term',
+      mandate: 'price',
+      debtFinancing: 'secondary-only',
+      exchangeRegime: 'managed',
+      credibility: 0.65,
+      governmentPressure: 0.1,
+      governorName: 'Governor Chan Wing-sze',
+      policyRate: 0.03,
+      reserveRequirement: 0.08,
+    }),
+  },
 ]
 
 // --- Characters, families, corporations ---
@@ -1199,6 +1320,7 @@ const CHARACTERS: Character[] = [
     { id: 'char-solenne-hart', name: 'Solenne Hart', age: 44, corporationId: 'arcadian-starlines', cultureId: 'arcadian', religionId: 'arcadian-idyll', speciesTemplateId: 'baseline-organic', traits: ['Reformer', 'Ambitious'], log: ['Founder of Arcadian Starlines.'] },
     { id: 'char-augustin-delorme', name: 'Augustin Delorme', age: 58, corporationId: 'compagnie-stellaire', cultureId: 'tidalian', religionId: 'non-affiliated', speciesTemplateId: 'tidalian', traits: ['Cautious', 'Shrewd'], log: ['Founder of the Compagnie Stellaire de Bellerive.'] },
     { id: 'char-marcus-thorne', name: 'Marcus Thorne', age: 63, corporationId: 'terran-spacelift', cultureId: 'terran', religionId: 'non-affiliated', speciesTemplateId: 'baseline-organic', traits: ['Cautious', 'Shrewd'], log: ['Director of Terran Spacelift, the state-chartered haulier of the old homeworld.'] },
+    { id: 'char-chan-wing-sze', name: 'Chan Wing-sze', age: 49, corporationId: 'fung-wong-starlines', cultureId: 'yue', religionId: 'jinshan-folk', speciesTemplateId: 'baseline-organic', traits: ['Shrewd', 'Ambitious'], log: ['Founder of Fung Wong Starlines, the haulier that carried the first settlers to Jinshan.'] },
   ].map(
     (c): Character => ({ ...c, role: 'corp-leader', wealth: 600, skills: { administration: 6, finance: 7, diplomacy: 5 } }),
   ),
@@ -1242,6 +1364,7 @@ const CORPORATIONS: Corporation[] = [
     { id: 'arcadian-starlines', name: 'Arcadian Starlines', countryId: 'orion-republic', leaderId: 'char-solenne-hart' },
     { id: 'compagnie-stellaire', name: 'Compagnie Stellaire de Bellerive', countryId: 'kingdom-of-lalande', leaderId: 'char-augustin-delorme' },
     { id: 'terran-spacelift', name: 'Terran Spacelift', countryId: 'earth', leaderId: 'char-marcus-thorne' },
+    { id: 'fung-wong-starlines', name: 'Fung Wong Starlines', countryId: 'republic-of-jinshan', leaderId: 'char-chan-wing-sze' },
   ].map(
     (c): Corporation => ({
       ...c,
@@ -1486,6 +1609,7 @@ const BANKS: Bank[] = [
   makeBank('bank-venus-2', 'Cytherean Trust', 'republic-of-venus', 40000, 0.55),
   makeBank('bank-orion-1', 'Arcadia Commercial Bank', 'orion-republic', 42000, 0.6),
   makeBank('bank-lalande-1', 'Lalande People’s Bank', 'kingdom-of-lalande', 48000, 0.7),
+  makeBank('bank-jinshan-1', 'Gam Waan Commercial Bank', 'republic-of-jinshan', 36000, 0.6),
 ]
 
 export function seedBanks(): Bank[] {

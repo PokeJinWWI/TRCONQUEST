@@ -38,6 +38,11 @@ export const LANDMARKS: Record<string, NationLandmarks> = {
     others: [{ name: 'Chambre des États', description: 'The chamber of the Kingdom’s estates.' }],
     fortress: { name: 'Château-Fort de Mont-Jérôme', description: 'The Kingdom’s castle, guarding the capital.' },
   },
+  'republic-of-jinshan': {
+    seat: { name: 'Gam Waan Council Hall', description: 'The seat of the Republic’s government, on the bay at Gam Waan (金灣, "Gold Bay").' },
+    others: [{ name: 'Assembly of the Five Peoples', description: 'Where delegates of the Yue, Hakka, Min, Zhongyuan and Jinshanese communities meet to settle the Republic’s laws.' }],
+    fortress: { name: 'Cing Saan Pass', description: 'The Republic’s fortress, built into the pass of Cing Saan (青山關, "Green Mountain Pass") above the capital.' },
+  },
   earth: {
     seat: { name: 'Northern Federal Command HQ', description: 'The fortified seat of the military government that rules Earth, in Chicago — the nerve centre of a declining empire.' },
     others: [{ name: 'Grand Federal Assembly', description: 'The old imperial assembly, now a rubber stamp for the Command.' }],

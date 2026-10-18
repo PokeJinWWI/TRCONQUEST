@@ -45,6 +45,7 @@ function hash(s: string): number {
 
 const cache = new Map<string, Map<number, KeyName>>()
 
+
 // The names a founding nation hands out to a body's settlements, in order from a per-body starting point (the capital's own name left
 // out). Empty for a body nobody founded or a nation without a list. Shared by the key nodes and the development sites.
 export function settlementNamePool(bodyName: string): { pool: CityName[]; start: number } {

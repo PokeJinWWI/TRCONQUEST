@@ -143,6 +143,45 @@ export const STARS: StarData[] = [
     ],
   },
   { id: 'ross-154', name: 'Ross 154', color: '#ff6b4a', distanceLy: 9.68, position: [1.879, -8.653, -3.911], hasSystemData: true, massKg: 5.967e29, radiusKm: 167_000, starClass: 'M3.5V' },
+  // More neighbours from the ~12 ly chart (real RA/Dec/distance). Their planets are in
+  // data/nearbySystems.ts (real detections + seeded top-up). Multi-star ones list
+  // each real star, the wide separations compressed to stay legible (see
+  // StarComponent); the star's own mass/radius is the primary's.
+  { id: 'epsilon-eridani', name: "ε Eridani", color: '#ffb36b', distanceLy: 10.47, position: [6.183, 8.272, -1.721], hasSystemData: true, massKg: 1.631e30, radiusKm: 515_040, starClass: 'K2V' },
+  { id: 'ross-248', name: "Ross 248", color: '#ff6b4a', distanceLy: 10.32, position: [7.378, -0.584, 7.192], hasSystemData: true, massKg: 2.705e29, radiusKm: 111_360, starClass: 'M5.5V' },
+  { id: 'lacaille-9352', name: "Lacaille 9352", color: '#ffa15a', distanceLy: 10.72, position: [8.448, -2.032, -6.278], hasSystemData: true, massKg: 9.746e29, radiusKm: 327_120, starClass: 'M0.5V' },
+  { id: 'ross-128', name: "Ross 128", color: '#ff7a5a', distanceLy: 11.01, position: [-10.993, 0.591, 0.154], hasSystemData: true, massKg: 3.342e29, radiusKm: 137_112, starClass: 'M4V' },
+  { id: '61-cygni', name: "61 Cygni", color: '#ffb27a', distanceLy: 11.4, position: [6.473, -6.095, 7.136], hasSystemData: true, massKg: 1.392e30, radiusKm: 466_320, starClass: 'K5V / K7V', components: [
+      { name: '61 Cygni A', color: '#ffb27a', radiusKm: 466_320, massKg: 1.392e30, offsetAU: [-14, 0] },
+      { name: '61 Cygni B', color: '#ff9a5a', radiusKm: 417_600, massKg: 1.253e30, offsetAU: [14, 0] },
+    ] },
+  { id: 'procyon', name: "Procyon", color: '#fff4e0', distanceLy: 11.46, position: [-4.792, 10.358, 1.043], hasSystemData: true, massKg: 2.983e30, radiusKm: 1_426_800, starClass: 'F5IV-V + DQZ white dwarf', components: [
+      { name: 'Procyon A', color: '#fff4e0', radiusKm: 1_426_800, massKg: 2.983e30, offsetAU: [-8, 0] },
+      { name: 'Procyon B', color: '#eaf4ff', radiusKm: 6_682, massKg: 1.193e30, offsetAU: [8, 0] },
+    ] },
+  { id: 'struve-2398', name: "Struve 2398", color: '#ff9a5a', distanceLy: 11.52, position: [1.081, -5.723, 9.939], hasSystemData: true, massKg: 6.961e29, radiusKm: 250_560, starClass: 'M3V / M3.5V', components: [
+      { name: 'Struve 2398 A', color: '#ff9a5a', radiusKm: 250_560, massKg: 6.961e29, offsetAU: [-14, 0] },
+      { name: 'Struve 2398 B', color: '#ff8a5a', radiusKm: 194_880, massKg: 5.171e29, offsetAU: [14, 0] },
+    ] },
+  { id: 'groombridge-34', name: "Groombridge 34", color: '#ff9a5a', distanceLy: 11.62, position: [8.329, 0.670, 8.075], hasSystemData: true, massKg: 7.558e29, radiusKm: 264_480, starClass: 'M1.5V / M3.5V', components: [
+      { name: 'Groombridge 34 A', color: '#ff9a5a', radiusKm: 264_480, massKg: 7.558e29, offsetAU: [-18, 0] },
+      { name: 'Groombridge 34 B', color: '#ff7a4a', radiusKm: 132_240, massKg: 3.182e29, offsetAU: [18, 0] },
+    ] },
+  { id: 'dx-cancri', name: "G51-15", color: '#ff5a3a', distanceLy: 11.68, position: [-6.340, 8.278, 5.263], hasSystemData: true, massKg: 1.790e29, radiusKm: 76_560, starClass: 'M6.5V' },
+  { id: 'tau-ceti', name: "τ Ceti", color: '#ffe29a', distanceLy: 11.91, position: [10.291, 5.025, -3.271], hasSystemData: true, massKg: 1.551e30, radiusKm: 549_840, starClass: 'G8V' },
+  { id: 'epsilon-indi', name: "ε Indi", color: '#ffb27a', distanceLy: 11.87, position: [5.678, -3.167, -9.931], hasSystemData: true, massKg: 1.512e30, radiusKm: 508_080, starClass: 'K5V', components: [
+      { name: 'ε Indi A', color: '#ffb27a', radiusKm: 508_080, massKg: 1.512e30, offsetAU: [-12, 0] },
+      { name: 'ε Indi Ba', color: '#a0563a', radiusKm: 62_640, massKg: 1.253e29, offsetAU: [34, 18] },
+      { name: 'ε Indi Bb', color: '#8a4a3a', radiusKm: 62_640, massKg: 8.950e28, offsetAU: [35.5, 18] },
+    ] },
+  { id: 'l789-6', name: "L789-6", color: '#ff7a5a', distanceLy: 11.27, position: [10.192, -3.780, -2.974], hasSystemData: true, massKg: 2.188e29, radiusKm: 90_480, starClass: 'M5V', components: [
+      { name: 'EZ Aquarii A', color: '#ff7a5a', radiusKm: 90_480, massKg: 2.188e29, offsetAU: [-0.6, 0] },
+      { name: 'EZ Aquarii B', color: '#ff7a5a', radiusKm: 83_520, massKg: 1.989e29, offsetAU: [0.6, 0] },
+      { name: 'EZ Aquarii C', color: '#ff6b4a', radiusKm: 76_560, massKg: 1.790e29, offsetAU: [6, 8] },
+    ] },
+  { id: 'l372-58', name: "L372-58", color: '#ff6b4a', distanceLy: 12.04, position: [5.047, 6.946, -8.440], hasSystemData: true, massKg: 2.486e29, radiusKm: 104_400, starClass: 'M5.5V' },
+  { id: 'l725-32', name: "L725-32", color: '#ff7a5a', distanceLy: 12.11, position: [11.007, 3.603, -3.539], hasSystemData: true, massKg: 2.586e29, radiusKm: 118_320, starClass: 'M4.5V' },
+  { id: 'luytens-star', name: "Luyten's Star", color: '#ff9a5a', distanceLy: 12.35, position: [-4.577, 11.415, 1.126], hasSystemData: true, massKg: 5.768e29, radiusKm: 201_840, starClass: 'M3.5V' },
 ]
 
 // Interstellar view is generic over "which neighborhood" (see
@@ -157,4 +196,10 @@ export function getStarsForNeighborhood(neighborhoodId: string): StarData[] {
 // game (ships, AI, territory) works over.
 export function findStar(starId: string): StarData | undefined {
   return STARS.find((s) => s.id === starId) ?? findGeneratedStar(starId)
+}
+
+// Whether a star (by its own name, a component's included) is a real one: every
+// hand-authored star is; the other neighbourhoods' generated ones are not.
+export function isRealStar(name: string): boolean {
+  return STARS.some((s) => s.name === name || (s.components ?? []).some((c) => c.name === name))
 }

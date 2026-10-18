@@ -20,6 +20,7 @@ import {
   KEY_MIN_SEPARATION_CELLS,
   MIN_MAINLAND_FRACTION,
   SURFACE_CLASSES,
+  SURFACE_OVERRIDES,
   TERRAIN,
   UNIT_TYPES,
   citiesForDistricts,
@@ -213,7 +214,7 @@ export function surfaceOf(bodyName: string, tier: SettlementTier): BodySurface {
   const hit = cache.get(key)
   if (hit) return hit
   const info = bodyGroundInfoAny(bodyName) ?? { radiusKm: 1000, planetClass: 'barren' as PlanetClass, color: '#9fe8ff' }
-  const spec = SURFACE_CLASSES[info.planetClass]
+  const spec = { ...SURFACE_CLASSES[info.planetClass], ...SURFACE_OVERRIDES[bodyName] }
   const seed = hashString(bodyName)
   const mesh = surfaceMesh()
   const n = mesh.count.fine

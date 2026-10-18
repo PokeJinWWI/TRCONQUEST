@@ -17,7 +17,7 @@ import { LIFE_SUPPORT_GROUP_ID, habitatPenalty, lifeSupportScale } from './habit
 import { NEED_TIERS, SPECIES_TEMPLATES, tierWealthFactor, type NeedTier, type NeedGroup } from './species'
 import { buildingLevelsByDistrict, districtBonus, withDistrictLevel } from './districts'
 import { DEVASTATION_OUTPUT_LOSS } from '../data/defenseData'
-import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, CONSTRUCTION_OUTPUT, DISTRICT_TYPES, getMethod, qualificationFraction, districtOfRecipe, constructionWork, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
+import { POP_CLASSES, RECIPES, BUREAUCRACY_OUTPUT, LOGISTICS_OUTPUT, CONSTRUCTION_OUTPUT, DISTRICT_TYPES, getMethod, methodOpenTo, qualificationFraction, districtOfRecipe, constructionWork, type PopClass, type ProductionMethod, type DistrictType } from './recipes'
 import { economicSystemDef, RETOOL_THROUGHPUT_FACTOR, OWNER_SWITCH_MARGIN, type EconomicSystem } from './laws'
 import type {
   Bank,
@@ -553,6 +553,8 @@ function tickWorld(
   popLaws?: Partial<PopLaws>,
   // The nation's own culture and faith: who is accepted, and who assimilates (economy/acceptance.ts).
   nationCulture?: NationCulture,
+  // The nation's unlocks: a method that needs one it lacks is never retooled to.
+  unlocks?: readonly string[],
 ): WorldTickResult {
   const report = emptyWorldReport()
   const law = economicSystemDef(system)
@@ -1130,6 +1132,7 @@ function tickWorld(
         let best = current
         let bestProfit = currentProfit
         for (const m of recipe.methods) {
+          if (!methodOpenTo(m, unlocks)) continue
           // Never retool to make MORE of a good already in glut: buildings run
           // at what labour and inputs allow, so the extra would only pile up
           // (Mars's mines mechanized into an ore and coal glut).
@@ -1310,7 +1313,7 @@ export function tickEconomy(
       // profit) to attract investment (state/economyStore.setSpecialEconomicZone).
       const sez = w.specialEconomicZone
       const effTaxRate = sez?.active ? country.taxRate * (1 - sez.taxDiscount) : country.taxRate
-      const res = tickWorld(w, effTaxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, stateCorps, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR, country.popLaws, nationCulture)
+      const res = tickWorld(w, effTaxRate, country.welfarePerCapita, country.economicSystem, publicServices, stateBureaucracyMalus, runningTreasury, poolByCountry, corpCountry, stateCorps, fxRate, discretionary * share, country.purchaseScale ?? 1, (country.monetary?.priceDrift ?? 0) / TICKS_PER_YEAR, country.popLaws, nationCulture, country.unlocks)
       runningTreasury -= res.constructionSpend + res.stockpileSpend
       constructionSpend += res.constructionSpend
       stockpileSpend += res.stockpileSpend

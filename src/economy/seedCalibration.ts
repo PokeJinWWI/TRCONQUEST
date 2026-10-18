@@ -49,6 +49,11 @@ export const SEED_CALIBRATION: SeedCalibration = {
     wages: { subsistence: 5.909, labor: 16.13, technical: 24.48, professional: 41.36, investor: 35.45, political: 48.69 },
     idle: { oilWell: 0.16, livestockRanch: 0.08, machineryFactory: 0.21, chemicalPlant: 0.38, artStudio: 0.41, sawmill: 0.38, glassworks: 0.45, paperMill: 0.36, sulfurMine: 0.48, hardwoodLogging: 0.34, electronicsFactory: 0.06, rocketFactory: 0.45, spaceyard: 0.36, aircraftFactory: 0.4, shipyard: 0.4, dyeWorks: 0.45, loggingCamp: 0.37, phosphateMine: 0.47, heavyMachineryPlant: 0.44, semiconductorFab: 0.38, electricalMachineryPlant: 0.45, alloySmelter: 0.44, rocketFuelRefinery: 0.49, precisionMachineryPlant: 0.44, explosivesFactory: 0.49, engineFactory: 0.42, rareMetalsMine: 0.37, baseMetalsMine: 0.48, lightMetalsMine: 0.48, toolWorkshop: 0.11, oilRefinery: 0.23 },
   },
+  "Jinshan": {
+    prices: { electricity: 1.6, water: 0.8, ironOre: 1.2, coal: 0.8, oil: 2.126, rareMetals: 6.4, copper: 2.8, aluminium: 2.4, nickel: 3.6, titanium: 6, lithium: 5.2, timber: 1.2, phosphate: 1.6, sulfur: 1.6, hardwood: 2, grains: 0.8, livestock: 2.4, sugar: 1.2, coffee: 3.2, tea: 2.8, meat: 2.8, fish: 2.4, steel: 3.987, alloys: 8, rocketFuel: 6, exoticMatter: 71.46, hyperium: 132.7, concrete: 1.2, lumber: 2, fuel: 3.2, chemicals: 2.8, fertilizer: 2.4, explosives: 4, semiconductors: 9.451, dyes: 4.8, glass: 4, paper: 3.618, tools: 3.6, machinery: 6, heavyMachinery: 10.4, electricalMachinery: 8, precisionMachinery: 13.6, electronics: 7.2, engines: 8, automobiles: 384, locomotives: 71.46, aircraft: 44, oceanGoingShips: 64, spaceships: 180, rockets: 80, groceries: 1.6, consumerGoods: 10.86, furniture: 168, textiles: 2, luxuryGoods: 312, art: 264, healthcare: 4.849, dental: 4, education: 5.878, retail: 2.8, onlineServices: 108, transportation: 3.2 },
+    wages: { subsistence: 5.973, labor: 17.04, technical: 24.39, professional: 42.47, investor: 35.84, political: 46.31 },
+    idle: { coalMine: 0.14, ironMine: 0.34, phosphateMine: 0.44, livestockRanch: 0.28, fertilizerPlant: 0.38, sawmill: 0.39, glassworks: 0.45, paperMill: 0.44, sulfurMine: 0.47, chemicalPlant: 0.39, rocketFactory: 0.48, spaceyard: 0.41, aircraftFactory: 0.46, shipyard: 0.42, dyeWorks: 0.47, loggingCamp: 0.41, hardwoodLogging: 0.49, heavyMachineryPlant: 0.47, alloySmelter: 0.46, rocketFuelRefinery: 0.49, precisionMachineryPlant: 0.46, explosivesFactory: 0.49, electronicsFactory: 0.3, engineFactory: 0.45, baseMetalsMine: 0.48, lightMetalsMine: 0.49, electricalMachineryPlant: 0.45, rareMetalsMine: 0.41, semiconductorFab: 0.43, toolWorkshop: 0.24, machineryFactory: 0.2, oilRefinery: 0.22, oilWell: 0.12 },
+  },
 }
 
 // Per nation: the starting tax rate that opens its budget near balance.
@@ -60,5 +65,6 @@ export const COUNTRY_CALIBRATION: Record<string, CountryCalibration> = {
   "imperial-state-of-mars": { taxRate: 0.12 },
   "kingdom-of-lalande": { taxRate: 0.1 },
   "orion-republic": { taxRate: 0.05 },
+  "republic-of-jinshan": { taxRate: 0.09 },
   "republic-of-venus": { taxRate: 0.11 },
 }

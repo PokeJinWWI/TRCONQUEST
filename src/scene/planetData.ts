@@ -1,5 +1,6 @@
 import { getSystemStars } from '../data/starData'
 import { generatedRawPlanetsFor } from '../data/galaxyGen'
+import { NEARBY_SYSTEM_IDS, nearbyRawPlanets } from '../data/nearbySystems'
 
 // Single unified scale: 1 AU = UNITS_PER_AU scene units, applied identically
 // to orbital distances and body radii, so positions and sizes are all
@@ -49,6 +50,10 @@ export type PlanetClass =
   | 'gas-giant'
   | 'ice-giant'
 
+// Real-world catalogue status of a body: seen and confirmed, or a detection
+// still awaiting confirmation. Absent = a generated (not real) body.
+export type KnownStatus = 'confirmed' | 'candidate'
+
 export interface PlanetData {
   name: string
   radius: number
@@ -77,6 +82,7 @@ export interface PlanetData {
   // Which component star this planet orbits (see StarComponent) — display
   // only; the resolved offset above is what physics/rendering use.
   parentStar?: string
+  knownStatus?: KnownStatus
 }
 
 export interface RawPlanet {
@@ -96,6 +102,7 @@ export interface RawPlanet {
   // StarComponent). Omit in a single-star system, where every planet orbits
   // the one star at the barycenter.
   parentStar?: string
+  knownStatus?: KnownStatus
 }
 
 function buildPlanets(starId: string, raw: RawPlanet[]): PlanetData[] {
@@ -121,6 +128,8 @@ function buildPlanets(starId: string, raw: RawPlanet[]): PlanetData[] {
     isDwarfPlanet: p.isDwarfPlanet,
     ownerId: p.ownerId,
     parentStar: p.parentStar,
+    // Every body of our own system is real.
+    knownStatus: p.knownStatus ?? (starId === 'sol' ? 'confirmed' : undefined),
     centerOffset: offsetOf(p.parentStar),
   }))
 }
@@ -176,9 +185,9 @@ const ORION_REPUBLIC = 'orion-republic'
 
 const ALPHA_CENTAURI_RAW: RawPlanet[] = [
   // Proxima Centauri (C) — real confirmed/candidate exoplanets.
-  { name: 'Proxima d', parentStar: 'Proxima Centauri', radiusKm: 5160, massKg: 1.55e24, auDistance: 0.02885, color: '#c9522a', periodYears: 0.01397, inclinationDeg: 4.0, ascendingNodeDeg: 40, phaseDeg: 15, planetClass: 'lava', ownerId: ORION_REPUBLIC },
-  { name: 'Proxima b', parentStar: 'Proxima Centauri', radiusKm: 6820, massKg: 6.39e24, auDistance: 0.0485, color: '#7fb8a0', periodYears: 0.0307, inclinationDeg: 3.2, ascendingNodeDeg: 130, phaseDeg: 200, planetClass: 'eyeball', ownerId: ORION_REPUBLIC },
-  { name: 'Proxima c', parentStar: 'Proxima Centauri', radiusKm: 14000, massKg: 4.18e25, auDistance: 1.489, color: '#6a8ac9', periodYears: 5.28, inclinationDeg: 2.1, ascendingNodeDeg: 250, phaseDeg: 90, planetClass: 'hycean', ownerId: ORION_REPUBLIC },
+  { name: 'Proxima d', parentStar: 'Proxima Centauri', radiusKm: 5160, massKg: 1.55e24, auDistance: 0.02885, color: '#c9522a', periodYears: 0.01397, inclinationDeg: 4.0, ascendingNodeDeg: 40, phaseDeg: 15, planetClass: 'lava', ownerId: ORION_REPUBLIC, knownStatus: 'confirmed' },
+  { name: 'Proxima b', parentStar: 'Proxima Centauri', radiusKm: 6820, massKg: 6.39e24, auDistance: 0.0485, color: '#7fb8a0', periodYears: 0.0307, inclinationDeg: 3.2, ascendingNodeDeg: 130, phaseDeg: 200, planetClass: 'eyeball', ownerId: ORION_REPUBLIC, knownStatus: 'confirmed' },
+  { name: 'Proxima c', parentStar: 'Proxima Centauri', radiusKm: 14000, massKg: 4.18e25, auDistance: 1.489, color: '#6a8ac9', periodYears: 5.28, inclinationDeg: 2.1, ascendingNodeDeg: 250, phaseDeg: 90, planetClass: 'hycean', ownerId: ORION_REPUBLIC, knownStatus: 'candidate' },
   // Rigil Kentaurus (A) — one real 2024 JWST direct-imaging candidate, plus
   // generated planets filling out the rest of the system.
   { name: 'Rigil Kentaurus c', parentStar: 'Rigil Kentaurus', radiusKm: 5734, massKg: 4.78e24, auDistance: 0.4, color: '#a89078', periodYears: 0.2436, inclinationDeg: 1.5, ascendingNodeDeg: 10, phaseDeg: 300, planetClass: 'barren', ownerId: ORION_REPUBLIC },
@@ -200,22 +209,19 @@ const ALPHA_CENTAURI_RAW: RawPlanet[] = [
   { name: 'Toliman Minor', parentStar: 'Toliman', radiusKm: 700, massKg: 6e20, auDistance: 9, color: '#c9d8dc', periodYears: 28.3, inclinationDeg: 9, ascendingNodeDeg: 300, phaseDeg: 40, planetClass: 'ice', isDwarfPlanet: true },
 ]
 
-// Barnard's Star (M4V) — Barnard b is real (confirmed 2024); the rest are
-// generated, filling out a compact inner system typical of red dwarfs.
+// Barnard's Star (M4V) — all four planets are real and confirmed (b 2024;
+// d, c, e 2025), see data/nearbySystems.ts. Barnard's Reach is generated.
 const BARNARDS_STAR_RAW: RawPlanet[] = [
-  { name: 'Barnard b', radiusKm: 8920, massKg: 1.97e25, auDistance: 0.0596, color: '#c9603a', periodYears: 0.00863, inclinationDeg: 2.0, ascendingNodeDeg: 50, phaseDeg: 0, planetClass: 'lava' },
-  { name: 'Barnard c', radiusKm: 4460, massKg: 2.99e24, auDistance: 0.12, color: '#a89478', periodYears: 0.1095, inclinationDeg: 1.4, ascendingNodeDeg: 150, phaseDeg: 100, planetClass: 'barren' },
-  { name: 'Barnard d', radiusKm: 6371, massKg: 5.97e24, auDistance: 0.23, color: '#7fb0a8', periodYears: 0.2907, inclinationDeg: 2.6, ascendingNodeDeg: 260, phaseDeg: 200, planetClass: 'eyeball' },
-  { name: 'Barnard e', radiusKm: 8282, massKg: 1.19e25, auDistance: 0.4, color: '#c9d8dc', periodYears: 0.6667, inclinationDeg: 3.1, ascendingNodeDeg: 20, phaseDeg: 320, planetClass: 'ice' },
+  ...(nearbyRawPlanets('barnards-star') ?? []),
   { name: 'Barnard’s Reach', radiusKm: 600, massKg: 4e20, auDistance: 5, color: '#c9d8dc', periodYears: 29.5, inclinationDeg: 8, ascendingNodeDeg: 100, phaseDeg: 40, planetClass: 'ice', isDwarfPlanet: true },
 ]
 
 // Lalande 21185 (M2V) — b is a well-confirmed real detection, c a
 // lower-confidence real candidate; the rest generated.
 const LALANDE_21185_RAW: RawPlanet[] = [
-  { name: 'Lalande 21185 b', radiusKm: 8282, massKg: 1.79e25, auDistance: 0.0786, color: '#b8623a', periodYears: 0.02703, inclinationDeg: 2.3, ascendingNodeDeg: 80, phaseDeg: 10, planetClass: 'lava' },
+  { name: 'Lalande 21185 b', radiusKm: 8282, massKg: 1.79e25, auDistance: 0.0786, color: '#b8623a', periodYears: 0.02703, inclinationDeg: 2.3, ascendingNodeDeg: 80, phaseDeg: 10, planetClass: 'lava', knownStatus: 'confirmed' },
   { name: 'Lalande 21185 d', radiusKm: 6690, massKg: 6.57e24, auDistance: 0.35, color: '#7fb8a0', periodYears: 0.3053, inclinationDeg: 1.8, ascendingNodeDeg: 190, phaseDeg: 150, planetClass: 'eyeball', ownerId: 'kingdom-of-lalande' },
-  { name: 'Lalande 21185 c', radiusKm: 11468, massKg: 7.76e25, auDistance: 2.9, color: '#8fb0c9', periodYears: 7.28, inclinationDeg: 3.5, ascendingNodeDeg: 300, phaseDeg: 250, planetClass: 'ice-giant' },
+  { name: 'Lalande 21185 c', radiusKm: 11468, massKg: 7.76e25, auDistance: 2.9, color: '#8fb0c9', periodYears: 7.28, inclinationDeg: 3.5, ascendingNodeDeg: 300, phaseDeg: 250, planetClass: 'ice-giant', knownStatus: 'confirmed' },
   { name: 'Lalande’s Hollow', radiusKm: 550, massKg: 3e20, auDistance: 8, color: '#c9d8dc', periodYears: 33.4, inclinationDeg: 11, ascendingNodeDeg: 40, phaseDeg: 300, planetClass: 'ice', isDwarfPlanet: true },
 ]
 
@@ -270,6 +276,8 @@ export const PLANETS_BY_STAR: Record<string, PlanetData[]> = {
   sirius: buildPlanets('sirius', SIRIUS_RAW),
   'luyten-726-8': buildPlanets('luyten-726-8', LUYTEN_726_8_RAW),
   'ross-154': buildPlanets('ross-154', ROSS_154_RAW),
+  // The nearby stars from the 12 light-year chart: real detections plus seeded top-up.
+  ...Object.fromEntries(NEARBY_SYSTEM_IDS.filter((id) => id !== 'barnards-star').map((id) => [id, buildPlanets(id, nearbyRawPlanets(id) ?? [])])),
 }
 
 // Planets of a star in another neighbourhood (data/galaxyGen.ts), built on

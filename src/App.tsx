@@ -43,6 +43,7 @@ import { useBattleTracker } from './hooks/useBattleTracker'
 import { useShipyardResolver } from './hooks/useShipyardResolver'
 import { useShipDeconstructionResolver } from './hooks/useShipDeconstructionResolver'
 import { useColonyResolver } from './hooks/useColonyResolver'
+import { useContactResolver } from './hooks/useContactResolver'
 import { useInfrastructureResolver } from './hooks/useInfrastructureResolver'
 import { useAutomationResolver } from './hooks/useAutomationResolver'
 import { useStrategicResources } from './hooks/useStrategicResources'
@@ -130,6 +131,7 @@ function App() {
   useShipyardResolver()
   useShipDeconstructionResolver()
   useColonyResolver()
+  useContactResolver()
   useInfrastructureResolver()
   useAutomationResolver()
   useStrategicResources()

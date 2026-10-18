@@ -20,7 +20,7 @@ console.log('\n=== The starting economies ===')
 {
   check('the calibration fitted mothballed plants for the nations\' worlds', Object.values(SEED_CALIBRATION).filter((w) => Object.keys(w.idle ?? {}).length > 0).length >= 4)
   const audits = auditNations(24)
-  check('all five nations are audited', audits.length === 5, audits.map((a) => a.id).join(', '))
+  check('all six nations are audited', audits.length === 6, audits.map((a) => a.id).join(', '))
   for (const a of audits) {
     const tag = a.id.slice(0, 14)
     // The fit only stays where it does not cost the nation its living standard (calibrate.ts): Mars and Orion keep a real improvement, the

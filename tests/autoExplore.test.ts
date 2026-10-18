@@ -234,7 +234,8 @@ console.log('\n=== 7. Intercluster and Both ===')
   useShipStore.getState().setAutomation(both, 'explore')
   useShipStore.getState().setExploreScope(both, 'both')
   const kinds: string[] = []
-  for (let d = 1; d <= 90; d++) {
+  // ~7 days a hop (the Turing cooldown) over 22 stars, then the crossing: the old 90 days fitted the original 7 other stars
+  for (let d = 1; d <= 400; d++) {
     useGameTimeStore.setState({ simDays: d })
     resolveAutomation(d)
     resolveSurvey(d)

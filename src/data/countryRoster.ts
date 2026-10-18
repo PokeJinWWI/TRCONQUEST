@@ -7,7 +7,7 @@ import { getCountry } from './countryData'
 // (src/ai/) when it isn't the player's. (Lalande sits alone in its own system,
 // so with no neighbours it rarely goes to war, but it still researches, surveys
 // and expands; Earth is the declining colossus in Sol.)
-export const STRATEGIC_AI_COUNTRY_IDS: readonly string[] = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic', 'kingdom-of-lalande', 'earth']
+export const STRATEGIC_AI_COUNTRY_IDS: readonly string[] = ['imperial-state-of-mars', 'republic-of-venus', 'orion-republic', 'kingdom-of-lalande', 'earth', 'republic-of-jinshan']
 
 // Whether the strategic AI should drive `countryId` right now — never the
 // player's own nation, and never a dormant one.

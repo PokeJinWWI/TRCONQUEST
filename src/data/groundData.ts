@@ -234,6 +234,15 @@ export const SURFACE_CLASSES: Record<PlanetClass, SurfaceClassSpec> = {
   'ice-giant': { landFraction: 0, seaTerrain: 'cloud', landBase: 'aerostat', mountainFraction: 0, iceLatitude: 2, forestMoisture: 2, desertMoisture: -1, continentBias: 0, belt: 0.14 },
 }
 
+// A named body whose surface differs from its class's recipe: the fields here
+// replace the class's. Used where a world is authored to look like somewhere.
+export const SURFACE_OVERRIDES: Record<string, Partial<SurfaceClassSpec>> = {
+  // Jinshan ("Gold Mountain"): a California world. Warm and dry-summered: much
+  // of the land is grassland (plains) between the coastal ranges and an inland
+  // desert, with only a little forest, and no polar ice cap to speak of.
+  Jinshan: { landFraction: 0.4, mountainFraction: 0.2, iceLatitude: 0.97, forestMoisture: 0.88, desertMoisture: 0.3, continentBias: 1.3 },
+}
+
 // The largest landmass must cover at least this share of the surface; if the
 // noise leaves it smaller, sea level drops until it does (so every inhabited
 // world can be invaded on foot).

@@ -13,6 +13,9 @@ import { create } from 'zustand'
 import { useDiplomacyStore } from './diplomacyStore'
 import { useTradePolicyStore, inSharedMarket } from './tradePolicyStore'
 import { pairKey } from '../data/diplomacyData'
+import { COUNTRIES } from '../data/countryData'
+import { uncontactedPairs } from '../scene/contact'
+import { useContactStore } from './contactStore'
 import { useStarbaseStore } from './starbaseStore'
 import { isStarbaseActive, onlineModulesOf, stationBody } from '../scene/starbaseLogic'
 import { useGameTimeStore } from './gameTimeStore'
@@ -534,6 +537,11 @@ function stepInputOf(state: Pick<EconomyStore, 'countries' | 'worlds' | 'corpora
     warPairs: wars,
     tradePolicies: tp.policies,
     embargoPairs,
+    uncontactedPairs: uncontactedPairs(
+      COUNTRIES.map((c) => c.id),
+      new Set(useContactStore.getState().met),
+    ),
+    portTradeCountries: COUNTRIES.map((c) => c.id),
     sharedMarketPairs,
     tetheredBodyNames,
     interstellarBonusByCountry,

@@ -50,6 +50,7 @@ import { findTech, type TechCategory } from '../data/techData'
 import { controllerOf, seedBodyOwners, type OwnerMap } from '../scene/territory'
 import { landForBody } from '../scene/bodyLand'
 import { COUNTRIES } from '../data/countryData'
+import { inContactNow } from './contactStore'
 import { useTerritoryStore } from './territoryStore'
 import { useResourceStore } from './resourceStore'
 import { useTechStore } from './techStore'
@@ -194,6 +195,7 @@ function seedNations(worlds: Record<string, WorldState>): Record<string, Abstrac
     mk('republic-of-venus', 150, 1400, 0.12, 'market'),
     mk('orion-republic', 90, 600, 0.09, 'market'),
     mk('kingdom-of-lalande', 60, 1200, 0.1, 'planned'),
+    mk('republic-of-jinshan', 40, 300, 0.11, 'market'),
   ]
   return Object.fromEntries(states.map((s) => [s.countryId, s]))
 }
@@ -321,7 +323,7 @@ export const useAbstractEconomyStore = create<AbstractEconomyStore>((set, get) =
         }),
         atWar,
         {
-          embargoed: (a, b) => isEmbargoed(tp.embargoes, a, b),
+          embargoed: (a, b) => isEmbargoed(tp.embargoes, a, b) || !inContactNow(a, b),
           sharedMarket: (a, b) => inSharedMarket(a, b),
           tariffRate: (buyer, g) => tradePolicyOf(tp.policies, buyer).tariffs[g] ?? 0,
           importSubvention: (buyer, g) => tradePolicyOf(tp.policies, buyer).importSubventions[g] ?? 0,

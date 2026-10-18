@@ -22,7 +22,7 @@ import { getMoonsForPlanet } from './moonData'
 import type { MoonData } from './moonData'
 import type { InspectableBody } from './inspectableBody'
 import { OrbitRing } from './OrbitRing'
-import { getSystemStars } from '../data/starData'
+import { getSystemStars, isRealStar } from '../data/starData'
 import { satelliteShipLocalPosition, clusterRestingShipsByFleet } from './shipPhysics'
 import { orderSelectedFleets } from './commsVisual'
 import { useGameTimeStore, simDaysToYears } from '../state/gameTimeStore'
@@ -180,7 +180,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
 
   const primaryBody: InspectableBody = useMemo(() => {
     if (isStar) {
-      return { name: currentStar?.name ?? SOL_NAME, kind: 'star', color, radiusKm: currentStar?.radiusKm ?? SUN_RADIUS_KM }
+      return { name: currentStar?.name ?? SOL_NAME, kind: 'star', color, radiusKm: currentStar?.radiusKm ?? SUN_RADIUS_KM, catalogStatus: isRealStar(currentStar?.name ?? SOL_NAME) ? 'confirmed' : undefined }
     }
     return {
       name: planetData?.name ?? bodyName,
@@ -191,6 +191,7 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
       orbitPeriodYears: planetData?.orbitPeriodYears,
       moonCount: moonInfo.totalCount,
       planetClass: planetData?.planetClass,
+      catalogStatus: planetData?.knownStatus,
     }
   }, [isStar, planetData, color, orbitAU, moonInfo, bodyName, currentStar])
 
@@ -213,6 +214,8 @@ export function SatelliteViewScene({ bodyName }: SatelliteViewSceneProps) {
         radiusKm: selectedMoon.radiusKm,
         orbitPeriodDays: selectedMoon.periodDays,
         orbitAU,
+        // moonData holds only real moons.
+        catalogStatus: 'confirmed',
       }
     }
     return inViewSelection === primaryBody.name ? primaryBody : null

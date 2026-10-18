@@ -4,7 +4,7 @@
 import type { DiplomacyEvent, DiplomacyEventKind } from '../data/diplomacyData'
 import type { ToastFilter } from '../state/situationPrefsStore'
 
-export const WORLD_NEWS_KINDS: ReadonlySet<DiplomacyEventKind> = new Set<DiplomacyEventKind>(['war-declared', 'peace-signed', 'treaty-signed', 'treaty-broken'])
+export const WORLD_NEWS_KINDS: ReadonlySet<DiplomacyEventKind> = new Set<DiplomacyEventKind>(['war-declared', 'peace-signed', 'treaty-signed', 'treaty-broken', 'first-contact'])
 
 export function eventReachesPlayer(event: Pick<DiplomacyEvent, 'kind' | 'countryIds'>, playerId: string | null, filter: ToastFilter): boolean {
   if (filter === 'all') return true

@@ -125,6 +125,12 @@ export interface EconomyStepInput {
   // 'core' group (the original four, as always). Absent = everyone reaches
   // everyone.
   tradeGroups?: Record<string, string>
+  // Pairs (pairKey strings) of nations that have not made first contact (scene/contact.ts): they
+  // neither trade nor invest in each other until they have.
+  uncontactedPairs?: string[]
+  // Nations that need a working spaceport (their trade building) to trade at all, and so trade
+  // only with another that has one. The empires are not listed: they keep their own reach rule.
+  portTradeCountries?: string[]
   // --- Trade policy (state/tradePolicyStore.ts), serialized for the worker. ---
   // Each nation's tariff/subvention schedule by good id; absent = none.
   tradePolicies?: Record<string, TradePolicy>
@@ -168,7 +174,17 @@ export function runEconomySteps(input: EconomyStepInput): EconomyStepOutput {
   const wars = new Set(input.warPairs)
   const atWar = (a: string, b: string) => a !== b && wars.has(pairKeyOf(a, b))
   const groups = input.tradeGroups
-  const canTrade = groups ? (a: string, b: string) => (groups[a] ?? 'core') === (groups[b] ?? 'core') : undefined
+  const uncontacted = input.uncontactedPairs && input.uncontactedPairs.length > 0 ? new Set(input.uncontactedPairs) : undefined
+  const portRule = input.portTradeCountries ? new Set(input.portTradeCountries) : undefined
+  // Who has a working spaceport this step (set at the top of each step).
+  let withPort: Set<string> | undefined
+  const canTrade =
+    groups || uncontacted || portRule
+      ? (a: string, b: string) =>
+          (!groups || (groups[a] ?? 'core') === (groups[b] ?? 'core')) &&
+          !(uncontacted && uncontacted.has(pairKeyOf(a, b))) &&
+          !(portRule && withPort && ((portRule.has(a) && !withPort.has(a)) || (portRule.has(b) && !withPort.has(b))))
+      : undefined
   const policies = input.tradePolicies
   const tariffRate = policies ? (buyer: string, good: string) => policies[buyer]?.tariffs[good] ?? 0 : undefined
   const importSubvention = policies ? (buyer: string, good: string) => policies[buyer]?.importSubventions[good] ?? 0 : undefined
@@ -189,6 +205,7 @@ export function runEconomySteps(input: EconomyStepInput): EconomyStepOutput {
   const migrationFlows: MigrationFlow[][] = []
   const treatyPairs = input.migration ? new Set(input.migration.treatyPairs) : undefined
   for (let i = 0; i < input.steps; i++) {
+    if (portRule) withPort = new Set(worlds.filter((w) => w.buildings.some((b) => b.recipeId === 'spaceport' && b.level > 0)).map((w) => w.ownerId))
     const res = tickEconomy(countries, worlds, corporations, { humanCountryIds: input.humanCountryIds, tick: input.startTick + i + 1, enableAI: true, atWar, canTrade, embargoed, sharedMarket, tariffRate, importSubvention, exportSubvention, tetheredBodies, interstellarBonus }, banks)
     countries = res.countries
     worlds = res.worlds

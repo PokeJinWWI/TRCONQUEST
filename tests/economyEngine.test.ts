@@ -6,6 +6,8 @@
 //
 // Run:  npx tsx tests/economyEngine.test.ts
 
+import { COUNTRIES } from '../src/data/countryData'
+import { uncontactedPairs } from '../src/scene/contact'
 import { runEconomySteps, type EconomyStepInput, type EconomyStepOutput } from '../src/economy/economyStep'
 import { seedBanks, seedCorporations, seedCountries, seedWorlds } from '../src/economy/economySeed'
 import { cancelEconomyFlight, economyBusy, useEconomyStore } from '../src/state/economyStore'
@@ -32,7 +34,7 @@ function fresh() {
   usePlayerStore.setState({ selectedCountryId: null })
   useEconomyStore.setState({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), banks: seedBanks(), tick: 0, history: {}, centralBankEvents: [], worldReports: {}, countryReports: {}, moneyReports: {}, empireSummaries: {}, empireHistory: {}, empireTick: 0 })
 }
-const input = (steps: number, startTick = 0): EconomyStepInput => ({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), banks: seedBanks(), startTick, steps, humanCountryIds: [], warPairs: [] })
+const input = (steps: number, startTick = 0): EconomyStepInput => ({ countries: seedCountries(), worlds: seedWorlds(), corporations: seedCorporations(), banks: seedBanks(), startTick, steps, humanCountryIds: [], warPairs: [] , uncontactedPairs: uncontactedPairs(COUNTRIES.map((c) => c.id), new Set()), portTradeCountries: COUNTRIES.map((c) => c.id) })
 
 console.log('\n=== 1. The step is a pure function ===')
 {
@@ -50,7 +52,7 @@ console.log('\n=== 1. The step is a pure function ===')
     return out
   })()
   check('three months at once = one month three times (so queued months can be batched)', same(a.countries, chained.countries) && same(a.worlds, chained.worlds) && same(a.banks, chained.banks) && a.tick === chained.tick)
-  check('it reports the steps: a sample per month per nation', Object.values(a.samples).every((s) => s.length === 3) && Object.keys(a.samples).length === 5)
+  check('it reports the steps: a sample per month per nation', Object.values(a.samples).every((s) => s.length === 3) && Object.keys(a.samples).length === 6)
   const noTrade = runEconomySteps({ ...input(2), tradeGroups: { 'imperial-state-of-mars': 'elsewhere' } })
   check('reach groups change what trade can happen (Mars cut off from the rest)', !same(noTrade.worlds, runEconomySteps(input(2)).worlds))
 }
@@ -62,7 +64,7 @@ console.log('\n=== 2. The store, with no worker: the same function inline ===')
   st().advance(2)
   check('advance(2) lands at once with no worker', tickOf() === 2 && !economyBusy())
   check('...exactly what the pure function gives', same(st().countries, direct.countries) && same(st().worlds, direct.worlds) && same(st().banks, direct.banks))
-  check('...with reports and history per nation', Object.keys(st().history).length === 5 && Object.values(st().history).every((h) => h.length === 2))
+  check('...with reports and history per nation', Object.keys(st().history).length === 6 && Object.values(st().history).every((h) => h.length === 2))
   st().advance(0)
   check('advance(0) does nothing', tickOf() === 2)
   fresh()
@@ -81,7 +83,7 @@ console.log('\n=== 3. A request in flight ===')
   check('a month goes out and the store is busy', requests.length === 1 && economyBusy() && tickOf() === 0)
   st().advance(2)
   check('months that come due meanwhile queue, not a second request', requests.length === 1)
-  check('the request carries the state, the human player and the wars', requests[0].input.startTick === 0 && requests[0].input.steps === 1 && requests[0].input.countries.length === 5)
+  check('the request carries the state, the human player and the wars', requests[0].input.startTick === 0 && requests[0].input.steps === 1 && requests[0].input.countries.length === 6)
 
   // A player edit while it runs: lands at once...
   st().setTaxRate('republic-of-venus', 0.33)
@@ -144,7 +146,7 @@ console.log('\n=== 5. The empires beside the four nations ===')
   st().advance(5)
   check('with the empires on, each month brings summaries for all 20', Object.keys(afterOne).length === 20 && st().empireTick === 6 && Object.keys(st().empireSummaries).length === 20)
   check('...and a fiscal history per empire', Object.values(st().empireHistory).every((h) => h.length === 6))
-  check('...while the nations hold only their own five', st().countries.length === 5 && st().worlds.length === 7)
+  check('...while the nations hold only their own six', st().countries.length === 6 && st().worlds.length === 8)
   const summary = st().empireSummaries['empire-3']
   check('a summary is headline numbers, not the economy', !!summary && summary.population > 0 && Object.keys(summary).length < 16 && JSON.stringify(summary).length < 600, `${JSON.stringify(summary).length} bytes`)
   check('the empires cost the nations nothing (same four nations as with the empires off)', (() => { fresh(); st().advance(2); return JSON.stringify([st().countries, st().worlds, st().banks]) === nationsOnly })())

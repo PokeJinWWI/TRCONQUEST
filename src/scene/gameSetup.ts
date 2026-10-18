@@ -67,6 +67,8 @@ function seedStartingRelations(): void {
   for (const other of ['imperial-state-of-mars', 'republic-of-venus']) {
     if (relationIn(diplomacy.relations, 'earth', other).opinion === 0) diplomacy.adjustOpinion('earth', other, -15)
   }
+  // Jinshan broke away from the Command: colder than Earth is toward Mars or Venus (an opinion is one shared figure per pair).
+  if (relationIn(diplomacy.relations, 'earth', 'republic-of-jinshan').opinion === 0) diplomacy.adjustOpinion('earth', 'republic-of-jinshan', -25)
 }
 
 // Earth begins with the "Ring of Heaven": a pre-built orbital ring circling Earth over its equator, a relic of the old empire's power. A

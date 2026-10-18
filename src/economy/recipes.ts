@@ -61,6 +61,8 @@ export interface ProductionMethod {
   inputs: RecipeIO[]
   outputs: RecipeIO[]
   jobs: RecipeJob[]
+  // An unlock a nation must hold (Country.unlocks) before it may run this method; absent = anyone.
+  requires?: string
 }
 
 export type BuildingCategory = 'energy' | 'extraction' | 'agriculture' | 'industry' | 'services' | 'corporate' | 'government'
@@ -2540,3 +2542,64 @@ export function getMethod(recipeId: string, methodId: string | undefined): Produ
   if (!recipe) return undefined
   return recipe.methods.find((m) => m.id === methodId) ?? recipe.methods[0]
 }
+
+// --- Automated production -----------------------------------------------------------------------
+// The robotic method of every extraction, farming, energy and industry building: the same output for far fewer
+// hands. The labour (and subsistence work) it replaces becomes machines: more power and machinery per level, and the
+// technicians and engineers who run them. A nation may only use it once it holds the 'automation' unlock
+// (Country.unlocks; economy/economyTick's retooling and the building panels honour it), so a nation that does not have
+// it plays exactly as before.
+export const AUTOMATION_UNLOCK = 'automation'
+// (Some recipes already have a method called 'automated'; this is a further step, so it has its own id.)
+export const ROBOTIC_METHOD_ID = 'robotic'
+const AUTOMATED_CATEGORIES: ReadonlySet<BuildingCategory> = new Set<BuildingCategory>(['extraction', 'agriculture', 'industry', 'energy'])
+const AUTOMATED_LABOUR_KEPT = 0.25 // of labour (and subsistence) jobs
+const AUTOMATED_POWER_PER_JOB = 0.4 // power per replaced job
+const AUTOMATED_MACHINERY_PER_JOB = 0.06 // machinery per replaced job
+const AUTOMATED_ENGINEERS_PER_JOB = 0.05 // extra professional jobs per replaced job
+
+export function automatedVariant(base: ProductionMethod): ProductionMethod {
+  let replaced = 0
+  const jobs: RecipeJob[] = []
+  for (const j of base.jobs) {
+    if (j.class === 'labor' || j.class === 'subsistence') {
+      const kept = Math.max(1, Math.round(j.count * AUTOMATED_LABOUR_KEPT))
+      replaced += j.count - kept
+      jobs.push({ class: j.class, count: kept })
+    } else jobs.push({ ...j })
+  }
+  const engineers = Math.round(replaced * AUTOMATED_ENGINEERS_PER_JOB)
+  if (engineers > 0) {
+    const pro = jobs.find((j) => j.class === 'professional')
+    if (pro) pro.count += engineers
+    else jobs.push({ class: 'professional', count: engineers })
+  }
+  const extra = (good: GoodId, amount: number): RecipeIO[] => {
+    const rounded = Math.round(amount)
+    return rounded > 0 ? [{ good, amount: rounded }] : []
+  }
+  const inputs: RecipeIO[] = base.inputs.map((i) => ({ ...i }))
+  for (const add of [...extra('electricity', replaced * AUTOMATED_POWER_PER_JOB), ...extra('machinery', replaced * AUTOMATED_MACHINERY_PER_JOB)]) {
+    const have = inputs.find((i) => i.good === add.good)
+    if (have) have.amount += add.amount
+    else inputs.push(add)
+  }
+  return {
+    id: ROBOTIC_METHOD_ID,
+    label: 'Robotic',
+    description: 'Robotic plant run by a few technicians: the same output with far fewer workers, for more power and machinery.',
+    inputs,
+    outputs: base.outputs.map((o) => ({ ...o })),
+    jobs,
+    requires: AUTOMATION_UNLOCK,
+  }
+}
+
+for (const recipe of Object.values(RECIPES)) {
+  if (!AUTOMATED_CATEGORIES.has(recipe.category) || recipe.autoBuilt) continue
+  const base = recipe.methods[recipe.methods.length - 1]
+  if (base.jobs.some((j) => j.class === 'labor' || j.class === 'subsistence')) recipe.methods.push(automatedVariant(base))
+}
+
+// Whether a method is open to a nation holding these unlocks.
+export const methodOpenTo = (m: ProductionMethod, unlocks?: readonly string[]): boolean => !m.requires || !!unlocks?.includes(m.requires)

@@ -252,7 +252,7 @@ console.log('\n=== 10. Trade and the exchange rate ===')
 console.log('\n=== 12. Store: seeds, stockpile sync, research, construction, territory ===')
 {
   const store = useAbstractEconomyStore.getState()
-  check('seeds the four nations', Object.keys(store.byCountry).length === 4)
+  check('seeds the five nations with a Simple economy (Earth has none)', Object.keys(store.byCountry).length === 5)
   check('every owned body is a world', Object.keys(store.worlds).length === Object.keys(seedBodyOwners()).length)
   const gdp = (id: string) => store.byCountry[id].gdp
   check('opening GDPs are ordered Mars > Venus > Orion > Lalande', gdp('imperial-state-of-mars') > gdp('republic-of-venus') && gdp('republic-of-venus') > gdp('orion-republic') && gdp('orion-republic') > gdp('kingdom-of-lalande'),

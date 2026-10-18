@@ -98,6 +98,8 @@ export type DiplomacyEventKind =
   | 'research-queue-empty'
   // A natural deposit ran dry (scene/extraction).
   | 'deposit-exhausted'
+  // Two nations met for the first time (hooks/useContactResolver); a click goes to the system where they met.
+  | 'first-contact'
 
 // How loud a notification is: its toast's colour, and (in a theme) its plate.
 export type EventSeverity = 'info' | 'warning' | 'danger'

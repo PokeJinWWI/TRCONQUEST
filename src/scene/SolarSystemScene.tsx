@@ -21,7 +21,7 @@ import { getPlanetsForStar, UNITS_PER_AU, type PlanetData } from './planetData'
 import { getMoonsForPlanet } from './moonData'
 import { StarStationMarkers } from './StationMarkers'
 import { getAsteroidBeltsForStar } from '../data/asteroidBeltData'
-import { getSystemStars } from '../data/starData'
+import { getSystemStars, isRealStar } from '../data/starData'
 import { mapModeColorsFor } from './mapModeColor'
 import { useEconomyStore } from '../state/economyStore'
 import { useAbstractEconomyStore } from '../state/abstractEconomyStore'
@@ -257,7 +257,7 @@ export function SolarSystemScene() {
   const selectedBody: InspectableBody | null = useMemo(() => {
     if (!selectedName) return null
     if (selectedStar) {
-      return { name: selectedStar.name, kind: 'star', color: selectedStar.color, radiusKm: selectedStar.radiusKm }
+      return { name: selectedStar.name, kind: 'star', color: selectedStar.color, radiusKm: selectedStar.radiusKm, catalogStatus: isRealStar(selectedStar.name) ? 'confirmed' : undefined }
     }
     if (!selectedPlanetData) return null
     return {
@@ -269,6 +269,7 @@ export function SolarSystemScene() {
       orbitPeriodYears: selectedPlanetData.orbitPeriodYears,
       moonCount: getMoonsForPlanet(selectedPlanetData.name).totalCount,
       planetClass: selectedPlanetData.planetClass,
+      catalogStatus: selectedPlanetData.knownStatus,
     }
   }, [selectedName, selectedStar, selectedPlanetData])
   const flyingPlanetData = useMemo(
