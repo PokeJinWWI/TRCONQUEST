@@ -7529,3 +7529,9 @@ html.side-resizing * {
   font-size: 9px;
   text-align: center;
 }
+
+/* Main menu: Credits panel */
+.menu-credits { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.menu-credits-role { margin-top: 12px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim, rgba(var(--accent-rgb), 0.7)); }
+.menu-credits-role:first-child { margin-top: 0; }
+.menu-credits-name { font-size: 16px; color: var(--text); }

@@ -17,7 +17,7 @@ import { menuWorldOf, readLastWorld } from '../scene/menuWorld'
 // countryData.ts). Session-only (playerStore has no persistence), so a reload always returns
 // here. Selecting seeds viewStore so the game opens already at that country's own capital
 // system instead of always at Sol.
-type Panel = 'new' | 'load' | 'settings'
+type Panel = 'new' | 'load' | 'credits' | 'settings'
 
 export function MainMenu() {
   const [panel, setPanel] = useState<Panel | null>(null)
@@ -56,6 +56,7 @@ export function MainMenu() {
             <button type="button" className="menu-item" onClick={startSandbox} title="No nations and no economy — set up fights and test ships and armies freely">
               Sandbox
             </button>
+            {item('credits', 'Credits')}
             {item('settings', 'Settings')}
           </nav>
 
@@ -118,6 +119,23 @@ export function MainMenu() {
             <section className="menu-panel">
               <div className="main-menu-subtitle"><Bi en="Saved games" /></div>
               <SaveSlots canSave={false} onLoaded={() => setPanel(null)} />
+            </section>
+          )}
+
+          {panel === 'credits' && (
+            <section className="menu-panel">
+              <div className="main-menu-subtitle">Credits</div>
+              <div className="menu-credits">
+                <div className="menu-credits-role">Design &amp; development</div>
+                <div className="menu-credits-name">mr1noobfatfish</div>
+                <div className="menu-credits-name">PokeJinWWI</div>
+                <div className="menu-credits-role">Complex mode economy</div>
+                <div className="menu-credits-name">mr1noobfatfish</div>
+                <div className="menu-credits-role">Programming assistance</div>
+                <div className="menu-credits-name">Claude (Anthropic)</div>
+                <div className="menu-credits-role">Map data</div>
+                <div className="menu-credits-name">NASA · USGS · NOAA · IAU Gazetteer</div>
+              </div>
             </section>
           )}
 
