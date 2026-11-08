@@ -19,6 +19,41 @@ import { menuWorldOf, readLastWorld } from '../scene/menuWorld'
 // system instead of always at Sol.
 type Panel = 'new' | 'load' | 'credits' | 'settings'
 
+// Credits shown from the main menu. Map-data lines mirror the `credit` strings in
+// scripts/terrain/sources.ts; typefaces are the @fontsource packages the themes load.
+const CREDITS: { role: string; lines: string[] }[] = [
+  { role: 'Economy (Complex mode and the economy systems)', lines: ['mr1noobfatfish, sole developer'] },
+  { role: 'Combat', lines: ['PokeJinWWI, sole developer'] },
+  { role: 'Everything else', lines: ['mr1noobfatfish and PokeJinWWI, shared between us'] },
+  { role: 'Programming assistance', lines: ['Claude (Anthropic)'] },
+  {
+    role: 'Built with',
+    lines: ['Vite · React · TypeScript', 'three.js · React Three Fiber · drei', 'zustand'],
+  },
+  {
+    role: 'Planetary maps',
+    lines: [
+      'Earth: NOAA ETOPO 2022 bedrock elevation',
+      'Mars: NASA MGS MOLA · Phobos: ESA Mars Express HRSC (DLR/USGS)',
+      'Venus: NASA Magellan · Mercury: NASA MESSENGER (USGS)',
+      'Luna: NASA LRO LOLA · Pluto: NASA New Horizons · Ceres: NASA Dawn (DLR/USGS)',
+      'Io, Europa, Ganymede, Callisto: Galileo SSI / Voyager mosaics (USGS)',
+      'Titan, Rhea, Dione, Iapetus: Cassini / Voyager mosaics (USGS)',
+      'Triton: Voyager 2 colour mosaic (USGS)',
+      'Feature names: IAU Gazetteer of Planetary Nomenclature',
+    ],
+  },
+  {
+    role: 'Typefaces (Google Fonts, Open Font License)',
+    lines: [
+      'Cinzel · Cormorant Garamond · Grenze Gotisch · Playfair Display · Old Standard TT',
+      'Rye · Italiana · Marcellus · Nunito Sans · IM Fell English SC · Spectral',
+      'Yuji Syuku · Shippori Mincho · Zen Kaku Gothic New · Noto Sans / Serif JP, SC, TC',
+      'Barlow Condensed · Oswald · Fira Code · Share Tech Mono · Pirata One',
+    ],
+  },
+]
+
 export function MainMenu() {
   const [panel, setPanel] = useState<Panel | null>(null)
   const selectCountry = usePlayerStore((s) => s.selectCountry)
@@ -126,15 +161,14 @@ export function MainMenu() {
             <section className="menu-panel">
               <div className="main-menu-subtitle">Credits</div>
               <div className="menu-credits">
-                <div className="menu-credits-role">Design &amp; development</div>
-                <div className="menu-credits-name">mr1noobfatfish</div>
-                <div className="menu-credits-name">PokeJinWWI</div>
-                <div className="menu-credits-role">Complex mode economy</div>
-                <div className="menu-credits-name">mr1noobfatfish</div>
-                <div className="menu-credits-role">Programming assistance</div>
-                <div className="menu-credits-name">Claude (Anthropic)</div>
-                <div className="menu-credits-role">Map data</div>
-                <div className="menu-credits-name">NASA · USGS · NOAA · IAU Gazetteer</div>
+                {CREDITS.map((g) => (
+                  <div key={g.role} className="menu-credits-group">
+                    <div className="menu-credits-role">{g.role}</div>
+                    {g.lines.map((l) => (
+                      <div key={l} className="menu-credits-name">{l}</div>
+                    ))}
+                  </div>
+                ))}
               </div>
             </section>
           )}

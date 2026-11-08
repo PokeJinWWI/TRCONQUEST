@@ -7531,7 +7531,7 @@ html.side-resizing * {
 }
 
 /* Main menu: Credits panel */
-.menu-credits { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
-.menu-credits-role { margin-top: 12px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim, rgba(var(--accent-rgb), 0.7)); }
-.menu-credits-role:first-child { margin-top: 0; }
-.menu-credits-name { font-size: 16px; color: var(--text); }
+.menu-credits { display: flex; flex-direction: column; gap: 14px; padding: 4px 0; max-height: 65vh; overflow-y: auto; }
+.menu-credits-group { display: flex; flex-direction: column; gap: 3px; }
+.menu-credits-role { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim, rgba(var(--accent-rgb), 0.7)); }
+.menu-credits-name { font-size: 14px; line-height: 1.4; color: var(--text); }
